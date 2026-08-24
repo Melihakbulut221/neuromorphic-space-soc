@@ -16,7 +16,7 @@ that is realistic for an open PDK and a small team.
 | AI engine | Akida 1.0, 8 nodes x 4 engines, 1/2/4-bit weights | Event-driven SNN fabric, sizing in research phase |
 | On-chip RAM | 8 MB shared + 3.2 MB Akida-private | Hundreds of kB class, ECC-protected |
 | External memory | QSPI controller, 2 chip selects | QSPI controller |
-| Interfaces | PCIe Gen3 x4, SpaceWire router 4x, GbE, CAN FD 2x, SPI, 2x I2C, 3x UART, CPI, 16 GPIO | Subset: SpaceWire codec, CAN, SPI, I2C, UART, GPIO; PCIe/GbE out of scope |
+| Interfaces | PCIe Gen3 x4, SpaceWire router 4x, GbE, CAN FD 2x, SPI, 2x I2C, 3x UART, CPI, 16 GPIO | Subset: SpaceWire codec, CAN, SPI, I2C, UART, GPIO, optional 8-bit CPI; PCIe/GbE out of scope |
 | Hardening | ECC on CPU/memories, fault detection on Akida memories | Layered: control TMR, memory ECC + scrub, fault counters |
 
 ## Status
@@ -32,5 +32,6 @@ reports; `ROADMAP.md` is produced at the end of the research phase.
 - `docs/03-cpu-and-ip-survey.md` — management CPU and interface IP survey (licensing, verification fit)
 - `docs/04-technology-and-flow.md` — 130 nm technology selection, memory strategy, flow and cost
 - `docs/05-market-positioning.md` — mission profile, competitive landscape, positioning rules
-- `docs/06-design-review.md` — independent review of the research phase
+- `docs/06-funding-and-shuttle.md` — NLnet grant plan and TTIHP26b shuttle logistics
+- `docs/07-design-review.md` — independent review of the research phase
 - `ROADMAP.md` — phased plan with gates

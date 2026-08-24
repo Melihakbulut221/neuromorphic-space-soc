@@ -4,3 +4,11 @@ __pycache__/
 runs/
 *.vcd
 *.fst
+
+# verification harness artifacts
+hw/.venv/
+hw/tb/sim_build*/
+hw/tb/results.xml
+.pytest_cache/
+formal/aer_fifo_*/
+formal/aer_fifo/

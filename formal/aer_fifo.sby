@@ -1,0 +1,41 @@
+# SymbiYosys job for the AER event FIFO.
+#
+#   sby -f aer_fifo.sby prove      k-induction proof at default parameters
+#                                  (WIDTH=16, DEPTH=64, docs/10 EVQ sizing)
+#   sby -f aer_fifo.sby prove_d4   same proof at DEPTH=4, WIDTH=8 (fast
+#                                  parameterization check)
+#   sby -f aer_fifo.sby bmc        bounded check, depth 40
+#   sby -f aer_fifo.sby cover      reachability of full/drain/drop states
+#
+# The properties live in formal/aer_fifo_props.v, textually included at
+# the end of the aer_fifo module body under `ifdef FORMAL (read_verilog
+# -formal defines FORMAL; both files land in the same sby src directory,
+# so the include resolves).
+
+[tasks]
+bmc
+prove
+prove_d4
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 40
+prove: mode prove
+prove: depth 15
+prove_d4: mode prove
+prove_d4: depth 15
+cover: mode cover
+cover: depth 150
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal aer_fifo.v
+prove_d4: chparam -set DEPTH 4 -set WIDTH 8 aer_fifo
+prep -top aer_fifo
+
+[files]
+../hw/rtl/aer_fifo.v
+aer_fifo_props.v

@@ -1,0 +1,205 @@
+# Register map single source for the NPU node block.
+# Everything else -- docs/regmap-npu.md, sw/golden/regmap_gen.py,
+# hw/rtl/npu_regs.vh -- is generated from this file by regmap/generate.py.
+# Do not edit the generated files by hand.
+#
+# Normative register list: docs/10-npu-mvp-spec.md section 10. That table
+# and this file must not diverge; sw/tests/test_regmap.py cross-checks
+# name, offset, access and (literal) reset against the spec mechanically.
+#
+# Conventions:
+#   - 12-bit byte-address space (one 4 KB window per node instance),
+#     32-bit word-aligned registers, accessed from the RV32 management
+#     core over the SoC peripheral bus (APB-class bridge). This mirrors
+#     the GR801/GRLIB model of memory-mapped peripherals: a constant
+#     identity word (vendor byte 0x4E "N" leading the ASCII device code
+#     "NPU1") plus a version word at the base of every block, and one
+#     identical block instance per mesh node at a per-node base address
+#     (docs/10 section 8, plug-and-play spirit).
+#   - access: RO (read-only), RW (read-write), WO (write-only),
+#     W1C (write-1-to-clear), SC (self-clearing write)
+#   - fields carry "bit" (LSB) and optional "width" (default 1).
+#   - reset values are given for every register; registers the spec
+#     leaves unspecified ("-") reset to 0.
+
+meta:
+  name: neuromorphic_space_soc_npu
+  version: "0.1"
+  addr_bits: 12
+  data_bits: 32
+  bus: "32-bit word-aligned peripheral bus (RV32 manager, APB-class bridge)"
+
+blocks:
+  - name: sys
+    desc: Identification, control and status
+    registers:
+      - {name: ID,      offset: 0x00, access: RO, reset: 0x4E505531, desc: "Identity constant, ASCII \"NPU1\" (vendor byte 0x4E \"N\" + device code); fixed discovery word at the block base"}
+      - {name: VERSION, offset: 0x04, access: RO, reset: 0x00000001, desc: "Spec/regmap version"}
+      - {name: SCRATCH, offset: 0x08, access: RW, reset: 0x00000000, desc: "Read/write test register, no side effects"}
+      - name: CTRL
+        offset: 0x0C
+        access: RW
+        reset: 0x00000008
+        desc: NPU global control
+        fields:
+          - {name: EN,        bit: 0, access: RW, desc: "Core enable; 0 gates the event pipeline"}
+          - {name: STATE_CLR, bit: 1, access: SC, desc: "Zero all neuron state words (hardware sequencer, BUSY while running); self-clears"}
+          - {name: SOFT_RST,  bit: 2, access: SC, desc: "Flush queues and pipeline, configuration retained; self-clears"}
+          - {name: SCRUB_EN,  bit: 3, access: RW, desc: "Background ECC scrubber enable (walks weight SRAM while the input queue is empty)"}
+      - name: STATUS
+        offset: 0x10
+        access: RO
+        reset: 0x00000006
+        desc: NPU global status; sticky bits b3..b6 cleared via STATUS_CLR
+        fields:
+          - {name: BUSY,          bit: 0, access: RO, desc: "Event processing, STATE_CLR sweep or scrub write in progress"}
+          - {name: EVQ_IN_EMPTY,  bit: 1, access: RO, desc: "Input event queue empty"}
+          - {name: EVQ_OUT_EMPTY, bit: 2, access: RO, desc: "Output event queue empty"}
+          - {name: SYNC_DONE,     bit: 3, access: RO, desc: "Sticky: SYNC barrier consumed and echoed; frame output complete"}
+          - {name: ERR_CFG,       bit: 4, access: RO, desc: "Sticky: out-of-range configuration or config write while BUSY"}
+          - {name: DED_SEEN,      bit: 5, access: RO, desc: "Sticky: uncorrectable (double-bit) ECC error observed (see FAULT_ADDR)"}
+          - {name: OVF_SEEN,      bit: 6, access: RO, desc: "Sticky: at least one software-port event dropped at a full input queue (see CNT_EVQ_OVF)"}
+      - {name: STATUS_CLR, offset: 0x14, access: W1C, reset: 0x00000000, desc: "Write-1-to-clear mask for STATUS b3..b6"}
+
+  - name: cfg
+    desc: Core-global configuration, loaded per pass (docs/10 section 6)
+    registers:
+      - name: CFG_NEUR
+        offset: 0x20
+        access: RW
+        reset: 0x00000200
+        desc: Active neuron count for the pass
+        fields:
+          - {name: CNT, bit: 0, width: 11, access: RW, desc: "Neurons swept per event, [1, N_NEURONS]; out of range latches ERR_CFG"}
+      - name: CFG_AXON
+        offset: 0x24
+        access: RW
+        reset: 0x00000200
+        desc: Valid axon id bound
+        fields:
+          - {name: CNT, bit: 0, width: 11, access: RW, desc: "Events with axon id >= CFG_AXON are dropped and counted (CNT_AXON_OOR)"}
+      - name: CFG_THRESH
+        offset: 0x28
+        access: RW
+        reset: 0x00000100
+        desc: Firing threshold THETA (E4)
+        fields:
+          - {name: THETA, bit: 0, width: 16, access: RW, desc: "Signed threshold, [1, +32767]; must be positive"}
+      - name: CFG_VRESET
+        offset: 0x2C
+        access: RW
+        reset: 0x00000000
+        desc: Post-spike reset potential (E5)
+        fields:
+          - {name: VRESET, bit: 0, width: 16, access: RW, desc: "Signed reset potential; must be below THETA"}
+      - name: CFG_LEAK
+        offset: 0x30
+        access: RW
+        reset: 0x00000003
+        desc: Leak shift S_LEAK (E6)
+        fields:
+          - {name: S_LEAK, bit: 0, width: 4, access: RW, desc: "Right-shift applied to the potential magnitude per tick, [0, 15]"}
+      - name: CFG_SYNSHIFT
+        offset: 0x34
+        access: RW
+        reset: 0x00000000
+        desc: Synaptic shift S_SYN (E2)
+        fields:
+          - {name: S_SYN, bit: 0, width: 3, access: RW, desc: "Left-shift applied to decoded weights, [0, 7]"}
+      - name: CFG_REFR
+        offset: 0x38
+        access: RW
+        reset: 0x00000000
+        desc: Refractory period T_REFR (E5, E7)
+        fields:
+          - {name: T_REFR, bit: 0, width: 4, access: RW, desc: "Ticks of post-spike gating, [0, 15]; 0 disables refractory"}
+      - name: CFG_FLAGS
+        offset: 0x3C
+        access: RW
+        reset: 0x00000002
+        desc: Mode flags
+        fields:
+          - {name: TS_EN,   bit: 0, access: RW, desc: "Append a 16-bit timestamp word to every AER event (docs/10 section 7.3)"}
+          - {name: LEAK_EN, bit: 1, access: RW, desc: "Enable leak on TICK events (E6)"}
+
+  - name: pass
+    desc: Multi-pass sequencing (docs/10 section 9)
+    registers:
+      - name: PASS_TILE_OFF
+        offset: 0x40
+        access: RW
+        reset: 0x00000000
+        desc: Neuron-tiling offset (E9)
+        fields:
+          # quoted: bare OFF is a YAML 1.1 boolean
+          - {name: "OFF", bit: 0, width: 10, access: RW, desc: "TILE_OFF added to emitted neuron ids"}
+      - {name: W_BASE, offset: 0x44, access: RW, reset: 0x00000000, desc: "QSPI byte address of the current pass weight slice"}
+      - name: PASS_ID
+        offset: 0x48
+        access: RW
+        reset: 0x00000000
+        desc: Software pass bookkeeping
+        fields:
+          - {name: NUM, bit: 0, width: 8, access: RW, desc: "Pass number, software-defined"}
+
+  - name: mem
+    desc: Weight SRAM load port and neuron state access
+    registers:
+      - {name: W_ADDR,    offset: 0x50, access: RW, reset: 0x00000000, desc: "Weight SRAM word index; auto-increments on W_DATA_HI commit"}
+      - {name: W_DATA_LO, offset: 0x54, access: WO, reset: 0x00000000, desc: "Weight word bits [31:0], staged"}
+      - {name: W_DATA_HI, offset: 0x58, access: WO, reset: 0x00000000, desc: "Weight word bits [63:32]; write commits the 64-bit word (ECC bits generated in hardware)"}
+      - {name: N_ADDR,    offset: 0x60, access: RW, reset: 0x00000000, desc: "Neuron index for state access"}
+      - name: N_DATA
+        offset: 0x64
+        access: RW
+        reset: 0x00000000
+        desc: Neuron state word at N_ADDR; debug and pass state save/restore
+        fields:
+          - {name: V, bit: 0,  width: 16, access: RW, desc: "Membrane potential, signed"}
+          - {name: R, bit: 16, width: 4,  access: RW, desc: "Refractory countdown"}
+
+  - name: fault
+    desc: Fault counters and injection hooks (docs/10 section 11)
+    registers:
+      - {name: CNT_SEC,      offset: 0x70, access: RO, reset: 0x00000000, desc: "Corrected single-bit ECC events"}
+      - {name: CNT_DED,      offset: 0x74, access: RO, reset: 0x00000000, desc: "Uncorrectable double-bit ECC events (E10 zero-substitution applied)"}
+      - {name: CNT_EVQ_OVF,  offset: 0x78, access: RO, reset: 0x00000000, desc: "Software-port event drops on full input queue (aer_fifo sticky drop counter)"}
+      - {name: CNT_AXON_OOR, offset: 0x7C, access: RO, reset: 0x00000000, desc: "Events dropped for axon id >= CFG_AXON"}
+      - {name: FAULT_ADDR,   offset: 0x80, access: RO, reset: 0x00000000, desc: "Weight SRAM word index of the last double-bit detection"}
+      - name: ECC_INJ
+        offset: 0x84
+        access: WO
+        reset: 0x00000000
+        desc: ECC error-injection hook (verification builds; netlist-audited out of flight builds)
+        fields:
+          - {name: SINGLE, bit: 0, access: SC, desc: "Flip one bit on the next W_DATA commit"}
+          - {name: DOUBLE, bit: 1, access: SC, desc: "Flip two bits on the next W_DATA commit"}
+      - {name: FAULT_CLR, offset: 0x88, access: W1C, reset: 0x00000000, desc: "Clear the fault counters"}
+
+  - name: aer
+    desc: AER queue access and mesh addressing (docs/10 sections 7, 8)
+    registers:
+      - name: EVQ_STAT
+        offset: 0x90
+        access: RO
+        reset: 0x00000000
+        desc: Event queue fill levels
+        fields:
+          - {name: IN_FILL,  bit: 0, width: 8, access: RO, desc: "Input queue occupancy"}
+          - {name: OUT_FILL, bit: 8, width: 8, access: RO, desc: "Output queue occupancy"}
+      - {name: EVQ_IN, offset: 0x94, access: WO, reset: 0x00000000, desc: "Software event injection, 16-bit event word; drops on full and counts (CNT_EVQ_OVF)"}
+      - name: EVQ_OUT
+        offset: 0x98
+        access: RO
+        reset: 0x00000000
+        desc: Pop one output event
+        fields:
+          - {name: EVENT, bit: 0,  width: 16, access: RO, desc: "Event word, valid when VALID = 1"}
+          - {name: VALID, bit: 31, access: RO, desc: "A word was popped; 0 = queue was empty"}
+      - name: NODE_ID
+        offset: 0x9C
+        access: RW
+        reset: 0x00000000
+        desc: Mesh node address (docs/10 section 8)
+        fields:
+          - {name: NID, bit: 0, width: 4, access: RW, desc: "This node's mesh address; frozen link-word field"}
