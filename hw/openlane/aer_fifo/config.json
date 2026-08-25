@@ -1,0 +1,27 @@
+{
+    "DESIGN_NAME": "aer_fifo",
+    "VERILOG_FILES": [
+        "dir::../../rtl/aer_fifo.v"
+    ],
+    "SYNTH_PARAMETERS": [
+        "WIDTH=16",
+        "DEPTH=64"
+    ],
+    "//dut": "G0 smoke vehicle: aer_fifo at the EVQ geometry of docs/10 section 7.1 (16-bit event word, 64 entries). The parameters are the module defaults, but they are pinned here explicitly so the hardened geometry is a property of this config rather than of the RTL header -- the numbers in docs/12 are only meaningful against a stated WIDTH/DEPTH. Pinning them is not cosmetic: chparam-ing WIDTH and DEPTH to the values they already had changes the netlist from 4160 cells / 89266.061 um2 to 4164 cells / 89320.455 um2 (docs/12 section 4.7).",
+
+    "CLOCK_PORT": "clk",
+    "CLOCK_NET": "clk",
+    "CLOCK_PERIOD": 30,
+    "//clock": "30 ns (33 MHz), deliberately loose. The block is a register file with a pointer adder, so timing is not the experiment here -- PDK and flow integration is. An unreachable constraint manufactures thousands of phantom violations and hides the real integration failures behind them (lesson recorded by the sibling SKY130 project). Achieved slack is reported per corner in docs/12 section 4.4: 18.0553 ns setup at the slow corner, i.e. the whole path fits in 11.945 ns, so the TT-class 50 MHz envelope is measured rather than asserted here.",
+
+    "PDK": "ihp-sg13g2",
+    "STD_CELL_LIBRARY": "sg13g2_stdcell",
+    "//pdk": "Both are also passed on the librelane command line by run_trial.sh. The CLI values are what the ciel wrapper uses to resolve PDK_ROOT before this file is parsed; these keys only make the config self-describing.",
+
+    "FP_SIZING": "relative",
+    "FP_CORE_UTIL": 40,
+    "//util": "Relative sizing at 40% target. sg13g2 has 84 cells and a single reset-flop family (docs/12 section 5), so the resizers have far less freedom than on sky130; starting loose and measuring the achieved utilization is more informative for the tile budget than forcing a die size.",
+
+    "RUN_HEURISTIC_DIODE_INSERTION": false,
+    "//antenna": "Left off deliberately, on the numbers in docs/12 section 4.5. With it off, run trial-03-signoff: 10 antenna-violating nets after global routing, 0 after detailed routing, and detailed routing's own repair inserted 3 sg13g2_antennanp cells totalling 16.33 um2. With it on, run trial-01 on the same RTL: the design finished carrying 4641 sg13g2_antennanp cells, 25261.9 um2, 11.4% of the 221386 um2 core area, for the same zero-violation result. Note that trial-01 also predates the SYNTH_PARAMETERS pin above, so this is 'the heuristic on this design' rather than a controlled A/B. The live controls are DRT_ANTENNA_REPAIR_* (3 iterations here) and GRT_ANTENNA_REPAIR_*, both left at their defaults. Do not confuse RUN_HEURISTIC_DIODE_INSERTION with GRT_REPAIR_ANTENNAS: the latter is a recognised deprecated alias for RUN_ANTENNA_REPAIR, it warns on the console and it does change behaviour, so it must not be carried over from a sky130 config by accident (docs/12 section 2.4c)."
+}

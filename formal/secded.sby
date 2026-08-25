@@ -1,0 +1,68 @@
+# SymbiYosys job for the SECDED (72, 64) weight-SRAM codec.
+#
+#   sby -f secded.sby bmc      full proof of the property set (boolector)
+#   sby -f secded.sby bmc_abc  the same proof on an independent engine
+#   sby -f secded.sby cover    non-vacuity of every property branch
+#
+# The properties live in formal/secded_props.v, a wrapper module that
+# composes hw/rtl/secded_enc.v with hw/rtl/secded_dec.v and drives them
+# with a symbolic data word and a symbolic 72-bit error vector
+# ($anyconst). Both modules are purely combinational, so BMC at depth 1
+# evaluates the entire input space: this is a full proof in the sense of
+# docs/09-formal-verification-plan.md target #2 ("UNSAT at depth 1 covers
+# the whole input space"), not a bounded result.
+#
+# Engine diversity (docs/09 section C.4 item 7) is expressed as two tasks
+# rather than two engines in one task: sby races the engines listed inside
+# a task and reports the first to answer, so a second engine there would
+# be a speed hedge, not independent confirmation. The two tasks use
+# different engine families - an SMT bit-blaster (boolector) and the
+# AIGER/SAT path (abc bmc3) - so a solver-specific defect would have to
+# occur twice to go unnoticed.
+#
+# Engine choice is measured, not inherited: on this query boolector closes
+# in about 17 s and abc bmc3 in about 10 s, while yices (the engine the
+# aer_fifo job uses) had not returned after 3 minutes. bitwuzla, at about
+# 19 s, is an equivalent alternative to boolector.
+#
+# The property set has since grown by the two check-port assertions C1/C2
+# and the second decoder instance they need (see secded_props.v). That did
+# not change the engine ranking: two re-measured runs reported 7 and 10 CPU
+# seconds for bmc against 2 and 3 for bmc_abc, in formal/secded_bmc/status
+# and formal/secded_bmc_abc/status [fact, two runs, machine under other
+# load - an order of magnitude, not a benchmark].
+#
+# There is deliberately no `mode prove` task. The design has no state - the
+# only registers in the model are the two $anyconst inputs - so k-induction
+# has nothing to induct over and BMC at depth 1 is already exhaustive. The
+# voter, which is equally stateless but far smaller, keeps a prove task in
+# formal/tmr_voter.sby as a cheap cross-check of that reasoning.
+
+[tasks]
+bmc
+bmc_abc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 1
+bmc_abc: mode bmc
+bmc_abc: depth 1
+cover: mode cover
+cover: depth 1
+
+[engines]
+bmc: smtbmc boolector
+bmc_abc: abc bmc3
+cover: smtbmc boolector
+
+[script]
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
+read_verilog -formal secded_props.v
+prep -top secded_props
+
+[files]
+../hw/rtl/secded_enc.v
+../hw/rtl/secded_dec.v
+secded_props.v

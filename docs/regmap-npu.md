@@ -151,7 +151,7 @@ sync test (sw/tests/test_regmap.py) enforces the alignment.
 | 0x07C | CNT_AXON_OOR | RO | 0x00000000 | Events dropped for axon id >= CFG_AXON |
 | 0x080 | FAULT_ADDR | RO | 0x00000000 | Weight SRAM word index of the last double-bit detection |
 | 0x084 | ECC_INJ | WO | 0x00000000 | ECC error-injection hook (verification builds; netlist-audited out of flight builds) |
-| 0x088 | FAULT_CLR | W1C | 0x00000000 | Clear the fault counters |
+| 0x088 | FAULT_CLR | W1C | 0x00000000 | Clear the fault counters; one bit per fault-block register in offset order from 0x70, bits [31:5] ignored |
 
 ### ECC_INJ fields
 
@@ -159,6 +159,16 @@ sync test (sw/tests/test_regmap.py) enforces the alignment.
 |---|---|---|---|
 | 0 | SINGLE | SC | Flip one bit on the next W_DATA commit |
 | 1 | DOUBLE | SC | Flip two bits on the next W_DATA commit |
+
+### FAULT_CLR fields
+
+| Bits | Field | Access | Description |
+|---|---|---|---|
+| 0 | CNT_SEC | W1C | Clear CNT_SEC (0x70) |
+| 1 | CNT_DED | W1C | Clear CNT_DED (0x74) |
+| 2 | CNT_EVQ_OVF | W1C | Clear CNT_EVQ_OVF (0x78); also re-exported to the input queue drop counter |
+| 3 | CNT_AXON_OOR | W1C | Clear CNT_AXON_OOR (0x7C) |
+| 4 | FAULT_ADDR | W1C | Clear FAULT_ADDR (0x80) |
 
 ## aer - AER queue access and mesh addressing (docs/10 sections 7, 8)
 

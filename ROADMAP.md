@@ -15,7 +15,7 @@ tagged with their source document; unsourced figures are [estimate].
 | Date | Event | Consequence |
 |---|---|---|
 | 2026-09-03 | NLnet calls reopen (Restack fund) | open-licensing decision must be made; application drafting starts |
-| 2026-09-07 | Internal go/no-go: RM_IHPSG13 SRAM macro closes DRC/LVS in the local rootless flow | selects 8-tile macro pilot (go) vs 2x2 latch-RAM pilot (no-go default) |
+| 2026-09-07 | Internal go/no-go: RM_IHPSG13 SRAM macro closes DRC/LVS in the local rootless flow | selects the macro content of the pilot, no longer its tile count (see the P1 sizing note) |
 | 2026-09-21 | TTIHP26b closes (fab IHP-2609) | pilot design frozen and submitted |
 | 2026-11-03 | NLnet Restack submission deadline | application submitted |
 | spring 2027 (date TBC) | TTIHP27a closes | full-SoC slot IF the pre-silicon gate passes |
@@ -41,18 +41,39 @@ green) or on pilot silicon results for TTIHP27b/IHP MPW (docs/06).
   the 2026-09-07 go/no-go.
 
 Gate G0: docs/07 blocking list closed; sg13g2 trial harden DRC/LVS clean
-on at least one block.
+on at least one block. **Met 2026-08-25** by run `trial-03-signoff` on
+`aer_fifo`: all 80 flow stages completed in 680 s with Magic DRC 0,
+KLayout DRC 0 (deep, no-recommended), Netgen LVS 0 on all seven
+counters, XOR 0, antenna 0 nets and 0 pins after detailed routing,
+0 disconnected pins, 0 power-grid violations, and 0 setup, hold,
+max-slew and max-cap violations across all three corners. Recorded with
+pinned tool and PDK versions in `docs/12-sg13g2-flow-bringup.md`.
 
 ### P1 — TTIHP26b pilot (to 2026-09-21)
 
-Default content (2x2 tiles, latch/FF RAM, no SRAM-macro dependency —
-docs/06 revised default): a reduced LIF slice (32 neurons, FF synapse
-storage) implementing the docs/10 update equations bit-exactly, AER
-input/output FIFOs (the formally proven block), the NPU register-bank
-subset from `regmap/regmap.yaml`, and fault-tolerance demonstrators
-(TMR voter bank + SECDED codec with error counters) observable via the
-TT IO budget. Upgrade path (go/no-go 2026-09-07): 8 tiles with one
-RM_IHPSG13 SRAM macro under BIST.
+Content (flip-flop RAM, no SRAM-macro dependency): a reduced LIF slice
+implementing the docs/10 update equations bit-exactly, AER input/output
+FIFOs (the formally proven block), the NPU register-bank subset from
+`regmap/regmap.yaml`, and fault-tolerance demonstrators (TMR voter bank
++ SECDED codec with error counters) observable through the Tiny Tapeout
+IO budget.
+
+**Tile sizing, measured (supersedes the 2x2 default carried from
+docs/06 B.6):** the integrated pilot does not fit 2x2. Synthesized on
+`sg13g2_stdcell`, `pilot_top` at 8x8 neurons is 105,245 um2 post-techmap,
+which needs 113.7 percent utilization in 4 tiles — and 88.5 percent even
+under the most optimistic placed-area calibration. The glue alone
+(register bank, serial port, queues, dispatcher, weight loader, TMR,
+SECDED — everything except `lif_core`) is 61,733 um2, about 95 percent
+of what 2x2 holds at 70 percent utilization with zero neurons.
+**Decision: 4x2 = 8 tiles at EUR 560**, which the docs/06 B.6 budget
+already carries, so the funding envelope is unchanged. Consequently the
+2026-09-07 go/no-go no longer decides the tile count; it decides whether
+the die carries an SRAM macro. Note the macro variant is itself larger
+than 8 tiles: `RM_IHPSG13_1P_512x32` with its halo is 92,278 um2 against
+a 264,507 um2 4x2 core, leaving 172,229 um2 for logic that needs
+210,866 — that variant is a 3x4 = 12-tile design and must be costed as
+one if it is ever chosen.
 
 Verification bar for submission: cocotb suites green in two simulators
 where feasible, golden-model lockstep on the LIF slice, formal proofs

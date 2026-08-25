@@ -21,9 +21,12 @@ that is realistic for an open PDK and a small team.
 
 ## Status
 
-Research phase complete and independently reviewed; design phase started
-(NPU specification, golden model, register map, first RTL block with
-simulation and formal proofs). `ROADMAP.md` is the phased plan.
+Research phase complete and independently reviewed. Design phase in
+progress: the NPU specification and its bit-exact golden model are
+frozen, and the register bank, LIF datapath, AER queues, SECDED codec
+and TMR voter exist as RTL with cocotb suites, golden-model lockstep and
+SymbiYosys proofs. A pilot top-level targets the Tiny Tapeout TTIHP26b
+shuttle on IHP SG13G2. `ROADMAP.md` is the phased plan.
 
 ## Documents
 
@@ -39,5 +42,17 @@ simulation and formal proofs). `ROADMAP.md` is the phased plan.
 - `docs/09-formal-verification-plan.md` — formal verification program (RTL formal, golden-model refinement, software track)
 - `docs/10-npu-mvp-spec.md` — NPU MVP micro-architecture specification v0.1
 - `docs/11-verification-harness.md` — how to run the simulation and formal harness
+- `docs/12-sg13g2-flow-bringup.md` — IHP SG13G2 flow bring-up, trial harden and SRAM macro inventory
+- `docs/13-nlnet-application.md` — NLnet Restack application draft
+- `docs/14-licensing-decision.md` — open-licensing decision memo (NLnet terms, dependency licenses, export interaction)
+- `docs/15-pilot-tile-plan.md` — pilot die content, pin contract and tile budget
 - `docs/regmap-npu.md` — generated register-map documentation (single source: `regmap/regmap.yaml`)
 - `ROADMAP.md` — phased plan with gates
+
+## Layout
+
+- `hw/rtl/` — RTL blocks; `hw/tb/` — cocotb testbenches, one `Makefile.<block>` each
+- `formal/` — SymbiYosys configurations and property files; `make -C formal everything` runs the full gate
+- `sw/golden/` — bit-exact integer golden models (the abstract specification); `sw/tests/` — their pytest suite
+- `regmap/` — the register map single source and its generators
+- `hw/openlane/` — physical flow configurations for IHP SG13G2

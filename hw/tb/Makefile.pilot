@@ -1,0 +1,94 @@
+# cocotb + Icarus bring-up suite for the TTIHP26b pilot.
+#
+#   cd hw/tb && make -f Makefile.pilot
+#
+# The device under test is the Tiny Tapeout wrapper
+# hw/rtl/tt_um_melihakbulut_nssoc.v,
+# not hw/rtl/pilot_top.v: driving the TT port list is the only way to
+# cover the pin map and the reset synchronizer, and everything the pilot
+# does is reachable from those pins by construction (that is the point of
+# the pin contract in pilot_top.v section 1).
+#
+# The wrapper has no parameters -- a Tiny Tapeout top level cannot have
+# any -- and Icarus applies -P only to a ROOT module, never to a nested
+# instance (verified during bring-up: -P<top>.u_pilot.N_NEURONS is
+# accepted and silently ignored). The geometry is therefore selected by
+# the macros pilot_top.v declares for exactly this purpose:
+#
+#   make -f Makefile.pilot N_NEURONS=8  N_AXONS=8    (default)
+#   make -f Makefile.pilot N_NEURONS=4  N_AXONS=8
+#   make -f Makefile.pilot N_NEURONS=8  N_AXONS=16
+#
+# The testbench reads CFG_NEUR and CFG_AXON back over the serial port and
+# builds the golden core to match, so it follows whatever geometry is
+# compiled. pilot_top's elaboration guards restrict the legal set to
+# powers of two in [4, 16] with at least 32 synapses.
+#
+# Build products land in sim_build_pilot/ and results_pilot.xml so this
+# suite never collides with the other suites in this directory.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+
+# Rootless tool discovery, identical to hw/tb/Makefile: iverilog comes
+# from PATH, cocotb lives in the project venv hw/.venv. If cocotb-config
+# is not already on PATH, re-invoke make with the venv prepended -- make
+# < 4.4 does not pass an exported PATH to $(shell ...), which the cocotb
+# makefiles rely on.
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+RTL := $(abspath $(HERE)/../rtl)
+
+N_NEURONS     ?= 8
+N_AXONS       ?= 8
+EVQ_IN_DEPTH  ?= 4
+EVQ_OUT_DEPTH ?= 4
+
+TOPLEVEL := tt_um_melihakbulut_nssoc
+VERILOG_SOURCES := \
+	$(RTL)/tt_um_melihakbulut_nssoc.v \
+	$(RTL)/pilot_top.v \
+	$(RTL)/lif_core.v \
+	$(RTL)/aer_fifo.v \
+	$(RTL)/tmr_voter.v \
+	$(RTL)/secded_enc.v \
+	$(RTL)/secded_dec.v
+
+COCOTB_TEST_MODULES := test_pilot_top
+
+COMPILE_ARGS += -g2005 -I$(RTL)
+COMPILE_ARGS += -DPILOT_N_NEURONS=$(N_NEURONS)
+COMPILE_ARGS += -DPILOT_N_AXONS=$(N_AXONS)
+COMPILE_ARGS += -DPILOT_EVQ_IN_DEPTH=$(EVQ_IN_DEPTH)
+COMPILE_ARGS += -DPILOT_EVQ_OUT_DEPTH=$(EVQ_OUT_DEPTH)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# The build directory and the results file carry the geometry. Icarus
+# bakes the defines into sim.vvp, but the cocotb makefile only rebuilds
+# when a source file is newer -- a bare geometry change would otherwise
+# silently re-run the previous elaboration.
+GEO := $(N_NEURONS)x$(N_AXONS)_q$(EVQ_IN_DEPTH)x$(EVQ_OUT_DEPTH)
+SIM_BUILD           ?= $(HERE)/sim_build_pilot_$(GEO)
+COCOTB_RESULTS_FILE ?= $(HERE)/results_pilot_$(GEO).xml
+export COCOTB_RESULTS_FILE
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# The register-map header is included by the RTL but is not a Verilog
+# source, so cocotb's rule never sees it change. Without this an edit to
+# npu_regs.vh reuses a stale sim.vvp and the suite reports a false PASS.
+$(SIM_BUILD)/sim.vvp: $(RTL)/npu_regs.vh
+
+endif

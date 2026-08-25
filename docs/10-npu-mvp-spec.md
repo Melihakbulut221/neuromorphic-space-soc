@@ -432,7 +432,7 @@ must not diverge once the regmap flow is instantiated.
 | 0x7C | CNT_AXON_OOR | RO | 0x0 | events dropped for axon id >= CFG_AXON |
 | 0x80 | FAULT_ADDR | RO | 0x0 | weight SRAM word index of the last DED |
 | 0x84 | ECC_INJ | WO | — | b0 flip one bit, b1 flip two bits on the next W_DATA commit (verification hook, netlist-audited out of flight builds) |
-| 0x88 | FAULT_CLR | W1C | 0x0 | clear the fault counters |
+| 0x88 | FAULT_CLR | W1C | 0x0 | clear the fault registers; one bit per fault-block register in offset order from 0x70: b0 CNT_SEC (0x70), b1 CNT_DED (0x74), b2 CNT_EVQ_OVF (0x78; also re-exported to the input queue's own drop counter), b3 CNT_AXON_OOR (0x7C), b4 FAULT_ADDR (0x80); bits [31:5] ignored |
 
 ### aer
 

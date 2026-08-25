@@ -1,0 +1,80 @@
+# cocotb targets for the SECDED (72, 64) codec.
+#
+#   make -f Makefile.secded                     both elaborations
+#   make -f Makefile.secded enc                 encoder only
+#   make -f Makefile.secded dec                 decoder only
+#   make -f Makefile.secded clean SECDED_DUT=X  drop one build directory
+#                                               (cocotb's own clean target,
+#                                               one elaboration at a time)
+#
+# hw/tb/Makefile forwards TB=secded here, so `make TB=secded` and
+# `make TB=secded enc` are the same runs through the shared entry point.
+#
+# cocotb runs one toplevel per simulation, and this block has two
+# combinational modules, so the simulator is invoked twice with the same
+# test module (hw/tb/test_secded.py). SECDED_DUT selects the elaboration
+# and the testbench skips the tests belonging to the other DUT.
+#
+# Separate SIM_BUILD and results files keep both runs, and the aer_fifo
+# run in hw/tb/Makefile, out of each other's way.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+
+# Rootless tool discovery, same convention as hw/tb/Makefile: iverilog
+# from PATH, cocotb from the project venv hw/.venv. If cocotb-config is
+# not already on PATH, re-invoke make with the venv prepended -- make
+# < 4.4 does not pass an exported PATH to $(shell ...), which the cocotb
+# makefiles rely on.
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),secded)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+RTL := $(abspath $(HERE)/../rtl)
+
+# enc | dec -- also exported to the testbench, which gates its tests on it.
+SECDED_DUT ?= dec
+export SECDED_DUT
+
+ifeq ($(SECDED_DUT),enc)
+TOPLEVEL := secded_enc
+VERILOG_SOURCES := $(RTL)/secded_enc.v
+else
+TOPLEVEL := secded_dec
+VERILOG_SOURCES := $(RTL)/secded_dec.v
+endif
+
+MODULE := test_secded
+SIM_BUILD := $(HERE)/sim_build_secded_$(SECDED_DUT)
+COCOTB_RESULTS_FILE := $(HERE)/results_secded_$(SECDED_DUT).xml
+export COCOTB_RESULTS_FILE
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# Default goal: both elaborations. Declared before the cocotb include so
+# it wins over the include's own `all: sim`.
+.DEFAULT_GOAL := secded
+
+.PHONY: secded enc dec
+secded: enc dec
+
+enc:
+	@$(MAKE) -f $(THIS) --no-print-directory sim SECDED_DUT=enc
+
+dec:
+	@$(MAKE) -f $(THIS) --no-print-directory sim SECDED_DUT=dec
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+endif

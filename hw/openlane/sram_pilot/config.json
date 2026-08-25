@@ -1,0 +1,68 @@
+{
+    "DESIGN_NAME": "sram_pilot",
+    "VERILOG_FILES": [
+        "dir::sram_pilot.v"
+    ],
+    "//dut": "Decision vehicle for the 2026-09-07 RM_IHPSG13 go/no-go (docs/06 B.6.1): one RM_IHPSG13_1P_512x32_c2_bm_bist in a registered wrapper and nothing else, so that any failure is attributable to the macro integration. It was built to answer two questions only a routed run can answer. Answers, from run macro-03: detailed routing into the 188 bottom-edge Metal2 pins closes with 0 DRC errors and 0 antenna violations, and signoff does NOT close -- Magic DRC 1106478, KLayout DRC 2316 (all inside the macro), Netgen LVS 359. Full result and interpretation: docs/12 sections 7 and 8.",
+
+    "CLOCK_PORT": "clk",
+    "CLOCK_NET": "clk",
+    "CLOCK_PERIOD": 20,
+    "//clock": "20 ns (50 MHz), the TT envelope of docs/06 B.2, not the loose 30 ns used for the aer_fifo bring-up, so the run reports a real margin rather than an untested one. The macro read arc worst-cases at 6.688 ns at the slow corner (docs/12 section 6.4g). Measured post-layout result: 13.0667 ns setup slack at the slow corner, i.e. the whole read path costs 6.93 ns, zero violations on all three corners.",
+
+    "PDK": "ihp-sg13g2",
+    "STD_CELL_LIBRARY": "sg13g2_stdcell",
+
+    "FP_SIZING": "absolute",
+    "DIE_AREA": [0, 0, 854.40, 340.20],
+    "//die": "The derived 4x2 Tiny Tapeout block of docs/12 section 6.5 (854.40 x 340.20 um), used verbatim so the run tests the actual fit question rather than a comfortable die. A relative-sized die cannot be used with a fixed macro: it does not reserve room for the block.",
+
+    "MACROS": {
+        "RM_IHPSG13_1P_512x32_c2_bm_bist": {
+            "gds": [
+                "pdk_dir::libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_512x32_c2_bm_bist.gds"
+            ],
+            "lef": [
+                "pdk_dir::libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_512x32_c2_bm_bist.lef"
+            ],
+            "vh": [
+                "dir::RM_IHPSG13_1P_512x32_c2_bm_bist_bb.v"
+            ],
+            "lib": {
+                "nom_typ_1p20V_25C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_512x32_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "nom_slow_1p08V_125C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_512x32_c2_bm_bist_slow_1p08V_125C.lib"
+                ],
+                "nom_fast_1p32V_m40C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_512x32_c2_bm_bist_fast_1p32V_m55C.lib"
+                ]
+            },
+            "instances": {
+                "u_sram": {
+                    "location": [380.16, 105.84],
+                    "orientation": "N"
+                }
+            }
+        }
+    },
+    "//macro": "The vh entry is not optional: Verilator.Lint runs before synthesis and aborts with 'Cannot find file containing module: RM_IHPSG13_1P_512x32_c2_bm_bist' without it, and the PDK's own behavioural .v cannot be used because it instantiates a core module from a second file. The fast lib entry is deliberately a cross-corner map: the standard cells ship fast_1p32V_m40C and the SRAM macros ship fast_1p32V_m55C, so the macro's -55 C file is attached to the -40 C corner ID (docs/12 section 6.4a). Location is site-aligned: (380.16, 105.84) - 380.16 = 5.76 + 780 x 0.48 site widths, 105.84 = 15.12 + 24 x 3.78 row heights - so the macro origin lands on the core grid. Orientation N puts the macro's single pin edge (all 188 signal pins at local y = 0) at the bottom, facing the standard-cell band below it.",
+
+    "PDN_MACRO_CONNECTIONS": [
+        "u_sram VPWR VGND VDD! VSS!",
+        "u_sram VPWR VGND VDDARRAY! VSS!"
+    ],
+    "PDN_CFG": "dir::pdn_macro.tcl",
+    "//pdn_cfg": "The stock LibreLane macro grid bonds only TopMetal1 to TopMetal2 over a macro. All three RM_IHPSG13 power pins are on Metal4, so the stock grid leaves them floating and OpenROAD.IRDropReport is the first step that notices (PSM-0069, measured in run macro-01). pdn_macro.tcl sources the stock file and adds the missing Metal4-to-TopMetal1 connect; the macro grid is hard-coded in pdn_cfg.tcl, so PDN_CFG is the only way in.",
+
+    "//pdn": "Three supplies, two entries. The macro's LEF pins carry the trailing '!' global-net marker (VDD!, VSS!, VDDARRAY!) while its Liberty pg_pins do not (docs/12 section 6.4b); PDN hookup matches on the LEF names. VPWR/VGND are this PDK's top-level design power/ground net names (VDD_PIN/GND_PIN in the PDK config); the standard-cell LEF pins are VDD/VSS (SCL_POWER_PINS/SCL_GROUND_PINS). VDDARRAY! is the separate array supply and has no counterpart in the standard-cell PDN, so it needs its own entry -- it does not fall out of the default hookup. Tying it to the core VPWR domain is the single-domain choice; a product design would decide separately whether to split it.",
+
+    "MAGIC_MACRO_STD_CELL_SOURCE": "PDK",
+    "//streamout": "Not the default. With the default 'macro', Magic.StreamOut first runs get_bbox.tcl over the macro GDS and reads its FIXED_BBOX property, which sg13g2's Magic tech derives from the prBoundary layer (calma 189/4). RM_IHPSG13_1P_512x32_c2_bm_bist.gds has no 189/4 layer at all, so the property is empty and LibreLane aborts with 'Failed to extract PR boundary from GDSII view of macro' (measured, run macro-02). 'PDK' takes the get_bbox path out of the flow.",
+
+    "EXTRA_SPICE_MODELS": [
+        "pdk_dir::libs.ref/sg13g2_sram/cdl/RM_IHPSG13_1P_512x32_c2_bm_bist.cdl"
+    ],
+    "//lvs": "The PDK's Netgen setup does not mention RM_IHPSG13 and declares no black box (docs/12 section 6.4f), so the macro CDL has to be handed to Netgen explicitly. This is the load-bearing setting for the LVS half of the go/no-go."
+}

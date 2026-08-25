@@ -1,0 +1,78 @@
+# cocotb + Icarus suite for hw/rtl/lif_core.v (docs/10 sections 1-4):
+# the LIF datapath run in lockstep against sw/golden/lif_core.py.
+#
+#   cd hw/tb && make -f Makefile.lif
+#
+# The module is parameterized (spec section 2), so the geometry is a make
+# variable; the testbench reads N_NEURONS / N_AXONS back from the DUT and
+# builds the golden core to match, so any legal pair works:
+#
+#   make -f Makefile.lif N_NEURONS=8  N_AXONS=4
+#   make -f Makefile.lif N_NEURONS=64 N_AXONS=16
+#
+# The directed cases address specific neuron and axon indices, so the
+# suite needs N_NEURONS >= 4 and N_AXONS >= 4. That is the only
+# restriction: tile offsets are derived from N_NEURONS, so the rest of
+# the specification's 1..1024 range works, including the top of it where
+# the legal offset range [0, 1024 - N_NEURONS] collapses toward zero.
+#
+# Green at 4x4, 8x4, 32x32 and 64x16 for the whole suite, and at 961x4,
+# 1000x4 and 1024x4 for the geometry-sensitive cases (the big geometries
+# are slow -- the weight-load port takes N_AXONS * N_NEURONS cycles and
+# every lockstep step reads back the whole state file -- so they are run
+# per test with COCOTB_TESTCASE, not as a full sweep):
+#
+#   make -f Makefile.lif N_NEURONS=961 N_AXONS=4 \
+#        SIM_BUILD=sim_build_lif_961x4 \
+#        COCOTB_RESULTS_FILE=results_lif_961x4.xml \
+#        COCOTB_TESTCASE=test_e9_partial_tile_matches_a_narrower_core
+#
+# Build products land in sim_build_lif/ and results_lif.xml so this suite
+# and the aer_fifo suite (hw/tb/Makefile) never overwrite each other.
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+# Rootless tool discovery, identical to hw/tb/Makefile: iverilog comes
+# from PATH, cocotb lives in the project venv hw/.venv. If cocotb-config
+# is not already on PATH, re-invoke make with the venv prepended -- make
+# < 4.4 does not pass an exported PATH to $(shell ...), which the cocotb
+# makefiles rely on.
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) --no-print-directory -f $(THIS_MK) $@
+
+else
+
+RTL = $(PWD)/../rtl
+
+N_NEURONS ?= 32
+N_AXONS   ?= 32
+
+# LIF_SRC exists so the mutation-testing script can point the same suite
+# at a mutated copy of the RTL without editing the tree
+# (make -f Makefile.lif LIF_SRC=/path/to/mutant.v SIM_BUILD=... ).
+LIF_SRC ?= $(RTL)/lif_core.v
+
+VERILOG_SOURCES = $(LIF_SRC)
+TOPLEVEL             = lif_core
+COCOTB_TEST_MODULES  = test_lif_core_rtl
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += -P$(TOPLEVEL).N_NEURONS=$(N_NEURONS)
+COMPILE_ARGS += -P$(TOPLEVEL).N_AXONS=$(N_AXONS)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+SIM_BUILD            ?= sim_build_lif
+COCOTB_RESULTS_FILE  ?= results_lif.xml
+export COCOTB_RESULTS_FILE
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+endif

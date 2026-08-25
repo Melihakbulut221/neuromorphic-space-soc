@@ -20,6 +20,15 @@
 //       consecutively written events are read out in order, unmodified,
 //       on the registered output.
 //
+// Checked by reachability (mode cover):
+//   P6  the read port is registered and NOT show-ahead. P5 pins the
+//       timing from above (rd_valid is exactly $past(rd_ok) and rd_data
+//       holds otherwise); P6 pins the shape from below by exhibiting a
+//       state in which a word is queued and rd_data is not that word.
+//       See the aer_fifo.v header: two consumers are built on this shape,
+//       and if the queue is ever made first-word-fall-through this cover
+//       goes unreachable and the job fails, which is the intended alarm.
+//
 // Reset is left free after the initial state, so the proof also covers
 // reset-mid-traffic behavior.
 
@@ -153,4 +162,7 @@ always @(posedge clk) if (f_past_valid && rst_n) begin
     cover (empty && f_seen_full);  // a FIFO that was once full was drained
     cover ($past(wr_drop) && rd_valid);
     cover (drop_cnt == 2);
+    // P6: a word is queued and the read port is not presenting it. Only
+    // a registered-output queue can reach this state.
+    cover (!empty && rd_data != mem[rd_ptr[AW-1:0]]);
 end

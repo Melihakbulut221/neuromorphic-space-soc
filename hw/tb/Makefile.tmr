@@ -1,0 +1,80 @@
+# cocotb targets for the TMR voter.
+#
+#   make -f Makefile.tmr                    all three widths (1, 8, 32)
+#   make -f Makefile.tmr w8                 one width (w1 | w8 | w32)
+#   make -f Makefile.tmr clean TMR_WIDTH=8  drop one build directory
+#                                           (cocotb's own clean target,
+#                                           one width at a time)
+#
+# hw/tb/Makefile forwards TB=tmr here, so `make TB=tmr` and
+# `make TB=tmr w8` are the same runs through the shared entry point.
+#
+# The voter is parameterized, so the same test module runs at several
+# elaborated widths; the testbench reads dut.WIDTH and adapts (at WIDTH = 1
+# it sweeps the whole eight-combination input space). Widths 1 and 32 are
+# the degenerate case and the register-file case of docs/10 section 11.4.
+# Two tests only exist at some widths and are reported as skipped at the
+# others, so every width runs 6 effective tests plus 1 skip.
+#
+# Separate SIM_BUILD and results files per width keep the runs, and the
+# aer_fifo run in hw/tb/Makefile, out of each other's way.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+
+# Rootless tool discovery, same convention as hw/tb/Makefile.
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),tmr)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+RTL := $(abspath $(HERE)/../rtl)
+
+# Elaborated voter width. Exported because the testbench gates its two
+# width-specific tests with a cocotb `skip`, and cocotb fixes `skip` when
+# the test module is imported - before dut.WIDTH can be read. The
+# testbench cross-checks this value against the elaborated parameter on
+# every vector, so the two cannot drift apart unnoticed.
+TMR_WIDTH ?= 8
+export TMR_WIDTH
+
+TOPLEVEL := tmr_voter
+VERILOG_SOURCES := $(RTL)/tmr_voter.v
+MODULE := test_tmr_voter
+SIM_BUILD := $(HERE)/sim_build_tmr_w$(TMR_WIDTH)
+COCOTB_RESULTS_FILE := $(HERE)/results_tmr_w$(TMR_WIDTH).xml
+export COCOTB_RESULTS_FILE
+
+# Icarus takes elaboration-time parameter overrides on the command line.
+COMPILE_ARGS += -P$(TOPLEVEL).WIDTH=$(TMR_WIDTH)
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# Default goal: every width. Declared before the cocotb include so it wins
+# over the include's own `all: sim`.
+.DEFAULT_GOAL := tmr
+
+.PHONY: tmr w1 w8 w32
+tmr: w1 w8 w32
+
+w1:
+	@$(MAKE) -f $(THIS) --no-print-directory sim TMR_WIDTH=1
+
+w8:
+	@$(MAKE) -f $(THIS) --no-print-directory sim TMR_WIDTH=8
+
+w32:
+	@$(MAKE) -f $(THIS) --no-print-directory sim TMR_WIDTH=32
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+endif

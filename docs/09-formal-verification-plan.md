@@ -4,7 +4,9 @@ Research-phase report, document 09. Scope: (A) an accurate summary of the
 seL4 verification program as the methodological reference, (B) an honest
 translation of that methodology to this SoC in three tracks (RTL formal,
 golden-model refinement, software), (C) a phased execution plan with CI
-gates, a rootless tool checklist, and the first ten formal targets.
+gates, a rootless tool checklist, and the first ten formal targets
+(eleven rows: target #4 is split into #4a and #4b, because only the
+voter half of it is provable against today's RTL).
 
 Conventions, as in documents 01-06:
 
@@ -280,18 +282,53 @@ EQ (equivalence, see track 2). Acceptance criteria are per-target and
 binding; "full proof" means UNSAT induction/PDR, not a deep BMC.
 Depths and hours are [estimate]; everything else is the plan of record.
 
-| # | Block | Properties (class) | Method | Acceptance criterion |
-|---|---|---|---|---|
-| 1 | Sync AER FIFO (event queues) | No overflow/underflow; count coherent with pointers; FIFO order preserved (two-symbol data-tracking abstraction); no data loss/duplication (S) | IND k<=4 after invariant strengthening; PDR fallback | Full proof of all safety props; covers: empty, full, wrap-around, simultaneous push+pop all reachable |
-| 2 | SECDED ECC encoder/decoder (39,32 and the fabric width variant) | decode(encode(x)) = x for all x; every 1-bit error corrected and flagged CE; every 2-bit error flagged UE, never silently miscorrected; syndrome=0 iff valid codeword (S) | BMC depth 1 over fully symbolic data + symbolic error mask constrained to weight 0/1/2 (`$anyconst`) — exhaustive for combinational logic | Full proof (UNSAT at depth 1 covers the whole input space); cross-checked by EQ against the Python golden ECC (track 2) |
-| 3 | Async FIFO / CDC crossings (AER in/out, CPI capture) | Gray-code property: pointer changes one bit per clock (S); no overflow/underflow across domains (S); no data loss under symbolic clock ratios (S) | IND on gray-pointer invariants; sby multiclock BMC depth 32 for domain interaction | Full proof of pointer/flag safety; BMC clean at depth >= 2x deepest sync chain; structural CDC lint (no un-synchronized crossing) as a separate CI check |
-| 4 | TMR voters + resync path | Output = majority(a,b,c) always (S); any single corrupted replica never changes output (S, symbolic fault via `$anyseq` on one replica); after fault removal, replicas re-converge within N cycles (L as bounded safety) | BMC depth 1 for voter; IND with one-symbolic-fault assumption for masking; bounded-response counter for resync | Full proofs; the masking theorem is the chip's "integrity" headline result and is reported per protected block |
-| 5 | Control FSMs (scheduler, multi-pass sequencer, scrub controller, link controllers): deadlock freedom and any-state recovery | No unreachable lockup: from ANY state encoding (including illegal/SEU-corrupted), the FSM reaches a legal safe state within K cycles without asserting outputs that violate bus/interface safety (S+L); state register always in legal set once recovered (S) | IND/BMC with *unconstrained initial state* (reset assumption removed) — the standard any-state trick; bounded recovery via watchdog counter assertion | Full proof per FSM; K documented per FSM (target K <= 16); this result is the formal counterpart of the force/release fault-injection campaign and the two must agree |
-| 6 | Register file / CSR write-enable logic | Write-enable one-hot-or-zero (S); no write outside decoded address (S); lock/privilege bits actually gate writes (S); TMR'd CSRs vote correctly (reuse #4) | IND k<=2 | Full proof; every architecturally read-only bit proven unwritable |
-| 7 | Bus arbiter / interconnect (Wishbone/APB-class, document 03 IP set) | Grant mutual exclusion (S); no grant without request unless parked (S); bounded grant latency under fairness assumption (L); protocol legality: no response without request, single outstanding per master (S) | IND for mutex/legality; PDR for fairness with fairness assumptions; BMC depth 64 backstop | Full proof of mutex/legality; bounded-latency proof with stated fairness assumption in the assumption ledger |
-| 8 | QSPI / multi-pass weight-streaming handshake | req/ack never lost or duplicated (S); no reload while fabric pass active unless paused (S); DMA pointer stays in configured window (S — the memory-isolation analog) | IND k<=4 | Full proof of handshake + window containment; the window property is the seL4 "integrity" analog for the NPU's memory traffic |
-| 9 | SpaceWire codec link FSM (ECSS-E-ST-50-12C) | State order ErrorReset -> ErrorWait -> Ready -> Started -> Connecting -> Run with specified timeouts (S); credit counter bounds (never >56 outstanding N-chars) (S); disconnect/parity error always returns to ErrorReset (S) | IND for counters/order; BMC depth ~200 (timeout counters abstracted/reduced for induction) | Full proof of credit and reset properties; timeout values checked by scaled-counter abstraction with the scaling argument documented |
-| 10 | Management core integration | Adopted upstream collateral (see above) + lockstep comparator: shadow-core mismatch always raises alarm within fixed delay (S) | Upstream flow + IND on comparator | Upstream suite green in project CI; comparator full proof |
+The **Status** column is measured against the working tree of
+2026-08-25 and is the only column that moves; it names the sby job that
+carries the evidence, or the reason there is none. `docs/11` section 8
+is the operating manual for re-running any of them. Statuses are one of
+**closed** (the acceptance criterion is met and the job is in
+`make -C formal everything`), **partial** (some clauses proven, the rest
+named), **blocked** (the target cannot be attempted yet, with the
+blocker stated) or **not started**.
+
+| # | Block | Properties (class) | Method | Acceptance criterion | Status (2026-08-25) |
+|---|---|---|---|---|---|
+| 1 | Sync AER FIFO (event queues) | No overflow/underflow; count coherent with pointers; FIFO order preserved (two-symbol data-tracking abstraction); no data loss/duplication (S) | IND k<=4 after invariant strengthening; PDR fallback | Full proof of all safety props; covers: empty, full, wrap-around, simultaneous push+pop all reachable | **closed** — `formal/aer_fifo.sby` tasks `prove` (k-induction, depth 15), `prove_d4`, `bmc`, `cover`; 4 of 4 covers reached |
+| 2 | SECDED ECC encoder/decoder, (72,64) Hsiao per docs/10 section 5 (64 data bits = 16 weights, 8 check bits) | decode(encode(x)) = x for all x; every 1-bit error corrected and flagged CE; every 2-bit error flagged UE, never silently miscorrected; syndrome=0 iff valid codeword (S) | BMC depth 1 over fully symbolic data + symbolic error mask constrained to weight 0/1/2 (`$anyconst`) — exhaustive for combinational logic | Full proof (UNSAT at depth 1 covers the whole input space); cross-checked against the Python golden ECC (track 2) | **closed, with the cross-check delivered by simulation rather than by eqy** — `formal/secded.sby` `bmc`, `bmc_abc`, `cover` give the full proof on two engine families. The track-2 cross-check against `sw/golden/secded.py` is layer 1 (lockstep simulation: `hw/tb/test_secded.py`, `sw/tests/test_secded.py`), not layer 2: **no eqy job exists in this repository**. See the note below the table |
+| 3 | Async FIFO / CDC crossings (AER in/out, CPI capture) | Gray-code property: pointer changes one bit per clock (S); no overflow/underflow across domains (S); no data loss under symbolic clock ratios (S) | IND on gray-pointer invariants; sby multiclock BMC depth 32 for domain interaction | Full proof of pointer/flag safety; BMC clean at depth >= 2x deepest sync chain; structural CDC lint (no un-synchronized crossing) as a separate CI check | **blocked on RTL** — no asynchronous FIFO exists yet; `hw/rtl/aer_fifo.v` is synchronous and the pilot is single-clock |
+| 4a | TMR voters | Output = majority(a,b,c) always (S); any single corrupted replica never changes output (S, symbolic fault via `$anyseq` on one replica) | BMC depth 1 for voter; IND with one-symbolic-fault assumption for masking | Full proofs; the masking theorem is the chip's "integrity" headline result and is reported per protected block | **closed** — `formal/tmr_voter.sby`, 8 tasks: exhaustive BMC at WIDTH 1, 8 and 32, the default width re-proven on a second engine family (`bmc_abc`), a `prove` cross-check, and a cover task at each of the three widths. S2 is stated per replica over *all* values of the third, so it covers faults of any weight, not only single-bit ones |
+| 4b | TMR replica resynchronization path | After fault removal, replicas re-converge within N cycles (L as bounded safety) | Bounded-response counter for resync, under IND | Bounded-response proof with N documented per protected block | **blocked on RTL — nothing to prove** — `hw/rtl/tmr_voter.v` deliberately contains no resynchronization path (restoring a faulty replica belongs to the protected block) and `hw/rtl/pilot_top.v`, the voter's only current user, states that no replica resynchronization is implemented; there, a configuration rewrite restores all three replicas. Closing 4b needs a resync path in RTL first, then a new `formal/<block>.mk` and property file — not a task added to `formal/ecc.mk` |
+| 5 | Control FSMs (scheduler, multi-pass sequencer, scrub controller, link controllers): deadlock freedom and any-state recovery | No unreachable lockup: from ANY state encoding (including illegal/SEU-corrupted), the FSM reaches a legal safe state within K cycles without asserting outputs that violate bus/interface safety (S+L); state register always in legal set once recovered (S) | IND/BMC with *unconstrained initial state* (reset assumption removed) — the standard any-state trick; bounded recovery via watchdog counter assertion | Full proof per FSM; K documented per FSM (target K <= 16); this result is the formal counterpart of the force/release fault-injection campaign and the two must agree | **partial** — the pattern now exists and is applied to one FSM, the `lif_core` control path: `formal/lif_ctrl.sby` H8 proves the encoding is always one of five codewords and that an illegal encoding enters S_SAFE and latches `err_cfg`, with **K = 1**. The any-state trick is task `bmc_safe`, which starts the trace on an illegal encoding — necessary because k-induction assumes the legality invariant and makes the recovery antecedent unreachable in `prove` (see the H8 note in `formal/lif_ctrl_props.v`). The scheduler, multi-pass sequencer, scrub controller and link controllers have no RTL yet. The fault-injection campaign this is supposed to agree with has not been run |
+| 6 | Register file / CSR write-enable logic | Write-enable one-hot-or-zero (S); no write outside decoded address (S); lock/privilege bits actually gate writes (S); TMR'd CSRs vote correctly (reuse #4) | IND k<=2 | Full proof; every architecturally read-only bit proven unwritable | **closed for the register bank; the TMR'd-CSR clause reuses 4a and is exercised in RTL, not proven here** — `formal/npu_regbank.sby`, 5 tasks: `prove` at silicon parameters, `prove_cnt2`, `prove_n256`, `bmc`, `cover`. P4 is the read-only-immunity proof the acceptance criterion names. `hw/rtl/pilot_top.v` votes 55 configuration bits through the proven voter, but no property in this repository binds the register bank to the voter |
+| 7 | Bus arbiter / interconnect (Wishbone/APB-class, document 03 IP set) | Grant mutual exclusion (S); no grant without request unless parked (S); bounded grant latency under fairness assumption (L); protocol legality: no response without request, single outstanding per master (S) | IND for mutex/legality; PDR for fairness with fairness assumptions; BMC depth 64 backstop | Full proof of mutex/legality; bounded-latency proof with stated fairness assumption in the assumption ledger | **blocked on RTL** — no arbiter or interconnect exists yet. The register bank's own single-master bus response channel is proven by P7 of target #6 |
+| 8 | QSPI / multi-pass weight-streaming handshake | req/ack never lost or duplicated (S); no reload while fabric pass active unless paused (S); DMA pointer stays in configured window (S — the memory-isolation analog) | IND k<=4 | Full proof of handshake + window containment; the window property is the seL4 "integrity" analog for the NPU's memory traffic | **blocked on RTL** — no QSPI or streaming path exists; the pilot loads weights over the serial register port |
+| 9 | SpaceWire codec link FSM (ECSS-E-ST-50-12C) | State order ErrorReset -> ErrorWait -> Ready -> Started -> Connecting -> Run with specified timeouts (S); credit counter bounds (never >56 outstanding N-chars) (S); disconnect/parity error always returns to ErrorReset (S) | IND for counters/order; BMC depth ~200 (timeout counters abstracted/reduced for induction) | Full proof of credit and reset properties; timeout values checked by scaled-counter abstraction with the scaling argument documented | **not started** — no codec RTL |
+| 10 | Management core integration | Adopted upstream collateral (see above) + lockstep comparator: shadow-core mismatch always raises alarm within fixed delay (S) | Upstream flow + IND on comparator | Upstream suite green in project CI; comparator full proof | **not started** — no management core is integrated; the core decision itself is still open (B.1) |
+
+Two notes on the acceptance criteria above, both of which exist because
+a makefile fragment or a property file states a completion claim in one
+line and the line has to be true:
+
+- **Target #2 and `formal/ecc.mk`.** That fragment's header records
+  "target #2, SECDED codec ... closed by `ecc_secded`". `ecc_secded`
+  delivers the *proof* clause in full — depth-1 BMC over a symbolic
+  data word and a symbolic 72-bit error vector is exhaustive for a
+  combinational codec, on two engine families. It does not deliver the
+  second clause as originally worded ("cross-checked by EQ ... (track
+  2)"), because EQ in B.2 means Yosys `eqy`/`equiv_*` and there is no
+  eqy job here **[fact — no `.eqy` file exists in the repository]**.
+  The clause is met at track 2 layer 1 instead: `hw/tb/test_secded.py`
+  runs the RTL against `sw/golden/secded.py` and `sw/tests/test_secded.py`
+  holds the model to the code's algebraic properties. The wording of
+  the criterion has been changed above from "by EQ" to "against the
+  Python golden ECC" to match what is actually delivered; adding an eqy
+  job would be a strengthening, not a repair, and is not scheduled.
+- **Target #4 and the voter fragment.** #4 was one row and it is now
+  two, because only 4a is provable today. `formal/ecc.mk` and
+  `formal/tmr_voter_props.v` both already say so in prose; splitting the
+  row means the plan of record says it too, and that "ecc PASSes" can no
+  longer be read as "target #4 is complete". Nothing about 4a's evidence
+  changes.
 
 **Vacuity control [decision].** Every assert set ships with cover
 obligations; a target with passing asserts but failing covers is *red*.
@@ -527,9 +564,11 @@ does — the program starts with the discipline, not after it.
   integrated FSMs, management-core upstream suite green in project CI.
 - **Gate F3 — tapeout freeze.** At the frozen commit: entire formal suite
   green; eqy RTL==netlist and RTL==post-TMR-netlist equivalence proofs
-  green; fault-injection campaign results cross-checked against the #4/#5
-  formal theorems (any disagreement is a blocker); assumption ledger
-  (C.4) reviewed and published in the repo.
+  green; fault-injection campaign results cross-checked against the
+  #4a/#4b/#5 formal theorems (any disagreement is a blocker); assumption
+  ledger (C.4) reviewed and published in the repo. If #4b is still
+  blocked on RTL at that point, F3 records it as an open target rather
+  than treating "ecc green" as its discharge.
 
 Proof maintenance rule across all phases (the seL4 rule verbatim): a
 commit that turns any formal target red is not mergeable; either the RTL
@@ -543,10 +582,10 @@ fault-tolerance trusted base, then protocol machines, then the core.
 | Priority | Target (B.1 ref) | Effort | Rationale for position |
 |---|---|---|---|
 | 1 | Sync AER FIFO full proof (#1) | 8-16 h | Proves the flow itself; week-1 CI smoke |
-| 2 | SECDED encoder/decoder (#2) | 6-12 h | Exhaustive result on the hardening story's cornerstone; also first spec-vs-RTL EQ slice |
-| 3 | TMR voter + masking theorem (#4) | 8-16 h | The chip's integrity headline; tiny proof |
+| 2 | SECDED encoder/decoder (#2) | 6-12 h | Exhaustive result on the hardening story's cornerstone; the spec-vs-RTL cross-check landed as lockstep simulation, not as an EQ slice (see the note under B.1) |
+| 3 | TMR voter + masking theorem (#4a) | 8-16 h | The chip's integrity headline; tiny proof. #4b, the resync path, is not in this order at all: it is blocked on RTL that does not exist |
 | 4 | Async FIFO / CDC (#3) | 12-24 h | Highest silent-failure risk class in the SoC |
-| 5 | FSM any-state recovery template (#5), applied to scrub controller first | 16-32 h | Establishes the reusable SEU-recovery proof pattern all FSMs inherit |
+| 5 | FSM any-state recovery template (#5), applied to scrub controller first | 16-32 h | Establishes the reusable SEU-recovery proof pattern all FSMs inherit. Executed out of order on `lif_core`'s control FSM instead, because that FSM exists and the scrub controller does not (`formal/lif_ctrl.sby`) |
 | 6 | CSR/register write-enable protection (#6) | 8-16 h | Small, closes the register-file trusted base |
 | 7 | Bus arbiter mutex + fairness (#7) | 16-32 h | Needed at Gate F2; fairness proof is the first liveness exercise |
 | 8 | QSPI/multi-pass handshake + DMA window containment (#8) | 16-32 h | The NPU memory-isolation ("integrity") property |
@@ -596,7 +635,8 @@ contents:
    proofs-with-commits, small trusted base, published assumptions — at RTL
    scale with open tools; explicitly do not imitate theorem-prover
    refinement (A.4 scale argument).
-2. Track 1: ten named formal targets with per-target acceptance criteria;
+2. Track 1: ten named formal targets (eleven rows after the #4a/#4b
+   split) with per-target acceptance criteria and a measured status;
    full proofs mandatory on the fault-tolerance trusted base.
 3. Track 2: frozen Python golden model as the abstract spec; lockstep
    cocotb + datapath EQ slices + netlist equivalence as the refinement

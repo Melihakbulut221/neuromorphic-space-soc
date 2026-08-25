@@ -1,0 +1,82 @@
+# SymbiYosys job for the TMR voter.
+#
+#   sby -f tmr_voter.sby bmc        full proof at WIDTH = 8 (boolector)
+#   sby -f tmr_voter.sby bmc_abc    the same proof on an independent engine
+#   sby -f tmr_voter.sby bmc_w1     same at WIDTH = 1 (degenerate width)
+#   sby -f tmr_voter.sby bmc_w32    same at WIDTH = 32 (register-file width)
+#   sby -f tmr_voter.sby prove      k-induction flow, WIDTH = 8
+#   sby -f tmr_voter.sby cover      non-vacuity (masking, unanimity, split)
+#   sby -f tmr_voter.sby cover_w1   the same cover set at WIDTH = 1
+#   sby -f tmr_voter.sby cover_w32  the same cover set at WIDTH = 32
+#
+# Engine diversity (docs/09 section C.4 item 7) is expressed as two tasks
+# rather than two engines in one task: sby races the engines listed inside
+# a task and reports the first to answer, so a second engine there would be
+# a speed hedge, not independent confirmation. The engine families differ
+# (SMT bit-blaster versus the AIGER/SAT path), matching formal/secded.sby.
+#
+# The properties live in formal/tmr_voter_props.v, a wrapper module driving
+# hw/rtl/tmr_voter.v with three $anyconst replica words. The voter is
+# combinational, so BMC at depth 1 is exhaustive over all 2^(3*WIDTH)
+# replica combinations at the elaborated width - a full proof of the voter
+# half of docs/09-formal-verification-plan.md target #4, at three widths.
+# (The resync half of that target is not proven here; see the scope note in
+# formal/tmr_voter_props.v and formal/ecc.mk.)
+#
+# Every width runs its own cover task, not just the default WIDTH = 8. The
+# cover set is width-conditional - the three-way-split cover is emitted only
+# for WIDTH >= 2, because three pairwise-distinct one-bit words do not exist
+# - so covering at 8 alone would never exercise the generate at the widths
+# it guards, and would leave the WIDTH = 1 and WIDTH = 32 property sets
+# without a reachability check.
+
+[tasks]
+bmc
+bmc_abc
+bmc_w1
+bmc_w32
+prove
+cover
+cover_w1
+cover_w32
+
+[options]
+bmc: mode bmc
+bmc: depth 1
+bmc_abc: mode bmc
+bmc_abc: depth 1
+bmc_w1: mode bmc
+bmc_w1: depth 1
+bmc_w32: mode bmc
+bmc_w32: depth 1
+prove: mode prove
+prove: depth 1
+cover: mode cover
+cover: depth 1
+cover_w1: mode cover
+cover_w1: depth 1
+cover_w32: mode cover
+cover_w32: depth 1
+
+[engines]
+bmc: smtbmc boolector
+bmc_abc: abc bmc3
+bmc_w1: smtbmc boolector
+bmc_w32: smtbmc boolector
+prove: smtbmc boolector
+cover: smtbmc boolector
+cover_w1: smtbmc boolector
+cover_w32: smtbmc boolector
+
+[script]
+read_verilog -formal tmr_voter.v
+read_verilog -formal tmr_voter_props.v
+bmc_w1: chparam -set WIDTH 1 tmr_voter_props
+cover_w1: chparam -set WIDTH 1 tmr_voter_props
+bmc_w32: chparam -set WIDTH 32 tmr_voter_props
+cover_w32: chparam -set WIDTH 32 tmr_voter_props
+prep -top tmr_voter_props
+
+[files]
+../hw/rtl/tmr_voter.v
+tmr_voter_props.v

@@ -3,6 +3,13 @@
 The YAML source (regmap/regmap.yaml) must stay in sync with both the
 generated files and the normative register list in docs/10-npu-mvp-spec.md
 section 10 ("must not diverge once the regmap flow is instantiated").
+
+The same rule applies to hand-written bit masks anywhere else in the tree
+that restate a position the YAML already fixes. sw/golden/secded.py
+carries the FAULT_CLR_* and STATUS_DED_SEEN constants as literals, so
+they are cross-checked against the generated field table at the end of
+this file; nothing else in the golden models is allowed to re-type a bit
+position without a check here.
 """
 
 import re
@@ -113,3 +120,94 @@ def test_yaml_matches_spec_section_10():
             assert RESET[name] == reset, f"{name}: reset mismatch"
     extra = set(ADDR) - set(spec)
     assert not extra, f"YAML registers not in the spec: {sorted(extra)}"
+
+
+# ---------------------------------------------------------------------
+# Golden-model bit constants against the generated map
+# ---------------------------------------------------------------------
+#
+# sw/golden/secded.py models the fault-counter block, so it has to name
+# the clear bits of FAULT_CLR (0x88) and the STATUS bit DED_SEEN. It
+# writes them as literals, which is a second copy of a position
+# regmap.yaml already owns. These tests are that copy's sync check, in
+# the same spirit as test_generated_files_in_sync above: a YAML edit that
+# moves, renames or adds a bit fails here instead of leaving the golden
+# model silently pointing at the old position.
+
+
+def _fault_clr_constants():
+    """The FAULT_CLR_<FIELD> constants sw/golden/secded.py exports.
+
+    FAULT_CLR_ALL is the union, not a field, and is checked separately.
+    """
+    from golden import secded
+    return {name[len("FAULT_CLR_"):]: getattr(secded, name)
+            for name in dir(secded)
+            if name.startswith("FAULT_CLR_") and name != "FAULT_CLR_ALL"}
+
+
+def test_secded_fault_clr_constants_cover_exactly_the_yaml_fields():
+    """One constant per declared FAULT_CLR field, and no orphans.
+
+    A field added to the YAML without a constant, or a constant left
+    behind after its field was renamed away, fails here.
+    """
+    from golden.regmap_gen import FIELDS
+    declared = set(FIELDS["FAULT_CLR"])
+    modelled = set(_fault_clr_constants())
+    assert modelled == declared, (
+        f"sw/golden/secded.py FAULT_CLR constants and regmap.yaml fields "
+        f"disagree; YAML only: {sorted(declared - modelled)}, "
+        f"secded.py only: {sorted(modelled - declared)}")
+
+
+def test_secded_fault_clr_constants_are_the_yaml_bit_positions():
+    from golden.regmap_gen import FIELDS, FIELD_WIDTHS
+    for field, value in _fault_clr_constants().items():
+        bit = FIELDS["FAULT_CLR"][field]
+        width = FIELD_WIDTHS["FAULT_CLR"][field]
+        assert width == 1, f"FAULT_CLR.{field} is {width} bits, not a flag"
+        assert value == 1 << bit, (
+            f"FAULT_CLR_{field} = 0x{value:X}, YAML puts the field at bit "
+            f"{bit} (0x{1 << bit:X})")
+
+
+def test_secded_fault_clr_all_is_the_union_of_the_declared_bits():
+    from golden.regmap_gen import FIELDS
+    from golden.secded import FAULT_CLR_ALL
+    union = 0
+    for bit in FIELDS["FAULT_CLR"].values():
+        union |= 1 << bit
+    assert FAULT_CLR_ALL == union, (
+        f"FAULT_CLR_ALL = 0x{FAULT_CLR_ALL:X}, the declared fields cover "
+        f"0x{union:X}")
+
+
+def test_secded_status_ded_seen_constant_is_the_yaml_bit_position():
+    from golden.regmap_gen import FIELDS, FIELD_WIDTHS
+    from golden.secded import STATUS_DED_SEEN
+    bit = FIELDS["STATUS"]["DED_SEEN"]
+    assert FIELD_WIDTHS["STATUS"]["DED_SEEN"] == 1
+    assert STATUS_DED_SEEN == 1 << bit, (
+        f"STATUS_DED_SEEN = 0x{STATUS_DED_SEEN:X}, YAML puts STATUS.DED_SEEN "
+        f"at bit {bit} (0x{1 << bit:X})")
+
+
+def test_fault_clr_bits_follow_fault_block_offset_order():
+    """RTL header convention C2, restated in sw/golden/secded.py: one bit
+    per fault-block register, in offset order from 0x70 upward, packed
+    from bit 0. The register bank's packed counter vector and the
+    exported fault_clr[4:0] port both assume it."""
+    from golden.regmap_gen import ADDR, FIELDS
+    fields = FIELDS["FAULT_CLR"]
+    by_bit = sorted(fields, key=lambda name: fields[name])
+    assert [fields[name] for name in by_bit] == list(range(len(by_bit))), (
+        f"FAULT_CLR bits are not packed from 0: {fields}")
+    for name in by_bit:
+        assert name in ADDR, (
+            f"FAULT_CLR.{name} names no register; the one-bit-per-register "
+            f"convention no longer holds")
+    offsets = [ADDR[name] for name in by_bit]
+    assert offsets == sorted(offsets), (
+        f"FAULT_CLR bit order {by_bit} is not fault-block offset order "
+        f"{[f'0x{o:02X}' for o in offsets]}")

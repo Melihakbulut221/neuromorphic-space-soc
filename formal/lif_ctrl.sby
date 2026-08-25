@@ -1,0 +1,90 @@
+# SymbiYosys job for the lif_core control path: command arbitration, the
+# two input handshakes, the output handshake, scan integrity and the
+# spec section 11.4 SAFE state.
+#
+#   sby -f lif_ctrl.sby prove       k-induction proof, 4 neurons x 4 axons
+#   sby -f lif_ctrl.sby prove_3x2   the same properties at a non-power-of-
+#                                   two neuron count (3 x 2), where the
+#                                   scan index does not wrap naturally
+#   sby -f lif_ctrl.sby prove_8x2   the same properties at 8 x 2
+#   sby -f lif_ctrl.sby bmc         bounded backstop, depth 40
+#   sby -f lif_ctrl.sby bmc_live    bounded-liveness watchdog under the
+#                                   sink-fairness assumption (LIF_LIVENESS)
+#   sby -f lif_ctrl.sby bmc_safe    the SAFE-state response itself, checked
+#                                   from a trace that starts on an illegal
+#                                   encoding (LIF_SAFE_ENTRY). This task is
+#                                   not redundant with prove: see the
+#                                   H8 note in lif_ctrl_props.v -- the
+#                                   inductive invariant "the encoding is
+#                                   always legal" makes the recovery
+#                                   antecedent unreachable in the induction
+#                                   step, so prove cannot check it and a
+#                                   default arm that resumed in IDLE would
+#                                   pass there.
+#   sby -f lif_ctrl.sby cover       reachability of every arbitration and
+#                                   handshake behavior proven above
+#   sby -f lif_ctrl.sby cover_safe  a concrete SAFE-state trace from an
+#                                   injected illegal encoding
+#
+# Geometry. The control path is geometry-independent in structure -- the
+# same FSM, the same two readys, the same stall term -- and N_NEURONS only
+# sets the scan length. Proving at 4 x 4 keeps the neuron and weight
+# flip-flop files small enough for k-induction to close quickly; the 3 x 2
+# and 8 x 2 tasks are the parameterization evidence, 3 specifically
+# because $clog2(3) = 2 leaves an unused index value and the wrap is done
+# by last_j rather than by counter overflow. The arithmetic at the
+# silicon geometry is the lockstep suite's job, not this one's
+# (hw/tb/test_lif_core_rtl.py).
+#
+# The properties live in formal/lif_ctrl_props.v, textually included at
+# the end of the lif_core module body under `ifdef FORMAL (read_verilog
+# -formal defines FORMAL; both files land in the same sby src directory,
+# so the include resolves).
+
+# Task groups. This sby release accepts only one tag per configuration
+# line, so the geometry (g4 / g3x2 / g8x2) and the read_verilog variant
+# (rd_plain / rd_live / rd_safe) are expressed as tags shared by several
+# tasks rather than as multi-task prefixes.
+[tasks]
+prove       g4    rd_plain
+prove_3x2   g3x2  rd_plain
+prove_8x2   g8x2  rd_plain
+bmc         g4    rd_plain
+bmc_live    g4    rd_live
+bmc_safe    g4    rd_safe
+cover       g4    rd_plain
+cover_safe  g4    rd_safe
+
+[options]
+prove: mode prove
+prove: depth 12
+prove_3x2: mode prove
+prove_3x2: depth 12
+prove_8x2: mode prove
+prove_8x2: depth 12
+bmc: mode bmc
+bmc: depth 40
+bmc_live: mode bmc
+bmc_live: depth 40
+bmc_safe: mode bmc
+bmc_safe: depth 12
+cover: mode cover
+cover: depth 40
+cover_safe: mode cover
+cover_safe: depth 8
+
+[engines]
+smtbmc yices
+
+[script]
+rd_plain: read_verilog -formal lif_core.v
+rd_live: read_verilog -formal -DLIF_LIVENESS lif_core.v
+rd_safe: read_verilog -formal -DLIF_SAFE_ENTRY lif_core.v
+g4: chparam -set N_NEURONS 4 -set N_AXONS 4 lif_core
+g3x2: chparam -set N_NEURONS 3 -set N_AXONS 2 lif_core
+g8x2: chparam -set N_NEURONS 8 -set N_AXONS 2 lif_core
+prep -top lif_core
+
+[files]
+../hw/rtl/lif_core.v
+lif_ctrl_props.v

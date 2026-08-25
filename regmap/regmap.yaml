@@ -174,7 +174,17 @@ blocks:
         fields:
           - {name: SINGLE, bit: 0, access: SC, desc: "Flip one bit on the next W_DATA commit"}
           - {name: DOUBLE, bit: 1, access: SC, desc: "Flip two bits on the next W_DATA commit"}
-      - {name: FAULT_CLR, offset: 0x88, access: W1C, reset: 0x00000000, desc: "Clear the fault counters"}
+      - name: FAULT_CLR
+        offset: 0x88
+        access: W1C
+        reset: 0x00000000
+        desc: "Clear the fault counters; one bit per fault-block register in offset order from 0x70, bits [31:5] ignored"
+        fields:
+          - {name: CNT_SEC,      bit: 0, access: W1C, desc: "Clear CNT_SEC (0x70)"}
+          - {name: CNT_DED,      bit: 1, access: W1C, desc: "Clear CNT_DED (0x74)"}
+          - {name: CNT_EVQ_OVF,  bit: 2, access: W1C, desc: "Clear CNT_EVQ_OVF (0x78); also re-exported to the input queue drop counter"}
+          - {name: CNT_AXON_OOR, bit: 3, access: W1C, desc: "Clear CNT_AXON_OOR (0x7C)"}
+          - {name: FAULT_ADDR,   bit: 4, access: W1C, desc: "Clear FAULT_ADDR (0x80)"}
 
   - name: aer
     desc: AER queue access and mesh addressing (docs/10 sections 7, 8)

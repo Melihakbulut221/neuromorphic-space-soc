@@ -200,7 +200,7 @@ satellites" (project short name to decide; repo name
 |---|---|---|
 | WP1 SNN engine + hardening IP | Event-driven SNN fabric RTL, TMR/ECC/scrub blocks, verification suite (developer time, ~5 months) | 10,000 |
 | WP2 SoC integration + flow | RV32 manager integration, SpaceWire/CAN/peripheral subset, LibreLane sg13g2 flow, docs (developer time, ~3 months) | 6,500 |
-| WP3 Shuttle silicon | TTIHP26b pilot (4 tiles ~EUR 280 default, 8 tiles ~EUR 560 if upgraded, per B.6) + follow-up TT run gated per B.6.2 (TTIHP27a on pre-silicon evidence, or silicon-results-gated TTIHP27b/IHP MPW; 16-32 tiles, EUR 1,120-2,240) + devkits/breakout PCBs | 3,500 |
+| WP3 Shuttle silicon | TTIHP26b pilot (8 tiles ~EUR 560 default, 12 tiles ~EUR 840 for the SRAM-macro variant, per B.6) + follow-up TT run gated per B.6.2 (TTIHP27a on pre-silicon evidence, or silicon-results-gated TTIHP27b/IHP MPW; 16-32 tiles, EUR 1,120-2,240) + devkits/breakout PCBs | 3,500 |
 | WP4 Bring-up hardware | Test boards, FPGA host board, instrumentation for characterization | 2,500 |
 | WP5 Radiation pre-screening | TID (Co-60) campaign on shuttle parts, test-board mods, logistics; facility-dependent | 5,000 |
 | **Total** | | **27,500** |
@@ -369,19 +369,44 @@ currently lacks.
 Capacity model: ~4.3 kGE raw / ~2.5-3 kGE practical per IHP tile
 (B.3), SRAM per B.4.
 
+The 2x2 default this section previously recommended has been overtaken
+by measurement. `docs/15-pilot-tile-plan.md` section 4 hardened the
+actual pilot RTL through the complete `Classic` flow: the design places
+**136,107 um2** of standard cells, and the tile geometry is now read
+out of `tt-support-tools` `tech/ihp-sg13g2/tile_sizes.yaml` and the DEF
+templates rather than interpolated, giving **126,685 um2** of placement
+rows in a 2x2 block and **259,837 um2** in a 4x2 **[fact, docs/15
+sections 4.1 and 4.3]**. 2x2 would need 107.4 % utilization — not tight
+but impossible — and 4x2 closed at 52.38 % with zero DRC, LVS, antenna
+and timing violations. **The flip-flop-RAM pilot is a 4x2 = 8-tile
+design; that is measured, not projected.**
+
 | Option | Tiles | Cost | Content | Verdict |
 |---|---|---|---|---|
-| **Default pilot (TTIHP26b)** | **2x2 = 4** | **~EUR 280 + devkit** | 16-32 LIF neuron crossbar (tt-um-lif-crossbar lineage), latch/FF-based 4-bit weights, event interface, TMR/EDAC demonstrator counters | **Default.** No SRAM-macro dependency; the only option that fits the remaining effort budget (B.6.1) |
-| Upgrade pilot (only if the 2026-09-07 go/no-go passes) | 4x2 = 8 | ~EUR 560 + devkit | One RM_IHPSG13 1024x8 macro (~2 tiles) as ECC-wrapped weight memory, 32-neuron event-driven SNN slice (~3 tiles), minimal sequencer or SERV-class RV32 control (~1-2 tiles), fault counters + SpaceWire-lite/UART host link (~1 tile) | Exercises every risky element of the full SoC (SRAM macro integration, ECC wrapper, SNN datapath, sg13g2 timing closure), but exceeds the solo effort budget unless macro integration closes early (B.6.1) |
+| **Default pilot (TTIHP26b)** | **4x2 = 8** | **~EUR 560 + devkit** | 8 LIF neurons x 8 axons with flip-flop 4-bit weights, AER event queues, serial host port, (72, 64) SECDED weight-word codec, TMR-voted configuration, fault counters and four fault pins (docs/15 section 1) | **Default.** No SRAM-macro dependency. Hardened end to end at this shape: 52.38 % utilization, 0 DRC, 0 LVS, 0 antenna, 0 timing violations on three corners **[fact, docs/15 section 5.3]** |
+| Superseded: 2x2 = 4 minimal pilot | 2x2 = 4 | ~EUR 280 + devkit | 16-32 LIF neuron crossbar (tt-um-lif-crossbar lineage), latch/FF-based 4-bit weights, event interface, TMR/EDAC demonstrator counters | **Not available.** Needs 107.4 % of the 2x2 placement rows for the content above; the synthesis netlist alone is 85.1 % of a 2x2 before a single repair buffer **[fact, docs/15 section 4.3]** |
+| SRAM-macro variant (only if the 2026-09-07 go/no-go passes) | 3x4 or 6x2 = 12 | ~EUR 840 + devkit | The 8-tile content above with the flip-flop synapse file replaced by one `RM_IHPSG13_1P_512x32` (16 kbit) or `1P_512x16` (8 kbit) macro under an ECC read path plus a scrubber, and the fault counters restored to their full 32-bit register-map width | **12 tiles, not 8.** Macro plus halo reserves 92,280 um2 and the logic needs 194,439 um2 of rows at 70 %, i.e. 286,719 um2 against 4x2's 259,837 = 110.3 % **[fact for the areas, estimate for the halo and the utilization; docs/15 section 6]**. Confirm the purchasable shape with Tiny Tapeout: the template's `info.yaml` comment lists no four-row shape while `tile_sizes.yaml` carries 3x4 |
 | Full-SoC attempt | 8x4 = 32 | ~EUR 2,240 | RV32 manager + multi-node SNN + SpaceWire codec + ~16 KB ECC SRAM (4x 1024x32 macros ~ 15 tiles, ~45 kGE logic left) | Marginal; TTIHP27a only on pre-silicon evidence — TTIHP26b silicon arrives after TTIHP27a closes (B.6.2) |
 | Product MVP | — | — | Hundreds-of-kB SRAM class | Not possible on TT; needs a dedicated IHP MPW slot (price list: https://www.ihp-microelectronics.com/services/research-and-prototyping-service/mpw-prototyping-service/schedule-price-list), potentially FMD/university-subsidized **[investigate]** |
 
-**Recommendation (revised 2026-08-25): the default TTIHP26b submission
-is the 2x2 minimal pilot — 16-32 LIF neurons with latch/FF weight
-storage, direct lineage of the shipped tt-um-lif-crossbar SKY130
-design, no RM_IHPSG13 dependency. The 8-tile SRAM-macro pilot is the
-upgrade path, taken only if the 2026-09-07 go/no-go in B.6.1 passes.
-The full-SoC integration is gated per B.6.2.**
+The macro named in the earlier revision of this table, "one RM_IHPSG13
+1024x8 macro (~2 tiles)", is withdrawn on geometry rather than on area.
+`RM_IHPSG13_1P_1024x8_c2_bm_bist` is **336.46 um** tall **[fact,
+installed PDK LEF `SIZE`]** and every two-row Tiny Tapeout block on this
+technology — 1x2 through 8x2 — is **313.74 um** tall **[fact,
+`tt-support-tools` `tech/ihp-sg13g2/tile_sizes.yaml`]**. The macro is
+taller than the block it was gated against, before any halo, PDN ring or
+core margin. Every 1024-word part in the family shares that height.
+The parts that fit a two-row block are the 191.34 um `1P_512x32` and
+`1P_512x16` and the 118.78 um `1P_256x32` (docs/12 section 6.5).
+
+**Recommendation (revised 2026-08-25, after the flow run): the TTIHP26b
+submission is the 4x2 = 8-tile flip-flop-RAM pilot — 8 neurons x 8
+axons with the SECDED and TMR demonstrators on the real datapath, no
+RM_IHPSG13 dependency. The submission tree exists at that shape and
+closes to a GDS locally (docs/15). The SRAM-macro variant is a 12-tile
+design and is gated by B.6.1. The full-SoC integration is gated per
+B.6.2.**
 
 ### B.6.1 Effort budget and go/no-go against the 2026-09-21 close
 
@@ -392,13 +417,17 @@ total** to the deadline **[estimate]**. At HEAD the verified RTL base
 is one block (`hw/rtl/aer_fifo.v` plus the generated `npu_regs.vh`);
 everything below is new work.
 
-Hour budget for the **default 2x2 pilot** (all figures [estimate];
-unit costs consistent with docs/03 and docs/09 where they exist):
+Hour budget for the **default pilot** (all figures [estimate]; unit
+costs consistent with docs/03 and docs/09 where they exist). The budget
+is unchanged from the revision that assumed 2x2: the tile-count
+correction in B.6 changes the shape the design is placed in, not the
+work it takes to build it, and the flow iterations were budgeted
+loosely enough to absorb a bigger block.
 
 | Item | Hours |
 |---|---|
 | Port TT pipeline to `ttihp-verilog-template`, pin the PDK, swap liberty/STA scripts (B.7 deltas 1-4, 6) | 8-12 |
-| LIF crossbar slice + latch/FF 4-bit weight storage + event interface, adapted from the tt-um-lif-crossbar lineage | 15-25 |
+| LIF crossbar slice + FF 4-bit weight storage + event interface, adapted from the tt-um-lif-crossbar lineage | 15-25 |
 | TMR/EDAC demonstrator counters + register hookup | 6-10 |
 | Verification of the new slice against the golden model; existing formal/CI jobs kept green | 10-16 |
 | sg13g2 harden iterations, precheck, submission and payment | 10-16 |
@@ -406,22 +435,51 @@ unit costs consistent with docs/03 and docs/09 where they exist):
 
 The total fits the ~55-80 h capacity only if the low-to-mid estimates
 hold; the upper bound consumes the entire capacity. The default scope
-therefore has **no slack for the SRAM macro**. The **8-tile upgrade**
-adds on top of the above: RM_IHPSG13 1024x8 + ECC-wrapper integration
-closed through DRC/LVS in the local rootless flow (~25-50 h, given the
-open LVS/GDS-merge issues that docs/04 calls "exactly the kind of
-issue that costs weeks at tapeout time"), sequencer or SERV
-integration (~10-20 h), UART host link (20-40 h per the docs/03
-verdict table), and a larger floorplan/timing pass (~8-16 h) —
-**~65-125 h additional [estimate]**, i.e. out of reach of the
-remaining capacity unless the macro work closes early.
+therefore has **no slack for the SRAM macro**. The **SRAM-macro
+variant** adds on top of the above: `RM_IHPSG13_1P_512x32` (or
+`1P_512x16`) + ECC-read-path and scrubber integration closed through
+DRC/LVS in the local rootless flow (~25-50 h, given the open
+LVS/GDS-merge issues that docs/04 calls "exactly the kind of issue that
+costs weeks at tapeout time"), sequencer or SERV integration
+(~10-20 h), UART host link (20-40 h per the docs/03 verdict table), and
+a larger floorplan/timing pass (~8-16 h) — **~65-125 h additional
+[estimate]**, i.e. out of reach of the remaining capacity unless the
+macro work closes early. It also costs a further ~EUR 280, because the
+macro variant is 12 tiles rather than 8 (B.6).
 
-**Go/no-go date: 2026-09-07** (14 days before close). The upgrade to
-the 8-tile pilot is taken only if, by that date, the RM_IHPSG13 1024x8
-macro with its ECC wrapper passes DRC/LVS in the local rootless flow
-inside the 4x2 floorplan. Otherwise the 2x2 default is submitted and
+**Go/no-go date: 2026-09-07** (14 days before close). **The gate
+decides macro content, not tile count.** 4x2 = 8 tiles is what the
+flip-flop-RAM pilot needs anyway and is what the submission tree is
+built at; the question the gate answers is whether the synapse file
+inside those tiles is flip-flops or an SRAM macro — and, if it is a
+macro, whether the shuttle order is raised to 12 tiles to hold it.
+
+The SRAM-macro variant is taken only if, by that date, all three hold:
+
+1. an `RM_IHPSG13_1P_512x32` or `1P_512x16` macro with its ECC read
+   path passes DRC **and** LVS in the local rootless flow at the block
+   shape it would actually ship in (`1024x8` is withdrawn: it is taller
+   than any two-row block, B.6);
+2. a 12-tile shape is purchasable for TTIHP26b — confirm with Tiny
+   Tapeout, since `tile_sizes.yaml` carries 3x4 and the template's own
+   `info.yaml` comment lists only two-row shapes (docs/15 section 6);
+3. the ~65-125 h above fits what is left of the capacity.
+
+Otherwise the 8-tile flip-flop-RAM pilot is submitted as it stands and
 the macro-integration learning moves to the TTIHP27a pre-silicon track
 (B.6.2).
+
+**Status as of 2026-08-25, ahead of the gate date:** condition 1 has
+been tested and fails. `docs/12-sg13g2-flow-bringup.md` sections 7 and
+8 hardened one `RM_IHPSG13_1P_512x32_c2_bm_bist` in a registered
+wrapper — i.e. without the ECC read path, strictly easier than the gate
+asks for — and it places, routes and closes timing, but does not sign
+off: Magic DRC and KLayout DRC both report errors that are 100 % inside
+the vendor macro geometry, and Netgen LVS fails on CDL-versus-GDS
+hierarchy naming (IHP-Open-PDK issue #239) plus a bus-delimiter
+mismatch. Both blocking causes are upstream of this repository. The
+recommendation recorded there is **NO-GO for TTIHP26b**; the gate can
+be closed early on that evidence.
 
 ### B.6.2 Second-run gating — corrected
 
@@ -480,7 +538,7 @@ TT submission pipeline — carry over almost entirely. Concrete deltas:
 | Date | Event | Source |
 |---|---|---|
 | 2026-09-03 | NLnet calls reopen (Restack et al.) | https://nlnet.nl/propose/ |
-| **2026-09-07** | **Pilot go/no-go: 8-tile upgrade only if RM_IHPSG13 + ECC wrapper closes DRC/LVS in the local rootless flow; otherwise submit the 2x2 default** | B.6.1 |
+| **2026-09-07** | **Pilot go/no-go on macro content: the 12-tile SRAM-macro variant only if an `RM_IHPSG13_1P_512x32`/`1P_512x16` with its ECC read path closes DRC/LVS in the local rootless flow and a 12-tile shape is purchasable; otherwise submit the 8-tile flip-flop-RAM pilot. Already answerable NO-GO on the docs/12 evidence** | B.6.1 |
 | **2026-09-21** | **TTIHP26b closes (submit + pay before this date)** | https://app.tinytapeout.com/shuttles/ **[re-confirm]** |
 | 2026-10 | Draft Restack application review window; office-hour question slot | https://nlnet.nl/officehour/ |
 | **2026-11-03 12:00 CEST** | **NLnet submission deadline** | https://nlnet.nl/propose/ |
@@ -501,16 +559,21 @@ disbursements and be out-of-pocket (A.7).
 
 ## Action items
 
-1. **Decide TTIHP26b entry and freeze pilot-block scope** (2x2 default
-   content per B.6, with the 8-tile upgrade path per B.6.1) —
-   developer. Immediately; the shuttle closes 2026-09-21.
+1. **Decide TTIHP26b entry and freeze pilot-block scope** (4x2 = 8-tile
+   flip-flop-RAM content per B.6, with the SRAM-macro variant gated per
+   B.6.1) — developer. Immediately; the shuttle closes 2026-09-21.
+   Buying 8 tiles rather than 4 raises the shuttle line from ~EUR 280
+   to ~EUR 560, which WP3 already carries.
 2. **Port the TT pipeline to `ttihp-verilog-template` and produce a
    first sg13g2 harden of the pilot block** (deltas 1-4, 6 of B.7) —
-   engineering.
-3. **Prototype RM_IHPSG13 1024x8 integration with the ECC wrapper**
-   in the 4x2 floorplan against the 2026-09-07 go/no-go (B.6.1); the
-   2x2 latch/FF-RAM default is submitted unless DRC/LVS closes by that
-   date — engineering.
+   engineering. **Done**: `tt/` is generated and the design closes to a
+   GDS at 4x2 locally (docs/15 sections 5.3 and 8).
+3. **Prototype RM_IHPSG13 integration with the ECC read path** against
+   the 2026-09-07 go/no-go (B.6.1) — engineering. **Done, negative**:
+   `RM_IHPSG13_1P_512x32_c2_bm_bist` places, routes and closes timing
+   but fails Magic DRC, KLayout DRC and Netgen LVS on causes that are
+   entirely inside the vendor views (docs/12 sections 7 and 8). The
+   8-tile flip-flop-RAM pilot is what is submitted.
 4. **Purchase tiles and submit on app.tinytapeout.com** before
    2026-09-21; re-confirm deadline, price, and max-tile policy in the
    dashboard — developer.

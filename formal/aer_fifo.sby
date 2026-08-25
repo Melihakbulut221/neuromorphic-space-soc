@@ -5,7 +5,10 @@
 #   sby -f aer_fifo.sby prove_d4   same proof at DEPTH=4, WIDTH=8 (fast
 #                                  parameterization check)
 #   sby -f aer_fifo.sby bmc        bounded check, depth 40
-#   sby -f aer_fifo.sby cover      reachability of full/drain/drop states
+#   sby -f aer_fifo.sby cover      reachability of full/drain/drop states,
+#                                  and P6, which pins the read port to the
+#                                  registered (not show-ahead) shape that
+#                                  two consumers depend on
 #
 # The properties live in formal/aer_fifo_props.v, textually included at
 # the end of the aer_fifo module body under `ifdef FORMAL (read_verilog

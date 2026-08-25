@@ -9,6 +9,26 @@ runs/
 hw/.venv/
 hw/tb/sim_build*/
 hw/tb/results.xml
+hw/tb/results_*.xml
 .pytest_cache/
-formal/aer_fifo_*/
+
+# SymbiYosys working directories: one per task. The .sby configs and the
+# property files are the tracked source; these are regenerated output.
 formal/aer_fifo/
+formal/aer_fifo_*/
+formal/npu_regbank/
+formal/npu_regbank_*/
+formal/secded/
+formal/secded_*/
+formal/tmr_voter/
+formal/tmr_voter_*/
+formal/lif_ctrl/
+formal/lif_ctrl_*/
+
+# physical flow run outputs
+hw/openlane/runs/
+hw/openlane/*/runs/
+tt/runs/
+
+# tt-support-tools is cloned in for the submission checks, not vendored
+tt/tt/

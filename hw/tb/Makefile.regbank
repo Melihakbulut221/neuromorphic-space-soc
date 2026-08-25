@@ -1,0 +1,92 @@
+# cocotb + Icarus suite for hw/rtl/npu_regbank.v.
+#
+#   cd hw/tb && make -f Makefile.regbank            default 512x512 build
+#   cd hw/tb && make -f Makefile.regbank small      256x256 build
+#   cd hw/tb && make -f Makefile.regbank lint       Verilator lint, no warnings
+#
+# The block is parameterized (docs/10 section 2) and CFG_NEUR / CFG_AXON
+# reset from N_NEURONS / N_AXONS rather than from the regmap.yaml 512
+# literal (RTL header convention C8), so the suite reads the parameters
+# back from the DUT and the geometry is a make variable:
+#
+#   make -f Makefile.regbank N_NEURONS=256 N_AXONS=256 \
+#        SIM_BUILD=sim_build_regbank_256 COCOTB_RESULTS_FILE=results_regbank_256.xml
+#
+# The `small` target is exactly that invocation. A build smaller than the
+# regmap default is the case that catches a reset value taken from the
+# literal instead of the parameter.
+#
+# Standalone by design (the shared hw/tb/Makefile is the integrator's file).
+# Same rootless tool discovery as that Makefile: iverilog from PATH, cocotb
+# from the project venv hw/.venv -- if cocotb-config is not already on PATH
+# the recipe re-invokes make with the venv prepended, because make < 4.4
+# does not pass an exported PATH into $(shell ...), which the cocotb
+# makefiles rely on.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../rtl
+
+N_NEURONS ?= 512
+N_AXONS   ?= 512
+
+# REGBANK_SRC exists so a mutation run can point the same suite at a
+# modified copy of the RTL without editing the tree
+# (make -f Makefile.regbank REGBANK_SRC=/path/to/mutant.v SIM_BUILD=... ).
+REGBANK_SRC ?= $(RTL)/npu_regbank.v
+
+VERILOG_SOURCES = $(REGBANK_SRC)
+TOPLEVEL = npu_regbank
+MODULE = test_npu_regbank
+
+# Per-block build and results paths so this suite can run alongside the
+# others without clobbering their artifacts.
+SIM_BUILD ?= sim_build_regbank
+COCOTB_RESULTS_FILE ?= results_regbank.xml
+export COCOTB_RESULTS_FILE
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += -P$(TOPLEVEL).N_NEURONS=$(N_NEURONS)
+COMPILE_ARGS += -P$(TOPLEVEL).N_AXONS=$(N_AXONS)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# A second instantiation, smaller than the regmap.yaml default, so the
+# CFG_NEUR / CFG_AXON reset values and the cfg_valid bounds are held to
+# the parameters (C8) and not to the 512 literal.
+.PHONY: small
+small:
+	$(MAKE) -f $(THIS_MK) N_NEURONS=256 N_AXONS=256 \
+		SIM_BUILD=sim_build_regbank_256 \
+		COCOTB_RESULTS_FILE=results_regbank_256.xml
+
+# Default-flag Verilator lint. The sibling aer_fifo emits nothing here and
+# so must this block: the read multiplexer is the one place where an
+# implicit width extension is easy to write by accident.
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) $(REGBANK_SRC)
+
+endif

@@ -1,0 +1,64 @@
+# SymbiYosys job for the NPU register bank (docs/09 section B.1 target #6:
+# register file / CSR write-enable logic, method IND k<=2, acceptance
+# "full proof; every architecturally read-only bit proven unwritable").
+#
+#   sby -f npu_regbank.sby prove       k-induction proof at silicon
+#                                      parameters (CNT_W = 32)
+#   sby -f npu_regbank.sby prove_cnt2  same properties with 2-bit fault
+#                                      counters, the configuration the
+#                                      cover task uses
+#   sby -f npu_regbank.sby prove_n256  same properties on a core smaller
+#                                      than the regmap.yaml default. This
+#                                      is where a CFG_NEUR / CFG_AXON
+#                                      reset value taken from the 512
+#                                      literal instead of from the
+#                                      N_NEURONS / N_AXONS parameters
+#                                      (RTL header C8) shows up: at 256 the
+#                                      literal is out of range, so P1 and
+#                                      the cfg_valid part of P10 fail
+#   sby -f npu_regbank.sby bmc         bounded check, depth 30
+#   sby -f npu_regbank.sby cover       reachability of every proven
+#                                      behavior; CNT_W = 2 so that counter
+#                                      saturation is reachable in a bounded
+#                                      trace (at 32 bits it is not, and an
+#                                      unreachable cover would be a red
+#                                      target under the docs/09 vacuity rule)
+#
+# The properties live in formal/npu_regbank_props.v, textually included at
+# the end of the npu_regbank module body under `ifdef FORMAL (read_verilog
+# -formal defines FORMAL). npu_regs.vh is listed in [files] as well, so the
+# generated-constants include resolves inside the sby src directory.
+
+[tasks]
+bmc
+prove
+prove_cnt2
+prove_n256
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 30
+prove: mode prove
+prove: depth 10
+prove_cnt2: mode prove
+prove_cnt2: depth 10
+prove_n256: mode prove
+prove_n256: depth 10
+cover: mode cover
+cover: depth 40
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal npu_regbank.v
+prove_cnt2: chparam -set CNT_W 2 npu_regbank
+prove_n256: chparam -set N_NEURONS 256 -set N_AXONS 256 npu_regbank
+cover: chparam -set CNT_W 2 npu_regbank
+prep -top npu_regbank
+
+[files]
+../hw/rtl/npu_regbank.v
+../hw/rtl/npu_regs.vh
+npu_regbank_props.v
