@@ -19,14 +19,15 @@
 //   - level is exact occupancy (0..DEPTH), full == (level == DEPTH),
 //     empty == (level == 0); level feeds EVQ_STAT.
 //
-// DEPTH must be a power of two. Plain Verilog-2001, Icarus-clean; the
-// formal properties (formal/aer_fifo_props.v) are textually included under
-// `ifdef FORMAL and are invisible to simulation and synthesis.
+// DEPTH must be a power of two, >= 2 (enforced by an elaboration guard).
+// Plain Verilog-2005, Icarus-clean; the formal properties
+// (formal/aer_fifo_props.v) are textually included under `ifdef FORMAL
+// and are invisible to simulation and synthesis.
 `default_nettype none
 
 module aer_fifo #(
     parameter WIDTH  = 16,             // AER event word width (docs/10 section 7.1)
-    parameter DEPTH  = 64,             // entries, power of two (EVQ_*_DEPTH)
+    parameter DEPTH  = 64,             // entries, power of two >= 2 (EVQ_*_DEPTH)
     parameter DROP_W = 16,             // sticky drop counter width
     parameter AW     = $clog2(DEPTH)   // derived pointer width, do not override
 ) (
@@ -46,6 +47,17 @@ module aer_fifo #(
     input  wire              drop_clr,
     output reg  [DROP_W-1:0] drop_cnt
 );
+
+    // Elaboration guard: a DEPTH outside the contract (power of two, >= 2)
+    // takes the generate branch and references a module that deliberately
+    // does not exist, so elaboration fails with the module name as the
+    // message in every tool (Icarus, Yosys). Plain-2005 construct; DEPTH=1
+    // would otherwise degenerate the [AW-1:0] index part-selects to [-1:0].
+    generate
+        if (DEPTH < 2 || (DEPTH & (DEPTH - 1)) != 0) begin : g_bad_depth
+            ERROR_aer_fifo_DEPTH_must_be_a_power_of_two_ge_2 guard ();
+        end
+    endgenerate
 
     localparam [DROP_W-1:0] DROP_MAX = {DROP_W{1'b1}};
 

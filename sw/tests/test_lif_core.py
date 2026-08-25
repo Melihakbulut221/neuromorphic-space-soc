@@ -335,3 +335,31 @@ def test_state_clr_matches_spec_reset_state():
     core.synaptic_event(0)
     core.reset_state()
     assert core.get_state(0) == (0, 0)
+
+
+# -- tile_offset bound (spec sections 7.1, 9, 10: 10-bit event-word ID) --------
+
+def test_tile_offset_negative_rejected():
+    # No hardware can emit a negative id; PASS_TILE_OFF is unsigned.
+    with pytest.raises(ValueError):
+        LIFCore(1, 1, [[0]], LIFConfig(thresh=100), tile_offset=-1)
+
+
+def test_tile_offset_above_id_field_rejected():
+    # PASS_TILE_OFF is bits [9:0]: 1024 is not programmable.
+    with pytest.raises(ValueError):
+        LIFCore(1, 1, [[0]], LIFConfig(thresh=100), tile_offset=1024)
+
+
+def test_tile_offset_plus_neurons_overflow_rejected():
+    # 1023 + 2 > 1024: neuron j = 1 would emit id 1024, which does not
+    # fit the 10-bit ID field of the frozen event word.
+    with pytest.raises(ValueError):
+        LIFCore(2, 1, [[0, 0]], LIFConfig(thresh=100), tile_offset=1023)
+
+
+def test_tile_offset_boundary_1024_accepted_and_emits_max_id():
+    # Boundary: tile_offset 1023 + n_neurons 1 = exactly 1024 is legal;
+    # the neuron emits id 1023, the largest representable event id.
+    core = LIFCore(1, 1, [[7]], LIFConfig(thresh=5), tile_offset=1023)
+    assert core.synaptic_event(0) == [1023]

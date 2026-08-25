@@ -21,8 +21,9 @@ that is realistic for an open PDK and a small team.
 
 ## Status
 
-Research phase. See `docs/` for the reference analysis and the research
-reports; `ROADMAP.md` is produced at the end of the research phase.
+Research phase complete and independently reviewed; design phase started
+(NPU specification, golden model, register map, first RTL block with
+simulation and formal proofs). `ROADMAP.md` is the phased plan.
 
 ## Documents
 
@@ -33,5 +34,10 @@ reports; `ROADMAP.md` is produced at the end of the research phase.
 - `docs/04-technology-and-flow.md` — 130 nm technology selection, memory strategy, flow and cost
 - `docs/05-market-positioning.md` — mission profile, competitive landscape, positioning rules
 - `docs/06-funding-and-shuttle.md` — NLnet grant plan and TTIHP26b shuttle logistics
-- `docs/07-design-review.md` — independent review of the research phase
+- `docs/07-design-review.md` — independent review of the research phase and design wave 1
+- `docs/08-gr801-datasheet-notes.md` — GR801/GRLIB programmer-visible conventions and proximity checklist
+- `docs/09-formal-verification-plan.md` — formal verification program (RTL formal, golden-model refinement, software track)
+- `docs/10-npu-mvp-spec.md` — NPU MVP micro-architecture specification v0.1
+- `docs/11-verification-harness.md` — how to run the simulation and formal harness
+- `docs/regmap-npu.md` — generated register-map documentation (single source: `regmap/regmap.yaml`)
 - `ROADMAP.md` — phased plan with gates

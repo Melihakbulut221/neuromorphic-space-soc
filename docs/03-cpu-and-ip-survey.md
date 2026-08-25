@@ -343,7 +343,8 @@ must appear in the ROADMAP cost line.
   (https://github.com/alexforencich/verilog-uart). ZipCPU wbuart32 is
   GPLv3 (https://github.com/ZipCPU/wbuart32) — avoided for license
   virality, not quality.
-- Assessment: 20–40 h (est.) for three instances plus FIFOs and a
+- Assessment: 20–40 h (est.) for the two instances in the docs/01
+  section 4 scaled interface set (GR801 carries 3x) plus FIFOs and a
   common register map; a UART is also a natural first TMR
   demonstration block.
 - Verdict: realistic, trivial. Candidate: alexforencich/verilog-uart
@@ -367,7 +368,10 @@ must appear in the ROADMAP cost line.
   including CDC verification and a frame-capture testbench. From-scratch
   is preferred over adapting any specific open example because the block
   is small and the DMA/SRAM back end is project-specific.
-- Verdict: realistic and cheap; in scope, from-scratch.
+- Verdict: realistic and cheap; optional per docs/01 section 4, with
+  the build decision deferred to the NPU architecture work per docs/08.
+  From-scratch if retained; costed as a separate optional line item in
+  section 2.4, not in the phase-1 base total.
 
 #### PCIe Gen3 x4 — out of scope, with reasons
 
@@ -424,9 +428,15 @@ integrate.
 
 ### 2.4 Roll-up and consequences for the ROADMAP
 
-- Total interface effort, phase-1 scope (SpaceWire codec, CAN 2.0B,
-  QSPI, SPI, I2C, UART, GPIO, CPI): roughly 320–555 h (est.) before
-  TMR insertion and fault-injection campaigns.
+- Base interface effort, phase-1 scope per the docs/01 section 4
+  scaled interface set (SpaceWire codec, CAN 2.0B, QSPI, SPI, I2C,
+  2x UART, GPIO): roughly 280–475 h (est.) before TMR insertion and
+  fault-injection campaigns.
+- Optional line item, outside the base total: CPI capture, 40–80 h
+  (est.). docs/01 marks the CPI front end optional and docs/08 defers
+  the build decision to the NPU architecture work; the ROADMAP
+  therefore inherits the base total plus this separately tracked
+  optional item, not a single merged figure.
 - Every selected interface IP is hand-written (or hand-auditable)
   Verilog under MIT/LGPL/BSD-style/Apache licenses; no GPL RTL enters
   the SoC; the only GPL-family item is LGPL (Mohor CAN, and

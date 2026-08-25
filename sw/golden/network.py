@@ -13,12 +13,15 @@ exactly as specified:
      per-event emissions are concatenated in tile order.
 
 The axon dimension is not splittable in v0.1 (spec section 9 limitation);
-the runner enforces fan-in <= core_axons.
+the runner enforces fan-in <= core_axons. Tiled layer width is capped at
+1024 = 2^10 (spec section 9 limitation): the last tile's base + width
+must fit the frozen 10-bit event-word ID field, so the runner refuses
+wider layers at construction.
 
 Integer-only, like everything in the golden path.
 """
 
-from .lif_core import LIFCore
+from .lif_core import EVENT_ID_SPAN, LIFCore
 
 
 class LayerSpec:
@@ -46,6 +49,12 @@ class NetworkRunner:
                     f"layer {i} fan-in {layer.n_axons} exceeds core_axons "
                     f"{core_axons}: axon-dimension multi-pass is not "
                     "supported in v0.1 (spec section 9)")
+            if layer.n_neurons > EVENT_ID_SPAN:
+                raise ValueError(
+                    f"layer {i} width {layer.n_neurons} exceeds "
+                    f"{EVENT_ID_SPAN}: the last tile's base + width would "
+                    "overflow the 10-bit event-word ID field (E9 bound, "
+                    "spec section 9)")
             if i > 0 and layers[i - 1].n_neurons != layer.n_axons:
                 raise ValueError(
                     f"layer {i} fan-in {layer.n_axons} does not match "

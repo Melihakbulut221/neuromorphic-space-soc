@@ -374,14 +374,24 @@ options:
   core logic excluding cache SRAM**, with 16 KB I$ + 32 KB D$ and
   flip-flop TLBs, 902 MHz sign-off (Zaruba & Benini, "The Cost of
   Application-Class Processing", https://arxiv.org/abs/1904.05442).
-- Area at 130 nm [estimate, using document 01 anchors of 150-190 kGE/mm2
-  placed and open-PDK SRAM at ~57 kbit/mm2]: 210 kGE logic = 1.1-1.4 mm2;
-  48 KB caches + tags + TLB state ~ 430+ kbit = 7-9 mm2 with OpenRAM-class
-  macros (1.5-2 mm2 only if commercial 130 nm SRAM compiler access
-  materializes, document 04); total CVA6 subsystem ~ 8-10 mm2 open-PDK,
-  versus 1.5-2.5 mm2 for the entire Ibex management subsystem (documents
-  01/03). On the 25 mm2 die, S1 spends a third-plus of total area — and
-  roughly half the total SRAM budget — on the manager.
+- Area at 130 nm [estimate], computed on the primary PDK with the
+  fallback kept for comparison. SG13G2 anchors: foundry SRAM macros in
+  the open PDK at ~25-40 KiB/mm2, no commercial access needed (document
+  04 section 3.1), and ~138 kGE/mm2 raw logic density (document 06 B.3).
+  sky130 anchors: document 01's 150-190 kGE/mm2 placed and open-PDK SRAM
+  at ~57 kbit/mm2.
+
+  | Item | SG13G2 (primary) | sky130 (fallback) |
+  |---|---|---|
+  | 210 kGE core logic | ~2.2-2.5 mm2 placed (60-70% utilization of 138 kGE/mm2 raw) | 1.1-1.4 mm2 |
+  | 48 KB caches + tags + TLB state (~430+ kbit) | ~1.3-2.1 mm2 (foundry macros) | 7-9 mm2 OpenRAM-class (1.5-2 mm2 only if commercial 130 nm SRAM compiler access materializes, document 04) |
+  | CVA6 subsystem total | ~3.5-4.6 mm2 | ~8-10 mm2 |
+
+  Versus 1.5-2.5 mm2 for the entire Ibex management subsystem (documents
+  01/03). On the 25 mm2 die, the S1 caches are 9-19% of document 04's
+  256-512 KiB SRAM budget — a real cost, but not "roughly half" of
+  anything, and not what decides S1: on the primary PDK the area
+  argument alone no longer carries the rejection.
 - Memory reality [fact + estimate]: the verified seL4 RV64 image alone is
   66 KiB (FAQ); a useful seL4 system (kernel data, page tables, Microkit
   PDs, payload) needs multiple MB of RAM [estimate] — far beyond the
@@ -396,10 +406,14 @@ options:
 - Frequency at 130 nm: ~50-80 MHz [estimate from document 01's 4-6x
   gate-delay scaling of a 902 MHz 22FDX sign-off] — adequate, not the
   problem.
-- **Verdict: infeasible for this die and team as v1.** S1 is not "add
-  seL4", it is "build a different, GR801-sized chip". It reverses the
-  settled NOEL-V-to-RV32 shrink decision (document 01, section 5) that the
-  whole area budget rests on.
+- **Verdict: rejected for v1 — on memory and verification scope, not on
+  cache area.** The decisive, PDK-independent argument is the memory
+  reality above: seL4's MB-class RAM requirement makes an external RAM
+  controller mandatory, and no on-chip budget fixes that. The second is
+  the flow/verification fit above, each item a project-scale risk on its
+  own. S1 is not "add seL4", it is "build a different, GR801-sized
+  chip". It also reverses the settled NOEL-V-to-RV32 shrink decision
+  (document 01, section 5) that the whole area budget rests on.
 
 **S2 — Ibex RV32 + seL4-inspired minimal verified runtime (no seL4).**
 
@@ -540,8 +554,10 @@ fault-tolerance trusted base, then protocol machines, then the core.
 | 10 | Management-core collateral: upstream Ibex suite in project CI, Yosys+rIC3 `dv/formal` path evaluated, comparator proof (#10) | 40-80 h | Largest item; deliberately last — it reuses upstream work rather than creating it, and depends on the final core decision |
 
 Total: roughly 155-310 h [estimate], spread across the phases gated in
-C.2 — comparable to one interface IP adaptation (document 03 roll-up) and
-consistent with a solo schedule.
+C.2 — roughly two to three of the largest single interface adaptations
+(document 03's 80-115 h SpaceWire codec), i.e. about a third to
+two-thirds of the corrected document 03 phase-1 interface base roll-up
+(280-475 h, CPI excluded), and consistent with a solo schedule.
 
 ### C.4 Assumption ledger — what this program does not cover [decision]
 
@@ -588,6 +604,7 @@ contents:
 4. Track 3: S2 (Ibex + seL4-inspired minimal verified runtime with
    Frama-C/CBMC evidence) now; S3 (seL4 on CVA6-class manager) preserved
    as a product tier through interface discipline; S1 rejected for v1 on
-   area/memory grounds.
+   memory (MB-class external RAM mandatory) and verification-scope
+   grounds.
 5. CI from week 1 (FIFO sby smoke), gates F0-F3, rootless oss-cad-suite
    toolchain, ~155-310 h initial formal budget.

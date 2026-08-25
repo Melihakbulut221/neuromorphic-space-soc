@@ -123,6 +123,29 @@ https://www.gaisler.com/news-events/frontgrade-gaisler-launches-new-grain-line-a
 
 ## 3. Quantitative scaling: 28 nm FDSOI to 130 nm bulk
 
+**Re-baseline note (2026-08-25) — all 130 nm densities in this document
+are SKY130-derived.** Every 130 nm figure in this section, and every
+budget derived from it in Section 3.4, Section 4 and the conclusion,
+comes from SkyWater sky130 sources (sky130_fd_sc_hd standard cells,
+OpenRAM sky130 macros), even where the text reads generically as "an
+open 130 nm PDK". `docs/04-technology-and-flow.md` has since selected
+**IHP SG13G2 as the primary PDK** with SKY130 as the fallback, and the
+SG13G2 numbers differ materially in both directions. Comparison for the
+25 mm2 case, sourced from `docs/04-technology-and-flow.md` and
+`docs/06-funding-and-shuttle.md` appendix B.3:
+
+| 25 mm2 case | IHP SG13G2 (primary) | SKY130 (fallback; basis of this document) |
+|---|---|---|
+| Logic density | ~138 kGE/mm2 raw, measured from the PDK (docs/06 B.3) — about 2x less dense than SKY130 HD; the 150-250 kGE management-core budget needs ~1.5-3.0 mm2 placed at 60-70% utilization [estimate] | ~260-270 kGE/mm2 raw (Section 3.1); 0.8-1.7 mm2 placed, budgeted 1.5-2.5 mm2 (Section 3.4) [estimate] |
+| SRAM density | ~25-40 KiB/mm2 incl. periphery, `RM_IHPSG13_1P_*` foundry macros (docs/04 section 3.1) [estimate, band assumed until measured] | ~57 kbit/mm2, i.e. ~7 KiB/mm2, OpenRAM 2 kB macro (Section 3.2) [estimate] |
+| Resulting SRAM budget | 256-512 KiB with roughly a third of the die in SRAM (docs/04 section 3.2) — 2-4x this document's open-PDK figure [estimate] | ~115 KB at ~16 mm2 SRAM area (Section 3.4) [estimate] |
+
+The SG13G2 SRAM column is an assumed band, not a measurement: docs/04
+open question 2 (extract real `RM_IHPSG13_1P_*` density/timing from the
+open PDK LEF/liberty and re-baseline the SRAM budget table) is the
+pending authority for it. Until that re-baseline lands, no area or SRAM
+number from this document should be quoted without naming its PDK.
+
 ### 3.1 Logic density [estimate]
 
 - 130 nm open-PDK reference (SkyWater sky130, high-density library): the
@@ -230,9 +253,25 @@ about 100-128 KB of SRAM, a 64-128 MAC event-driven fabric, an RV32
 management core and the low-speed interface set. That is the honest
 envelope; 10 mm2 forces the SRAM below 64 KB (open PDK) and starts
 compromising the architecture, while 50 mm2 buys margin but raises cost
-and yield risk for a first spin.
+and yield risk for a first spin. These are SKY130 figures despite the
+generic "open 130 nm PDK" wording: on the SG13G2 primary PDK the SRAM
+budget rises 2-4x and the logic area roughly doubles — see the
+re-baseline note at the head of Section 3.
 
 ## 4. Recommended scaled architecture envelope
+
+**Supersession note (2026-08-25).** The 4-node fabric recommended below
+was superseded by `docs/02-npu-architecture.md` section 4, which
+selected Candidate B: a single 512-neuron time-multiplexed core whose
+AER event interface and configuration map are frozen as if it were one
+node of a mesh, with the multi-node mesh (Candidate C) deferred to a
+later phase. Recorded reasons: lower verification burden than four
+interacting nodes plus a NoC, the SRAM budget concentrated in one ECC
+macro group instead of distributed across four nodes, and scale-out
+preserved as a later instantiation through the frozen AER interface
+rather than a redesign. The text below is retained unmodified as the
+original decision record; the re-baseline note at the head of Section 3
+applies to its numbers as well.
 
 Target: 25 mm2 class, sky130-class open PDK, open RTL-to-GDS flow.
 
@@ -271,7 +310,7 @@ Target: 25 mm2 class, sky130-class open PDK, open RTL-to-GDS flow.
 | Event-based processing model | Keep | Node-independent architectural idea; the power argument is strongest at low clock rates |
 | 1/2/4-bit quantized weights | Keep | Multiplies effective SRAM capacity 2-8x; the single most valuable idea at 130 nm |
 | Multi-pass execution | Keep | Decouples model size from fabric size; essential when fabric SRAM is ~1% of GR801's |
-| 8 nodes x 4 engines, 1024 MACs | Shrink | 4 nodes x 1 engine, 64 MACs; matches the 1-5% memory fraction that fits |
+| 8 nodes x 4 engines, 1024 MACs | Shrink | 4 nodes x 1 engine, 64 MACs; matches the 1-5% memory fraction that fits — superseded, see the errata note below this table |
 | Mesh interconnect | Shrink | Full mesh is overkill for 4 nodes; ring or 2x2 grid with same packet semantics |
 | 3.2 MB Akida-private RAM | Shrink | 64-96 KB distributed per-node; open-PDK SRAM density forces this |
 | 8 MB system RAM | Shrink | 32-64 KB shared ECC SRAM plus QSPI-resident model storage |
@@ -288,6 +327,17 @@ Target: 25 mm2 class, sky130-class open PDK, open RTL-to-GDS flow.
 | FDSOI platform radiation immunity | Drop | Not transferable to bulk 130 nm; replaced by architecture-level mitigation and honest positioning |
 | ESCC9030 flight screening, 441-ball BGA | Drop | Out of scope for an open-flow project; modest package, test-chip qualification path instead |
 
+**Errata (2026-08-25).** The "4 nodes x 1 engine, 64 MACs" target in the
+row above was superseded by `docs/02-npu-architecture.md` section 4,
+which selected a single 512-neuron time-multiplexed core (Candidate B)
+and deferred the multi-node mesh to a later phase. Reasons recorded
+there: verification burden of four interacting nodes plus a NoC, SRAM
+budget concentration in one ECC macro group rather than four distributed
+ones, and the AER interface frozen mesh-ready so later scale-out is an
+instantiation, not a redesign. The row is kept as originally issued for
+decision-record integrity; see also the supersession note at the head of
+Section 4.
+
 ## 6. Open questions for the roadmap
 
 1. Fabric microarchitecture: ring vs 2x2 mesh, event/packet format, and
@@ -296,9 +346,14 @@ Target: 25 mm2 class, sky130-class open PDK, open RTL-to-GDS flow.
 2. SRAM strategy: OpenRAM macros vs DFFRAM-class fabric RAM vs pursuing
    commercial 130 nm compiler access; this single choice swings total SRAM
    by ~5x at fixed die size (drives `docs/04-technology-and-flow.md`).
-3. PDK selection: sky130 vs gf180mcu (gf180mcu ships foundry SRAM macros;
-   sky130 has the more mature open flow) — quantify the memory-density and
-   flow-maturity trade.
+3. PDK selection — resolved by `docs/04-technology-and-flow.md`: primary
+   IHP SG13G2 (foundry `RM_IHPSG13_1P_*` SRAM macros in the open PDK),
+   fallback SkyWater sky130; gf180mcu was evaluated there and excluded on
+   node grounds (180 nm). The sky130-vs-gf180mcu framing originally posed
+   here is obsolete. What remains open is the quantitative re-baseline of
+   this document's budgets on SG13G2 (docs/04 open question 2, the
+   RM_IHPSG13 LEF/liberty density extraction; see the re-baseline note at
+   the head of Section 3).
 4. Management core selection: which RV32 core (Verilog, verifiable,
    fault-injection-observable), and TMR vs lockstep for its control path
    (drives `docs/03-cpu-and-ip-survey.md`).

@@ -219,13 +219,26 @@ From `00-reference-brief.md` and the survey:
    spike-processing loop (Akida precedent: node-to-node communication is
    CPU-free). Decision.
 
-Rough physical anchors used in the estimates below (all estimates,
-open-PDK 130 nm class): a placed DFF plus routing overhead ~30–60 um², so
-10 kFF is on the order of 0.3–0.6 mm²; compiled single-port SRAM at this
-node class runs very roughly 1.5–3 mm² per Mb, so 128 KB (1 Mb) of SRAM
-is a 1.5–3 mm² commitment before ECC overhead (+22% bits for SECDED on
-32-bit words). These anchors must be replaced with real macro data in
-`04-technology-and-flow.md`.
+Physical anchors used in the estimates below. Logic: a placed DFF plus
+routing overhead ~30–60 um², so 10 kFF is on the order of 0.3–0.6 mm²
+(estimate, open-PDK 130 nm class). SRAM: density is PDK-specific and the
+project's own data spans a ~5x range, so no single "130 nm class" figure
+is usable; the per-PDK bands below are this document's sizing basis,
+sourced from `01-reference-decomposition.md` section 3.2 and
+`04-technology-and-flow.md` section 3.1:
+
+| SRAM path | Density | Area per Mbit |
+|---|---|---|
+| sky130 OpenRAM macros (open PDK) | ~57 kbit/mm² (17.4 um²/bit) | ~17.4 mm² |
+| Commercial 130 nm SRAM compiler (NDA access, not assumed) | ~270–280 kbit/mm² (~3.6 um²/bit) | ~3.6 mm² |
+| IHP SG13G2 foundry macros (`RM_IHPSG13_1P_*`) | ~25–40 KiB/mm² incl. periphery | ~3.2–5.1 mm² |
+
+All three bands are estimates derived from published macro dimensions or
+vendor-typical figures in the cited sections; the SG13G2 band is pending
+measurement from the macro LEFs (`04-technology-and-flow.md` open
+question 2), which becomes the authority once extracted. ECC overhead
+(+22% bits for SECDED on 32-bit words) is carried inside the capacity
+figures of the candidate tables below (e.g. "128 KB + SECDED ≈ 156 KB").
 
 ---
 
@@ -244,7 +257,7 @@ sequencer, with weight reload between layers for multi-layer networks.
 | Neuron state | 32 x 16 b = 512 FF |
 | Control/sequencer/IO | ~2–4 kFF |
 | Total FF | ~7–9 kFF (~0.3–0.5 mm² placed) |
-| SRAM | None required (optional weight-overlay buffer 8–16 KB) |
+| SRAM | None required (optional weight-overlay buffer 8–16 KB: ~0.2–0.6 mm² on SG13G2 macros, ~1.1–2.3 mm² at sky130 OpenRAM density) |
 | Clock target | 25–50 MHz, easily met |
 
 - Workloads: telemetry anomaly detection (small FC nets over tens of
@@ -261,7 +274,7 @@ sequencer, with weight reload between layers for multi-layer networks.
   engine is scrub-free.
 - Fundamental limit: FF-based weights do not scale. 64k synapses (the
   ODIN/tinyODIN working point) would need ~256 kb of FFs — roughly
-  10–15 mm² by the anchor above — which is not a serious option. Candidate
+  10–15 mm² by the DFF anchor above — which is not a serious option. Candidate
   A is capped at roughly 2–8 k synapses and is therefore a floor, not a
   destination.
 
@@ -307,10 +320,17 @@ Working point: 512 neurons, 256k synapses (512 x 512).
   favorable property of LIF dynamics worth demonstrating in the
   fault-injection campaign. Injection into SRAM contents is supported by
   the existing flow via behavioral memory models in Verilog.
-- Physical: ~156 KB SRAM ≈ 2–4 mm² plus logic — the dominant NPU cost,
-  inside the SoC budget but only just; the 256-neuron half-size point
-  exists precisely so the memory budget can be cut 4x without
-  architectural change.
+- Physical (estimates from the section 2 per-PDK bands): ~156 KB SRAM is
+  ~4–6.2 mm² plus logic on SG13G2 foundry macros — the dominant NPU cost,
+  inside the 25 mm² SoC budget but materially tight — and ~4.6 mm² with
+  commercial 130 nm compiler access. At sky130 OpenRAM density the same
+  memory is ~22 mm², i.e. essentially the whole die: **the 512-neuron
+  working point is out of reach of OpenRAM-density sky130** and exists
+  only on the SG13G2 foundry SRAM macros (or commercial sky130 SRAM
+  access). The 256-neuron half-size point (~40 KB: ~1.0–1.6 mm² on
+  SG13G2, ~5.7 mm² at sky130 OpenRAM density) is the sky130-fallback
+  configuration and exists precisely so the memory budget can be cut 4x
+  without architectural change.
 
 ### Candidate C — small mesh of event-driven nodes (clean-room Akida-class)
 
@@ -344,9 +364,12 @@ SRAM, RV32 core orchestrating pass schedules.
   pass). All in Verilog by construction; SNE's SystemVerilog can inform
   the conv engine but should not be imported wholesale into the Icarus
   flow.
-- Physical: ~300 KB SRAM ≈ 4.5–9 mm² by the anchors above — at or beyond
-  the whole-SoC memory budget from `00-reference-brief.md`. As a v1
-  target this over-reaches.
+- Physical (estimates from the section 2 per-PDK bands): ~300 KB SRAM is
+  ~7.5–12 mm² on SG13G2 foundry macros and ~43 mm² at sky130 OpenRAM
+  density — at or beyond the whole-SoC memory budget from
+  `00-reference-brief.md` even on the primary PDK, and larger than the
+  entire die on open-PDK sky130. As a v1 target this over-reaches on
+  every available memory path.
 
 ---
 
@@ -362,7 +385,8 @@ is its scale-out rather than a redesign:
    classification), reuses the verified LIF neuron lineage from
    tt-um-lif-crossbar in the update pipeline, has an open Verilog
    reference microarchitecture (tinyODIN) to verify against, and fits the
-   memory and observability budgets.
+   memory and observability budgets on the primary PDK (see the hard
+   dependency below).
 2. Freeze the AER event interface and the configuration map as if the
    core were one node of a mesh: node-addressed events, per-core fault
    counters, pass-schedule registers. Then Candidate C becomes
@@ -373,14 +397,33 @@ is its scale-out rather than a redesign:
 3. Keep Candidate A alive as the **fallback**, not a parallel effort: the
    RTL substrate (LIF neuron, crossbar update) is shared.
 
+**Hard dependency on the technology decision:** by the section 2 bands,
+the v1 working point's ~156 KB weight memory is ~4–6.2 mm² on IHP SG13G2
+foundry macros but ~22 mm² at sky130 OpenRAM density (estimates). The
+512-neuron/256k-synapse configuration therefore requires the SG13G2
+foundry SRAM macros or commercial sky130 SRAM access, and is out of
+reach of OpenRAM-density sky130. The IHP-primary decision in
+`04-technology-and-flow.md` is a hard dependency of this recommendation,
+not an independent choice: losing it — or failing SRAM-macro integration
+(trigger F1 below) — does not merely shrink Candidate B, it forces the
+ladder down to the 256-neuron sky130 point or, if no SRAM macro
+integrates at all, to Candidate A's latch/FF-based engine.
+
 Fallback conditions (trigger → action):
 
-- **F1.** Compiled/generated SRAM macros on the chosen 130 nm PDK fail
-  characterization, cannot support SECDED widths, or cannot be modeled in
-  the Icarus fault-injection flow → drop to Candidate B's 256-neuron/64k
-  point with DFF-based or latch-array memory, and if that still breaks
-  area, drop to Candidate A (pure-FF 32x32 engine). The mission story
-  narrows to telemetry anomaly detection only.
+- **F1.** SRAM macros on the chosen PDK fail characterization or flow
+  integration (for the primary PDK this is the `RM_IHPSG13_1P_*`
+  LVS/GDS-merge risk that `04-technology-and-flow.md` names as its own
+  main fallback trigger), cannot support SECDED widths, or cannot be
+  modeled in the Icarus fault-injection flow → the 512-neuron working
+  point is gone (section 4 hard dependency). If an SRAM macro path still
+  exists (sky130 OpenRAM), drop to Candidate B's 256-neuron/64k point
+  (~40 KB ≈ ~5.7 mm² at OpenRAM density, estimate). If no SRAM macro can
+  be integrated at all, the fallback is Candidate A with latch/FF-based
+  weights (pure-FF 32x32 engine): a latch/DFF-array version of even the
+  40 KB memory would be ~8–13 mm² at DFFRAM-class density
+  (`04-technology-and-flow.md` section 3.1) and is not a viable middle
+  step. The mission story narrows to telemetry anomaly detection only.
 - **F2.** The time-multiplexed pipeline misses the verification gate
   (schedule) while the crossbar path is green → tape out Candidate A as
   the risk-reduction vehicle and carry B to the next shuttle.
@@ -398,8 +441,12 @@ Fallback conditions (trigger → action):
 
 1. **SRAM reality check (blocks sizing):** what macro sizes, port
    configurations, and ECC-friendly widths does the selected 130 nm open
-   PDK actually provide, and at what mm²/Mb? (Feeds
-   `04-technology-and-flow.md`; every budget in section 3 depends on it.)
+   PDK actually provide, and at what mm²/Mb? (Status: answered at band
+   level — section 2 now carries the per-PDK densities from
+   `01-reference-decomposition.md` section 3.2 and
+   `04-technology-and-flow.md` section 3.1. Outstanding: the
+   LEF-measured density of the `RM_IHPSG13_1P_*` macros, tracked as
+   docs/04 open question 2.)
 2. **Reuse policy for Solderpad RTL:** does the project reuse
    tinyODIN/ODIN Verilog directly (legal under Solderpad v2.x with
    attribution), use it only as a golden reference model, or stay fully

@@ -4,8 +4,22 @@ Date: 24 August 2026
 Status: v0.1 working spec for the event-driven inference engine MVP.
 Grounding: implements the recommendation of `docs/02-npu-architecture.md`
 (Candidate B — single time-multiplexed LIF neuron core, architected as one
-node of a future mesh), inside the envelope of
-`docs/01-reference-decomposition.md` section 4. Conventions carried over
+node of a future mesh) at the full 512-neuron scale. For the NPU block,
+this spec SUPERSEDES the physical envelope of
+`docs/01-reference-decomposition.md` section 4 (64-96 KB fabric SRAM,
+resident weights near 30-60 KB, single-pass models up to roughly 60-120k
+4-bit parameters): the 144 KB configuration of section 5 exceeds that
+sky130-derived envelope on every axis, and its physical feasibility rests
+on the IHP SG13G2 foundry SRAM macros (`RM_IHPSG13_1P_*`, ~25-40 KiB/mm²
+including periphery) per `docs/04-technology-and-flow.md` section 3.1 and
+the recomputed Candidate B feasibility row of `docs/02` section 3 (~156 KB
+weight SRAM ~4-6.2 mm² on SG13G2 foundry macros, out of reach of
+OpenRAM-density sky130 — a hard dependency on the IHP-primary technology
+decision, stated in `docs/02` section 4). The
+`docs/01` envelope remains the reference for the whole-SoC budget, and
+the parameterization of section 2 (N_NEURONS, N_AXONS) allows a smaller
+instantiation — e.g. the 256-neuron fallback point of `docs/02` — if SoC
+integration forces it. Conventions carried over
 from the developer's prior 130 nm accelerator practice: a bit-exact integer
 golden model as the executable specification, round-shift-saturate
 arithmetic discipline, a single-source register map, and pytest regression
@@ -341,6 +355,17 @@ layer's fan-in must satisfy fan-in <= N_AXONS. Axon-split passes would
 interleave saturation and threshold crossings in a different order and
 break bit-exactness; supporting them needs a deferred-threshold pass mode,
 deferred to v0.2 (section 14).
+
+Limitation (explicit): tiling does not lift the event-word ID bound. An
+E9 pass emits ids TILE_OFF + j, and both the ID field of the frozen
+16-bit event word (section 7.1) and PASS_TILE_OFF (section 10) are 10
+bits wide: every tile must satisfy TILE_OFF + tile width <= 1024, so the
+total width of a tiled layer is hard-capped at 1024 = 2^10 neurons. The
+golden model enforces the bound: `NetworkRunner` rejects layers wider
+than 1024 at construction, and `LIFCore` rejects tile_offset outside
+[0, 1023] as well as tile_offset + n_neurons > 1024. Layers wider than
+1024 neurons cannot be represented on the frozen event interface and are
+refused, not approximated.
 
 Bandwidth anchor (estimate): a full 128 KB slice over QSPI x4 at 50 MHz
 (25 MB/s) takes about 5.2 ms; per-pass slices are usually smaller. The

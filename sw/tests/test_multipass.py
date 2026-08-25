@@ -105,6 +105,27 @@ def test_e9_pass_counting():
     assert runner.total_passes == 3
 
 
+def test_e9_layer_wider_than_event_id_space_rejected():
+    # (E9) bound, spec section 9 limitation: emitted ids TILE_OFF + j must
+    # fit the frozen 10-bit event-word ID field, so a 1025-wide layer —
+    # whose last tile would need base + width = 1025 > 1024 — must be
+    # refused at construction, not silently mis-executed.
+    layer = LayerSpec([[0] * 1025 for _ in range(4)], LIFConfig(thresh=10))
+    with pytest.raises(ValueError):
+        NetworkRunner([layer], core_neurons=512, core_axons=4)
+
+
+def test_e9_layer_width_exactly_1024_accepted():
+    # (E9) boundary: 1024 = 2^10 neurons exactly fill the ID space
+    # (ids 0..1023) and must be accepted and runnable; the last tile is
+    # base 512 + width 512 = 1024, and the maximum emitted id is 1023.
+    layer = LayerSpec([[7] * 1024, [0] * 1024],
+                      LIFConfig(thresh=5, leak_en=False))
+    runner = NetworkRunner([layer], core_neurons=512, core_axons=2)
+    assert runner.layer_passes(layer) == 2
+    assert runner.run([[0]]) == [list(range(1024))]
+
+
 def test_axon_dimension_split_rejected():
     # spec section 9 limitation: fan-in > core_axons is not splittable in
     # v0.1 and must be refused, not silently mis-executed.

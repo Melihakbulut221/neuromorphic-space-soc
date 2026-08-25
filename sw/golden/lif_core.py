@@ -31,6 +31,8 @@ W_MIN = -8  # 4-bit signed two's complement (E1)
 W_MAX = 7
 R_MAX = 15  # 4-bit refractory counter
 WEIGHTS_PER_WORD = 16  # 64-bit weight SRAM data word (spec section 5)
+EVENT_ID_BITS = 10  # event-word ID field width, frozen (spec section 7.1)
+EVENT_ID_SPAN = 1 << EVENT_ID_BITS  # 1024 emittable ids: 0..1023
 
 SYN_SHIFT_MAX = 7
 LEAK_SHIFT_MAX = 15
@@ -105,6 +107,9 @@ class LIFCore:
 
     weights: list [n_axons][n_neurons] of plain ints in [-8, +7] (E1).
     tile_offset: added to emitted neuron ids (multi-pass tiling, E5/E9).
+    Emitted ids tile_offset + j must fit the frozen 10-bit event-word ID
+    field (spec sections 7.1 and 9): tile_offset in [0, 1023] and
+    tile_offset + n_neurons <= 1024, enforced at construction.
     poisoned_words: word indices flagged uncorrectable by ECC; every
     weight in such a word contributes zero (E10, fail-operational).
     """
@@ -115,6 +120,15 @@ class LIFCore:
         _check_int("tile_offset", tile_offset)
         if n_neurons < 1 or n_axons < 1:
             raise ValueError("n_neurons and n_axons must be >= 1")
+        if not 0 <= tile_offset < EVENT_ID_SPAN:
+            raise ValueError(
+                f"tile_offset {tile_offset} outside [0, {EVENT_ID_SPAN - 1}] "
+                "(PASS_TILE_OFF is 10 bits, spec sections 7.1 and 10)")
+        if tile_offset + n_neurons > EVENT_ID_SPAN:
+            raise ValueError(
+                f"tile_offset {tile_offset} + n_neurons {n_neurons} exceeds "
+                f"{EVENT_ID_SPAN}: emitted ids would overflow the 10-bit "
+                "event-word ID field (spec section 9 limitation)")
         if len(weights) != n_axons:
             raise ValueError(f"expected {n_axons} weight rows, got {len(weights)}")
         for a, row in enumerate(weights):

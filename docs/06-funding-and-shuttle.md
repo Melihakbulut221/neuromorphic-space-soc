@@ -200,7 +200,7 @@ satellites" (project short name to decide; repo name
 |---|---|---|
 | WP1 SNN engine + hardening IP | Event-driven SNN fabric RTL, TMR/ECC/scrub blocks, verification suite (developer time, ~5 months) | 10,000 |
 | WP2 SoC integration + flow | RV32 manager integration, SpaceWire/CAN/peripheral subset, LibreLane sg13g2 flow, docs (developer time, ~3 months) | 6,500 |
-| WP3 Shuttle silicon | TTIHP26b pilot (8 tiles, ~EUR 560) + follow-up TT run (16-32 tiles, EUR 1,120-2,240) + devkits/breakout PCBs | 3,500 |
+| WP3 Shuttle silicon | TTIHP26b pilot (4 tiles ~EUR 280 default, 8 tiles ~EUR 560 if upgraded, per B.6) + follow-up TT run gated per B.6.2 (TTIHP27a on pre-silicon evidence, or silicon-results-gated TTIHP27b/IHP MPW; 16-32 tiles, EUR 1,120-2,240) + devkits/breakout PCBs | 3,500 |
 | WP4 Bring-up hardware | Test boards, FPGA host board, instrumentation for characterization | 2,500 |
 | WP5 Radiation pre-screening | TID (Co-60) campaign on shuttle parts, test-board mods, logistics; facility-dependent | 5,000 |
 | **Total** | | **27,500** |
@@ -230,7 +230,8 @@ Reference cadence of prior IHP runs (two per year):
 - TTIHP25b: autumn 2025 run (https://tinytapeout.com/chips/ttihp25b/)
 - TTIHP26a: closed 2026-03-23 (https://tinytapeout.com/chips/ttihp26a/)
 - TTIHP27a: expected ~March 2027 **[extrapolation, unannounced]** —
-  natural backup / second-run slot.
+  closes before TTIHP26b silicon exists, so it can only serve as a
+  pre-silicon-gated follow-up slot (B.6.2).
 
 Fab-to-board lag on IHP runs is long (~9-11 months tapeout to boards);
 prior runs were partially subsidized by SwissChips and the German BMBF
@@ -290,9 +291,17 @@ What SG13G2 gives back: a faster process (competitive timing at
 
 ### B.4 Digital flow maturity and SRAM on SG13G2 (2026)
 
-- **PDK:** IHP-Open-PDK is mature and actively released (June 2026
+- **PDK:** IHP-Open-PDK is actively developed and released (June 2026
   release documented at https://ihp-open-pdk-docs.readthedocs.io/;
   https://www.ihp-microelectronics.com/services/research-and-prototyping-service/fast-design-enablement/open-source-pdk).
+  However, IHP's own documentation describes the current content as an
+  "experimental preview" / "alpha release" that "is not intended to be
+  used for production at this moment", to be tagged with a production
+  version when ready (https://ihp-open-pdk-docs.readthedocs.io/,
+  re-checked 2026-08-25) — the same caveat docs/04 carries. **[fact]**
+  The underlying SG13G2 process and the commercial PDK are
+  production-proven; the caveat applies to the open design-kit views,
+  not the silicon.
 - **LibreLane:** the TT flow itself hardens IHP projects with LibreLane
   (https://github.com/TinyTapeout/ttihp-verilog-template), and IHP
   publishes its own LibreLane full-chip templates
@@ -301,7 +310,9 @@ What SG13G2 gives back: a faster process (competitive timing at
   (https://github.com/The-OpenROAD-Project/OpenROAD-flow-scripts/tree/master/flow/platforms/ihp-sg13g2).
   DRC/LVS is KLayout-based; Magic/Netgen integration is newer and still
   maturing (https://wiki.f-si.org/index.php?title=IHP_Open_PDK_integration_with_Magic,_Netgen,_and_LibreLane).
-  Verdict: the digital flow is production-grade for TT-scale designs.
+  Verdict: the digital flow is proven at TT scale (hundreds of shipped
+  designs per IHP shuttle), while the open PDK itself remains
+  pre-production per the caveat above.
 - **SRAM:** IHP ships compiled macros (`RM_IHPSG13_*`, e.g.
   `RM_IHPSG13_1P_1024x32_c2_bm_bist`) in the open PDK. TT documents
   per-tile densities when instantiating them
@@ -324,10 +335,16 @@ What SG13G2 gives back: a faster process (competitive timing at
 Honest summary — the data is encouraging but mostly from the SiGe
 BiCMOS side of the process, not from `sg13g2_stdcell` digital logic:
 
-- A 112 Gb/s radiation-hardened optical transceiver in IHP 130 nm SiGe
-  BiCMOS (SG13G2 family) survived X-ray TID to **1.2 Mrad(Si)** and
-  showed **no SEL under heavy ions up to LET 65.2 MeV cm2/mg**
+- A 112 Gb/s radiation-hardened optical transceiver was designed in
+  **SG13RH** — the rad-hard sibling PDK of SG13G2, not the open PDK —
+  in IHP 130 nm SiGe BiCMOS
   (https://www.researchgate.net/publication/351632595_A_112_Gbs_Radiation-Hardened_Mid-Board_Optical_Transceiver_in_130-nm_SiGe_BiCMOS_for_Intra-Satellite_Links).
+  The paper reports **no irradiation of the transceiver itself**; it
+  cites prior characterization of the technology: SiGe HBTs evaluated
+  to TID levels of **1.2 Mrad(Si)**, and the RH standard-cell library
+  free of SEU and SEL up to **LET 62 MeV cm2/mg**. **[fact — SG13RH
+  results; they transfer to SG13G2 only via the shared 130 nm CMOS
+  backbone, per docs/04 section 1.2]**
 - SiGe HBTs have well-documented intrinsic TID tolerance
   (https://www.researchgate.net/publication/260356025_Radiation_Effects_in_SiGe_Technology),
   and 130 nm CMOS nodes generically show usable TID behavior in HEP
@@ -354,14 +371,76 @@ Capacity model: ~4.3 kGE raw / ~2.5-3 kGE practical per IHP tile
 
 | Option | Tiles | Cost | Content | Verdict |
 |---|---|---|---|---|
-| Minimal pilot | 2x2 = 4 | ~EUR 280 | 16-32 LIF neuron crossbar, latch-based 4-bit weights, event interface, TMR/EDAC demonstrator counters | Fits, but no SRAM macro learning |
-| **Recommended pilot (TTIHP26b)** | **4x2 = 8** | **~EUR 560 + devkit** | One RM_IHPSG13 1024x8 macro (~2 tiles) as ECC-wrapped weight memory, 32-neuron event-driven SNN slice (~3 tiles), minimal sequencer or SERV-class RV32 control (~1-2 tiles), fault counters + SpaceWire-lite/UART host link (~1 tile) | Exercises every risky element of the full SoC: SRAM macro integration, ECC wrapper, SNN datapath, sg13g2 timing closure |
-| Full-SoC attempt | 8x4 = 32 | ~EUR 2,240 | RV32 manager + multi-node SNN + SpaceWire codec + ~16 KB ECC SRAM (4x 1024x32 macros ~ 15 tiles, ~45 kGE logic left) | Marginal; only as a second run (TTIHP27a) after pilot results |
+| **Default pilot (TTIHP26b)** | **2x2 = 4** | **~EUR 280 + devkit** | 16-32 LIF neuron crossbar (tt-um-lif-crossbar lineage), latch/FF-based 4-bit weights, event interface, TMR/EDAC demonstrator counters | **Default.** No SRAM-macro dependency; the only option that fits the remaining effort budget (B.6.1) |
+| Upgrade pilot (only if the 2026-09-07 go/no-go passes) | 4x2 = 8 | ~EUR 560 + devkit | One RM_IHPSG13 1024x8 macro (~2 tiles) as ECC-wrapped weight memory, 32-neuron event-driven SNN slice (~3 tiles), minimal sequencer or SERV-class RV32 control (~1-2 tiles), fault counters + SpaceWire-lite/UART host link (~1 tile) | Exercises every risky element of the full SoC (SRAM macro integration, ECC wrapper, SNN datapath, sg13g2 timing closure), but exceeds the solo effort budget unless macro integration closes early (B.6.1) |
+| Full-SoC attempt | 8x4 = 32 | ~EUR 2,240 | RV32 manager + multi-node SNN + SpaceWire codec + ~16 KB ECC SRAM (4x 1024x32 macros ~ 15 tiles, ~45 kGE logic left) | Marginal; TTIHP27a only on pre-silicon evidence — TTIHP26b silicon arrives after TTIHP27a closes (B.6.2) |
 | Product MVP | — | — | Hundreds-of-kB SRAM class | Not possible on TT; needs a dedicated IHP MPW slot (price list: https://www.ihp-microelectronics.com/services/research-and-prototyping-service/mpw-prototyping-service/schedule-price-list), potentially FMD/university-subsidized **[investigate]** |
 
-**Recommendation: buy 4x2 = 8 tiles on TTIHP26b for the pilot block,
-and hold the full-SoC integration for TTIHP27a or an IHP MPW,
-depending on NLnet outcome.**
+**Recommendation (revised 2026-08-25): the default TTIHP26b submission
+is the 2x2 minimal pilot — 16-32 LIF neurons with latch/FF weight
+storage, direct lineage of the shipped tt-um-lif-crossbar SKY130
+design, no RM_IHPSG13 dependency. The 8-tile SRAM-macro pilot is the
+upgrade path, taken only if the 2026-09-07 go/no-go in B.6.1 passes.
+The full-SoC integration is gated per B.6.2.**
+
+### B.6.1 Effort budget and go/no-go against the 2026-09-21 close
+
+As of 2026-08-25 there are **27 days** to the TTIHP26b close. The
+developer is solo and time-sliced across other projects; sustainable
+capacity for this pilot is taken as ~2-3 h/day, i.e. **~55-80 h
+total** to the deadline **[estimate]**. At HEAD the verified RTL base
+is one block (`hw/rtl/aer_fifo.v` plus the generated `npu_regs.vh`);
+everything below is new work.
+
+Hour budget for the **default 2x2 pilot** (all figures [estimate];
+unit costs consistent with docs/03 and docs/09 where they exist):
+
+| Item | Hours |
+|---|---|
+| Port TT pipeline to `ttihp-verilog-template`, pin the PDK, swap liberty/STA scripts (B.7 deltas 1-4, 6) | 8-12 |
+| LIF crossbar slice + latch/FF 4-bit weight storage + event interface, adapted from the tt-um-lif-crossbar lineage | 15-25 |
+| TMR/EDAC demonstrator counters + register hookup | 6-10 |
+| Verification of the new slice against the golden model; existing formal/CI jobs kept green | 10-16 |
+| sg13g2 harden iterations, precheck, submission and payment | 10-16 |
+| **Total** | **49-79** |
+
+The total fits the ~55-80 h capacity only if the low-to-mid estimates
+hold; the upper bound consumes the entire capacity. The default scope
+therefore has **no slack for the SRAM macro**. The **8-tile upgrade**
+adds on top of the above: RM_IHPSG13 1024x8 + ECC-wrapper integration
+closed through DRC/LVS in the local rootless flow (~25-50 h, given the
+open LVS/GDS-merge issues that docs/04 calls "exactly the kind of
+issue that costs weeks at tapeout time"), sequencer or SERV
+integration (~10-20 h), UART host link (20-40 h per the docs/03
+verdict table), and a larger floorplan/timing pass (~8-16 h) —
+**~65-125 h additional [estimate]**, i.e. out of reach of the
+remaining capacity unless the macro work closes early.
+
+**Go/no-go date: 2026-09-07** (14 days before close). The upgrade to
+the 8-tile pilot is taken only if, by that date, the RM_IHPSG13 1024x8
+macro with its ECC wrapper passes DRC/LVS in the local rootless flow
+inside the 4x2 floorplan. Otherwise the 2x2 default is submitted and
+the macro-integration learning moves to the TTIHP27a pre-silicon track
+(B.6.2).
+
+### B.6.2 Second-run gating — corrected
+
+The earlier framing "second run (TTIHP27a) after pilot results" does
+not close against this document's own dates: TTIHP26b silicon is
+expected 2027-06-25 (boards ~2027-08-16), roughly three months
+**after** the extrapolated TTIHP27a close (~2027-03). No pilot silicon
+result can exist before TTIHP27a closes. **[fact — dates per B.1]**
+The gate is therefore redefined:
+
+- **TTIHP27a (target, ~2027-03):** gated on **pre-silicon evidence**
+  only — a clean sg13g2 harden of the enlarged design, RM_IHPSG13
+  macro integration closed through DRC/LVS, and the formal/CI suite
+  green on the pilot flow. Funding reality: with MoU start ~2027-02/04
+  and disbursements following published milestones (A.7), a TTIHP27a
+  tile purchase would be out-of-pocket, not grant-funded.
+- **Silicon-results-gated run:** retargeted to **TTIHP27b (~autumn
+  2027 [extrapolated, unannounced])** or an IHP MPW slot, chosen after
+  TTIHP26b bring-up data exists (boards ~2027-08-16).
 
 ### B.7 Deltas from the proven SKY130 rootless flow
 
@@ -401,32 +480,37 @@ TT submission pipeline — carry over almost entirely. Concrete deltas:
 | Date | Event | Source |
 |---|---|---|
 | 2026-09-03 | NLnet calls reopen (Restack et al.) | https://nlnet.nl/propose/ |
+| **2026-09-07** | **Pilot go/no-go: 8-tile upgrade only if RM_IHPSG13 + ECC wrapper closes DRC/LVS in the local rootless flow; otherwise submit the 2x2 default** | B.6.1 |
 | **2026-09-21** | **TTIHP26b closes (submit + pay before this date)** | https://app.tinytapeout.com/shuttles/ **[re-confirm]** |
 | 2026-10 | Draft Restack application review window; office-hour question slot | https://nlnet.nl/officehour/ |
 | **2026-11-03 12:00 CEST** | **NLnet submission deadline** | https://nlnet.nl/propose/ |
 | ~2027-01/02 | NLnet selection decision (observed 2-3 month lag) | A.7 **[estimate]** |
 | ~2027-02/04 | MoU signed, funded work starts | A.7 **[estimate]** |
-| ~2027-03 | TTIHP27a expected close (second-run option) | **[extrapolated, unannounced]** |
+| ~2027-03 | TTIHP27a expected close — pre-silicon-gated follow-up option (B.6.2); precedes TTIHP26b silicon | **[extrapolated, unannounced]** |
 | 2027-06-25 | TTIHP26b chips expected (fab run IHP-2609) | https://app.tinytapeout.com/shuttles/ |
 | 2027-08-16 | TTIHP26b boards delivered (estimate); bring-up + radiation pre-screening begins | https://app.tinytapeout.com/shuttles/ |
+| ~2027-09/10 | TTIHP27b expected close — earliest silicon-results-gated run (B.6.2) | **[extrapolated, unannounced]** |
 
 Note the favorable coupling: the TTIHP26b submission (September 2026)
 becomes concrete, citable evidence of capability in the NLnet
 application (November 2026), and the NLnet grant, if awarded
-(early 2027), funds the bring-up, radiation campaign, and the
-second-run silicon of the same design line.
+(early 2027), funds the bring-up, the radiation campaign, and the
+silicon-results-gated follow-up run (TTIHP27b or an IHP MPW, per
+B.6.2). A pre-silicon TTIHP27a entry (~2027-03) would precede first
+disbursements and be out-of-pocket (A.7).
 
 ## Action items
 
-1. **Decide TTIHP26b entry and freeze pilot-block scope** (8-tile
-   content per B.6) — developer. Immediately; the shuttle closes
-   2026-09-21.
+1. **Decide TTIHP26b entry and freeze pilot-block scope** (2x2 default
+   content per B.6, with the 8-tile upgrade path per B.6.1) —
+   developer. Immediately; the shuttle closes 2026-09-21.
 2. **Port the TT pipeline to `ttihp-verilog-template` and produce a
    first sg13g2 harden of the pilot block** (deltas 1-4, 6 of B.7) —
    engineering.
 3. **Prototype RM_IHPSG13 1024x8 integration with the ECC wrapper**
-   in the 4x2 floorplan; fall back to latch RAM in a 2x2 if macro
-   integration does not close in time — engineering.
+   in the 4x2 floorplan against the 2026-09-07 go/no-go (B.6.1); the
+   2x2 latch/FF-RAM default is submitted unless DRC/LVS closes by that
+   date — engineering.
 4. **Purchase tiles and submit on app.tinytapeout.com** before
    2026-09-21; re-confirm deadline, price, and max-tile policy in the
    dashboard — developer.
@@ -441,5 +525,6 @@ second-run silicon of the same design line.
 7. **Scope the radiation pre-screening**: identify a Co-60 TID facility
    and obtain quotes to firm up WP5; locate and cite the primary
    IHP rad-hard 130 nm library paper (B.5 gap) — developer.
-8. **Track TTIHP27a announcement** and the IHP MPW/FMD subsidy options
-   for the full-SoC run — developer.
+8. **Track the TTIHP27a and TTIHP27b announcements** and the IHP
+   MPW/FMD subsidy options for the follow-up runs (gating per B.6.2) —
+   developer.

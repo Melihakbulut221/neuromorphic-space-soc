@@ -146,22 +146,29 @@ HBT module). The published numbers characterize the family's 130 nm CMOS,
 not the open SG13G2 PDK specifically, and the open PDK does not ship the
 rad-hard (DICE/TMR/ELT) library extensions. The correct claim for this
 project is therefore: "implemented on a 130 nm process family with
-published TID/SEL characterization (no SEL to 65 MeV·cm²/mg, standard-cell
-CMOS to ~110 krad(Si), 500 krad+ device-level)," plus this project's own
-architectural hardening — not "on a rad-hard PDK." **[fact + framing]**
+published ESCC-track TID/SEL characterization; device target LEO
+10–30 krad(Si) class, fault-tolerant by architecture" — not "on a
+rad-hard PDK." The claim wording itself carries no numeric TID figure
+(docs/05 section 4 rule 3: positioning stays below 100 krad(Si) in
+wording as well as in fact); the platform numbers live only in the
+sourced-facts list above, with attribution. **[fact + framing]**
 That is still categorically more than SKY130 offers, and 110 krad(Si)
 standard-cell-level TID comfortably covers LEO CubeSat missions (typical
 mission doses of a few to tens of krad behind 2–3 mm Al). **[estimate for
 mission dose; standard figure]**
 
-Separately, third-party literature reports SG13G2 circuits irradiated to
-1.2–2 Mrad(Si) TID and heavy-ion SET testing at 20–65.2 MeV·cm²/mg on
-this technology (e.g. rad-hard optical transceiver work,
-https://www.researchgate.net/publication/351632595, and JICG transistor
-work verified to >1.3 Mrad(Si),
-https://www.sciencedirect.com/science/article/pii/S0168900220312298).
-**[fact that these publications exist; individual results are
-circuit-specific]**
+Separately, third-party literature adds radiation data on the same
+130 nm SiGe BiCMOS technology base — not on SG13G2 circuits. A 112 Gb/s
+rad-hard optical transceiver was designed in SG13RH, the rad-hard
+sibling PDK; the paper does not irradiate the transceiver itself but
+cites prior technology characterization of SiGe HBTs to 1.2 Mrad(Si)
+TID (https://www.researchgate.net/publication/351632595). JICG
+transistor structures in 130 nm SiGe BiCMOS were verified against
+TID-induced leakage above 1.3 Mrad(Si), with CMOS inverter SET LET
+threshold above 130 MeV·cm²/mg
+(https://www.sciencedirect.com/science/article/pii/S0168900220312298).
+**[fact, from those papers; results are for SG13RH and transistor/test
+structures, not SG13G2 circuits]**
 
 **2026 shuttle access and cost.** Via Europractice
 (https://europractice-ic.com/schedules-prices-2026/):
@@ -211,8 +218,10 @@ Reasoning:
    "architectural hardening on an uncharacterized bulk process." For
    customers, reviewers, and any future funding conversation, the first
    claim is materially stronger. (Doc 00, observation 5: bulk 130 nm has
-   no intrinsic SEL immunity — SG13G2's published no-SEL-to-65 heavy-ion
-   result directly retires the scariest bulk-CMOS risk.)
+   no intrinsic SEL immunity — the SG13 family's published no-SEL-to-65
+   heavy-ion result (SG13RH/SG13S standard-cell test vehicles, section
+   1.2) retires the scariest bulk-CMOS risk, transferring to SG13G2 only
+   via the shared 130 nm CMOS backbone.)
 2. **European space ecosystem.** IHP is an ESA-adjacent European
    institute with EPPL-track processes and Europractice access;
    a European CubeSat-supplier customer base (doc 05) aligns with a
@@ -299,7 +308,7 @@ taking meaningful area:
 | Die class | Platform example | SRAM budget (with ECC overhead) |
 |---|---|---|
 | ~10–15 mm² user area | chipIgnite Caravel/OpenFrame | 32–96 KiB on sky130 (OpenRAM density); 128–256 KiB on SG13G2 (foundry macros) **[estimate]** |
-| ~25 mm² full-custom die | IHP MPW, 25 mm² | 256–512 KiB on SG13G2 with roughly a third of the die in SRAM **[estimate]** |
+| ~25 mm² full-custom die | IHP MPW, 25 mm² | ~200–330 KiB on SG13G2 with roughly a third of the die in SRAM (~8.3 mm² at the section 3.1 band of 25–40 KiB/mm²); 512 KiB would take ~13–20 mm², i.e. half the die or more **[estimate]** |
 | ~50 mm² | IHP MPW, upper cost bound | up to ~1 MiB, but cost-prohibitive for an MVP (section 5) **[estimate]** |
 
 ECC (SEC-DED, 32+7 or 64+8) costs ~22% (32-bit) or ~13% (64-bit) extra

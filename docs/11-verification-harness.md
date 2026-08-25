@@ -17,7 +17,7 @@ enforcer, and everything runnable rootless.
 | `regmap/regmap.yaml` | register map single source (normative list: `docs/10-npu-mvp-spec.md` section 10) |
 | `regmap/generate.py` | emits `docs/regmap-npu.md`, `sw/golden/regmap_gen.py`, `hw/rtl/npu_regs.vh`; `--check` verifies sync |
 | `sw/tests/test_regmap.py` | sync test: generated files fresh, YAML equal to the docs/10 section 10 table |
-| `hw/rtl/aer_fifo.v` | AER event FIFO (docs/10 section 7 EVQ semantics), Verilog-2001 |
+| `hw/rtl/aer_fifo.v` | AER event FIFO (docs/10 section 7 EVQ semantics), Verilog-2005 |
 | `hw/tb/Makefile`, `hw/tb/test_aer_fifo.py` | cocotb + Icarus suite, `TB=aer_fifo` default |
 | `formal/aer_fifo.sby`, `formal/aer_fifo_props.v` | SymbiYosys jobs and properties (included into the module under `ifdef FORMAL`) |
 | `formal/Makefile` | `make prove prove_d4 bmc cover` with rootless sby discovery |
