@@ -224,7 +224,8 @@ def flip(code: int, positions) -> int:
 
 
 # ---------------------------------------------------------------------
-# Clear-port bit assignments (docs/10 section 10, hw/rtl/npu_regbank.v)
+# Clear-port bit assignments
+# (regmap/regmap.yaml, docs/10 section 10, hw/rtl/npu_regbank.v)
 # ---------------------------------------------------------------------
 #
 # Two different registers clear this block's state, and they are not
@@ -233,9 +234,14 @@ def flip(code: int, positions) -> int:
 # which is DED_SEEN. A driver that writes only FAULT_CLR leaves DED_SEEN
 # set, which is the behaviour hw/rtl/npu_regbank.v implements.
 
-# FAULT_CLR (0x88, W1C). regmap.yaml declares no fields, so the bit
-# assignment is the one hw/rtl/npu_regbank.v note C2 fixes: one bit per
-# fault-block register, in offset order from 0x70 upward.
+# FAULT_CLR (0x88, W1C). regmap.yaml declares all five bits as named
+# fields of the register, and that declaration is the source: one bit per
+# fault-block register, in offset order from 0x70 upward, which is the
+# convention hw/rtl/npu_regbank.v note C2 restates. The literals below
+# are a second copy of positions the YAML owns, so
+# sw/tests/test_regmap.py cross-checks every one of them against the
+# generated field table -- a bit that moves, is renamed or is added in
+# the YAML fails there rather than silently diverging here.
 FAULT_CLR_CNT_SEC = 1 << 0          # 0x70
 FAULT_CLR_CNT_DED = 1 << 1          # 0x74
 FAULT_CLR_CNT_EVQ_OVF = 1 << 2      # 0x78, register bank only, not modelled here

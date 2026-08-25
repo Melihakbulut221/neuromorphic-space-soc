@@ -1,0 +1,124 @@
+# SymbiYosys job for the weight-SRAM ECC scrub controller
+# (hw/rtl/scrub.v). Closes the scrub-controller clause of
+# docs/09-formal-verification-plan.md target #5 (control-FSM deadlock
+# freedom and any-state recovery), which the C.3 priority order lists
+# first among the FSM targets.
+#
+#   sby -f scrub.sby prove        k-induction at the silicon parameters
+#                                 (AW 10, CNT_W 16, WD_W 4)
+#   sby -f scrub.sby prove_small  the same properties at the degenerate
+#                                 geometry AW 2 / CNT_W 2 / WD_W 1, where
+#                                 the window is four words, the counters
+#                                 saturate after three faults and the
+#                                 read-response watchdog expires after one
+#                                 cycle -- every bound is reachable and
+#                                 nothing hides behind a wide counter
+#   sby -f scrub.sby prove_pdr    the same property set on an independent
+#                                 engine family (AIGER/PDR via abc)
+#   sby -f scrub.sby bmc          bounded backstop, depth 40
+#   sby -f scrub.sby bmc_any      THE any-state task: the trace starts on
+#                                 an illegal state encoding
+#                                 (SCRUB_ANY_STATE), which is the only
+#                                 kind of task in which SC13/SC14/SC15
+#                                 mean anything. See the methodology note
+#                                 in scrub_props.v -- k-induction assumes
+#                                 the legality invariant, so `prove`
+#                                 reports PASS for a default arm that
+#                                 silently resumes in S_IDLE
+#   sby -f scrub.sby prove_any    the same, by k-induction rather than
+#                                 BMC. SCRUB_ANY_STATE also switches OFF
+#                                 the legality invariant SC12, so the
+#                                 induction step here starts from a wholly
+#                                 unconstrained state -- which is what
+#                                 makes "S_SAFE is terminal until reset"
+#                                 an unbounded result rather than a
+#                                 statement about the first ten cycles.
+#                                 bmc_any is kept alongside it because a
+#                                 failing BMC yields the counterexample
+#                                 trace and a failing induction may not
+#   sby -f scrub.sby bmc_live     whole-word bounded response under the
+#                                 arbiter-fairness assumption
+#                                 (SCRUB_LIVENESS)
+#   sby -f scrub.sby cover        reachability of every behaviour the
+#                                 assertions constrain
+#   sby -f scrub.sby cover_any    a concrete S_SAFE trace from an injected
+#                                 illegal encoding
+#
+# Parameterization. The controller's structure is parameter-independent
+# -- the same five states, the same handshake, the same watchdog -- and
+# AW only sets the window size, CNT_W the counter width and WD_W the
+# watchdog bound. The full proof runs at the silicon parameters; the
+# prove_small task is the parameterization evidence and is also the
+# geometry the cover and liveness tasks use, because a four-word window,
+# a two-bit counter and a one-cycle watchdog put saturation, wrap and
+# timeout inside a 40-cycle trace instead of a 65536-cycle one.
+#
+# Engine diversity (docs/09 C.4 item 7), expressed the way secded.sby
+# expresses it: as two TASKS rather than two engines inside one task, so
+# the second engine is independent confirmation and not a speed hedge.
+# prove uses the SMT path (yices, the house default for the sequential
+# jobs) and prove_pdr the AIGER/PDR path (abc pdr) at the mid geometry.
+#
+# The properties live in formal/scrub_props.v, textually included at the
+# end of the scrub module body under `ifdef FORMAL (read_verilog -formal
+# defines FORMAL; both files land in the same sby src directory, so the
+# include resolves).
+
+# Task groups. This sby release accepts only one tag per configuration
+# line, so the geometry (g10 / gsmall / gmid) and the read_verilog
+# variant (rd_plain / rd_any / rd_live) are expressed as tags shared by
+# several tasks rather than as multi-task prefixes.
+[tasks]
+prove        g10     rd_plain
+prove_small  gsmall  rd_plain
+prove_pdr    gmid    rd_plain
+bmc          g10     rd_plain
+bmc_any      gmid    rd_any
+prove_any    gmid    rd_any
+bmc_live     gsmall  rd_live
+cover        gsmall  rd_plain
+cover_any    gmid    rd_any
+
+[options]
+prove: mode prove
+prove: depth 14
+prove_small: mode prove
+prove_small: depth 14
+prove_pdr: mode prove
+prove_pdr: depth 14
+bmc: mode bmc
+bmc: depth 40
+bmc_any: mode bmc
+bmc_any: depth 10
+prove_any: mode prove
+prove_any: depth 14
+bmc_live: mode bmc
+bmc_live: depth 40
+cover: mode cover
+cover: depth 40
+cover_any: mode cover
+cover_any: depth 8
+
+[engines]
+prove: smtbmc yices
+prove_small: smtbmc yices
+prove_pdr: abc pdr
+bmc: smtbmc yices
+bmc_any: smtbmc yices
+prove_any: smtbmc yices
+bmc_live: smtbmc yices
+cover: smtbmc yices
+cover_any: smtbmc yices
+
+[script]
+rd_plain: read_verilog -formal scrub.v
+rd_any: read_verilog -formal -DSCRUB_ANY_STATE scrub.v
+rd_live: read_verilog -formal -DSCRUB_LIVENESS scrub.v
+g10: chparam -set AW 10 -set CNT_W 16 -set WD_W 4 scrub
+gmid: chparam -set AW 4 -set CNT_W 4 -set WD_W 2 scrub
+gsmall: chparam -set AW 2 -set CNT_W 2 -set WD_W 1 scrub
+prep -top scrub
+
+[files]
+../hw/rtl/scrub.v
+scrub_props.v

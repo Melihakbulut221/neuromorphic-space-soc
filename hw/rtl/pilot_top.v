@@ -940,6 +940,15 @@ module pilot_top #(
     // -----------------------------------------------------------------
     localparam [1:0] D_IDLE = 2'b00, D_FETCH = 2'b01, D_ISSUE = 2'b11;
 
+    // Bound on the D_FETCH wait. A granted read answers in one cycle, so
+    // any value well above that is generous; 6 bits keeps the counter to
+    // 6 flip-flops and still allows 63 cycles of queue latency before the
+    // wait is declared a fault.
+    localparam integer FETCH_WAIT_W   = 6;
+    localparam [FETCH_WAIT_W-1:0] FETCH_WAIT_MAX = {FETCH_WAIT_W{1'b1}};
+    reg [FETCH_WAIT_W-1:0] fetch_wait;
+    reg                    fetch_timeout;
+
     reg [1:0]  dstate;
     reg [15:0] evw;
 
@@ -966,7 +975,10 @@ module pilot_top #(
             fi_rd_en <= 1'b0;
             sync_push <= 1'b0;
             sync_word <= 16'd0;
+            fetch_wait <= {FETCH_WAIT_W{1'b0}};
+            fetch_timeout <= 1'b0;
         end else begin
+            fetch_timeout <= 1'b0;
             fi_rd_en  <= 1'b0;
             sync_push <= 1'b0;
             case (dstate)
@@ -977,10 +989,26 @@ module pilot_top #(
                         dstate   <= D_FETCH;
                     end
                 end
+                // D_FETCH waits for the read it requested in D_IDLE. An
+                // upset that lands the FSM here without a read outstanding
+                // would otherwise wait forever with STATUS.BUSY high and
+                // nothing flagged -- the one failure class this chip exists
+                // to rule out. The bounded wait converts that silent hang
+                // into a latched configuration fault the host can see.
+                // Measured by the fault-injection campaign (docs/16
+                // section 5.1): reachable from a direct dstate flip and
+                // from an EVQ_IN write-pointer flip.
                 D_FETCH: begin
                     if (fi_rd_valid) begin
-                        evw    <= fi_rd_data;
-                        dstate <= D_ISSUE;
+                        evw          <= fi_rd_data;
+                        dstate       <= D_ISSUE;
+                        fetch_wait   <= {FETCH_WAIT_W{1'b0}};
+                    end else if (fetch_wait == FETCH_WAIT_MAX) begin
+                        dstate        <= D_IDLE;
+                        fetch_wait    <= {FETCH_WAIT_W{1'b0}};
+                        fetch_timeout <= 1'b1;
+                    end else begin
+                        fetch_wait <= fetch_wait + 1'b1;
                     end
                 end
                 D_ISSUE: begin
@@ -1268,6 +1296,9 @@ module pilot_top #(
             // evidence that it happened. A chip built to measure upset
             // rates must not lose an upset to its own recovery.
             if (lif_err_cfg) sticky_errcfg <= 1'b1;
+            // A dispatcher that waited out D_FETCH was hung; the recovery
+            // to D_IDLE is silent unless it is recorded here.
+            if (fetch_timeout) sticky_errcfg <= 1'b1;
 
             // ---- FAULT_CLR (npu_regbank C2 re-export) ----------------
             // A clear coincident with its own event restarts the

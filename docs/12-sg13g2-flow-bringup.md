@@ -254,14 +254,26 @@ this document sent the reader looking for one in both this section and
 section 9. What a step directory holds is `config.json`, which is the
 **subset** of the resolved configuration that that step consumes. On
 `trial-03-signoff`: exactly one `resolved.json`, at the run root, with
-**411 keys**; and **76** step `config.json` files carrying **79 to 123**
-keys each **[fact — counted]**. The difference is not academic, because
-the subset is small enough to give false negatives on the very keys this
-section is about:
+**411 keys**; and **78** step `config.json` files carrying **79 to 123**
+keys each **[fact — `find <run> -name config.json`]**.
+
+Seventy-eight, not seventy-six, and the two figures are both real. The
+run has **76 numbered step directories** (the count section 4 states and
+`sw/tests/test_flow_evidence.py` holds), each with one `config.json`.
+One of them, `42-openroad-repairantennas`, is a **composite** step that
+nests its own sub-steps — `1-openroad-diodeinsertion` and
+`2-openroad-checkantennas` — and each of those carries a `config.json`
+of its own, with 107 and 91 keys. A recursive count therefore returns
+78 while a directory listing returns 76. Anyone auditing a step count
+has to say which of the two they mean; this document means the
+directory count in section 4 and the file count here.
+
+The subset difference is not academic either, because it is small enough
+to give false negatives on the very keys this section is about:
 
 | Key | In `<run>/resolved.json` | In a step `config.json` |
 |---|---|---|
-| `RUN_ANTENNA_REPAIR` | `true` | **in none of the 76** |
+| `RUN_ANTENNA_REPAIR` | `true` | **in none of the 78** |
 | `SYNTH_PARAMETERS` | `["WIDTH=16", "DEPTH=64"]` | only in `05-yosys-jsonheader` and `06-yosys-synthesis` |
 | `CLOCK_PERIOD`, `FP_CORE_UTIL`, `PDK` | present | present in the steps that use them |
 
@@ -337,6 +349,13 @@ The seven Netgen counters are
 `..._unmatched_pin__count`, all **0**, from
 `final/metrics.json`. **This is the artifact ROADMAP G0 asks for.**
 
+Every row above names the check it covers, and the last one names four
+counters rather than saying "timing". That is deliberate: one violation
+counter in the same `metrics.json` is **not** zero, and 4.4a says which
+one, how many, and why the flow does not gate on it. This is a sign-off
+table against the checks G0 names — not a claim that every counter
+LibreLane emits reads zero.
+
 ### 4.2 Synthesis
 
 From `06-yosys-synthesis/reports/stat.json`: **4,164 cells**, Yosys area
@@ -400,11 +419,20 @@ inverters (3,196.97 um2 together).
 From `55-openroad-stapostpnr/summary.rpt`, post-layout, parasitics from
 OpenRCX:
 
-| Corner | Setup worst slack | Hold worst slack | Violations |
+| Corner | Setup worst slack | Hold worst slack | Setup/hold/slew/cap violations |
 |---|---|---|---|
 | `nom_slow_1p08V_125C` | **18.0553 ns** | 0.6397 ns | 0 |
 | `nom_typ_1p20V_25C` | 20.1784 ns | 0.3024 ns | 0 |
 | `nom_fast_1p32V_m40C` | 21.4717 ns | **0.1130 ns** | 0 |
+
+The last column is named for exactly the four counters it covers —
+`timing__setup_vio__count`, `timing__hold_vio__count`,
+`design__max_slew_violation__count` and
+`design__max_cap_violation__count`, per corner — because there is a
+fifth violation counter in the same `metrics.json` and it is **not**
+zero. An earlier revision headed that column bare "Violations", which
+invited the reading "no violations of any kind". That reading is wrong,
+and the correction is 4.4a below.
 
 Setup TNS and hold TNS are 0 at every corner. Clock skew is 0.264-0.277
 ns for setup and -0.265 to -0.273 ns for hold. 68 nets are unannotated by
@@ -422,6 +450,54 @@ Note that `TIMING_VIOLATION_CORNERS` defaults to `*typ*` in this PDK
 (section 5), so the slow and fast columns above are analysed but do not
 by themselves gate the flow. They are reported here because for silicon
 they should.
+
+#### 4.4a Max-fanout: 90 violations, disclosed
+
+`design__max_fanout_violation__count = 90`, and **90 at each of the
+three corners individually** **[fact — `final/metrics.json`, and the
+`report_check_types -max_fanout -violators` block of
+`55-openroad-stapostpnr/<corner>/checks.rpt`]**. The count is identical
+at all three corners because fanout is a netlist-topology property; PVT
+does not move it.
+
+What the 90 are, read off the violator list at the typical corner
+**[fact]**: **89 clock-tree buffers** — `clkbuf_0_clk` at 16 loads and
+88 `clkbuf_leaf_*` at 10 to 14 — and **one resizer-inserted fanout
+buffer**, `fanout278/X`, at 9. **Not one of them is an RTL net.** Every
+violator is a buffer this flow inserted itself, in CTS and in design
+repair.
+
+That is also why raising `MAX_FANOUT_CONSTRAINT` would not change the
+list. Every violating pin is reported against a limit of **8**, while
+this run set `MAX_FANOUT_CONSTRAINT` to **10** **[fact —
+`<run>/resolved.json`]**; the 8 is
+`sg13g2_stdcell_typ_1p20V_25C.lib`'s `default_max_fanout : 8` **[fact —
+line 36 of that library]**. The binding limit is the library's, the
+design constraint is already looser than it, and loosening it further
+would move nothing.
+
+Why it is not gating, and this is a fact about the tool rather than a
+judgement **[fact]**: the Classic flow instantiates checker steps for
+setup (`72-checker-setupviolations`), hold
+(`73-checker-holdviolations`), max slew (`74-checker-maxslewviolations`)
+and max cap (`75-checker-maxcapviolations`), and **there is no
+max-fanout checker step in the flow at all** — the step list of
+`trial-03-signoff` has none. `design__violations`, the flow's own
+aggregate, is therefore `0` while `design__max_fanout_violation__count`
+is 90, and the run completes. Nothing here is waived or suppressed by
+this configuration.
+
+What it would mean for silicon **[estimate]**: an overloaded clock-tree
+buffer costs transition time and skew, and both are measured clean at
+this design — max-slew and max-cap violations are 0 at all three
+corners, clock skew stays inside +/-0.28 ns, and the worst setup slack
+is 18 ns against a 30 ns period. So the fanout numbers are not hiding a
+timing problem *in this run*. They are still worth carrying forward,
+because the margin that absorbs them here comes from a 30 ns clock; a
+design closed near its limit would not have it. ROADMAP G0 asks for
+DRC/LVS/antenna/timing clean, which this run is on the counters G0
+names; the fanout counter is disclosed here so that "no violations"
+never has to be read as covering more than it does.
 
 ### 4.5 Antenna, and why heuristic diode insertion is off
 

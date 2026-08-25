@@ -1,0 +1,112 @@
+# cocotb targets for the weight-SRAM ECC scrub controller.
+#
+#   make -f Makefile.scrub                      all three elaborations
+#   make -f Makefile.scrub mid                  one elaboration
+#                                               (small | mid | silicon)
+#   make -f Makefile.scrub clean SCRUB_AW=4 ... drop one build directory
+#                                               (cocotb's own clean target,
+#                                               one elaboration at a time)
+#
+# hw/tb/Makefile does NOT forward TB=scrub here yet: adding `scrub` to its
+# TB_FRAGMENTS list is a one-line change in a file this track does not
+# own. Until then this fragment is invoked directly, exactly as
+# `cd hw/tb && make -f Makefile.scrub` -- which is the same run either
+# way, since the shared entry point only forwards.
+#
+# The controller is parameterized and the testbench reads dut.AW,
+# dut.CNT_W and dut.WD_W and adapts, so the same test module runs at
+# every elaboration:
+#
+#   small    AW 2, CNT_W 2, WD_W 1   a four-word window, counters that
+#                                    saturate after three faults and a
+#                                    one-cycle read-response watchdog:
+#                                    every bound in the block is reachable
+#                                    inside a short trace
+#   mid      AW 4, CNT_W 4, WD_W 2   the default; sixteen words, a
+#                                    four-cycle watchdog
+#   silicon  AW 10, CNT_W 16, WD_W 4 the parameters docs/10 section 11.2
+#                                    implies for the weight SRAM. The
+#                                    counter-saturation clause is not
+#                                    reachable in simulation at CNT_W 16
+#                                    and the testbench says so rather than
+#                                    pretending; saturation is exhaustive
+#                                    in formal (formal/scrub_props.v SC19)
+#                                    and simulated at the two narrow
+#                                    elaborations.
+#
+# Separate SIM_BUILD and results files per elaboration keep the runs, and
+# the aer_fifo run in hw/tb/Makefile, out of each other's way.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+
+# Rootless tool discovery, same convention as hw/tb/Makefile: iverilog
+# from PATH, cocotb from the project venv hw/.venv. If cocotb-config is
+# not already on PATH, re-invoke make with the venv prepended -- make
+# < 4.4 does not pass an exported PATH to $(shell ...), which the cocotb
+# makefiles rely on.
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),scrub)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+RTL := $(abspath $(HERE)/../rtl)
+
+# Elaborated parameters. The testbench reads them back from the design
+# handle and sizes every bound from them, so these and the elaboration
+# cannot drift apart unnoticed.
+SCRUB_AW    ?= 4
+SCRUB_CNT_W ?= 4
+SCRUB_WD_W  ?= 2
+
+# Seed for the constrained-random lockstep test. Fixed by default so a
+# failure is reproducible; override to widen the search.
+SCRUB_SEED ?= 20260825
+export SCRUB_SEED
+
+TOPLEVEL := scrub
+VERILOG_SOURCES := $(RTL)/scrub.v
+MODULE := test_scrub
+TAG := $(SCRUB_AW)_$(SCRUB_CNT_W)_$(SCRUB_WD_W)
+SIM_BUILD := $(HERE)/sim_build_scrub_$(TAG)
+COCOTB_RESULTS_FILE := $(HERE)/results_scrub_$(TAG).xml
+export COCOTB_RESULTS_FILE
+
+# Icarus takes elaboration-time parameter overrides on the command line.
+COMPILE_ARGS += -P$(TOPLEVEL).AW=$(SCRUB_AW)
+COMPILE_ARGS += -P$(TOPLEVEL).CNT_W=$(SCRUB_CNT_W)
+COMPILE_ARGS += -P$(TOPLEVEL).WD_W=$(SCRUB_WD_W)
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# Default goal: every elaboration. Declared before the cocotb include so
+# it wins over the include's own `all: sim`.
+.DEFAULT_GOAL := scrub
+
+.PHONY: scrub small mid silicon
+scrub: small mid silicon
+
+small:
+	@$(MAKE) -f $(THIS) --no-print-directory sim \
+		SCRUB_AW=2 SCRUB_CNT_W=2 SCRUB_WD_W=1
+
+mid:
+	@$(MAKE) -f $(THIS) --no-print-directory sim \
+		SCRUB_AW=4 SCRUB_CNT_W=4 SCRUB_WD_W=2
+
+silicon:
+	@$(MAKE) -f $(THIS) --no-print-directory sim \
+		SCRUB_AW=10 SCRUB_CNT_W=16 SCRUB_WD_W=4
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+endif

@@ -151,7 +151,7 @@ sync test (sw/tests/test_regmap.py) enforces the alignment.
 | 0x07C | CNT_AXON_OOR | RO | 0x00000000 | Events dropped for axon id >= CFG_AXON |
 | 0x080 | FAULT_ADDR | RO | 0x00000000 | Weight SRAM word index of the last double-bit detection |
 | 0x084 | ECC_INJ | WO | 0x00000000 | ECC error-injection hook (verification builds; netlist-audited out of flight builds) |
-| 0x088 | FAULT_CLR | W1C | 0x00000000 | Clear the fault counters; one bit per fault-block register in offset order from 0x70, bits [31:5] ignored |
+| 0x088 | FAULT_CLR | W1C | 0x00000000 | Clear the fault counters; one bit per fault-block register in offset order from 0x70, bits [31:5] ignored. Bit 5 is deliberately not a field here: hw/rtl/pilot_top.v allocates it for that build's pilot-only CNT_TMR clear (its section 5) and this block ignores it, so a host that writes 0x3F is portable across both. Declaring it would also require a CNT_TMR register in this map, in docs/10 section 10 and in hw/rtl/npu_regbank.v, because one clear bit per fault-block register is a checked convention (sw/tests/test_regmap.py) |
 
 ### ECC_INJ fields
 

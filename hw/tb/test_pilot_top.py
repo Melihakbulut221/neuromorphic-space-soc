@@ -3,11 +3,14 @@
 The device under test is hw/rtl/tt_um_melihakbulut_nssoc.v, the Tiny
 Tapeout wrapper, so every stimulus in this file goes through the eight
 inputs, eight outputs and eight
-bidirectionals the shuttle actually gives us. Exactly one test reaches
-into the hierarchy, and only to inject a fault that no pin can inject;
-it is marked as such and observes nothing a bench could not observe. If
-a test passes here it passes on a board with an SPI master and a logic
-analyser, which is the whole point of a pilot.
+bidirectionals the shuttle actually gives us. Exactly three tests reach
+into the hierarchy, all for the same reason -- no pin injects a
+single-event upset -- and all three are marked as such. Two of them
+observe only what a bench could observe. The remaining one additionally
+holds one internal flop, because the two terms of STATUS.ERR_CFG are
+otherwise indistinguishable from outside; its docstring says so in full.
+If any other test passes here it passes on a board with an SPI master
+and a logic analyser, which is the whole point of a pilot.
 
 Coverage, in the order the tests appear:
 
@@ -30,7 +33,12 @@ Coverage, in the order the tests appear:
                  SCRUB_STB pin, TMR masking proven by running the same
                  inference with a configuration replica corrupted, and
                  an upset in the neuron core's FSM state register
-                 observed at STATUS.ERR_CFG and the ERR pin
+                 observed at STATUS.ERR_CFG and the ERR pin, twice: once
+                 for the recovery path and once for the live term that
+                 keeps the bit asserted while the core is still parked,
+                 and an upset that strands the event dispatcher in
+                 D_FETCH, whose bounded wait must clear BUSY on its own
+                 and report the recovery (docs/16 section 5.1)
   register map   the FAULT_CLR bit assignment against regmap.yaml
 
 Run: cd hw/tb && make -f Makefile.pilot
@@ -41,6 +49,7 @@ from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
+from cocotb.handle import Force, Release
 from cocotb.triggers import RisingEdge, Timer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -119,6 +128,30 @@ def uo(dut, bit):
 def uio_out_nibble(dut):
     s = str(dut.uio_out.value)
     return int("".join("1" if c == "1" else "0" for c in s[:4]), 2)
+
+
+async def realign(dut):
+    """Put the test back on the system-clock grid before a serial frame.
+
+    Every helper below drives SER_SCK at exactly clk/4, which is host
+    obligation H1 at its limit (pilot_top.v section 2), and it does so by
+    counting nanoseconds from wherever the test happens to be. A test
+    that samples a pin mid-cycle -- `await RisingEdge(clk)` followed by a
+    short `Timer` to let combinational logic settle -- leaves the clock
+    offset by that Timer, and every SPI edge of the next frame inherits
+    it. Measured on this design: one leftover nanosecond moves the MISO
+    sampling point across a system-clock edge and the host reads the
+    whole 32-bit word shifted by one bit position (0xA5A51234 came back
+    as 0xD2D2891A). Awaiting one more clock edge discards the offset,
+    because the clock's edges are on the grid by construction.
+
+    That is a property of this testbench's timing, not of the design: a
+    real host's SER_SCK has no phase relationship to clk at all, which is
+    what the two-flop synchronizer exists for. Frames driven from
+    `reset()` are already on the grid, so only tests that sample pins
+    between frames need this.
+    """
+    await RisingEdge(dut.clk)
 
 
 async def spi_byte(p, tx):
@@ -1080,6 +1113,238 @@ async def test_fsm_upset_reaches_status_and_the_err_pin(dut):
     core = LIFCore(n_neurons, n_axons, weights, CFG)
     assert await run_frames(p, FRAMES) == core.run_frames(FRAMES), \
         "the core must be fully functional after the recovery reset"
+
+
+@cocotb.test()
+async def test_parked_core_holds_err_cfg_on_the_live_term(dut):
+    """STATUS.ERR_CFG holds on lif_err_cfg itself, not on the sticky flop.
+
+    pilot_top.v section 7 builds STATUS.ERR_CFG out of two sources and
+    says what each one buys. The test above proves the LATCHED half: the
+    record of an upset survives CTRL.SOFT_RST, the recovery for that
+    exact fault. It does not prove the LIVE half, and no sequence of pin
+    activity can, because while the core is parked
+
+        if (lif_err_cfg) sticky_errcfg <= 1'b1;
+
+    re-arms the sticky flop on every clock edge and, sitting later in the
+    same always block, beats the STATUS_CLR clear above it. The sticky
+    term alone therefore answers every host-visible stimulus, and
+    reverting `err_cfg_any` to `sticky_errcfg` passes the rest of this
+    suite -- measured, 21 of 21. That makes the live term untested, not
+    unnecessary; this test closes that gap.
+
+    Two independent observations separate the terms, and each one kills
+    the `err_cfg_any = sticky_errcfg` mutant on its own:
+
+      1. Timing, from the pins alone. lif_core registers err_cfg on the
+         clock edge that takes its FSM into S_SAFE; pilot_top samples
+         that output one edge later. In the cycle between the two, the
+         ERR pin is already high while the sticky flop is still zero, so
+         that cycle is driven by the live term and by nothing else.
+      2. A clear the re-arm cannot undo. Holding sticky_errcfg at zero is
+         what a STATUS_CLR would achieve if the re-arm did not exist.
+         STATUS.ERR_CFG and the ERR pin must stay asserted through it,
+         because the core is still parked and reporting a parked core as
+         recovered is the failure section 7 exists to prevent.
+
+    Like the test above, the stimulus reaches into the hierarchy because
+    no pin injects an upset. This one also forces one internal flop, for
+    observation 2, and that force is the whole of the deviation: every
+    value it checks is read at a pin or over the serial port.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    weights = make_weights(n_axons, n_neurons)
+    await bring_up(p, weights, n_neurons)
+
+    assert uo(dut, ERR) == 0, "nothing has gone wrong yet"
+    assert int(dut.u_pilot.sticky_errcfg.value) == 0
+
+    # ---- observation 1: the cycle the latch has not closed yet --------
+    # S_IDLE is 4'b0000 and every legal encoding has even parity, so
+    # flipping one bit is guaranteed to produce an illegal word.
+    await RisingEdge(dut.clk)
+    dut.u_pilot.u_lif.state.value = 0b0001
+
+    await RisingEdge(dut.clk)          # lif_core parks and raises err_cfg
+    await Timer(1, unit="ns")          # settle the combinational pin
+    assert int(dut.u_pilot.sticky_errcfg.value) == 0, \
+        "the sticky latch cannot have closed yet -- it samples err_cfg " \
+        "one edge later; if it has, this observation is measuring nothing"
+    assert uo(dut, ERR) == 1, \
+        "the ERR pin must rise in the cycle the core parks, on the live " \
+        "lif_err_cfg term, before the sticky flop has seen anything"
+
+    await RisingEdge(dut.clk)          # now the latch closes
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.sticky_errcfg.value) == 1, \
+        "and one edge later the fault is recorded in the sticky flop too"
+
+    await realign(dut)
+
+    # ---- observation 2: a STATUS_CLR that does reach the sticky flop --
+    # The write is the real host action; the force is what makes it take
+    # effect, standing in for the re-arm that would otherwise cancel it.
+    # The core is still parked throughout.
+    await wr(p, ADDR["STATUS_CLR"], ST_ERR_CFG)
+    dut.u_pilot.sticky_errcfg.value = Force(0)
+    await RisingEdge(dut.clk)
+    assert int(dut.u_pilot.sticky_errcfg.value) == 0, \
+        "the force did not take: this observation needs the sticky term " \
+        "out of the way to say anything about the live one"
+
+    assert (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "with the sticky term cleared and the core still parked, " \
+        "STATUS.ERR_CFG must be held by lif_err_cfg alone"
+    assert uo(dut, ERR) == 1, "and the ERR pin with it"
+    assert (await rd(p, ADDR["STATUS"])) & ST_BUSY, \
+        "the core really is still parked, so the report above is honest"
+
+    # Releasing leaves the flop at zero; the re-arm sets it again on the
+    # next edge, which is the behaviour the force was standing in for.
+    dut.u_pilot.sticky_errcfg.value = Release()
+    await RisingEdge(dut.clk)
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.sticky_errcfg.value) == 1, \
+        "a parked core re-arms the sticky flop every cycle"
+
+    await realign(dut)
+
+    # SOFT_RST still recovers, so nothing above left the design wedged.
+    await wr(p, ADDR["CTRL"], CTRL_SOFT_RST)
+    assert not (await rd(p, ADDR["STATUS"])) & ST_BUSY
+    await wr(p, ADDR["STATUS_CLR"], ST_ERR_CFG)
+    assert not (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG
+    assert uo(dut, ERR) == 0
+
+
+# The dispatcher gives up after FETCH_WAIT_MAX = 63 cycles, so the wait
+# below is bounded by 64 plus the cycle the deposit lands in. The poll is
+# given eight times that: the assertion this test makes is "the wait is
+# bounded", not "the bound is exactly 63", so a later change to
+# FETCH_WAIT_MAX must not have to touch this file, while an unbounded
+# wait must still fail here rather than run into a suite timeout.
+FETCH_TIMEOUT_POLL = 512
+
+
+@cocotb.test()
+async def test_dispatcher_stranded_in_fetch_recovers_and_is_flagged(dut):
+    """A dispatcher stranded in D_FETCH gives up, and says so.
+
+    This is the regression test for the one failure class the pilot
+    exists to rule out, found by the fault-injection campaign of docs/16
+    section 5.1 and fixed in pilot_top.v section 8.
+
+    The dispatcher requests a queue read in D_IDLE and waits for it in
+    D_FETCH. `fi_rd_en` is asserted from the D_IDLE arm and nowhere
+    else, so a single-bit upset that lands the FSM in D_FETCH without a
+    read outstanding is waiting for a grant that will never be
+    requested. Before the fix D_FETCH had exactly one exit,
+    `if (fi_rd_valid)`, so that dispatcher waited forever: STATUS.BUSY
+    stuck high, every further event refused, and -- measured against the
+    pre-fix RTL, not assumed -- no fault flag, no counter and no fault
+    pin. Five of 255 injections reached it, from two independent
+    targets. The fix bounds the wait, returns to D_IDLE and pulses
+    `fetch_timeout`, which latches `sticky_errcfg`.
+
+    The deposit below is exactly the campaign's: `dstate` = D_FETCH
+    (2'b01), landing 3 ns after a clock edge, with the input queue empty
+    so no read is or can be outstanding. An on-edge deposit is
+    overwritten by that same edge's non-blocking update before anything
+    samples it, which is why the offset is not cosmetic.
+
+    Four host-visible results, and this test checks only those:
+
+      1. BUSY clears by itself inside a bounded number of cycles, with
+         no CTRL.SOFT_RST and no host action of any kind;
+      2. STATUS.ERR_CFG is set, so the recovery is recorded instead of
+         being silent -- and, the core not being parked, STATUS_CLR
+         clears it, which is what distinguishes this from the latched
+         live term of the test above;
+      3. the ERR pin is high, so a logic analyser sees it with no
+         serial frame at all;
+      4. the pilot then accepts events again and reproduces sw/golden
+         spike for spike and neuron for neuron.
+
+    Like the two tests above, only the STIMULUS reaches into the
+    hierarchy -- no pin injects an upset. Every observation below is one
+    a bench with an SPI master and a logic analyser could make, so
+    reverting the D_FETCH arm to its single-exit form fails check 1 at
+    the BUSY poll rather than fails an internal-signal assertion.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    weights = make_weights(n_axons, n_neurons)
+    await bring_up(p, weights, n_neurons)
+
+    st = await rd(p, ADDR["STATUS"])
+    assert st & ST_IN_EMPTY, \
+        "the deposit needs an empty input queue, or a read could be " \
+        "granted and the dispatcher would not be stranded at all"
+    assert not st & ST_BUSY, "the pilot must be idle before the upset"
+    assert not st & ST_ERR_CFG and uo(dut, ERR) == 0, \
+        "nothing has gone wrong yet"
+
+    # ---- the upset: D_FETCH with no read outstanding -----------------
+    await RisingEdge(dut.clk)
+    await Timer(3, unit="ns")
+    dut.u_pilot.dstate.value = 0b01                 # D_FETCH
+    await Timer(1, unit="ns")
+    assert uo(dut, BUSY) == 1, \
+        "the deposit did not take: BUSY is driven by dstate != D_IDLE, " \
+        "so a stranded dispatcher must show BUSY immediately"
+
+    # ---- 1. BUSY clears on its own, inside a bound -------------------
+    for waited in range(1, FETCH_TIMEOUT_POLL + 1):
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ns")
+        if uo(dut, BUSY) == 0:
+            break
+    else:
+        raise AssertionError(
+            f"the dispatcher never left D_FETCH: BUSY still high "
+            f"{FETCH_TIMEOUT_POLL} cycles after an upset put the FSM "
+            f"there with no read outstanding. That is the silent "
+            f"deadlock of docs/16 section 5.1 -- the pilot is wedged "
+            f"with nothing flagged and only CTRL.SOFT_RST recovers it.")
+    dut._log.info(f"the dispatcher gave up after {waited} cycles")
+
+    # The sticky flop samples fetch_timeout on the edge after the pulse,
+    # so ERR follows BUSY's fall by one cycle.
+    await RisingEdge(dut.clk)
+    await Timer(1, unit="ns")
+
+    # ---- 2 and 3. the recovery is recorded, and reaches the pin ------
+    assert uo(dut, ERR) == 1, \
+        "a bounded wait that recovers silently is still a silent " \
+        "failure: the ERR pin must report it with no serial frame"
+    await realign(dut)
+    assert (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "the abandoned fetch must latch STATUS.ERR_CFG"
+
+    # The core was never parked, so this is a plain sticky and the host
+    # can acknowledge it -- unlike the parked-core case above, where the
+    # live term deliberately refuses the clear.
+    await wr(p, ADDR["STATUS_CLR"], ST_ERR_CFG)
+    assert not (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "with the dispatcher running again, STATUS_CLR clears the record"
+    assert uo(dut, ERR) == 0
+
+    # ---- 4. and the pilot works, bit for bit -------------------------
+    core = LIFCore(n_neurons, n_axons, weights, CFG)
+    expected = core.run_frames(FRAMES)
+    got = await run_frames(p, FRAMES)
+    assert any(step for step in expected), \
+        "the follow-up stimulus must actually produce spikes"
+    assert got == expected, \
+        f"the dispatcher must dispatch again after the timeout: " \
+        f"rtl {got}, golden {expected}"
+    await check_state(p, core, n_neurons)
+
+    st = await rd(p, ADDR["STATUS"])
+    assert not st & (ST_ERR_CFG | ST_DED_SEEN | ST_OVF_SEEN), \
+        f"the recovered run raised a new flag: STATUS {st:#x}"
 
 
 # ---------------------------------------------------------------------

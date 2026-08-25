@@ -6,7 +6,7 @@ Every command in section 8 was executed against the working tree of this
 date; the counts there are what those runs printed. Headline totals,
 all measured: **28 SymbiYosys tasks** across five formal jobs, carrying
 **374 assert obligations** and **67 cover obligations** counted once per
-property set at its default parameters; **108 distinct cocotb tests**
+property set at its default parameters; **109 distinct cocotb tests**
 across six suites; and **145 Python tests** from the repository root.
 Scope: how to run and how to read every verification target in the
 repository — the Python golden-model suite, the register-map sync check,
@@ -91,10 +91,15 @@ so a testbench built on it constrains the arithmetic completely and the
 control interface not at all. **Five independent mutants of `ev_ready`,
 `tick_ready`, the `state_clr` priority and the held-spike interaction
 survived the entire lockstep suite** **[fact — recorded in the header of
-`formal/lif_ctrl_props.v`; the mutation runs are the
-`hw/tb/results_mut_m*.xml` files]**. Two further mutants of the SAFE
-state's default arm survive `lif_prove` and `lif_bmc_live` and are
-caught only by `lif_bmc_safe`.
+`formal/lif_ctrl_props.v`; the mutation runs are
+`hw/tb/results_mut_m1_*.xml` through `results_mut_m5_*.xml`]**. Two
+further mutants of the SAFE state's default arm survive `lif_prove` and
+`lif_bmc_live` and are caught only by `lif_bmc_safe`
+(`results_mut_m6_*`, `results_mut_m7_*`).
+
+The `results_mut_m*` numbering is repository-wide rather than
+per-block: `m8` is the pilot mutant of section 6.2, and it is the one
+mutant in the set whose repair was a **test** rather than a property.
 
 Two things follow, and both are general:
 
@@ -289,7 +294,7 @@ the same way, with
 | `sw/tests/test_traceability.py` | every equation tag `En` in docs/10 has a `test_e<n>_*`, and no test cites an equation the spec does not define |
 | `sw/tests/test_e2e.py` | a 3-layer toy SNN classifying two rate-coded patterns above chance |
 | `sw/tests/test_tt_submission.py` | the `tt/` submission tree: `MANIFEST.sha256` against the files, `tt/src` against `hw/rtl`, and the whole tree against a fresh in-memory regeneration |
-| `sw/tests/test_flow_evidence.py` | added by the physical-flow workstream; holds `docs/12`/`docs/15` figures against the artifacts they were read from |
+| `sw/tests/test_flow_evidence.py` | added by the physical-flow workstream; holds **`docs/12` section 4 only** — the sign-off and provenance claims — against the LibreLane run tree they were read from. It parses no other document, and `docs/12`'s descriptive tables (4.2, 4.3, 4.6) are out of its scope by its own statement. The `docs/15` figure that is machine-held is the 4x2 tile decision, and its guard is `test_tt_submission.py::test_tile_shape_is_the_documented_decision` |
 
 `test_traceability.py` is the piece that keeps the model files honest: it
 fails if the specification grows an equation nobody tested, or if a test
@@ -522,7 +527,7 @@ vector, so the two cannot drift apart unnoticed.
     cd hw/tb && make -f Makefile.pilot N_NEURONS=4 N_AXONS=8
     cd hw/tb && make -f Makefile.pilot EVQ_IN_DEPTH=2 EVQ_OUT_DEPTH=2
 
-**21 tests.** The device under test is the Tiny Tapeout wrapper, not
+**22 tests.** The device under test is the Tiny Tapeout wrapper, not
 `pilot_top` directly: driving the TT port list is the only way to cover
 the pin map and the reset synchronizer. Reset values against
 `regmap_gen.py`, pin directions and quiescence, asynchronous reset
@@ -531,8 +536,11 @@ configuration lock, input-queue overflow, soft reset, state clear and
 the state port, the SYNC barrier, out-of-range axon drops, the parallel
 AER pins, inference against `sw/golden/lif_core.py` with and without
 tile offset, SECDED single-bit correction, a syndrome walk, double-bit
-detection with the E10 zero substitution, and TMR masking of a corrupted
-configuration replica.
+detection with the E10 zero substitution, TMR masking of a corrupted
+configuration replica, an upset in `lif_core`'s FSM state register seen
+at `STATUS.ERR_CFG` and the ERR pin together with its `CTRL.SOFT_RST`
+recovery, the same upset checked against the *live* half of that status
+bit, and the `FAULT_CLR` bit assignment against `regmap.yaml`.
 
 The wrapper has no parameters — a Tiny Tapeout top level cannot have any
 — and Icarus applies `-P` only to a ROOT module, never to a nested
@@ -542,14 +550,53 @@ geometry, because Icarus bakes the defines into `sim.vvp` while the
 cocotb makefile only rebuilds when a source is newer: without that, a
 bare geometry change silently re-runs the previous elaboration.
 
+One harness trap in that suite, found while adding the test below and
+worth stating because nothing about it is obvious from a failure. The
+serial helpers drive `SER_SCK` at exactly `clk/4` — host obligation H1
+at its limit — by counting nanoseconds forward from wherever the test
+happens to be. A test that samples a pin mid-cycle, `await
+RisingEdge(clk)` followed by a short `Timer` to let combinational logic
+settle, leaves the whole subsequent timeline offset by that `Timer`, and
+every SPI edge of the next frame inherits it. **One leftover nanosecond
+moves the MISO sampling point across a system-clock edge and the host
+reads the entire 32-bit word shifted by one bit position** — `0xA5A51234`
+came back as `0xD2D2891A` **[fact — measured with a throwaway
+`SCRATCH` round trip, on the grid and one nanosecond off it]**. It
+presents as a plausible-looking wrong register value several frames
+later, not as a protocol error. `hw/tb/test_pilot_top.py` now has a
+one-line `realign()` helper whose whole job is to await one more clock
+edge, and whose docstring is the reason. This is a property of the
+testbench, not of the design: a real host's `SER_SCK` has no phase
+relationship to `clk`, which is what the two-flop synchronizer is for.
+
 **There is no formal job for the pilot**, and that is a scope statement
 rather than an omission: every block inside it is proven individually
-above, and what the pilot adds is wiring. The one thing the wiring gets
-wrong today is visible only to the linter — `lif_core.err_cfg` is left
-unconnected, so an upset in the datapath's own control FSM reaches
-neither `STATUS.ERR_CFG` nor the ERR pin, even though `lif_ctrl.sby` H8
-proves that `err_cfg` is latched correctly. `docs/15` section 8.4 owns
-that item.
+above, and what the pilot adds is wiring.
+
+An earlier revision of this section recorded a wiring gap here:
+`lif_core.err_cfg` left unconnected, so an upset in the datapath's own
+control FSM reached neither `STATUS.ERR_CFG` nor the ERR pin even though
+`lif_ctrl.sby` H8 proves that `err_cfg` is latched correctly. **That gap
+is closed.** `pilot_top.v` connects the port, ORs it into
+`STATUS.ERR_CFG` live and latches it into the sticky bit as well
+(`pilot_top.v` section 7), and Verilator no longer reports the
+`PINMISSING` that named it — one warning, and only that one, is the
+measured difference the connection makes (`docs/15` section 5.2).
+
+Closing it also produced a lesson about mutation checking that is worth
+carrying, because it is general. The two terms of `STATUS.ERR_CFG` are
+not independently observable from the pins: while the core is parked,
+the latch re-arms from `lif_err_cfg` on every clock edge, so the sticky
+term alone answers every host-visible stimulus and reverting the live
+`|| lif_err_cfg` term passed the whole pilot suite — **21 of 21 at the
+time, measured** **[fact]**. A connection can be real, correct, and
+still carry no test. The repair was a test that separates the terms two
+ways at once: the cycle in which the ERR pin is already high and the
+sticky flop is not yet set, and a clear that reaches the sticky flop
+while the core is still parked. Each kills the mutant on its own
+**[fact — both re-measured against the reverted term; the recorded run
+is `hw/tb/results_mut_m8_errcfg_live_term_dropped.xml`, 22 tests,
+21 pass, 1 fail]**.
 
 `make -f Makefile.<block> clean` is cocotb's own clean and removes one
 build directory at a time, so for the multi-elaboration drivers pass the
@@ -1018,11 +1065,17 @@ different count.
 | secded, decoder only | `make -f Makefile.secded dec` | — | 9 pass, 3 skip |
 | tmr_voter, three widths | `make -f Makefile.tmr` | 7 | **6 pass + 1 width-gated skip at each of WIDTH 1, 8 and 32** |
 | tmr_voter, one width | `make -f Makefile.tmr w8` | — | 6 pass, 1 skip |
-| pilot | `make -f Makefile.pilot` | 21 | 21 pass |
-| pilot, other geometries | `make -f Makefile.pilot N_NEURONS=… N_AXONS=… EVQ_*_DEPTH=…` | same 21 | 21 pass at each |
+| pilot | `make -f Makefile.pilot` | 22 | 22 pass |
+| pilot, other geometries | `make -f Makefile.pilot N_NEURONS=… N_AXONS=… EVQ_*_DEPTH=…` | same 22 | 22 pass at each |
 
-**108 distinct cocotb tests** across the six suites (11 + 33 + 24 + 12 +
-7 + 21), measured 11:08-11:10 local on 25 August 2026. The `SKIP` counts in the secded and tmr rows are structural, not
+**109 distinct cocotb tests** across the six suites (11 + 33 + 24 + 12 +
+7 + 22). The five block suites were measured 11:08-11:10 local on
+25 August 2026; the pilot row was 21 in that window and gained its
+twenty-second test later the same day — the `STATUS.ERR_CFG` live-term
+test of section 6.2 — and the whole pilot row was re-measured then, at
+the default geometry and at 4x8, 8x16 and queue depths 2/2.
+
+The `SKIP` counts in the secded and tmr rows are structural, not
 coverage gaps: in secded they are the other elaboration's tests, and in
 tmr they are the two width-gated tests described in section 6.2.
 
@@ -1165,7 +1218,10 @@ as a planning aid and not as a regression threshold.
 After a run, a quick independent confirmation that nothing was skipped
 by accident is
 
-    grep -c '<failure' hw/tb/results*.xml
+    grep -c '<failure' hw/tb/results_lif.xml hw/tb/results_lif_[0-9]*.xml \
+        hw/tb/results.xml hw/tb/results_regbank*.xml \
+        hw/tb/results_secded_*.xml hw/tb/results_tmr_*.xml \
+        hw/tb/results_pilot_*.xml
 
 which should print `0` for each file **[fact]**, and
 
@@ -1174,6 +1230,23 @@ which should print `0` for each file **[fact]**, and
 which should print 28 lines, every one beginning `PASS 0`. If a task
 directory has no `status` file at all, that is the collision of section
 7.1 and not a result — check `pgrep -af 'sby -f'` first.
+
+**The file list in the first command is spelled out on purpose; do not
+widen it to `hw/tb/results*.xml`.** An earlier revision of this section
+did, and told the reader to expect `0` everywhere. On a machine where
+the mutation runs have actually been done — the machine whose evidence
+section 1.1 cites — the widened glob reports failures in **nine** files,
+and every one of them is *supposed* to fail: `results_mut_m1_*.xml`
+through `results_mut_m7_*.xml`, the seven `lif_ctrl` mutants;
+`results_mut_m8_errcfg_live_term_dropped.xml`, the pilot mutant of
+section 6.2; and `results_lif_dbg.xml`, a mutant that lets a mid-scan
+debug write reach the neuron state file. A recorded dead mutant *is* a
+`<failure>` element — that is the whole artifact — so a
+red-means-broken check must not be pointed at one. All of these files
+are gitignored (`hw/tb/results_*.xml`), so a fresh clone sees none of
+them and the discrepancy reads as machine-to-machine noise rather than
+as what it is **[fact — `grep -c '<failure' hw/tb/results*.xml` on this
+tree]**.
 
 Because that second check reads shared directories, capture the gate's
 own output as well when anyone else might be running formal work:

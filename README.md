@@ -46,6 +46,8 @@ shuttle on IHP SG13G2. `ROADMAP.md` is the phased plan.
 - `docs/13-nlnet-application.md` — NLnet Restack application draft
 - `docs/14-licensing-decision.md` — open-licensing decision memo (NLnet terms, dependency licenses, export interaction)
 - `docs/15-pilot-tile-plan.md` — pilot die content, pin contract and tile budget
+- `docs/16-fault-injection-campaign.md` — seeded upset campaign, measured outcome distribution and per-structure ranking
+- `docs/17-wave2-review-record.md` — independent review record for design wave 2
 - `docs/regmap-npu.md` — generated register-map documentation (single source: `regmap/regmap.yaml`)
 - `ROADMAP.md` — phased plan with gates
 

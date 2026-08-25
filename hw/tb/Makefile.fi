@@ -1,0 +1,123 @@
+# Fault-injection campaign harness (docs/16-fault-injection-campaign.md).
+#
+#   cd hw/tb && make -f Makefile.fi
+#
+# The device under test is hw/rtl/pilot_top.v itself, not the Tiny Tapeout
+# wrapper hw/rtl/tt_um_melihakbulut_nssoc.v that Makefile.pilot drives.
+# Two reasons, and both are about the campaign rather than about taste:
+#
+#   1. The campaign injects into named architectural flip-flops by
+#      hierarchical path. Driving pilot_top directly makes those paths one
+#      level shorter and, more importantly, makes them the paths the RTL
+#      itself uses, so a target list read next to the source is checkable
+#      by eye. The wrapper adds nothing a fault can hide in: it is a pin
+#      map and a two-flop reset synchronizer.
+#   2. The campaign is a separate simulator target on purpose. It is the
+#      slowest suite in the repository (it runs a full inference per
+#      injection) and it deposits into internal state, so it must not
+#      share a build directory or a results file with the functional
+#      suites. This file gives it its own sim_build_fi_<geometry>/ and
+#      results_fi_<geometry>.xml, exactly as the sibling programme keeps
+#      its fault-injection suite on a dedicated testbench target.
+#
+# Everything the campaign OBSERVES still goes through the pins: the serial
+# register port, the parallel AER port and the five status pins. Only the
+# stimulus reaches into the hierarchy, which is the same rule
+# test_pilot_top.py's FSM-upset test states.
+#
+# Geometry is selected exactly as in Makefile.pilot, through the macros
+# pilot_top.v declares for it. The default 8 x 8 is the shuttle geometry
+# (docs/15). The campaign reads CFG_NEUR / CFG_AXON back and builds its
+# golden model and its target list to match:
+#
+#   make -f Makefile.fi                       (8 x 8, the campaign of record)
+#   make -f Makefile.fi N_NEURONS=4 N_AXONS=8
+#
+# Those two are the geometries that have been run. The target list follows
+# the elaborated geometry on its own, but the WORKLOAD table in
+# test_fi_campaign.py does not: the weight seed and the per-burst busy
+# windows have to be chosen per geometry, and a geometry with no entry
+# there fails immediately with a message saying so rather than reporting
+# numbers drawn against the wrong windows.
+#
+# The per-injection log is written to hw/tb/fi_campaign_results.json for
+# the 8 x 8 campaign of record, and to
+# hw/tb/fi_campaign_results_<n>x<a>.json for any other geometry, so an
+# exploratory run cannot overwrite the acceptance baseline.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+
+# Rootless tool discovery, identical to Makefile.pilot: iverilog comes from
+# PATH, cocotb lives in the project venv hw/.venv. If cocotb-config is not
+# already on PATH, re-invoke make with the venv prepended -- make < 4.4
+# does not pass an exported PATH to $(shell ...), which the cocotb
+# makefiles rely on.
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+RTL := $(abspath $(HERE)/../rtl)
+
+N_NEURONS     ?= 8
+N_AXONS       ?= 8
+EVQ_IN_DEPTH  ?= 4
+EVQ_OUT_DEPTH ?= 4
+
+TOPLEVEL := pilot_top
+VERILOG_SOURCES := \
+	$(RTL)/pilot_top.v \
+	$(RTL)/lif_core.v \
+	$(RTL)/aer_fifo.v \
+	$(RTL)/tmr_voter.v \
+	$(RTL)/secded_enc.v \
+	$(RTL)/secded_dec.v
+
+COCOTB_TEST_MODULES := test_fi_campaign
+
+COMPILE_ARGS += -g2005 -I$(RTL)
+COMPILE_ARGS += -DPILOT_N_NEURONS=$(N_NEURONS)
+COMPILE_ARGS += -DPILOT_N_AXONS=$(N_AXONS)
+COMPILE_ARGS += -DPILOT_EVQ_IN_DEPTH=$(EVQ_IN_DEPTH)
+COMPILE_ARGS += -DPILOT_EVQ_OUT_DEPTH=$(EVQ_OUT_DEPTH)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# No extra access flags are needed: Icarus 12 exposes every register and
+# every memory word this campaign addresses (lif_core's vmem / rmem /
+# wmem, both aer_fifo mem arrays, and the pilot's own flops) through the
+# default VPI name space. The testbench resolves its whole target list
+# before the first injection and fails loudly if a path disappears, so a
+# tool that stops exposing one of them shrinks nothing silently.
+
+# The build directory and the results file carry the geometry, exactly as
+# in Makefile.pilot and for the same reason: Icarus bakes the defines into
+# sim.vvp, but the cocotb makefile only rebuilds when a source file is
+# newer, so a bare geometry change would otherwise re-run the previous
+# elaboration and report those numbers for the geometry that was asked
+# for. Measured before this line existed: `make -f Makefile.fi
+# N_NEURONS=4 N_AXONS=8` immediately after an 8 x 8 run reproduced the
+# 8 x 8 histogram, the 8 x 8 simulated time and the 8 x 8 log, and passed.
+GEO := $(N_NEURONS)x$(N_AXONS)_q$(EVQ_IN_DEPTH)x$(EVQ_OUT_DEPTH)
+SIM_BUILD           ?= $(HERE)/sim_build_fi_$(GEO)
+COCOTB_RESULTS_FILE ?= $(HERE)/results_fi_$(GEO).xml
+export COCOTB_RESULTS_FILE
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# The register-map header is included by the RTL but is not a Verilog
+# source, so cocotb's rule never sees it change. Without this an edit to
+# npu_regs.vh reuses a stale sim.vvp and the campaign reports numbers for
+# the previous elaboration.
+$(SIM_BUILD)/sim.vvp: $(RTL)/npu_regs.vh
+
+endif

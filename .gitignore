@@ -24,6 +24,8 @@ formal/tmr_voter/
 formal/tmr_voter_*/
 formal/lif_ctrl/
 formal/lif_ctrl_*/
+formal/scrub/
+formal/scrub_*/
 
 # physical flow run outputs
 hw/openlane/runs/
