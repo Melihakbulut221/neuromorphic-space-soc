@@ -138,6 +138,11 @@ def _is_flop(cell_type):
         return True
     if re.match(r"^sg13g2_s?df", cell_type):         # sg13g2 mapped
         return True
+    # sky130_fd_sc_hd mapped: dfxtp, dfrtp, dfstp, dfbbn, sdfrtp, edfxbp.
+    # The latch family is dl*, so it does not match, and no combinational
+    # cell in the library carries a "df".
+    if re.match(r"^sky130_fd_sc_hd__[a-z]*df", cell_type):
+        return True
     return False
 
 
@@ -421,3 +426,91 @@ def test_reset_synchronizer_is_still_two_stages(workdir):
             "reset synchronizer collapsed to one stage")
         return
     pytest.fail("rst_sync is not in the netlist at all")
+
+
+# =====================================================================
+# 4. the real flow, not this file's model of it
+# =====================================================================
+# Where a LibreLane run of this design lands. tt/runs/ is the Tiny
+# Tapeout harden -- gitignored, so that glob is empty on a fresh
+# checkout and only hw/openlane/pilot_sky130/runs/ answers.
+RUN_TREES = (
+    ROOT / "hw" / "openlane" / "pilot_sky130" / "runs",
+    ROOT / "tt" / "runs",
+)
+
+# One cell instantiation in a mapped netlist: a type, an instance name
+# that may be an escaped identifier, then the port list.
+_NETLIST_CELL = re.compile(r"^\s*([A-Za-z]\w*)\s+(\\?\S+)\s*\(", re.M)
+
+
+def _hardening_netlists():
+    """Final netlists of runs configured the way this design requires.
+
+    A run only counts as a witness if its own resolved.json says
+    SYNTH_HIERARCHY_MODE = deferred_flatten. Under LibreLane's default
+    ("flatten") yosys flattens BEFORE mapping and abc renumbers every
+    cell to `_NNNN_`, so no instance path survives for anything to be
+    counted under -- a pre-fix run cannot answer this question and must
+    not be read as answering it. hw/openlane/pilot_sky130/runs/sky-03-*
+    is exactly such a run and is still on disk.
+
+    The discriminator is the run's configuration, deliberately not a
+    marker in the netlist: a netlist-shaped skip condition would skip
+    on the very symptom these tests exist to catch.
+    """
+    found = []
+    for tree in RUN_TREES:
+        if not tree.is_dir():
+            continue
+        for run in sorted(tree.iterdir()):
+            resolved = run / "resolved.json"
+            nl_dir = run / "final" / "nl"
+            if not resolved.is_file() or not nl_dir.is_dir():
+                continue
+            cfg = json.loads(resolved.read_text())
+            if cfg.get("SYNTH_HIERARCHY_MODE") != "deferred_flatten":
+                continue
+            found.extend((run, nl) for nl in sorted(nl_dir.glob("*.nl.v")))
+    return found
+
+
+def test_config_tmr_survives_the_real_hardening_flow():
+    """The tests above run a MODEL of LibreLane synthesis; this one reads
+    what LibreLane actually produced, after placement and CTS have also
+    had a chance to touch the netlist.
+
+    The model is close but not byte-identical -- before the fix it read
+    1045 flip-flops where the real 4x2 run read 1037 -- so it can agree
+    with itself while the shipped flow does something else. Only the
+    final netlist is the artifact that becomes silicon.
+
+    This does NOT duplicate Checker.YosysUnmappedCells. That checker
+    fails when the $paramod module types reach the mapped netlist, which
+    is the crash this design's SYNTH_HIERARCHY_MODE setting avoids; a
+    run that reaches final/ has already passed it. What no checker looks
+    at is whether the three banks are still three banks, which is the
+    property the design needs and the one measured here.
+
+    Skips when no such run is on disk: the hardening is not part of the
+    test suite's own work, so this reports on the latest one a developer
+    or CI happened to leave behind.
+    """
+    netlists = _hardening_netlists()
+    if not netlists:
+        pytest.skip(
+            "no deferred_flatten LibreLane run with a final netlist; "
+            "produce one with hw/openlane/pilot_sky130/run_sky130.sh")
+
+    for run, nl in netlists:
+        text = nl.read_text()
+        cells = _NETLIST_CELL.findall(text)
+        flops = [name for ctype, name in cells if _is_flop(ctype)]
+        found = {r: sum(1 for n in flops if f"{r}." in n) for r in REPLICAS}
+        assert all(v == TMR_W for v in found.values()), (
+            f"configuration TMR collapsed in {nl.relative_to(ROOT)}: "
+            f"expected {TMR_W} flip-flops per replica, found {found}. "
+            f"This is the shipped netlist of run {run.name}, so unlike "
+            f"the recipe tests above this is the structure that would "
+            f"have been fabricated. See hw/rtl/pilot_top.v header "
+            f"section 9. Total flip-flops in this netlist: {len(flops)}.")
