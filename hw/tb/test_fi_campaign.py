@@ -781,7 +781,21 @@ def target_list(n_neurons, n_axons, q_depth):
     #    because only a flop deposit tests what an upset does to the
     #    stored replica -- including the fact that nothing resynchronizes
     #    it afterwards.
-    t += [(f"cfg_tmr_{r}", f"cfg_{r}", [0, 12, 16, 32, 43], 1, True)
+    #
+    #    The target is the bank's storage register `bits`, not its output
+    #    `q` (the `cfg_a/b/c` wires in pilot_top): since 2026-08-26 the
+    #    replicas are pilot_cfg_bank instances (pilot_top.v header section
+    #    9), so `cfg_a` is a continuously driven net and a deposit on it
+    #    models an upset at the voter input, not in the flip-flop. Icarus
+    #    happens to let such a deposit persist until the driver
+    #    re-evaluates, so both spellings classify the same here, but only
+    #    this one is a flop deposit and only this one is portable.
+    #
+    #    Bit positions are unchanged by the move. Each bank stores
+    #    `value ^ POL` and presents `bits ^ POL`, and XOR with a constant
+    #    is bit-wise, so flipping bit i of `bits` still flips exactly bit
+    #    i of the value the voter sees.
+    t += [(f"cfg_tmr_{r}", f"u_cfg_{r}.bits", [0, 12, 16, 32, 43], 1, True)
           for r in ("a", "b", "c")]
 
     # 7. register-bank configuration registers outside the TMR domain.
