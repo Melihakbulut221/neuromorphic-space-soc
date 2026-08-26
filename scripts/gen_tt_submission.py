@@ -176,27 +176,46 @@ PINOUT_UIO = [
 # ---------------------------------------------------------------------
 # LibreLane configuration overrides
 # ---------------------------------------------------------------------
-# Deliberately empty, and that is a measured decision rather than an
-# oversight. The sibling fault-tolerant edge-AI project in this
-# workspace (see its own scripts/gen_tt_submission.py) has to inject
-# SYNTH_HIERARCHY_MODE = "deferred_flatten" into the Tiny Tapeout config,
-# because its TMR is built from per-copy submodules carrying
-# `keep_hierarchy` attributes: under the LibreLane default ("flatten",
-# librelane/steps/pyosys.py) those attributes survive into techmap and
-# the GDS action dies with "Unmapped Yosys instances".
+# CORRECTED 2026-08-26. This block used to be empty, on the reasoning
+# that "the replicas are not merged, because Yosys opt_merge does not
+# merge flip-flops unless asked with -share_all". That reasoning was
+# wrong and the measurement behind it was misread. opt_merge does not
+# merge bit-level flip-flops on its own, but `opt_dff` first normalises
+# the three identically-written replicas into identical enable
+# flip-flops, and opt_merge then hashes THOSE into one bank. The
+# artifact proves it: the netlist that fed the 4x2 harden,
+# tt/runs/tt-harden/06-yosys-synthesis/tt_um_melihakbulut_nssoc.nl.v,
+# has 362 references to `cfg_a[` and zero to `cfg_b[` or `cfg_c[`.
+# The earlier `(* keep *)` experiment reported "the same 1036" because the
+# attribute preserves the WIRE name while the storage still merges --
+# the flip-flop count never moved, which is the number that mattered.
 #
-# This design has no `keep_hierarchy` attribute anywhere in hw/rtl (grep),
-# and its configuration TMR is three same-module registers voted by
-# tmr_voter, not three submodules, so the same workaround would protect
-# nothing. Measured here on sg13g2 with the repository's own Yosys 0.33:
-# `synth -flatten` on tt_um_pilot yields 1036 sg13g2_dfrbpq_1 flip-flops,
-# and marking cfg_a/cfg_b/cfg_c with (* keep *) yields the same 1036 --
-# the replicas are not merged, because Yosys opt_merge does not merge
-# flip-flops unless asked with -share_all.
+# hw/rtl/pilot_top.v header section 9 now builds each replica as a
+# `pilot_cfg_bank` instance carrying `keep_hierarchy`, so this design
+# is in exactly the position the sibling edge-AI project is in: under
+# the LibreLane default SYNTH_HIERARCHY_MODE ("flatten",
+# librelane/steps/pyosys.py) the three instances survive into the mapped
+# netlist as derived module types whose names begin with `$paramod`, and
+# the Checker.YosysUnmappedCells step counts every cell type starting
+# with `$` as an unmapped instance (librelane/steps/pyosys.py, the
+# design__instance_unmapped__count metric). The GDS action would abort.
 #
-# If the Tiny Tapeout GDS action ever does report unmapped instances, the
-# one-line fix is {"SYNTH_HIERARCHY_MODE": "deferred_flatten"} here.
-CONFIG_OVERRIDES: "dict[str, object]" = {}
+# "deferred_flatten" is the documented answer and the one the sibling
+# programme runs through GDS: LibreLane resynthesizes the already-mapped
+# netlist with `synth -flatten`, which removes the hierarchy AFTER the
+# banks are standard cells, so nothing can hash them together. Measured
+# here on sg13g2 with the repository's own Yosys 0.33, using the
+# standalone recipe of sw/tests/test_synthesis_guards.py: 1155
+# flip-flops, 55 under each of u_cfg_a / u_cfg_b / u_cfg_c, and no cell
+# type beginning with `$` left in the netlist. That recipe is not
+# byte-for-byte LibreLane -- before the fix it read 1045 where the real
+# 4x2 run read 1037 -- which is exactly why the guard test measures its
+# own recipe rather than asserting a hardcoded LibreLane number.
+#
+# sw/tests/test_synthesis_guards.py is the check that keeps this true.
+CONFIG_OVERRIDES: "dict[str, object]" = {
+    "SYNTH_HIERARCHY_MODE": "deferred_flatten",
+}
 
 # =====================================================================
 # Files taken verbatim from the upstream template. --diff-template proves

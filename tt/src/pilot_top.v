@@ -326,6 +326,125 @@
 // either observer can consume. Nothing here reads aer_fifo's rd_data
 // combinationally, so the queue stays retargetable.
 //
+// =====================================================================
+// 9. Configuration TMR: why the replicas are submodules, not three regs
+// =====================================================================
+//
+// Until 2026-08-26 the three 55-bit replicas of the configuration TMR
+// domain were three `reg [TMR_W-1:0]` vectors (cfg_a, cfg_b, cfg_c) in
+// this module's register process, written from the same expression on
+// the same cycle. That is correct RTL and it is a defect in silicon.
+// It takes two yosys passes, which is why a single-pass reading of the
+// tool missed it: `opt_dff` first rewrites each bank's hold-mux into an
+// enable flip-flop, which erases the only structural difference between
+// them, and `opt_merge` then hashes the three now-identical cells into
+// one and rewires the other two names to it. Bisected on this design:
+// `opt_merge` alone leaves all 1161 declared flip-flops standing, and
+// `opt_dff; opt_merge` takes it to 1045 [fact].
+// Measured on the artifact that fed the 4x2 harden,
+// tt/runs/tt-harden/06-yosys-synthesis/tt_um_melihakbulut_nssoc.nl.v:
+// 362 references to `cfg_a[` and zero to `cfg_b[` or `cfg_c[` [fact].
+// The voter therefore read one physical bank three times; a real upset
+// corrupted all three inputs together and the majority vote returned the
+// corrupted value. RTL fault injection (docs/16) cannot see this,
+// because at RTL the three vectors are still distinct signals.
+//
+// Four mechanisms were considered. Every number below is measured with
+// Yosys 0.33 on sg13g2, `synth -flatten` + dfflibmap + abc, whole
+// design; the pre-fix reference point is 1045 flip-flops and the RTL
+// declares 1161.
+//
+//   (a) `(* keep *)` on the three regs. REJECTED, and it is worse than
+//       useless because it looks like it works. Measured: flip-flop
+//       count unchanged at 1045, and the netlist now contains 110
+//       references to `cfg_b[` -- all of them of the form
+//       `assign \u_pilot.cfg_b[3] = \u_pilot.cfg_a[3] ;` [fact]. The
+//       attribute lands on the wire, not on the flip-flop cell, so
+//       opt_clean preserves the name while opt_merge still deletes the
+//       storage. This is why the guard test counts flip-flops and never
+//       greps for a signal name.
+//   (b) `(* syn_keep *)`. REJECTED: it is a vendor attribute for
+//       Synplify/Vivado front ends and Yosys ignores it outright.
+//       Measured: 1045 flip-flops and zero references to `cfg_b[` in
+//       the netlist, so unlike (a) it does not even leave a name behind
+//       [fact].
+//   (c) one module per replica plus `(* keep_hierarchy *)`. CHOSEN as
+//       the primary mechanism. `flatten` skips modules carrying the
+//       attribute, and `opt_merge` does not merge instances of
+//       user-defined modules unless it is asked with `-share_all`, so
+//       the three banks are two independent steps away from collapse
+//       rather than one. It is the same M-4 recipe the sibling
+//       rad-hard programme validated through LibreLane after its own
+//       constant-folding loss (its docs/20 finding F-1).
+//   (d) an architectural difference that makes the three genuinely
+//       non-equivalent to structural hashing. ADDED ON TOP of (c),
+//       because (c) is still one tool honouring one attribute. Each
+//       bank takes a POL parameter and stores `value ^ POL`, presenting
+//       `bits ^ POL` at its output: replica A stores the value true
+//       (POL = 0), replica B stores its exact complement (POL = all
+//       ones) and replica C stores it with the odd bits complemented
+//       (POL = 0x2AAAAAAAAAAAAA). Two consequences, both intended:
+//         - the three instances carry different parameters, so Yosys
+//           derives three different module types and nothing can hash
+//           them together even with `-share_all`;
+//         - if some future flow flattens the hierarchy anyway, bit i of
+//           bank A is driven by `x_i` and bit i of bank B by `~x_i`,
+//           which are different cells, so at least two physical banks
+//           survive a total loss of the attributes. Measured: 110
+//           flip-flops under a deliberately forced flatten against 55
+//           before this fix [fact].
+//       Honest limit: only two distinct functions of x_i exist (x_i and
+//       ~x_i), so under a forced flatten bank C merges bitwise into A
+//       and B and the domain degrades to duplication-with-detection.
+//       Polarity coding cannot do better than that, and no encoding
+//       can: a third per-bit function would have to mix in a second
+//       signal, which turns a single upset into a multi-bit error and
+//       defeats the voter it is meant to protect.
+//       Secondary, and tagged as an estimate because this project has
+//       no beam data: complementary storage also decorrelates any
+//       upset mechanism with a preferred direction (a strike or a
+//       total-dose shift that favours 1->0), because the same physical
+//       bias lands as the opposite logical error in replica B
+//       [estimate].
+//
+// Flow portability, stated plainly rather than assumed:
+//
+//   (c) is portable across every flow this repository runs, because
+//       both of them are yosys: the LibreLane/yosys ASIC flow and the
+//       plain `synth_ecp5` FPGA run use the same `flatten` pass, which
+//       honours the attribute. It is NOT portable to a front end that
+//       does not read yosys attributes. That is a real limit, not a
+//       theoretical one, and it is why (d) exists.
+//   (d) is plain Verilog-2005 and depends on no attribute in any tool.
+//       It is the layer that still holds when (c) does not.
+//   Neither is trusted. sw/tests/test_synthesis_guards.py runs both
+//       flows, counts the flip-flops in the mapped netlist per replica
+//       bank, and fails if any of them collapses. That test -- not any
+//       attribute -- is what keeps this fixed, and it is mutation-checked
+//       against a scratch copy with the fix removed.
+//
+// One flow consequence to carry forward. Because (d) parameterises the
+// bank, yosys derives three module types whose names begin with
+// `$paramod`, and LibreLane's Checker.YosysUnmappedCells counts every
+// cell type starting with `$` as an unmapped instance. Under the default
+// SYNTH_HIERARCHY_MODE ("flatten") the hardening run would therefore
+// abort. scripts/gen_tt_submission.py now emits
+// SYNTH_HIERARCHY_MODE = "deferred_flatten", which flattens AFTER the
+// banks are standard cells: measured 1155 flip-flops, 55 under each of
+// u_cfg_a / u_cfg_b / u_cfg_c, and no `$` cell type left [fact]. Any
+// other LibreLane configuration that hardens this module needs the same
+// key.
+//
+// Cost, measured, against the pre-fix design [fact]:
+//   sg13g2   1045 -> 1155 flip-flops; 106,174 -> 109,058 um2 (+2.7%)
+//            on a 4x2 tile of 268,059 um2
+//   ECP5 85F 1045 -> 1155 TRELLIS_FF, 3449 -> 4503 TRELLIS_COMB,
+//            Fmax 47.87 -> 46.45 MHz at speed grade 6, seed 0
+//            (target 25 MHz, PASS both before and after)
+// The LUT growth is larger than the flip-flop growth because the voter
+// was not being paid for either: with one physical bank feeding all
+// three of its inputs, `(a&b)|(a&c)|(b&c)` folded to a wire.
+//
 // Plain Verilog-2005, Icarus-clean.
 `default_nettype none
 
@@ -657,8 +776,11 @@ module pilot_top #(
     // fault-pin stickies not present in STATUS
     reg sticky_sec, sticky_tmr;
 
-    // configuration replicas (TMR domain)
-    reg [TMR_W-1:0] cfg_a, cfg_b, cfg_c;
+    // Configuration replicas (TMR domain). Three pilot_cfg_bank
+    // instances at the bottom of this file, NOT three regs here; see
+    // header section 9 for why, and sw/tests/test_synthesis_guards.py
+    // for the check that keeps it true.
+    wire [TMR_W-1:0] cfg_a, cfg_b, cfg_c;
 
     // ECC-protected weight staging word: data field is W_DATA_LO/HI
     reg [63:0] ecc_data;
@@ -695,8 +817,77 @@ module pilot_top #(
     localparam [CNT_W-1:0] CNT_MAX = {CNT_W{1'b1}};
 
     // -----------------------------------------------------------------
-    // Configuration TMR domain
+    // Configuration TMR domain (header section 9)
     // -----------------------------------------------------------------
+    // Packed write port shared by the three banks. Every field position
+    // is taken from the T_* layout localparams, so the elaboration drift
+    // guard above still covers this packing, and the payload of each
+    // field is reg_wdata[width-1:0] exactly as the register map defines
+    // it. wr_ok is the qualified write strobe, so the enable term here
+    // is identical to the `if (wr_ok) ... if (s_cfg_x)` nesting these
+    // assignments used to sit inside.
+    wire [TMR_W-1:0] cfg_wr_d;
+    wire [TMR_W-1:0] cfg_wr_en;
+
+    assign cfg_wr_d [T_THRESH +: 16] = reg_wdata[15:0];
+    assign cfg_wr_d [T_VRESET +: 16] = reg_wdata[15:0];
+    assign cfg_wr_d [T_LEAK   +: 4]  = reg_wdata[3:0];
+    assign cfg_wr_d [T_SYN    +: 3]  = reg_wdata[2:0];
+    assign cfg_wr_d [T_REFR   +: 4]  = reg_wdata[3:0];
+    assign cfg_wr_d [T_FLAGS  +: 2]  = reg_wdata[1:0];
+    assign cfg_wr_d [T_TILE   +: 10] = reg_wdata[9:0];
+
+    assign cfg_wr_en[T_THRESH +: 16] = {16{wr_ok && s_cfg_thresh}};
+    assign cfg_wr_en[T_VRESET +: 16] = {16{wr_ok && s_cfg_vreset}};
+    assign cfg_wr_en[T_LEAK   +: 4]  = {4 {wr_ok && s_cfg_leak}};
+    assign cfg_wr_en[T_SYN    +: 3]  = {3 {wr_ok && s_cfg_synshift}};
+    assign cfg_wr_en[T_REFR   +: 4]  = {4 {wr_ok && s_cfg_refr}};
+    assign cfg_wr_en[T_FLAGS  +: 2]  = {2 {wr_ok && s_cfg_flags}};
+    assign cfg_wr_en[T_TILE   +: 10] = {10{wr_ok && s_tile_off}};
+
+    // Reset image of the TMR vector (docs/10 section 6), assembled from
+    // the generated RST_* constants at the T_* positions. Shifted-OR
+    // rather than a concatenation so the packing stays expressed in the
+    // same localparams the drift guard checks, and so a field that moves
+    // cannot be silently mis-packed by a concatenation whose order was
+    // never updated.
+    localparam [63:0] CFG_RST_VAL =
+          ({{(64-16){1'b0}}, RST_CFG_THRESH[15:0]}   << T_THRESH)
+        | ({{(64-16){1'b0}}, RST_CFG_VRESET[15:0]}   << T_VRESET)
+        | ({{(64-4) {1'b0}}, RST_CFG_LEAK[3:0]}      << T_LEAK)
+        | ({{(64-3) {1'b0}}, RST_CFG_SYNSHIFT[2:0]}  << T_SYN)
+        | ({{(64-4) {1'b0}}, RST_CFG_REFR[3:0]}      << T_REFR)
+        | ({{(64-2) {1'b0}}, RST_CFG_FLAGS[1:0]}     << T_FLAGS)
+        | ({{(64-10){1'b0}}, RST_PASS_TILE_OFF[9:0]} << T_TILE);
+
+    // Per-replica storage polarity, header section 9 option (d). These
+    // are TMR_W = 55 bits wide inside the bank; the parameter is carried
+    // as 64 bits so the port declaration does not depend on W.
+    localparam [63:0] CFG_POL_A = 64'h0000000000000000;  // true
+    localparam [63:0] CFG_POL_B = 64'h007FFFFFFFFFFFFF;  // 55 ones
+    localparam [63:0] CFG_POL_C = 64'h002AAAAAAAAAAAAA;  // odd bits
+
+    // A width change to the TMR vector must not silently truncate the
+    // reset image or the polarity masks, both of which are carried as
+    // 64-bit parameters.
+    generate
+        if (TMR_W > 64) begin : g_tmr_too_wide
+            ERROR_pilot_top_TMR_W_exceeds_the_64_bit_cfg_bank_parameters guard ();
+        end
+    endgenerate
+
+    pilot_cfg_bank #(.W(TMR_W), .RST_VAL(CFG_RST_VAL), .POL(CFG_POL_A))
+        u_cfg_a (.clk(clk), .rst_n(rst_n), .wr_en(cfg_wr_en),
+                 .wr_d(cfg_wr_d), .q(cfg_a));
+
+    pilot_cfg_bank #(.W(TMR_W), .RST_VAL(CFG_RST_VAL), .POL(CFG_POL_B))
+        u_cfg_b (.clk(clk), .rst_n(rst_n), .wr_en(cfg_wr_en),
+                 .wr_d(cfg_wr_d), .q(cfg_b));
+
+    pilot_cfg_bank #(.W(TMR_W), .RST_VAL(CFG_RST_VAL), .POL(CFG_POL_C))
+        u_cfg_c (.clk(clk), .rst_n(rst_n), .wr_en(cfg_wr_en),
+                 .wr_d(cfg_wr_d), .q(cfg_c));
+
     wire [TMR_W-1:0] inj_bit = {{(TMR_W-1){1'b0}}, 1'b1} << tmr_inj[5:0];
     wire [TMR_W-1:0] inj_a = (tmr_inj[9:8] == 2'b01) ? inj_bit : {TMR_W{1'b0}};
     wire [TMR_W-1:0] inj_b = (tmr_inj[9:8] == 2'b10) ? inj_bit : {TMR_W{1'b0}};
@@ -1126,30 +1317,11 @@ module pilot_top #(
             ld_word_idx   <= {WORD_W{1'b0}};
             ld_run        <= 1'b0;
             ld_k          <= 4'd0;
-            // The TMR replicas hold the regmap reset values (docs/10
-            // section 6). Written three times, once per replica, from
-            // the generated constants.
-            cfg_a[T_THRESH +: 16] <= RST_CFG_THRESH[15:0];
-            cfg_b[T_THRESH +: 16] <= RST_CFG_THRESH[15:0];
-            cfg_c[T_THRESH +: 16] <= RST_CFG_THRESH[15:0];
-            cfg_a[T_VRESET +: 16] <= RST_CFG_VRESET[15:0];
-            cfg_b[T_VRESET +: 16] <= RST_CFG_VRESET[15:0];
-            cfg_c[T_VRESET +: 16] <= RST_CFG_VRESET[15:0];
-            cfg_a[T_LEAK   +: 4]  <= RST_CFG_LEAK[3:0];
-            cfg_b[T_LEAK   +: 4]  <= RST_CFG_LEAK[3:0];
-            cfg_c[T_LEAK   +: 4]  <= RST_CFG_LEAK[3:0];
-            cfg_a[T_SYN    +: 3]  <= RST_CFG_SYNSHIFT[2:0];
-            cfg_b[T_SYN    +: 3]  <= RST_CFG_SYNSHIFT[2:0];
-            cfg_c[T_SYN    +: 3]  <= RST_CFG_SYNSHIFT[2:0];
-            cfg_a[T_REFR   +: 4]  <= RST_CFG_REFR[3:0];
-            cfg_b[T_REFR   +: 4]  <= RST_CFG_REFR[3:0];
-            cfg_c[T_REFR   +: 4]  <= RST_CFG_REFR[3:0];
-            cfg_a[T_FLAGS  +: 2]  <= RST_CFG_FLAGS[1:0];
-            cfg_b[T_FLAGS  +: 2]  <= RST_CFG_FLAGS[1:0];
-            cfg_c[T_FLAGS  +: 2]  <= RST_CFG_FLAGS[1:0];
-            cfg_a[T_TILE   +: 10] <= RST_PASS_TILE_OFF[9:0];
-            cfg_b[T_TILE   +: 10] <= RST_PASS_TILE_OFF[9:0];
-            cfg_c[T_TILE   +: 10] <= RST_PASS_TILE_OFF[9:0];
+            // The TMR replicas reset themselves inside pilot_cfg_bank,
+            // from the CFG_RST_VAL image assembled next to their
+            // instantiation. They are not driven from this process on
+            // purpose: three identical assignments here are exactly what
+            // synthesis proved equivalent and merged (header section 9).
         end else begin
             // self-clearing strobes
             state_clr_req <= state_clr_req && !state_clr_go;
@@ -1188,41 +1360,12 @@ module pilot_top #(
                 // TMR-protected configuration: one write updates all
                 // three replicas, so a masked replica error is repaired
                 // by the next configuration write as well as by a scrub.
-                if (s_cfg_thresh) begin
-                    cfg_a[T_THRESH +: 16] <= reg_wdata[15:0];
-                    cfg_b[T_THRESH +: 16] <= reg_wdata[15:0];
-                    cfg_c[T_THRESH +: 16] <= reg_wdata[15:0];
-                end
-                if (s_cfg_vreset) begin
-                    cfg_a[T_VRESET +: 16] <= reg_wdata[15:0];
-                    cfg_b[T_VRESET +: 16] <= reg_wdata[15:0];
-                    cfg_c[T_VRESET +: 16] <= reg_wdata[15:0];
-                end
-                if (s_cfg_leak) begin
-                    cfg_a[T_LEAK +: 4] <= reg_wdata[3:0];
-                    cfg_b[T_LEAK +: 4] <= reg_wdata[3:0];
-                    cfg_c[T_LEAK +: 4] <= reg_wdata[3:0];
-                end
-                if (s_cfg_synshift) begin
-                    cfg_a[T_SYN +: 3] <= reg_wdata[2:0];
-                    cfg_b[T_SYN +: 3] <= reg_wdata[2:0];
-                    cfg_c[T_SYN +: 3] <= reg_wdata[2:0];
-                end
-                if (s_cfg_refr) begin
-                    cfg_a[T_REFR +: 4] <= reg_wdata[3:0];
-                    cfg_b[T_REFR +: 4] <= reg_wdata[3:0];
-                    cfg_c[T_REFR +: 4] <= reg_wdata[3:0];
-                end
-                if (s_cfg_flags) begin
-                    cfg_a[T_FLAGS +: 2] <= reg_wdata[1:0];
-                    cfg_b[T_FLAGS +: 2] <= reg_wdata[1:0];
-                    cfg_c[T_FLAGS +: 2] <= reg_wdata[1:0];
-                end
-                if (s_tile_off) begin
-                    cfg_a[T_TILE +: 10] <= reg_wdata[9:0];
-                    cfg_b[T_TILE +: 10] <= reg_wdata[9:0];
-                    cfg_c[T_TILE +: 10] <= reg_wdata[9:0];
-                end
+                // The write itself happens in the three pilot_cfg_bank
+                // instances, driven by cfg_wr_en / cfg_wr_d, which carry
+                // the same wr_ok && s_cfg_x enable this branch used to
+                // apply. Do not reintroduce the assignments here: three
+                // identical ones are what synthesis merged into one bank
+                // (header section 9).
                 // ECC-protected staging word (D4)
                 if (s_w_data_lo) ecc_data[31:0] <= reg_wdata;
                 if (s_w_data_hi) begin
@@ -1399,6 +1542,69 @@ module pilot_top #(
     wire _unused = &{1'b0, dec_syndrome, enc_code, fo_drop,
                      tmr_inj[7:6], evw[13:10], 1'b0};
 
+endmodule
+
+// =====================================================================
+// pilot_cfg_bank: one physical replica of the configuration TMR domain
+// =====================================================================
+//
+// One instance per replica. The reason this is a module at all, rather
+// than a reg vector in pilot_top, is header section 9: three identical
+// flip-flop banks written from the same expression are one bank after
+// yosys opt_merge, and the voter above them then votes three copies of
+// the same corrupted value.
+//
+// Two independent defences live here and neither is trusted alone:
+//
+//   keep_hierarchy   `flatten` skips this module, and `opt_merge` does
+//                    not merge instances of user-defined modules unless
+//                    it is invoked with -share_all. Flow-portable across
+//                    the LibreLane/yosys ASIC flow and synth_ecp5, both
+//                    of which use the same `flatten` pass; NOT portable
+//                    to a front end that does not read yosys attributes,
+//                    which is why POL exists.
+//   POL              per-replica storage polarity. Gives the three
+//                    instances different parameters, so yosys derives
+//                    three different module types, and gives bank A and
+//                    bank B different per-bit D functions (x_i against
+//                    ~x_i), so they cannot be hashed together even if
+//                    the hierarchy is flattened away. This is plain
+//                    Verilog and depends on no attribute in any tool.
+//
+// keep on `bits` is a third, weakest layer: measured on this design it
+// does NOT stop the merge on its own (it preserves the wire name while
+// the storage still disappears), so it is here only to stop opt_clean,
+// never as evidence that the bank survived. The evidence is the
+// flip-flop count in sw/tests/test_synthesis_guards.py.
+//
+// The stored image is `value ^ POL` and the port presents `bits ^ POL`,
+// so every user of q sees the true configuration value and only the
+// physical cells differ. A debugger reading u_cfg_b.bits sees the
+// complement of the configuration, by design.
+(* keep_hierarchy *)
+module pilot_cfg_bank #(
+    parameter integer W       = 55,   // <= 64, guarded at the instance
+    parameter [63:0]  RST_VAL = 64'd0,
+    parameter [63:0]  POL     = 64'd0
+) (
+    input  wire         clk,
+    input  wire         rst_n,
+    input  wire [W-1:0] wr_en,   // per-bit write enable, already qualified
+    input  wire [W-1:0] wr_d,    // per-bit write data, true polarity
+    output wire [W-1:0] q        // stored value, true polarity
+);
+    (* keep *) reg [W-1:0] bits;
+
+    integer i;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            bits <= RST_VAL[W-1:0] ^ POL[W-1:0];
+        else
+            for (i = 0; i < W; i = i + 1)
+                if (wr_en[i]) bits[i] <= wr_d[i] ^ POL[i];
+    end
+
+    assign q = bits ^ POL[W-1:0];
 endmodule
 
 `default_nettype wire

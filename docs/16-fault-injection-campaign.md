@@ -59,9 +59,12 @@ written for and buys nothing else, which is what it should do.
 
 In both runs every hardened structure kept its promise with zero
 counterexamples — the neuron-core FSM (12/12 detected), the
-configuration TMR domain (15/15 corrected and counted), the SECDED
-weight word (12/12 singles corrected, 4/4 doubles detected, E10
-substitution exact on every event stream it produced). Every silent
+configuration TMR domain (15/15 corrected and counted, but read the
+correction of 2026-08-26 in section 4 before quoting that number: the
+replicas it votes on did not exist as three registers in the netlist
+until that date), the SECDED weight word (12/12 singles corrected, 4/4
+doubles detected, E10 substitution exact on every event stream it
+produced). Every silent
 corruption came from a structure the pilot never claimed to protect.
 The ranking of those, and the previously unknown deadlock in the event
 dispatcher, is the result that matters.
@@ -295,6 +298,13 @@ injections, if any FSM injection is not DETECTED, if any single TMR
 replica upset is SDC, if any single-bit weight-word upset is not
 CORRECTED, or if any double-bit weight-word upset is not DETECTED.
 
+Every one of those criteria is an RTL criterion and none of them can
+fail because a structure vanished in synthesis; `test_04_summary` would
+have passed unchanged on a netlist with one configuration bank instead
+of three. `sw/tests/test_synthesis_guards.py` is the separate,
+netlist-level criterion that covers that class, and it is not a
+substitute for this one or vice versa.
+
 ---
 
 ## 2. Coverage
@@ -302,6 +312,14 @@ CORRECTED, or if any double-bit weight-word upset is not DETECTED.
 Flip-flop counts below are **counted from the RTL declarations** at the
 8 x 8 geometry, not from a synthesised netlist [fact for the counts,
 estimate for their mapping to silicon area].
+
+That distinction cost this project a real defect and is worth stating
+rather than assuming. Counting from the RTL is the right basis for
+*coverage* — the campaign injects into RTL signals, so RTL is the
+population it samples — but it is not evidence that any of those
+flip-flops reach silicon. The 165 flip-flops of the `cfg_a/b/c` row
+below were 55 in the netlist until 2026-08-26; see the correction in
+section 4 and the discussion in section 7.4.
 
 "Represented" means the campaign sampled that structure, not that it
 injected into every bit of it — 255 injections cannot cover 996
@@ -312,7 +330,7 @@ the design the map speaks about, not how exhaustively.
 | Structure | Group | FF | Injections |
 |---|---|---:|---:|
 | Synapse weight file, `lif_core.wmem` | `lif_wmem` (+ unread control) | 256 | 20 |
-| Configuration TMR replicas, `cfg_a/b/c` | `cfg_tmr_a/b/c` | 165 | 15 |
+| Configuration TMR replicas, `cfg_a/b/c` [†] | `cfg_tmr_a/b/c` | 165 | 15 |
 | Membrane potentials, `lif_core.vmem` | `lif_vmem` | 128 | 24 |
 | AER queue storage, both `mem[]` | `evq_mem` | 128 | 32 |
 | Register-bank configuration | `regbank_cfg` | 75 | 16 |
@@ -325,6 +343,11 @@ the design the map speaks about, not how exhaustively.
 | AER queue pointers (4 x 3 b) | `evq_ptr` | 12 | 24 |
 | Neuron-core FSM state | `lif_fsm` | 4 | 12 |
 | **Total represented** | | **996** | **255** |
+
+[†] 165 in the RTL, and 55 in the netlist until 2026-08-26 — the three
+replicas were merged into one register bank by synthesis. Corrected in
+`hw/rtl/pilot_top.v` on that date; see section 4 and section 7.4.
+
 
 The design held **1160 flip-flops** at this geometry by the same count
 when the campaign was written, so the campaign represents **86%** of
@@ -442,6 +465,44 @@ not the clean golden final value either (no `lif_fsm` record has
 mid-run, and it is the reason all twelve classify with a corrupted
 output. An earlier revision of this section claimed all twelve read
 back the post-`STATE_CLR` state; that was true of four.
+
+> **Correction, 2026-08-26 — the 15/15 result below is an RTL-level
+> measurement that did not hold in the netlist until the synthesis fix
+> of that date.** The original measurement stands exactly as recorded
+> and is not withdrawn: at RTL, `cfg_a`, `cfg_b` and `cfg_c` are three
+> distinct signals, the campaign deposited into one of them at a time,
+> and the voter masked every one. What the campaign could not see is
+> that the three replicas did not exist as three registers in silicon.
+> They were written from the same expression on the same cycle, so
+> yosys `opt_dff` normalised them into identical enable flip-flops and
+> `opt_merge` hashed those into a single bank. Netlist evidence, read
+> off the artifact that fed the 4x2 harden,
+> `tt/runs/tt-harden/06-yosys-synthesis/tt_um_melihakbulut_nssoc.nl.v`:
+> **362 references to `cfg_a[`, zero to `cfg_b[`, zero to `cfg_c[`**
+> [fact]. It was not one PDK's behaviour: the sky130 run
+> `hw/openlane/pilot_sky130/runs/sky-03-clk26/` carries 1045
+> `sky130_fd_sc_hd__df*` flip-flops with the same zero references to
+> `cfg_b[` and `cfg_c[`, and the ECP5 fit measured 1045 TRELLIS_FF —
+> against 1161 flip-flops declared by the RTL [fact]. In that netlist
+> the voter read one physical bank three times:
+> a real upset would have corrupted all three of its inputs together
+> and the majority vote would have returned the corrupted value —
+> masking nothing, counting nothing, lighting no pin.
+>
+> `hw/rtl/pilot_top.v` header section 9 fixes this by building each
+> replica as its own `pilot_cfg_bank` instance and giving each instance
+> a different storage polarity. After the fix, both flows carry
+> **1155 flip-flops, 55 under each of `u_cfg_a`, `u_cfg_b` and
+> `u_cfg_c`** [fact], which is the +110 the three banks cost.
+>
+> So this paragraph now reports two different things and both are true:
+> **the voting logic is correct and was measured correct at RTL
+> (15/15)**, and **the redundancy it votes on only existed in silicon
+> from 2026-08-26**. Any use of the 15/15 number against a netlist
+> older than that date is a claim about a design that had no
+> configuration TMR. See section 7.4 for why no amount of RTL injection
+> could have caught this, and `sw/tests/test_synthesis_guards.py` for
+> the check that now closes the gap.
 
 **Configuration TMR: 15/15 CORRECTED [fact].** Five voted-field bits
 (THETA low, THETA high, V_RESET, S_LEAK, CFG_FLAGS) across all three
@@ -924,6 +985,15 @@ measured, the weighting is arithmetic on the section 2 FF counts]:
    `W_ADDR` and `CTRL` before every use.
 
 Nothing in this list argues for touching the three hardened structures.
+One correction to the cost line below, dated 2026-08-26: the 165 FF of
+the configuration TMR domain were an RTL cost that the design was not
+actually paying — synthesis had merged the three replicas into one bank
+of 55, so the block was carrying the voter, the counter and the pin
+while banking the area saving of having no redundancy (section 4
+correction). The fix restores the full 165, measured as +110 flip-flops
+in both the sg13g2 and the ECP5 flow. The "50 for 50" record below is
+an RTL record throughout and section 7.4 says what that does and does
+not license.
 They cost 165 FF for the configuration TMR domain, 72 FF for the ECC
 word plus the SECDED codec, and **one** extra state bit for the
 neuron-core FSM encoding — `lif_core` has five states, which a plain
@@ -1035,6 +1105,39 @@ outside the model), no stuck-at faults, no latch-up. Injection is at RTL
 with zero delay: there is no netlist campaign, no timing-aware
 injection, and no cell-level sensitivity. The gate-level behaviour of a
 deposit near a setup boundary is not represented at all.
+
+**RTL-level fault injection cannot see synthesis-level structure loss,
+and this is not a weakness of the harness — it is a property of where
+the harness stands.** The campaign deposits into RTL signals. A
+redundant structure that synthesis proves equivalent and deletes is
+still three separate signals in the RTL simulation, so the campaign
+measures the redundancy the designer wrote, not the redundancy the
+netlist contains. Every "hardened structure held" result in section 4
+therefore carries an implicit precondition: *provided the structure
+exists in the netlist*. This is not hypothetical. The configuration TMR
+domain was measured 15/15 CORRECTED here while the netlist that fed the
+4x2 harden contained one physical bank instead of three (section 4,
+correction dated 2026-08-26), and nothing in this campaign could have
+revealed that — not a longer run, not more injections, not a better
+oracle.
+
+Two things close the gap, and only the second is mechanical:
+
+- a **gate-level campaign**, which would see the loss but only if
+  someone thought to attack that structure there. Not run; it is on the
+  section 6 list.
+- **`sw/tests/test_synthesis_guards.py`**, which runs both synthesis
+  flows on every `pytest` invocation, counts the flip-flops in the
+  mapped netlist per replica bank, and fails if any of them collapses.
+  It also compares the whole design's declared flip-flop population
+  against the mapped one, so a future redundant structure is covered
+  the day it is added rather than the day someone remembers to check
+  it. That test, not this campaign and not any synthesis attribute, is
+  what keeps the section 4 preconditions true. It asserts on flip-flop
+  *cells*: a `(* keep *)` attribute was measured to preserve the signal
+  *name* in the netlist while the storage still merged, so any guard
+  that greps for a signal name is satisfied by a design that has
+  already lost the redundancy.
 
 ### 7.5 This says nothing about rates
 

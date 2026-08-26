@@ -1,0 +1,128 @@
+# Pin constraints for an ECP5 / ULX3S fit-and-timing check of
+# tt_um_melihakbulut_nssoc.
+#
+# SCOPE. This file exists so nextpnr-ecp5 has a legal placement for every
+# top-level port and can therefore produce a real routed design and a real
+# Fmax number. It is NOT a board bring-up constraint file. Two things are
+# deliberately wrong for hardware:
+#
+#   1. The Tiny Tapeout port list carries uio_in, uio_out and uio_oe as
+#      three separate 8-bit ports. A board build must fold them into eight
+#      bidirectional balls driven by a tristate primitive. Here they are
+#      given 24 separate balls so the fitter sees the design as written.
+#   2. That needs 43 balls, which is more than the ULX3S header pins named
+#      below supply, so uio_out[7:6] and uio_oe[7:6] land on button balls
+#      (btn[2..5]). Those balls are inputs on the board. Driving them would
+#      be wrong on real hardware; it is harmless for a fit and timing run.
+#
+# All ball names below were checked against
+# share/trellis/database/ECP5/{LFE5U-12F,LFE5U-45F,LFE5U-85F}/iodb.json and
+# exist in the CABGA381 package of all three devices, so the same file
+# fits 12F, 45F and 85F unchanged. (Fact: checked against the database
+# shipped with the toolchain, not against a board.)
+#
+# No FREQUENCY constraint is set here on purpose. The clock target is
+# passed by the Makefile with nextpnr's --freq so that the same pin map
+# can be run at 25 MHz and at 50 MHz without editing this file.
+
+# ---------------------------------------------------------------- clock
+# ULX3S clk_25mhz.
+LOCATE COMP "clk" SITE "G2";
+IOBUF  PORT "clk" IO_TYPE=LVCMOS33;
+
+# ------------------------------------------------------- reset / enable
+# btn[0] (power button) and btn[1] (fire1).
+LOCATE COMP "rst_n" SITE "D6";
+IOBUF  PORT "rst_n" IO_TYPE=LVCMOS33;
+LOCATE COMP "ena" SITE "R1";
+IOBUF  PORT "ena" IO_TYPE=LVCMOS33;
+
+# ------------------------------------------------------- ui_in -> gp[7:0]
+LOCATE COMP "ui_in[0]" SITE "B11";
+LOCATE COMP "ui_in[1]" SITE "A10";
+LOCATE COMP "ui_in[2]" SITE "A9";
+LOCATE COMP "ui_in[3]" SITE "B9";
+LOCATE COMP "ui_in[4]" SITE "A7";
+LOCATE COMP "ui_in[5]" SITE "C8";
+LOCATE COMP "ui_in[6]" SITE "C6";
+LOCATE COMP "ui_in[7]" SITE "A6";
+IOBUF  PORT "ui_in[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "ui_in[7]" IO_TYPE=LVCMOS33;
+
+# ----------------------------------------------------- uio_in -> gn[7:0]
+LOCATE COMP "uio_in[0]" SITE "C11";
+LOCATE COMP "uio_in[1]" SITE "A11";
+LOCATE COMP "uio_in[2]" SITE "B10";
+LOCATE COMP "uio_in[3]" SITE "C10";
+LOCATE COMP "uio_in[4]" SITE "A8";
+LOCATE COMP "uio_in[5]" SITE "B8";
+LOCATE COMP "uio_in[6]" SITE "C7";
+LOCATE COMP "uio_in[7]" SITE "B6";
+IOBUF  PORT "uio_in[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_in[7]" IO_TYPE=LVCMOS33;
+
+# ----------------------------------------------------- uo_out -> led[7:0]
+LOCATE COMP "uo_out[0]" SITE "B2";
+LOCATE COMP "uo_out[1]" SITE "C2";
+LOCATE COMP "uo_out[2]" SITE "C1";
+LOCATE COMP "uo_out[3]" SITE "D2";
+LOCATE COMP "uo_out[4]" SITE "D1";
+LOCATE COMP "uo_out[5]" SITE "E2";
+LOCATE COMP "uo_out[6]" SITE "E1";
+LOCATE COMP "uo_out[7]" SITE "H3";
+IOBUF  PORT "uo_out[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uo_out[7]" IO_TYPE=LVCMOS33;
+
+# ------------------------------------- uio_out -> gp[13:8] then btn[3:2]
+LOCATE COMP "uio_out[0]" SITE "A4";
+LOCATE COMP "uio_out[1]" SITE "A2";
+LOCATE COMP "uio_out[2]" SITE "C4";
+LOCATE COMP "uio_out[3]" SITE "E4";
+LOCATE COMP "uio_out[4]" SITE "F4";
+LOCATE COMP "uio_out[5]" SITE "H4";
+LOCATE COMP "uio_out[6]" SITE "T1";
+LOCATE COMP "uio_out[7]" SITE "R18";
+IOBUF  PORT "uio_out[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_out[7]" IO_TYPE=LVCMOS33;
+
+# -------------------------------------- uio_oe -> gn[13:8] then btn[5:4]
+LOCATE COMP "uio_oe[0]" SITE "A5";
+LOCATE COMP "uio_oe[1]" SITE "A3";
+LOCATE COMP "uio_oe[2]" SITE "B4";
+LOCATE COMP "uio_oe[3]" SITE "D5";
+LOCATE COMP "uio_oe[4]" SITE "E3";
+LOCATE COMP "uio_oe[5]" SITE "F3";
+LOCATE COMP "uio_oe[6]" SITE "V1";
+LOCATE COMP "uio_oe[7]" SITE "U1";
+IOBUF  PORT "uio_oe[0]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[1]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[2]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[3]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[4]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[5]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[6]" IO_TYPE=LVCMOS33;
+IOBUF  PORT "uio_oe[7]" IO_TYPE=LVCMOS33;

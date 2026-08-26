@@ -1,19 +1,14 @@
 # Formal verification targets (SymbiYosys + smtbmc/yices).
 #
-# Rootless tool discovery, house convention: prefer sby on PATH, then the
-# known oss-cad-suite checkouts (sby brings its own yosys and solvers).
-SBY := $(shell command -v sby 2>/dev/null)
-ifeq ($(SBY),)
-SBY := $(firstword $(wildcard \
-	$(HOME)/oss-cad-suite/bin/sby \
-	$(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/sby \
-	$(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/sby))
-endif
-ifeq ($(SBY),)
-$(error sby not found: install oss-cad-suite or put sby on PATH)
-endif
-
+# Tool resolution lives in one place for the whole repository. The glob
+# that used to sit here silently selected a sibling project's toolchain;
+# see tools.mk for the incident and the rule that replaced it.
 HERE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+include $(HERE)/../tools.mk
+
+ifeq ($(SBY),)
+$(error sby not found: set OSS_CAD_SUITE to an oss-cad-suite checkout, or put sby on PATH)
+endif
 
 .PHONY: all everything prove bmc cover prove_d4 clean clean-all
 

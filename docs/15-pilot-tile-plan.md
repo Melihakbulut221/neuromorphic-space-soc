@@ -485,6 +485,18 @@ section 4.3 whose placement rows exceed it. **[estimate, except the
 | 16 x 8 | 128 | 139,481 | 180,027 | 257,182 | 4x2, 1 % margin |
 | 16 x 16 | 256 | 180,778 | 233,330 | 333,328 | 6x2 or 3x4 (12 tiles) |
 
+**Superseded areas (2026-08-26).** Every cell area in this table predates
+the configuration-TMR synthesis fix. Before it, yosys merged the three
+55-bit replicas into one bank, so the hardened netlist carried 1,045
+flip-flops where the RTL declares 1,161; with the fix the mapped count is
+1,155 and the 8 x 8 cell area measures 109,058 um2 rather than 105,245 —
+about 2.9 % more (see `docs/16` section 7.4 and
+`sw/tests/test_synthesis_guards.py`). The 4x2 decision is unaffected: the
+corrected 8 x 8 figure still lands inside 8 tiles with room to spare, and
+the shape column does not move for any row. The table is left as measured
+and will be re-derived when the pilot is re-hardened; treat the absolute
+areas as roughly 3 % low until then.
+
 Sanity check on the model: for the 8 x 8 row it predicts 135,840 um2 and
 the flow measured 136,107, an error of 0.2 %. That is luck as much as
 method — one block, one geometry — but it is the only calibration point
