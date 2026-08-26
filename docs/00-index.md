@@ -1,0 +1,296 @@
+# 00 — Index: what this is, what exists, and where to start
+
+Entry point to the document corpus. It states what the project is, what
+physically exists in this repository today as against what is planned,
+how the twenty-odd documents relate to one another, and which of them to
+read first depending on why you are reading.
+
+Convention, as everywhere in this repository: **[fact]** = measured in
+this environment or read out of a file in the working tree;
+**[estimate]** = derived or judged; **[planned]** = an intention with a
+date attached and no artifact behind it yet.
+
+Every count below carries the command that produced it. They were
+re-measured on 2026-08-26 against the working tree rather than copied
+from another document, because several documents state totals that were
+correct when they were written and have since been overtaken by later
+work — see section 6.
+
+---
+
+## 1. What this project is
+
+A fault-tolerant system-on-chip for on-board AI inference in
+small-satellite missions, implemented on a 130 nm open PDK with an
+open-source RTL-to-GDS flow, by a solo developer.
+
+The architecture class follows the Frontgrade Gaisler GR801 as published
+in its April 2026 product brief — a RISC-V management processor, an
+event-driven neuromorphic inference engine, on-chip SRAM and a set of
+spacecraft interfaces — retargeted from 28 nm FDSOI to 130 nm at a scale
+an open PDK and one person can actually carry. It is a clean-room
+retarget, not a clone: no Gaisler or BrainChip IP is used, and the
+GR801 serves as the requirement set and the yardstick. The reference
+analysis is `docs/00-reference-brief.md` and
+`docs/01-reference-decomposition.md`; the positioning rules that bind
+every external claim are `docs/05-market-positioning.md` section 4.
+
+Three things distinguish it from a hobby tapeout, and each is a
+falsifiable claim rather than a slogan:
+
+- **Spec-first with frozen golden models.** The bit-exact integer models
+  in `sw/golden/` are the specification; RTL is verified against them in
+  lockstep, not against a testbench author's expectations. See
+  `docs/10-npu-mvp-spec.md` and `docs/11-verification-harness.md`.
+- **Formal proof where the property is provable.** Six blocks carry
+  SymbiYosys property sets. See `docs/09-formal-verification-plan.md`.
+- **Fault tolerance that is measured, not asserted.** TMR, SECDED and
+  scrubbing are demonstrated by a seeded upset campaign that reports an
+  outcome distribution per structure, judged against the golden model.
+  See `docs/16-fault-injection-campaign.md`.
+
+## 2. What exists today, and what does not
+
+### 2.1 Exists — artifacts in this working tree [fact]
+
+| What | Where | Evidence |
+|---|---|---|
+| RTL: AER FIFO, LIF core, NPU register bank, SECDED encoder and decoder, TMR voter, scrub controller, pilot top level, Tiny Tapeout wrapper | `hw/rtl/` (10 files, 3,800 lines) | `wc -l hw/rtl/*.v` |
+| Bit-exact golden models: LIF core, network, SECDED, register-map generator | `sw/golden/` | `docs/10-npu-mvp-spec.md` |
+| Python suite: **185 tests collected**. At commit `fe89f0d`, before this index's link check added 32 of them, the suite ran 152 passed, 1 skipped in 87 s | `sw/tests/` | `.venv/bin/python -m pytest` at the repository root |
+| cocotb suites: **129 test functions across 8 modules**, seven of them reachable as `make -C hw/tb TB=<block>` | `hw/tb/` | `grep -c '@cocotb.test' hw/tb/test_*.py` |
+| Formal: **37 SymbiYosys tasks across 6 property sets** (`aer_fifo`, `lif_ctrl`, `npu_regbank`, `scrub`, `secded`, `tmr_voter`) | `formal/` | the `[tasks]` sections of `formal/*.sby`; `make -C formal everything` runs them all |
+| Register map, single-sourced from `regmap/regmap.yaml`, with a sync test that fails if spec, generated document and RTL header drift apart | `regmap/`, `docs/regmap-npu.md` | `sw/tests/test_regmap.py` |
+| IHP SG13G2 sign-off of a single block (`aer_fifo`) | `hw/openlane/aer_fifo/runs/trial-03-signoff/` | `final/metrics.json`: 0 Magic DRC, 0 KLayout DRC, 0 LVS errors, 0 antenna nets and pins, 0 XOR differences, 0 power-grid violations |
+| IHP SG13G2 sign-off of the integrated 4x2 pilot at 52.4 % utilization | `tt/runs/tt-harden/` | `final/metrics.json`: 0 Magic DRC, 0 LVS errors, 0 antenna nets and pins, 0 unmapped instances, 0 max-slew and 0 max-cap violations on all three corners |
+| SKY130A harden of the same RTL, as a portability control | `hw/openlane/pilot_sky130/runs/sky-02-signoff/` | `final/metrics.json`: 0 Magic DRC, 0 KLayout DRC, 0 LVS errors, 0 antenna nets and pins, 0 XOR differences. Max-slew violations are *not* zero on this PDK; `docs/18-cross-pdk-portability.md` records why |
+| A Tiny Tapeout submission tree for TTIHP26b, generated rather than hand-maintained | `tt/`, `scripts/gen_tt_submission.py` | `sw/tests/test_tt_submission.py` |
+| A measured fault-injection outcome distribution for `pilot_top` | `hw/tb/fi_campaign_results.json` | `docs/16-fault-injection-campaign.md` |
+| 25 markdown source files: 23 under `docs/` including this one, plus `README.md` and `ROADMAP.md` | `docs/`, `README.md`, `ROADMAP.md` | `_site/manifest.json` after `python3 scripts/build_docs.py` |
+
+Two of the run directories above are git-ignored build output. On a
+fresh clone they are absent and the artifact half of
+`sw/tests/test_flow_evidence.py` skips rather than fails; the commands
+that regenerate them are in that file's docstring and in
+`docs/12-sg13g2-flow-bringup.md`.
+
+### 2.2 Does not exist [fact]
+
+- **No silicon.** Nothing has been fabricated. The TTIHP26b shuttle
+  closes 2026-09-21 and its silicon is expected 2027-06-25 per
+  `ROADMAP.md` section 1; every radiation and reliability statement in
+  this repository is therefore pre-silicon.
+- **No radiation test data.** No TID, proton or heavy-ion result exists.
+  The fault-injection campaign is a simulation of single-bit upsets, not
+  a beam test, and `docs/16-fault-injection-campaign.md` says so in its
+  own limitations section.
+- **No management CPU.** The RV32 core is surveyed in
+  `docs/03-cpu-and-ip-survey.md` and not selected, integrated or
+  verified.
+- **No spacecraft interfaces.** SpaceWire, CAN, QSPI, SPI, I2C, UART and
+  GPIO are scoped and costed; none is implemented.
+- **No SRAM macro in any hardened design.** Every result above is
+  flip-flop RAM. The RM_IHPSG13 macro study is in
+  `docs/12-sg13g2-flow-bringup.md`.
+- **No licence.** `docs/14-licensing-decision.md` is a decision memo with
+  an unsigned decision section. Until it is signed the repository is
+  unpublished and unlicensed, and that is why the documentation workflow
+  in `.github/workflows/docs.yml` builds the site but deliberately does
+  not publish it.
+- **No funding.** `docs/13-nlnet-application.md` is a submission-ready
+  draft. The NLnet Restack deadline is 2026-11-03.
+
+### 2.3 Planned, with dates [planned]
+
+The authoritative plan is `ROADMAP.md`; it carries the phase gates and
+the external clocks. The near-term shape is: freeze and submit the pilot
+before 2026-09-21, submit the NLnet application before 2026-11-03, build
+the SoC through 2027, bring up pilot silicon from mid-2027. Effort
+figures in `ROADMAP.md` phase P3 are tagged `[estimate]` and should be
+read as such.
+
+## 3. How the documents relate
+
+The corpus is not a single narrative. It is five overlapping tracks laid
+down in roughly chronological order, plus two review records that cut
+across all of them.
+
+**Research (00-06)** established what is being built and why. `docs/00`
+summarises the GR801 brief; `docs/01` decomposes it and does the 28 nm
+to 130 nm scaling; `docs/02`, `docs/03` and `docs/04` choose the
+inference engine, the CPU and interface IP, and the technology and flow
+respectively; `docs/05` fixes the positioning rules; `docs/06` covers
+funding and the shuttle. Later measurement has superseded specific
+figures in several of these, and where it has, the later document says
+so explicitly — `docs/10` supersedes the `docs/01` physical envelope for
+the NPU, and `docs/15` supersedes the `docs/06` tile arithmetic.
+
+**Specification and verification (08-11)** turned the research into
+something buildable. `docs/08` extracts the programmer-visible
+conventions to stay close to; `docs/09` is the verification programme;
+`docs/10` is the NPU specification the golden model implements;
+`docs/11` is the operating manual for the whole harness and is the
+document to read before running anything.
+
+**Physical (12, 15, 18, 21)** is the evidence chain. `docs/12` brings up
+the SG13G2 flow and hardens one block; `docs/15` states the pilot's die
+content, pin contract and tile budget; `docs/18` hardens the same RTL on
+SKY130A to separate design properties from PDK properties; `docs/21` is
+the pre-silicon device datasheet that collects the pilot's
+externally-visible behaviour in one place.
+
+**Fault tolerance (16)** is the measurement that the hardening
+mechanisms in the RTL actually cover the design, rather than merely
+working when aimed at.
+
+**Funding and licensing (13, 14)** are the two documents with an
+external deadline and an unmade decision in them.
+
+**Process (19)** compares this repository's CI against `gonsolo/borg`
+and is where the case for this documentation site was made.
+
+**Reviews (07, 17)** are the cross-cutting audits. `docs/07` closes the
+research phase and design wave 1; `docs/17` closes design wave 2. Both
+carry numbered findings with dispositions and both feed `ROADMAP.md`.
+They are the fastest way to find out what is wrong with everything else.
+
+## 4. Where to start
+
+### 4.1 If you are evaluating the engineering
+
+Read the two review records first — `docs/07-design-review.md` and
+`docs/17-wave2-review-record.md`. They are adversarial by construction,
+they cite line numbers, and they will tell you the weaknesses faster
+than the documents that contain them will. Then:
+
+1. `docs/10-npu-mvp-spec.md` — the specification, and the only place the
+   update equations are normative.
+2. `docs/11-verification-harness.md` — what is verified, how, and what
+   each suite is entitled to claim.
+3. `docs/09-formal-verification-plan.md` part C — the formal targets and
+   which of them are green.
+4. `docs/16-fault-injection-campaign.md` — the measured upset response,
+   including the structures where the answer is bad.
+5. `docs/12-sg13g2-flow-bringup.md` and
+   `docs/18-cross-pdk-portability.md` — the physical results and the
+   cross-PDK control.
+
+The single most informative artifact is not a document: it is
+`sw/tests/test_flow_evidence.py`, which re-reads the sign-off numbers
+claimed in `docs/12` out of the run directory every time the suite runs,
+so the gate is auditable rather than asserted.
+
+### 4.2 If you are reproducing the results
+
+Start at `docs/11-verification-harness.md`. It is the only document
+written as instructions. In order:
+
+1. Python golden-model suite — `.venv/bin/python -m pytest` from the
+   repository root. 185 tests collect; at commit `fe89f0d` they ran 152
+   passed, 1 skipped, and this index's link check adds 32 more
+   [fact, 2026-08-26]. The one skip is an artifact test in
+   `sw/tests/test_flow_evidence.py` that needs a run tree a fresh clone
+   does not have.
+2. cocotb suites — `make -C hw/tb TB=<block>` for `aer_fifo`, `regbank`,
+   `lif`, `secded`, `tmr`, `pilot`, and `make -C hw/tb -f Makefile.scrub`
+   for the scrub controller. These need `hw/.venv`, which is deliberately
+   separate from the root virtualenv; `docs/11` section 3.2 explains why.
+3. Formal — `make -C formal everything`. Tool discovery for the whole
+   repository is in `tools.mk`.
+4. Physical — `hw/openlane/run_trial.sh` and the per-target scripts under
+   `hw/openlane/`; `docs/12-sg13g2-flow-bringup.md` pins the tool and PDK
+   versions each result was produced with.
+
+Everything is rootless. Nothing in this repository needs Docker,
+`sudo`, or network access at run time.
+
+### 4.3 If you are assessing this for funding
+
+Read in this order:
+
+1. `docs/13-nlnet-application.md` — the application package itself, with
+   every form field drafted and every open decision collected in its
+   section 7.
+2. This document's section 2 — what exists against what is promised.
+3. `docs/06-funding-and-shuttle.md` — the budget derivation and the
+   shuttle logistics, noting that its tile arithmetic is superseded by
+   `docs/15-pilot-tile-plan.md`.
+4. `docs/14-licensing-decision.md` — the open-licensing decision, which
+   is a precondition of NLnet funding and is **not yet made**.
+5. `docs/05-market-positioning.md` section 4 — the rules that stop this
+   project from overclaiming radiation tolerance, and against which any
+   claim made to you should be checked.
+6. `docs/07-design-review.md` and `docs/17-wave2-review-record.md` — the
+   project's own account of its defects.
+
+The two questions worth pressing are in section 2.2: there is no
+silicon and no radiation data, and the licence is unsigned.
+
+## 5. The documents
+
+| Document | Purpose |
+|---|---|
+| `docs/00-index.md` | This page. |
+| `docs/00-reference-brief.md` | GR801 public-brief summary and initial scaling observations. |
+| `docs/01-reference-decomposition.md` | GR801 architecture decomposition and 28 nm to 130 nm scaling analysis. |
+| `docs/02-npu-architecture.md` | Event-driven inference engine options, and the recommendation. |
+| `docs/03-cpu-and-ip-survey.md` | Management CPU and interface IP survey: licensing and verification fit. |
+| `docs/04-technology-and-flow.md` | 130 nm technology selection, memory strategy, flow and cost. |
+| `docs/05-market-positioning.md` | Mission profile, competitive landscape, and the binding positioning rules. |
+| `docs/06-funding-and-shuttle.md` | NLnet grant plan and TTIHP26b shuttle logistics. |
+| `docs/07-design-review.md` | Independent review of the research phase and design wave 1. |
+| `docs/08-gr801-datasheet-notes.md` | GR801/GRLIB programmer-visible conventions and a proximity checklist. |
+| `docs/09-formal-verification-plan.md` | Formal verification programme: RTL formal, golden-model refinement, software track. |
+| `docs/10-npu-mvp-spec.md` | NPU MVP micro-architecture specification v0.1 — normative. |
+| `docs/11-verification-harness.md` | How to run and how to read every verification target in the repository. |
+| `docs/12-sg13g2-flow-bringup.md` | IHP SG13G2 flow bring-up, `aer_fifo` trial harden, and the RM_IHPSG13 macro decision. |
+| `docs/13-nlnet-application.md` | NLnet Restack application package, drafted field by field. |
+| `docs/14-licensing-decision.md` | Open-licensing and publication decision memo — recommendation made, decision unsigned. |
+| `docs/15-pilot-tile-plan.md` | Pilot die content, pin contract, tile budget and submission tree. |
+| `docs/16-fault-injection-campaign.md` | Seeded upset campaign: measured outcome distribution and per-structure ranking. |
+| `docs/17-wave2-review-record.md` | Independent review record for design wave 2, and the wave-3 plan. |
+| `docs/18-cross-pdk-portability.md` | The same pilot RTL hardened on SKY130A, as a control on PDK-specific results. |
+| `docs/19-ci-parity-borg.md` | CI parity assessment against `gonsolo/borg`'s six workflows. |
+| `docs/20-reharden-and-corners.md` | Re-harden after the configuration-TMR fix, and why `PNR_CORNERS` cannot close the SKY130 slow corner. Supersedes area and timing figures in `docs/15` and `docs/18`. |
+| `docs/21-pilot-datasheet.md` | Pre-silicon device datasheet for the submitted pilot. |
+| `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
+| `README.md` | Project summary and repository layout. |
+| `ROADMAP.md` | Phased plan with gates and external clocks. |
+
+`sw/tests/test_doc_links.py` checks that this table names every document
+in the corpus and that every cross-reference in every document names a
+file that exists. A document added without an entry here fails that
+test.
+
+## 6. Counts that other documents state differently
+
+`docs/11-verification-harness.md` opens with headline totals measured on
+2026-08-25: 28 SymbiYosys tasks across five formal jobs, 109 distinct
+cocotb tests across six suites, and 145 Python tests. All three were
+correct on that date and all three have since been overtaken by the
+`scrub` block and by wave-3 work. Re-measured on 2026-08-26 the same
+quantities are 37 SymbiYosys tasks across six property sets, 129 cocotb
+test functions across eight modules, and 153 collected Python tests of
+which 152 pass and one skips — 185 collected once this index's own link
+check is counted. **[fact]** Nothing about the verification
+argument changes; only the arithmetic does. This section is a pointer,
+not a correction — `docs/11` remains the authority on what each suite
+means.
+
+## 7. Reading this corpus as a site
+
+`scripts/build_docs.py` renders every document in the table above into a
+browsable, self-contained static site, resolving each bare `docs/NN`
+cross-reference into a hyperlink and generating a table of contents per
+document:
+
+```
+python3 scripts/build_docs.py --out _site
+```
+
+It uses pandoc when pandoc is on PATH and a built-in renderer otherwise,
+and prints which one it used. `_site/` is build output and is not
+tracked. `.github/workflows/docs.yml` builds the same site on every push
+and uploads it as an artifact; it does not publish it, because
+publication depends on `docs/14-licensing-decision.md`, which is
+unsigned.

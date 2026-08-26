@@ -80,6 +80,13 @@ smtbmc yices
 rd_plain: read_verilog -formal lif_core.v
 rd_live: read_verilog -formal -DLIF_LIVENESS lif_core.v
 rd_safe: read_verilog -formal -DLIF_SAFE_ENTRY lif_core.v
+# The synapse weight file carries a SECDED (72,64) code since the memory
+# hardening (hw/rtl/lif_core.v, MEMORY HARDENING section), so lif_core now
+# instantiates the codec and this job has to read it. Every pilot-level
+# source list already named these two files; this job compiled lif_core.v
+# alone and was the one place that did not.
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
 g4: chparam -set N_NEURONS 4 -set N_AXONS 4 lif_core
 g3x2: chparam -set N_NEURONS 3 -set N_AXONS 2 lif_core
 g8x2: chparam -set N_NEURONS 8 -set N_AXONS 2 lif_core
@@ -87,4 +94,6 @@ prep -top lif_core
 
 [files]
 ../hw/rtl/lif_core.v
+../hw/rtl/secded_enc.v
+../hw/rtl/secded_dec.v
 lif_ctrl_props.v

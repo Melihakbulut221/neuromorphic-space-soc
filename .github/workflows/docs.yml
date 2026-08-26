@@ -1,0 +1,130 @@
+name: docs
+
+# Builds the document site from docs/*.md, README.md and ROADMAP.md on
+# every push, and uploads it as a workflow artifact.
+#
+# Modelled on gonsolo/borg's .github/workflows/book.yaml, with two
+# deliberate differences.
+#
+# 1. NO GITHUB PAGES DEPLOY. borg's workflow ends with an
+#    actions/deploy-pages step; this one stops at upload-artifact. Two
+#    reasons, both current as of 2026-08-26:
+#
+#      * This repository is private. Deploying to Pages publishes it.
+#      * docs/14-licensing-decision.md is a decision memo whose decision
+#        section is UNSIGNED. Until the owner signs it, the repository
+#        has no licence, and publishing unlicensed work -- especially
+#        work whose funding application (docs/13-nlnet-application.md)
+#        turns on the licence answer -- is a decision the owner has not
+#        made. Publication is therefore not a CI default; it is an
+#        explicit act, and it belongs to the owner, not to this file.
+#
+#    Turning it on later is a small edit: restore borg's `deploy` job,
+#    add `pages: write` and `id-token: write` to `permissions`, and add
+#    the `concurrency: group: pages` block. Do that only after docs/14
+#    section 11 is signed.
+#
+# 2. No build_book.py snippet resolution and no Mermaid loader. Our
+#    corpus has no snippet directives, no diagrams and, before
+#    scripts/build_docs.py, no links at all; docs/19-ci-parity-borg.md
+#    section 3.6 measured that. What it does have is several hundred
+#    bare "docs/NN" cross-references, so our generator's job is link
+#    resolution rather than snippet expansion.
+#
+# The gate step follows the pattern docs/19 section 6 recommends
+# copying from borg's gds-wafer-space workflow: state the pass condition
+# as a machine-checked assertion in the workflow, rather than leaving a
+# human to read the log.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pandoc
+        run: sudo apt-get install -y pandoc
+
+      - name: Link integrity
+        # Every cross-reference names a file that exists, and every
+        # document is reachable from docs/00-index.md. This runs before
+        # the build so a broken reference fails as a link error rather
+        # than as a missing page.
+        run: |
+          python3 -m pip install --disable-pip-version-check pytest
+          python3 -m pytest sw/tests/test_doc_links.py -q
+
+      - name: Build site (pandoc)
+        run: python3 scripts/build_docs.py --out _site --renderer pandoc
+
+      - name: Gate on the build result
+        # The pass condition, machine-checked: a page per source
+        # document, and the cross-references actually resolved. The
+        # threshold is a floor, not the exact count -- the corpus grows.
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+
+          site = pathlib.Path("_site")
+          manifest = json.loads((site / "manifest.json").read_text())
+
+          sources = sorted(pathlib.Path("docs").glob("*.md"))
+          expected = len(sources) + 2  # README.md and ROADMAP.md
+
+          failures = []
+          if manifest["documents"] != expected:
+              failures.append(
+                  f"built {manifest['documents']} documents, expected {expected}"
+              )
+          if manifest["backend"] != "pandoc":
+              failures.append(f"backend was {manifest['backend']}, expected pandoc")
+          if manifest["cross_references_resolved"] < 500:
+              failures.append(
+                  f"only {manifest['cross_references_resolved']} cross-references "
+                  "resolved; the corpus carries several hundred"
+              )
+          for name in ("index.html", "all-documents.html", "style.css"):
+              if not (site / name).is_file():
+                  failures.append(f"missing {name}")
+
+          for f in failures:
+              print(f"FAIL: {f}")
+          print(
+              f"{manifest['documents']} documents, "
+              f"{manifest['cross_references_resolved']} cross-references resolved, "
+              f"backend {manifest['backend']}"
+          )
+          sys.exit(1 if failures else 0)
+          PY
+
+      - name: Build site (no pandoc) as a degradation check
+        # scripts/build_docs.py must still produce a usable site where
+        # pandoc is absent, which is the case in the developer's local
+        # rootless environment. Building both ways here keeps that path
+        # from rotting unnoticed.
+        run: |
+          python3 scripts/build_docs.py --out _site_builtin --renderer builtin
+          test -s _site_builtin/index.html
+
+      - name: Upload site artifact
+        # Artifact only. See the header comment: no Pages deploy while
+        # the licence decision in docs/14 is unsigned.
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-site
+          path: _site
+          retention-days: 30

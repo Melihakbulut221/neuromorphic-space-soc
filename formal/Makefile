@@ -31,9 +31,11 @@ clean:
 include $(HERE)/npu_regbank.mk
 include $(HERE)/ecc.mk
 include $(HERE)/lif_ctrl.mk
+include $(HERE)/lif_mem.mk
 include $(HERE)/scrub.mk
 
 # The full formal gate across every block.
-everything: all regbank_all ecc lif_all scrub_all
+everything: all regbank_all ecc lif_all lif_mem_all scrub_all
 
-clean-all: clean regbank_clean ecc_clean lif_clean scrub_clean
+clean-all: clean regbank_clean ecc_clean lif_clean lif_mem_clean \
+           scrub_clean

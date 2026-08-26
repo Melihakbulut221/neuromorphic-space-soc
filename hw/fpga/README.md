@@ -156,7 +156,20 @@ Does not prove, and must not be quoted as proving:
   - **Area or power on the target process.**
   - **That the mitigation logic is present in silicon.** See below.
 
-## Finding: the configuration TMR is optimised away
+## Finding: the configuration TMR was optimised away (repaired)
+
+**Status: fixed in commit `e45d52d`.** The finding below is what this
+directory's netlist check turned up and it was correct; the defect no
+longer exists. Each replica is now a `keep_hierarchy` `pilot_cfg_bank`
+instance carrying a per-replica storage polarity — plain Verilog, so it
+does not depend on one tool honouring one attribute. Mapped flip-flops go
+1,045 to 1,155 in this ECP5 flow as well as in the ASIC flow,
+`synth_ecp5` reports three separate `pilot_cfg_bank` modules at 55 flops
+each, and `sw/tests/test_synthesis_guards.py` counts them in both flows
+and fails on three separate mutations of the fix. Cost on ECP5: Fmax
+47.87 to 46.45 MHz, still passing 25 MHz with margin.
+
+The original finding, retained because the reasoning is what matters:
 
 Checking the ECP5 netlist against the RTL turned up something that is not
 an FPGA problem at all.
@@ -180,10 +193,16 @@ a mismatch signal working, but all three voter inputs come from one
 physical register bank. Against a real upset in that bank, the voter votes
 three copies of the same wrong value.
 
-This directory does not fix that; `hw/rtl` is not owned here. Flagging it
-is the point. The usual fix is a synthesis attribute on the three
-replicas, and it needs to be applied and then verified by counting flops
-in the netlist, not assumed.
+This directory did not fix it; `hw/rtl` is not owned here. Flagging it was
+the point. The last sentence of the original note — that the fix "needs to
+be applied and then verified by counting flops in the netlist, not
+assumed" — is exactly what was done, and it turned out to matter: the
+obvious fix, a `(* keep *)` attribute on the three replicas, does NOT
+work. It preserves the names while the flip-flops stay merged, filling the
+netlist with `assign cfg_b[3] = cfg_a[3]` aliases at an unchanged flop
+count. A previous check in `docs/15` section 4.2 had read that unchanged
+count as proof that no merge occurred, which is how the defect survived
+review.
 
 ## Files
 

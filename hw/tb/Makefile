@@ -11,7 +11,7 @@ TB ?= aer_fifo
 # fragment's SIM_BUILD, results file and parameter handling here, so
 # `make TB=secded` and `cd hw/tb && make -f Makefile.secded` are the same
 # run and cannot drift apart.
-TB_FRAGMENTS := regbank lif secded tmr pilot
+TB_FRAGMENTS := regbank lif secded tmr pilot scrub fi
 TB_BLOCKS := aer_fifo $(TB_FRAGMENTS)
 
 # An unrecognised TB= used to fall through every branch and start the

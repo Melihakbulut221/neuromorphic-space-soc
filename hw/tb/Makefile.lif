@@ -60,7 +60,13 @@ N_AXONS   ?= 32
 # (make -f Makefile.lif LIF_SRC=/path/to/mutant.v SIM_BUILD=... ).
 LIF_SRC ?= $(RTL)/lif_core.v
 
-VERILOG_SOURCES = $(LIF_SRC)
+# lif_core.v instantiates the proven (72,64) SECDED codec for the synapse
+# weight file (lif_core.v header, MEMORY HARDENING section 1). Those two
+# files were already in every pilot-level source list; this suite used to
+# compile lif_core.v on its own, so they are named here too. The (26,20)
+# neuron-state codec needs no entry: it lives inside lif_core.v, for the
+# reason recorded above its module header.
+VERILOG_SOURCES = $(LIF_SRC) $(RTL)/secded_enc.v $(RTL)/secded_dec.v
 TOPLEVEL             = lif_core
 COCOTB_TEST_MODULES  = test_lif_core_rtl
 

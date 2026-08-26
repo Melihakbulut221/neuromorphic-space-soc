@@ -1,0 +1,124 @@
+# SymbiYosys job for the lif_core memory hardening: the SECDED (26,20)
+# neuron-state codec, and both coded files in place inside the datapath
+# that reads and writes them.
+#
+#   sby -f lif_mem.sby codec        full proof of the (26,20) codec
+#   sby -f lif_mem.sby codec_abc    the same proof on an independent engine
+#   sby -f lif_mem.sby codec_cover  non-vacuity of every codec branch
+#   sby -f lif_mem.sby read         one flipped stored bit cannot change
+#                                   what the datapath reads, at 4 x 4
+#   sby -f lif_mem.sby read_3x2     the same at a geometry whose index
+#                                   widths round up and whose synapse
+#                                   codeword is only partly populated
+#   sby -f lif_mem.sby read_cover   non-vacuity of the fault model
+#   sby -f lif_mem.sby inv          k-induction: every write leaves both
+#                                   codewords consistent
+#   sby -f lif_mem.sby inv_cover    the writes the invariant survives are
+#                                   reachable
+#
+# Two property files, and the split is deliberate:
+#
+#   lif_mem_codec_props.v  a wrapper module that composes lif_state_enc
+#       with lif_state_dec and drives them with a symbolic 20-bit word and
+#       a symbolic 26-bit error vector. Both are purely combinational, so
+#       BMC at depth 1 evaluates the entire input space -- a full proof in
+#       the sense of docs/09 target #2, not a bounded result. This is the
+#       same shape as formal/secded.sby, which already covers the (72,64)
+#       codec the synapse file uses, so between the two jobs both codes in
+#       this design are proven outright.
+#   lif_mem_props.v  included INSIDE lif_core under `ifdef FORMAL when
+#       LIF_MEM_FORMAL is defined. A correct codec wired incorrectly is
+#       still a broken design: these properties are about the datapath's
+#       use of the codecs -- that the codeword read is the codeword
+#       written, that the corrected value is the one E1..E7 consume, that
+#       the debug port presents corrected state, that a double-bit synapse
+#       error degrades to the E10 zero substitution of docs/10 section
+#       11.2, and that no write can leave a codeword's two halves
+#       disagreeing.
+#
+# Geometry. The read tasks are exhaustive over the fault model at the
+# geometry they run, and the fault model is one stored bit. 4 x 4 is the
+# small power-of-two case: sixteen synapses, exactly one 72-bit codeword,
+# no unpopulated nibbles, index widths that cannot encode a missing entry.
+# 3 x 2 is the awkward one and is where the padding logic is actually
+# exercised -- six synapses in a codeword sized for sixteen, and
+# $clog2(3) = 2 leaving a scan index value with no neuron behind it. The
+# invariant task runs at 3 x 2 for the same reason: the read-modify-write
+# has to keep a partly populated codeword consistent too.
+#
+# Engine choice follows secded.sby, which measured this shape of query:
+# boolector closes a 72-bit codeword BMC in seconds where yices had not
+# returned after minutes. codec and codec_abc are two engine FAMILIES on
+# the same query rather than two engines racing inside one task, so a
+# solver-specific defect would have to occur twice to go unnoticed.
+#
+# The codec tasks read lif_core.v WITHOUT -formal on purpose: they only
+# need the two codec modules out of that file, and the plain read keeps
+# `ifdef FORMAL from pulling in a property set written for a different
+# top module.
+
+[tasks]
+codec
+codec_abc
+codec_cover
+read        g4x4  rd_mem
+read_3x2    g3x2  rd_mem
+read_cover  g4x4  rd_mem
+inv         g3x2  rd_inv
+inv_cover   g3x2  rd_inv
+
+[options]
+codec: mode bmc
+codec: depth 1
+codec_abc: mode bmc
+codec_abc: depth 1
+codec_cover: mode cover
+codec_cover: depth 1
+read: mode bmc
+read: depth 1
+read_3x2: mode bmc
+read_3x2: depth 1
+read_cover: mode cover
+read_cover: depth 1
+inv: mode prove
+inv: depth 5
+inv_cover: mode cover
+inv_cover: depth 12
+
+[engines]
+codec: smtbmc boolector
+codec_abc: abc bmc3
+codec_cover: smtbmc boolector
+read: smtbmc boolector
+read_3x2: smtbmc boolector
+read_cover: smtbmc boolector
+inv: smtbmc boolector
+inv_cover: smtbmc boolector
+
+[script]
+codec: read_verilog lif_core.v
+codec: read_verilog -formal lif_mem_codec_props.v
+codec: prep -top lif_mem_codec_props
+codec_abc: read_verilog lif_core.v
+codec_abc: read_verilog -formal lif_mem_codec_props.v
+codec_abc: prep -top lif_mem_codec_props
+codec_cover: read_verilog lif_core.v
+codec_cover: read_verilog -formal lif_mem_codec_props.v
+codec_cover: prep -top lif_mem_codec_props
+rd_mem: read_verilog -formal -DLIF_MEM_FORMAL lif_core.v
+rd_inv: read_verilog -formal -DLIF_MEM_FORMAL -DLIF_MEM_INV lif_core.v
+rd_mem: read_verilog -formal secded_enc.v
+rd_inv: read_verilog -formal secded_enc.v
+rd_mem: read_verilog -formal secded_dec.v
+rd_inv: read_verilog -formal secded_dec.v
+g4x4: chparam -set N_NEURONS 4 -set N_AXONS 4 lif_core
+g3x2: chparam -set N_NEURONS 3 -set N_AXONS 2 lif_core
+rd_mem: prep -top lif_core
+rd_inv: prep -top lif_core
+
+[files]
+../hw/rtl/lif_core.v
+../hw/rtl/secded_enc.v
+../hw/rtl/secded_dec.v
+lif_mem_props.v
+lif_mem_codec_props.v

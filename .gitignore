@@ -24,8 +24,14 @@ formal/tmr_voter/
 formal/tmr_voter_*/
 formal/lif_ctrl/
 formal/lif_ctrl_*/
+formal/lif_mem/
+formal/lif_mem_*/
 formal/scrub/
 formal/scrub_*/
+
+# generated documentation site
+_site/
+_site_builtin/
 
 # physical flow run outputs
 hw/openlane/runs/

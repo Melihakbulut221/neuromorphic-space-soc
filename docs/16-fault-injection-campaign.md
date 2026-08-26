@@ -503,6 +503,24 @@ back the post-`STATE_CLR` state; that was true of four.
 > configuration TMR. See section 7.4 for why no amount of RTL injection
 > could have caught this, and `sw/tests/test_synthesis_guards.py` for
 > the check that now closes the gap.
+>
+> **What the campaign deposits into, after the same fix.** With the
+> replicas built as instances, `cfg_a` / `cfg_b` / `cfg_c` are no longer
+> registers — they are wires driven by the banks' `q` outputs — so the
+> `cfg_tmr_*` targets moved to `u_cfg_a.bits` / `u_cfg_b.bits` /
+> `u_cfg_c.bits`, the storage registers inside the banks. This changes
+> what the injection *means*, not what it measured: a deposit on the
+> output models an upset at the voter input rather than in the
+> flip-flop, and it only survives at all because Icarus lets a deposit
+> on a continuously driven net stand until that net's driver next
+> re-evaluates, which here is the next clocked configuration write.
+> Both spellings were run at 8 x 8 and the 255-injection log is
+> byte-identical apart from `wall_seconds` and the three target strings
+> [fact], so every number in this document is unaffected. The sampled
+> bit positions carry over unchanged as well: a bank stores
+> `value ^ POL` and presents `bits ^ POL`, and XOR against a constant is
+> bit-wise, so bit *i* of `bits` is still bit *i* of the voted field and
+> a single-bit deposit is still a single-bit error at the voter.
 
 **Configuration TMR: 15/15 CORRECTED [fact].** Five voted-field bits
 (THETA low, THETA high, V_RESET, S_LEAK, CFG_FLAGS) across all three

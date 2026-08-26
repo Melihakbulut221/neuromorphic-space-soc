@@ -19,13 +19,23 @@
 #   hw/openlane/pilot_sky130/run_sky130.sh                 # full flow
 #   hw/openlane/pilot_sky130/run_sky130.sh -T Yosys.Synthesis
 #   ENABLE_PDK=1 hw/openlane/pilot_sky130/run_sky130.sh    # switch ciel to the pin
+#   CONFIG=$PWD/config.pnrcorners.json ...run_sky130.sh    # a generated variant
 #
-# Environment overrides: SHIMS, VENV, OSS_CAD, PDK_ROOT.
+# Environment overrides: CONFIG, SHIMS, VENV, OSS_CAD, PDK_ROOT.
+#
+# CONFIG exists for the docs/20 corner experiments. A variant is a copy
+# of config.json with a small, named key delta, written into THIS
+# directory by mkvariant.py -- same directory because every `dir::` path
+# in the config resolves relative to the config file, so a variant kept
+# anywhere else would silently point at different sources or a different
+# pin-frame DEF. Generated rather than hand-copied so the delta against
+# the baseline is the only thing that can differ.
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-CONFIG="$HERE/config.json"
+CONFIG="${CONFIG:-$HERE/config.json}"
+[ -f "$CONFIG" ] || { echo "no config at $CONFIG"; exit 1; }
 
 SHIMS="${SHIMS:-$HOME/.local/opt/llbin}"
 VENV="${VENV:-$HOME/Documents/caravel-lif-crossbar/.venv-flow}"

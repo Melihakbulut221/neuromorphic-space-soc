@@ -133,6 +133,7 @@ class LifHarness:
         self.n_neurons = int(dut.N_NEURONS.value)
         self.n_axons = int(dut.N_AXONS.value)
         self.spikes = []       # ids accepted on the output handshake
+        self.ecc = {name: 0 for name in self.ECC_FLAGS}
         self._mon_on = True
         self._bp_on = False
 
@@ -172,6 +173,7 @@ class LifHarness:
         assert d.busy.value == 0, "reset must leave the core idle"
         assert d.out_valid.value == 0, "reset must clear the output register"
         cocotb.start_soon(self._spike_monitor())
+        cocotb.start_soon(self._ecc_monitor())
 
     # -- output monitor ----------------------------------------------------
 
@@ -196,6 +198,32 @@ class LifHarness:
     def take_spikes(self):
         got = list(self.spikes)
         self.spikes.clear()
+        return got
+
+    # -- memory ECC flag monitor --------------------------------------------
+
+    ECC_FLAGS = ("state_sec", "state_ded", "wmem_sec", "wmem_ded")
+
+    async def _ecc_monitor(self):
+        """Count every cycle each memory ECC flag is asserted.
+
+        The four flags are combinational level outputs qualified by the
+        cycle the scan consumes the word (hw/rtl/lif_core.v), so they are
+        sampled at the clock edge in the active region, the same rule the
+        spike monitor follows and the same rule a register block counting
+        them would follow.
+        """
+        d = self.dut
+        while self._mon_on:
+            await RisingEdge(d.clk)
+            for name in self.ECC_FLAGS:
+                if getattr(d, name).value == 1:
+                    self.ecc[name] += 1
+
+    def take_ecc(self):
+        got = dict(self.ecc)
+        for k in self.ecc:
+            self.ecc[k] = 0
         return got
 
     # -- backpressure driver ------------------------------------------------
@@ -1194,6 +1222,431 @@ async def test_safe_state_on_corrupted_fsm_encoding(dut):
     model = await h.reconfigure(w, cfg)
     for k in range(4):
         await h.step_event(model, 0, f"event after SAFE recovery {k}")
+
+
+# -- memory ECC fault response (lif_core.v, MEMORY HARDENING) ----------------
+#
+# The docs/16 fault-injection campaign ranked lif_core's three memory
+# files as the whole residual silent-corruption risk of the pilot: wmem
+# 56.2% SDC over 256 flip-flops, vmem 91.7% over 128, rmem 100.0% over
+# 32. The tests below inject exactly the fault that campaign injects --
+# one stored bit, XORed 3 ns past a clock edge so the deposit is not
+# overwritten by the same edge's non-blocking update -- into each of the
+# five coded structures, and check that the protection acts.
+#
+# What "acts" means is stated per structure rather than in general,
+# because the two files answer differently:
+#   vmem, rmem, smem   corrected on both read ports, announced on
+#                      state_sec, AND scrubbed: the next scan that visits
+#                      the neuron writes the corrected word back, so the
+#                      raw storage is repaired, not merely masked. That
+#                      last part is checked against the RAW array, not
+#                      through dbg_v, because dbg_v reads through the
+#                      decoder and would look right either way.
+#   wmem, wchk         corrected on the read the datapath uses and
+#                      announced on wmem_sec. The scan never writes wmem,
+#                      so there is no scrub; the raw array stays wrong
+#                      until the host reloads the image, which is checked
+#                      too.
+# Double-bit errors are checked separately: the synapse file degrades to
+# the E10 zero substitution of docs/10 section 11.2, bit-exact against a
+# golden core with that word poisoned, and the neuron state file reports
+# without inventing a substitution it has no golden reference for.
+#
+# Every case also asserts that the deposit LANDED (the raw storage really
+# differs from the golden value before the correction is checked). Without
+# that, a test whose handle path was wrong would pass by doing nothing --
+# the honesty check docs/16 section 1.8 makes of the campaign itself.
+
+
+async def deposit(dut, handle, bits):
+    """XOR one or more bits into a storage element, 3 ns past an edge.
+
+    Off the edge on purpose: a deposit made AT the edge is overwritten by
+    that same edge's non-blocking update before anything samples it, so
+    the injection silently does nothing. Same rule, same offset, as
+    hw/tb/test_fi_campaign.py.
+    """
+    await RisingEdge(dut.clk)
+    await Timer(3, unit="ns")
+    v = int(handle.value)
+    for b in bits:
+        v ^= 1 << b
+    handle.value = v
+    await Timer(SETTLE_NS, unit="ns")
+
+
+def state_word_bits(j, bit):
+    """Bit index inside the flat smem check field of neuron j."""
+    return j * 6 + bit
+
+
+def weight_word(lin):
+    """SECDED codeword index of linear synapse index lin.
+
+    16 weights per codeword, which is WEIGHTS_PER_WORD and word_index() in
+    sw/golden/lif_core.py -- the same word the model poisons.
+    """
+    return lin // 16
+
+
+@cocotb.test()
+async def test_ecc_single_bit_upset_in_vmem_is_corrected_and_scrubbed(dut):
+    """(MEMORY HARDENING) A single flipped bit anywhere in a membrane
+    potential is corrected on both read ports, announced, and repaired in
+    place by the next scan.
+
+    Four bit positions are walked: bit 0 (the one the campaign found the
+    leak quantisation could sometimes absorb by accident), bits 4 and 11,
+    and bit 15, the sign bit, whose flip is the largest error the word can
+    carry and which no leak can mask."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=1000, v_reset=-4, leak_shift=3, syn_shift=1,
+                    refr_period=2, leak_en=True)
+    h, model = await setup(dut, random_weights(random.Random(7), n_ax, n_ne),
+                           cfg)
+    for k, bit in enumerate((0, 4, 11, 15)):
+        j = k % n_ne
+        # A distinct, nonzero starting potential per neuron, so a fault
+        # that writes the right value to the wrong neuron cannot pass.
+        for m in range(n_ne):
+            v = -300 - 37 * m
+            await h.write_state(m, v, 0)
+            model.set_state(m, v, 0)
+        h.take_ecc()
+
+        await deposit(dut, dut.vmem[j], (bit,))
+        assert int(dut.vmem[j].value) != u16(model.v[j]), \
+            f"the deposit into vmem[{j}] bit {bit} did not land"
+
+        # Corrected on the debug read port, before anything scans.
+        assert (await h.read_state(j)) == (model.v[j], model.r[j]), \
+            f"vmem[{j}] bit {bit}: the debug port did not correct"
+
+        # Corrected on the scan read port: one TICK, in lockstep.
+        await h.step_tick(model, f"tick after vmem[{j}] bit {bit}")
+        flags = h.take_ecc()
+        assert flags["state_sec"] >= 1, \
+            f"vmem[{j}] bit {bit}: the correction was not announced"
+        assert flags["state_ded"] == 0, \
+            f"vmem[{j}] bit {bit}: a single-bit error was called uncorrectable"
+
+        # Scrubbed: the RAW storage now holds the corrected word.
+        assert int(dut.vmem[j].value) == u16(model.v[j]), \
+            (f"vmem[{j}] bit {bit}: the scan masked the upset but did not "
+             "write the corrected word back")
+        h.take_ecc()
+        await h.step_event(model, 0, f"event after vmem[{j}] bit {bit}")
+        assert h.take_ecc()["state_sec"] == 0, \
+            f"vmem[{j}] bit {bit}: the error was still there after the scrub"
+
+
+@cocotb.test()
+async def test_ecc_single_bit_upset_in_rmem_is_corrected_and_scrubbed(dut):
+    """(MEMORY HARDENING) The refractory counter was the worst structure
+    in the campaign -- 12 of 12 injections silently corrupted -- because R
+    reads zero most of the time, so a flip almost always SETS a spurious
+    refractory count, which then gates E1..E5 for that neuron on every
+    following event (E7).
+
+    Both directions are exercised: a flip that invents a refractory
+    period on a running neuron, and a flip inside a real one."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=64, v_reset=-8, leak_shift=3, syn_shift=2,
+                    refr_period=10, leak_en=False)
+    w = zeros(n_ax, n_ne)
+    for m in range(n_ne):
+        w[0][m] = 7                       # every neuron integrates on axon 0
+    h, model = await setup(dut, w, cfg)
+
+    for bit, r_start in ((0, 0), (1, 0), (3, 0), (0, 10), (3, 10)):
+        for m in range(n_ne):
+            v = 11 + 7 * m
+            await h.write_state(m, v, r_start)
+            model.set_state(m, v, r_start)
+        j = bit % n_ne
+        h.take_ecc()
+
+        await deposit(dut, dut.rmem[j], (bit,))
+        assert int(dut.rmem[j].value) != model.r[j], \
+            f"the deposit into rmem[{j}] bit {bit} did not land"
+        assert (await h.read_state(j)) == (model.v[j], model.r[j]), \
+            f"rmem[{j}] bit {bit}: the debug port did not correct"
+
+        # An event: without the correction a spurious R would suppress
+        # this neuron's update entirely (E7), which the lockstep sees.
+        await h.step_event(model, 0, f"event after rmem[{j}] bit {bit}")
+        flags = h.take_ecc()
+        assert flags["state_sec"] >= 1, \
+            f"rmem[{j}] bit {bit}: the correction was not announced"
+        assert flags["state_ded"] == 0
+        assert int(dut.rmem[j].value) == u4(model.r[j]), \
+            f"rmem[{j}] bit {bit}: the corrected word was not written back"
+
+
+@cocotb.test()
+async def test_ecc_single_bit_upset_in_the_state_check_field_is_corrected(dut):
+    """(MEMORY HARDENING) The check field is storage too, and an upset in
+    it must not be mistaken for an upset in the data it protects. All six
+    bits of one neuron's check word are walked: five Hamming bits and the
+    overall-parity bit, whose syndrome is zero and which the decoder has
+    to recognise as "the parity bit itself took the hit"."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=500, v_reset=0, leak_shift=2, syn_shift=0,
+                    refr_period=3, leak_en=True)
+    h, model = await setup(dut, zeros(n_ax, n_ne), cfg)
+    for bit in range(6):
+        j = bit % n_ne
+        for m in range(n_ne):
+            await h.write_state(m, -100 - 13 * m, (m + 1) % 4)
+            model.set_state(m, -100 - 13 * m, (m + 1) % 4)
+        h.take_ecc()
+
+        before = int(dut.smem.value)
+        await deposit(dut, dut.smem, (state_word_bits(j, bit),))
+        assert int(dut.smem.value) != before, \
+            f"the deposit into smem check bit {bit} of neuron {j} did not land"
+
+        assert (await h.read_state(j)) == (model.v[j], model.r[j]), \
+            f"smem check bit {bit}: the debug port did not correct"
+        await h.step_tick(model, f"tick after smem check bit {bit}")
+        flags = h.take_ecc()
+        assert flags["state_sec"] >= 1, \
+            f"smem check bit {bit}: the correction was not announced"
+        assert flags["state_ded"] == 0
+        # The scrub covers the check field as well as the data.
+        h.take_ecc()
+        await h.step_tick(model, f"second tick after smem check bit {bit}")
+        assert h.take_ecc()["state_sec"] == 0, \
+            f"smem check bit {bit}: the check field was not repaired"
+
+
+@cocotb.test()
+async def test_ecc_double_bit_upset_in_a_state_word_is_detected(dut):
+    """(MEMORY HARDENING) Two flipped bits in one neuron's state word are
+    detected and never miscorrected. There is no fail-operational
+    substitution for a membrane potential -- any value this module could
+    invent would be a spec deviation with no golden reference -- so the
+    contract is report, not repair, and this test pins that down: the flag
+    fires and the data field comes back exactly as stored."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=900, v_reset=0, leak_shift=4, leak_en=True)
+    h, model = await setup(dut, zeros(n_ax, n_ne), cfg)
+    for pair in ((0, 5), (3, 15), (11, 12)):
+        j = pair[0] % n_ne
+        await h.write_state(j, -4096, 0)
+        model.set_state(j, -4096, 0)
+        h.take_ecc()
+
+        await deposit(dut, dut.vmem[j], pair)
+        corrupted = int(dut.vmem[j].value)
+        assert corrupted != u16(model.v[j]), "the double deposit did not land"
+
+        v_rd, r_rd = await h.read_state(j)
+        assert u16(v_rd) == corrupted, \
+            (f"vmem[{j}] bits {pair}: a double-bit error was silently "
+             "'corrected' into a different value")
+        assert r_rd == model.r[j]
+
+        await h.send_tick()
+        flags = h.take_ecc()
+        assert flags["state_ded"] >= 1, \
+            f"vmem[{j}] bits {pair}: the double-bit error was not detected"
+        assert flags["state_sec"] == 0, \
+            f"vmem[{j}] bits {pair}: a double-bit error was reported corrected"
+        # Resynchronise: the host's documented recovery is STATE_CLR.
+        await h.state_clr()
+        model.reset_state()
+        h.take_spikes()
+        await h.check_state(model, "STATE_CLR after a double-bit state error")
+
+
+@cocotb.test()
+async def test_ecc_single_bit_upset_in_wmem_is_corrected(dut):
+    """(MEMORY HARDENING) wmem is the largest structure in the design and
+    the campaign's rank-1 source of expected silent corruption. A single
+    flipped bit in a synapse codeword leaves the weight the datapath
+    integrates equal to the weight that was loaded.
+
+    The raw array is deliberately NOT repaired -- the scan never writes
+    wmem, so nothing scrubs it -- and this test checks that too, together
+    with the reload that does repair it (docs/16 section 5.4)."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=40, v_reset=-2, leak_shift=3, syn_shift=2,
+                    refr_period=0, leak_en=False)
+    w = zeros(n_ax, n_ne)
+    for m in range(n_ne):
+        w[0][m] = ((m % 7) - 3) or 5
+    h, model = await setup(dut, w, cfg)
+
+    for bit in (0, 1, 2, 3):
+        lin = 0 * n_ne + (bit % min(n_ne, 16))   # inside codeword 0
+        j = lin % n_ne
+        await h.state_clr()
+        model.reset_state()
+        h.take_spikes()
+        h.take_ecc()
+
+        await deposit(dut, dut.wmem[lin], (bit,))
+        assert int(dut.wmem[lin].value) != u4(w[0][j]), \
+            f"the deposit into wmem[{lin}] bit {bit} did not land"
+
+        for step in range(3):
+            await h.step_event(model, 0,
+                               f"event {step} after wmem[{lin}] bit {bit}")
+        flags = h.take_ecc()
+        assert flags["wmem_sec"] >= 1, \
+            f"wmem[{lin}] bit {bit}: the correction was not announced"
+        assert flags["wmem_ded"] == 0, \
+            f"wmem[{lin}] bit {bit}: a single-bit error was called uncorrectable"
+        # No scrub on this file: the raw nibble is still wrong.
+        assert int(dut.wmem[lin].value) != u4(w[0][j]), \
+            "the scan wrote wmem, which it must never do"
+
+        # The host reload repairs it, which is the documented mitigation.
+        await h.load_weights(w)
+        assert int(dut.wmem[lin].value) == u4(w[0][j]), \
+            "a full weight reload did not repair the synapse file"
+        h.take_ecc()
+        await h.step_event(model, 0, f"event after reload, bit {bit}")
+        assert h.take_ecc()["wmem_sec"] == 0, \
+            "the reload left the codeword still carrying an error"
+
+
+@cocotb.test()
+async def test_ecc_single_bit_upset_in_the_weight_check_field_is_corrected(dut):
+    """(MEMORY HARDENING) The synapse check field, walked across the low,
+    middle and high bits of codeword 0's eight check bits."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=32, v_reset=0, leak_shift=3, syn_shift=2,
+                    leak_en=False)
+    w = zeros(n_ax, n_ne)
+    for m in range(n_ne):
+        w[0][m] = 6
+    h, model = await setup(dut, w, cfg)
+    for bit in (0, 3, 7):
+        await h.state_clr()
+        model.reset_state()
+        h.take_spikes()
+        h.take_ecc()
+
+        before = int(dut.wchk.value)
+        await deposit(dut, dut.wchk, (bit,))
+        assert int(dut.wchk.value) != before, \
+            f"the deposit into wchk bit {bit} did not land"
+
+        for step in range(3):
+            await h.step_event(model, 0, f"event {step} after wchk bit {bit}")
+        flags = h.take_ecc()
+        assert flags["wmem_sec"] >= 1, \
+            f"wchk bit {bit}: the correction was not announced"
+        assert flags["wmem_ded"] == 0
+        await h.load_weights(w)          # recomputes the check field
+
+
+@cocotb.test()
+async def test_ecc_double_bit_upset_in_a_weight_word_degrades_to_e10(dut):
+    """(MEMORY HARDENING, E10) Two flipped bits in one synapse codeword
+    are detected, never miscorrected, and every one of that word's sixteen
+    weights contributes exactly zero from then on.
+
+    That is docs/10 section 11.2's fail-operational substitution, and it
+    is checked the only way it is worth checking: in lockstep against a
+    golden core built with exactly that word poisoned. The word index is
+    the same on both sides -- LIFCore.word_index() and this module's
+    codeword index are both floor(linear / 16) -- which is why E10 can be
+    compared at all rather than merely asserted.
+
+    Before this hardening the lif_core header recorded E10 as having no
+    hardware to attach to in the flip-flop build. It has now."""
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=24, v_reset=-1, leak_shift=3, syn_shift=2,
+                    refr_period=1, leak_en=True)
+    w = zeros(n_ax, n_ne)
+    for m in range(n_ne):
+        w[0][m] = 4 + (m % 3)
+        if n_ax > 1:
+            w[1][m] = -2 - (m % 2)
+    h, _ = await setup(dut, w, cfg)
+
+    lin = 0
+    word = weight_word(lin)
+    # A golden core that has the same word poisoned from the start.
+    poisoned = LIFCore(n_ne, n_ax, w, cfg)
+    poisoned.poison_word(word)
+
+    await h.state_clr()
+    h.take_spikes()
+    h.take_ecc()
+    await deposit(dut, dut.wmem[lin], (0, 2))
+    assert int(dut.wmem[lin].value) != u4(w[0][lin % n_ne]), \
+        "the double deposit into wmem did not land"
+
+    for step in range(6):
+        axon = step % min(n_ax, 2)
+        await h.step_event(poisoned, axon, f"E10 event {step}")
+    flags = h.take_ecc()
+    assert flags["wmem_ded"] >= 1, \
+        "a double-bit error in a synapse codeword was not detected"
+    assert flags["wmem_sec"] == 0, \
+        "a double-bit error in a synapse codeword was reported corrected"
+
+    # And the recovery: reloading the image from a protected source
+    # removes the poison, and the core is bit-exact against a clean model.
+    await h.load_weights(w)
+    await h.state_clr()
+    h.take_spikes()
+    h.take_ecc()
+    clean = LIFCore(n_ne, n_ax, w, cfg)
+    for step in range(6):
+        await h.step_event(clean, step % min(n_ax, 2),
+                           f"event {step} after the E10 recovery")
+    assert h.take_ecc()["wmem_ded"] == 0, \
+        "the reload did not clear the uncorrectable word"
+
+
+@cocotb.test()
+async def test_ecc_flags_stay_silent_without_an_injected_fault(dut):
+    """(MEMORY HARDENING, transparency) The whole point of the hardening
+    is that it is invisible when nothing is wrong. Every other test in
+    this file already checks that through the golden model; this one
+    checks the other half, which the lockstep cannot see: that no ECC flag
+    fires at all across a run with no injection.
+
+    A design that reported a correction on every cycle would still pass
+    every lockstep test in this suite."""
+    rng = random.Random(20260826)
+    n_ax = int(dut.N_AXONS.value)
+    n_ne = int(dut.N_NEURONS.value)
+    cfg = LIFConfig(thresh=48, v_reset=-6, leak_shift=2, syn_shift=3,
+                    refr_period=3, leak_en=True)
+    h, model = await setup(dut, random_weights(rng, n_ax, n_ne), cfg)
+    h.take_ecc()
+    for step in range(120):
+        roll = rng.random()
+        ctx = f"clean step {step}"
+        if roll < 0.05:
+            j = rng.randrange(n_ne)
+            v = rng.randint(V_MIN, V_MAX)
+            r = rng.choice([0, 1, 15])
+            await h.write_state(j, v, r)
+            model.set_state(j, v, r)
+            h.check_spikes([], ctx)
+        elif roll < 0.80:
+            await h.step_event(model, rng.randrange(n_ax), ctx)
+        else:
+            await h.step_tick(model, ctx)
+    flags = h.take_ecc()
+    assert flags == {"state_sec": 0, "state_ded": 0,
+                     "wmem_sec": 0, "wmem_ded": 0}, \
+        f"a fault-free run raised memory ECC flags: {flags}"
 
 
 # -- randomized lockstep -----------------------------------------------------
