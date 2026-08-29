@@ -3,11 +3,24 @@
 Date: 25 August 2026
 Status: harness live across six RTL blocks and the pilot integration.
 Every command in section 8 was executed against the working tree of this
-date; the counts there are what those runs printed. Headline totals,
-all measured: **28 SymbiYosys tasks** across five formal jobs, carrying
-**374 assert obligations** and **67 cover obligations** counted once per
-property set at its default parameters; **109 distinct cocotb tests**
-across six suites; and **145 Python tests** from the repository root.
+date; the counts there are what those runs printed.
+
+**Re-measured at HEAD on 2026-08-27: 45 SymbiYosys tasks across seven
+formal jobs, 137 distinct cocotb tests across eight suites, and 191
+Python tests from the repository root** [fact]. The per-section figures
+throughout the rest of this document were measured before the scrub
+controller, the memory hardening, the fault-injection campaign and the
+ECC telemetry wiring were added. They are left in place as the record of
+that state rather than patched line by line, because re-running the
+command beside each one is the way to get a current number and patching
+them by hand is how a document starts lying. The assert and cover
+obligation totals have not been re-counted; treat them as a floor.
+
+The original headline, superseded: **28 SymbiYosys tasks** across five
+formal jobs, carrying **374 assert obligations** and **67 cover
+obligations** counted once per property set at its default parameters;
+**109 distinct cocotb tests** across six suites; and **145 Python
+tests** from the repository root.
 Scope: how to run and how to read every verification target in the
 repository — the Python golden-model suite, the register-map sync check,
 the cocotb/Icarus RTL suites, and the SymbiYosys formal jobs. The

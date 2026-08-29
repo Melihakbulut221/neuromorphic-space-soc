@@ -411,6 +411,30 @@ design holds **1167** and the represented share is **85%** with the
 unrepresented count at 171 [fact]. The `dispatch` group's 18 FF above
 is `dstate` and `evw` only, unchanged.
 
+**A note on the several flip-flop totals in this document, because they
+look like a contradiction and are not.** Each is a measurement of the
+design as it stood when that section was written, and the design grew
+three times during the work this document reports:
+
+| total | the design it describes |
+|---|---|
+| 1,161 | before the dispatcher-deadlock fix (quoted in the section 7.4 correction) |
+| 1,167 | after that fix adds `fetch_wait` and `fetch_timeout` |
+| 1,247 | after the memory hardening of section 2.1 |
+
+Re-measured at HEAD on 2026-08-27 with `sw/tests/test_synthesis_guards.py`'s
+own census: **1,241 declared, 1,235 mapped, 6 lost to optimisation**
+[fact]. The 6 lost is the same constant recorded before and after the
+TMR fix, so nothing new is disappearing. The 1,247 above does not
+reproduce at HEAD and the 6-flop gap is not explained by the
+optimisation step — counting without `opt_clean` gives 1,922, not 1,247
+— so it is most likely a measurement of an intermediate state during
+the hardening rather than of the committed design. The shares computed
+against it in section 2.1 are therefore accurate to roughly 0.3
+percentage points; the census should be re-derived when the next
+campaign runs rather than patched here, because the numerator would
+have to be re-measured too and this document does not guess at numbers.
+
 **After the memory hardening of 2026-08-26 [fact].** `hw/rtl/lif_core.v`
 adds 80 flip-flops and no others: `wchk`, 8 SECDED check bits per 16
 weights, 32 bits at 8 x 8; and `smem`, 6 check bits per neuron state

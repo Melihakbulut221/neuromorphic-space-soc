@@ -238,7 +238,9 @@ substantially smaller job than the name `fpga` suggests. **[estimate]**
 
 ### 3.6 `book`
 
-We have 20 markdown documents in `docs/`, 13,633 lines total, counting
+We have 20 markdown documents in `docs/` at the time of this assessment
+(24 at HEAD on 2026-08-27; see the closing note at the end of this
+section), 13,633 lines total, counting
 everything except this document. (The corpus was 19 documents when this
 assessment began; `docs/18-cross-pdk-portability.md` was added by
 concurrent work while it was running, and it does not change any figure
@@ -264,10 +266,29 @@ section B.6" are plain text and would stay plain text, and there is no
 
 Effort to close: a `.github/workflows/book.yaml` modelled on borg's,
 minus `build_book.py` and minus the Mermaid injection, is roughly 40
-lines and an afternoon. An index page is another hour. Turning the 575
+lines and an afternoon. An index page is another hour. Turning the 603
 cross-references into anchors is a scripted rewrite plus a proofread and
 is the only part that is not trivial — call it a day, and it is
 optional. **[estimate]**
+
+**Closed 2026-08-27, and doing it corrected two of the figures above.**
+`scripts/build_docs.py` renders the corpus, using pandoc when present and
+a built-in renderer otherwise — both were checked to produce structurally
+identical output. `docs/00-index.md` is the index.
+`sw/tests/test_doc_links.py` fails if a reference names a file that does
+not exist or a document drops out of the index, and was mutation-checked
+against six ways of breaking it. `.github/workflows/docs.yml` builds the
+site but deliberately does not deploy it: the repository is private and
+the licensing decision in `docs/14` is unsigned, so publication is the
+owner's call.
+
+The corrections: the resolvable cross-reference count is **804**, not
+603 — the original count missed the `docs/NN-name.md`,
+`docs/NN-name.md:LINE` and `README.md`/`ROADMAP.md` forms — and the
+corpus is **24** documents, not 20. This also settles an internal
+inconsistency in the text above, which gave 603 in the section 3.6 table
+and 575 in this paragraph for the same quantity; 603 was the better of
+the two and both were low.
 
 ## 4. Verdict per check
 
