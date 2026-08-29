@@ -48,24 +48,25 @@ from. Two consequences have to be carried through the whole file:
   being exactly 32 + 48 **[fact, measured with this repository's own
   synthesis recipe]**.
 
-  **The IHP side has since been re-hardened against that RTL. The sky130
-  side has not.** Run `ihp-memecc`
-  (`hw/openlane/pilot_ihp/runs/ihp-memecc/`, `final/metrics.json`
-  timestamped 2026-08-27 00:03), same `ihp-sg13g2`, same 4x2 tile, same
+  **The IHP side has since been re-hardened against that RTL, twice. The
+  sky130 side has not been re-hardened at all.** The current IHP run is
+  `ihp-mix` (`hw/openlane/pilot_ihp/runs/ihp-mix/`, `final/metrics.json`
+  timestamped 2026-08-27 01:26), same `ihp-sg13g2`, same 4x2 tile, same
   `CLOCK_PERIOD: 20`, closed to a GDS with `flow__errors__count: 0`:
-  **180,651 um2 placed at 69.52 % utilization** and a worst-corner setup
-  slack of **+0.4035 ns**, against `sky-04-tmr`-era IHP figures of
+  **181,043 um2 placed at 69.6756 % utilization** and a worst-corner
+  setup slack of **+0.6315 ns**, against `sky-04-tmr`-era IHP figures of
   158,268 um2, 60.91 % and +6.4359 ns **[fact,
-  `.../ihp-memecc/final/metrics.json`,
+  `.../ihp-mix/final/metrics.json`,
   `design__instance__area__stdcell` and `design__instance__utilization`,
-  and `.../ihp-memecc/55-openroad-stapostpnr/summary.rpt`;
-  `docs/15-pilot-tile-plan.md` section 4 is the full record]**.
-  Sign-off stayed clean: Magic DRC 0, Netgen LVS 0, antenna 0 nets /
-  0 pins, detailed-route DRC 0.
+  and `.../ihp-mix/55-openroad-stapostpnr/summary.rpt`;
+  `docs/15-pilot-tile-plan.md` section 4 is the full record]**. The
+  intermediate run `ihp-memecc` (2026-08-27 00:03) measured 180,651 um2,
+  69.52 % and +0.4035 ns. Sign-off stayed clean at both steps: Magic DRC
+  0, Netgen LVS 0, antenna 0 nets / 0 pins, detailed-route DRC 0.
 
   **So every sky130 figure in this document — area, utilization, slack,
   diode count, wirelength, max-fanout — is a
-  pre-memory-hardening measurement, and is now one RTL revision behind
+  pre-memory-hardening measurement, and is now two RTL revisions behind
   the IHP figures it sits next to.** Where this file previously placed
   the two columns side by side as a like-for-like PDK comparison, that
   reading no longer holds and each such place now says so. Nothing here
@@ -74,18 +75,55 @@ from. Two consequences have to be carried through the whole file:
   `hw/openlane/pilot_sky130/run_sky130.sh`, which has **not** been done
   **[planned — no date and no artifact]**.
 
-- **Even `ihp-memecc` is not the last word.** `hw/rtl/pilot_top.v` was
-  rewritten at **2026-08-27 00:17**, fourteen minutes after that run
-  finished, giving replica C of the configuration TMR an invertible XOR
-  *mixing* transform (`MIX = 1`) in place of a polarity, so that it
-  survives a forced flatten with no `keep_hierarchy` at all. A
-  synthesis-only re-run measures **+0.92 % cell area with the flip-flop
-  count unchanged at 1,235** **[fact, run tags `memecc-synthcheck` and
-  `memecc-synthcheck3` under `hw/openlane/pilot_ihp/runs/`; the RTL's own
-  matched A/B in `hw/rtl/pilot_top.v` header section 9 measures +1.06 %,
-  and `docs/20` section 11.6 tabulates it]**. The IHP figures above are
-  therefore the best measurement available rather than the settled ones,
-  and `docs/15` section 4 marks the tile budget open for that reason.
+- **`ihp-mix` is the last word, and it was pinned so that it stays one.**
+  `hw/rtl/pilot_top.v` was rewritten at **2026-08-27 00:17**, fourteen
+  minutes after `ihp-memecc` finished, giving replica C of the
+  configuration TMR an invertible XOR *mixing* transform (`MIX = 1`) in
+  place of a polarity, so that it survives a forced flatten with no
+  `keep_hierarchy` at all; a synthesis-only probe measured **+0.92 % cell
+  area with the flip-flop count unchanged at 1,235** **[fact, run tags
+  `memecc-synthcheck` and `memecc-synthcheck3` under
+  `hw/openlane/pilot_ihp/runs/`; the RTL's own matched A/B in
+  `hw/rtl/pilot_top.v` header section 9 measures +1.06 %, and `docs/20`
+  section 11.6 tabulates it]**. That was the third time an `hw/rtl` write
+  landed inside a quarter of an hour of a harden completing, so `ihp-mix`
+  was run against sources pinned by `hw/openlane/pin_rtl.py` to a
+  `git stash create` snapshot, commit-ish
+  **`e4c850b3c7c3631e66721825ce829022c960a12e`** — the discipline section
+  2.1 had to apply retrospectively to `sky-02-signoff` and that `docs/20`
+  section 1.2 applies to every run from `sky-06` onward. The blobs it
+  consumed:
+
+  ```
+  13c523519d55d80bcf0da0b54677a53ab9fb2e22  hw/rtl/pilot_top.v
+  b196828f65c271d849cad0ad21536c561d2079af  hw/rtl/lif_core.v
+  ac6edac5cb5e759359afe765c0c2f0f56c70acf6  hw/rtl/aer_fifo.v
+  62b5f4d2a1eae095d9d4a8634ede55237e2c924d  hw/rtl/tmr_voter.v
+  f7c7ec187a0df4eb09a8405dcda285de0fc2e44e  hw/rtl/secded_dec.v
+  b5710b8a679c3e378e74953b621b99f0d8dc3014  hw/rtl/secded_enc.v
+  e294afcf03e1947906086beeba2fd0c40b29441d  hw/rtl/tt_um_melihakbulut_nssoc.v
+  9aaaa394e7a6ef855f5584fb85d53e688ac3e0b5  hw/rtl/npu_regs.vh
+  ```
+
+  **[fact, `git ls-tree e4c850b3:hw/rtl`]** — the first seven are
+  `VERILOG_FILES` and the eighth is reached through the pinned
+  `VERILOG_INCLUDE_DIRS`. `pilot_top.v` at
+  `13c52351` is the revision carrying `MIX = 1` on `u_cfg_c`;
+  `lif_core.v` at `b196828f` is the SECDED-hardened one. The IHP figures
+  above are therefore settled for the RTL that run consumed, rather than
+  provisional, which is a change from every earlier revision of this
+  preamble. (`hw/rtl/pilot_top.v` has moved again since, on 2026-08-29,
+  to connect the `lif_core` ECC status ports; that write costs `ihp-mix`
+  nothing precisely because `ihp-mix` is pinned, and `docs/15` section 5.2
+  carries it.) **`docs/15` section 4 no
+  longer marks the tile budget open** — it records it as closed at 4x2
+  with 0.46 % of the core spare, and records why the earlier reasoning
+  ("the +0.92 % synthesis delta is larger than the 0.68 % spare, so the
+  criterion is a coin toss") was wrong rather than merely uncertain:
+  +0.92 % at synthesis landed as **+0.22 % of placed area**, because
+  placement absorbed about three quarters of it. A synthesis-area delta
+  is not a placed-area delta, and this document should not treat one as a
+  proxy for the other on the sky130 side either.
 
 The one finding that does **not** move with the RTL revision is section
 3.3b's diagnosis, because it is a property of the flow and the PDK — a
@@ -114,9 +152,10 @@ parasitic model, not a netlist. That is why it is the durable result.
   of its corners, worst slack **+6.4359 ns**. Hold is clean on all nine
   sky130 corners. Run `sky-04-tmr`; the superseded pre-fix figure was
   -3.8504 ns. Section 3.3. **[fact]** *The IHP half of that comparison
-  has since moved to **+0.4035 ns** on the memory-hardened RTL, which
-  sky130 has not been re-hardened against — the sign of the finding is
-  unchanged, its size is not; see the preamble and section 3.3.*
+  has since moved to **+0.6315 ns** on the memory-hardened, `MIX`-carrying
+  RTL (`ihp-mix`; `ihp-memecc` read +0.4035 ns), which sky130 has not been
+  re-hardened against — the sign of the finding is unchanged, its size is
+  not; see the preamble and section 3.3.*
 - **The flow does not tell you that.** `design__violations` is **0** and
   the run completes, because the PDK ships
   `TIMING_VIOLATION_CORNERS: ["*tt*"]` and
@@ -370,20 +409,31 @@ the IHP utilization rather than 4.5. Both of those figures predate the
 
 **That pair, `sky-04-tmr` against `tmr-reharden`, is the last
 like-for-like one this document has, and it should stay the pair that is
-quoted.** On IHP the memory hardening has since been measured — run
-`ihp-memecc`, **180,651 um2 at 69.52 %** **[fact,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/final/metrics.json`]**. On sky130
-it has **not**: no run exists against that RTL. Dividing 99,923.3 by
-180,651 gives 0.553 and would make sky130 look 2.5 points *below* IHP in
-utilization rather than 6.1 above, but that number is not a PDK ratio —
-it is a PDK difference and one RTL revision of design growth, added
-together, and the two terms cannot be separated from it. **Do not quote
-0.553 as a cross-PDK figure.** The like-for-like comparison is restored
-by one command,
-`hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-07-memecc` or
-similar, and until it is run the honest statement about the sky130 cost
-of the memory hardening is that it is unmeasured **[planned — no date and
-no artifact]**.
+quoted.** On IHP the memory hardening and `MIX` have since been measured
+— run `ihp-mix`, **181,043 um2 at 69.6756 %** **[fact,
+`hw/openlane/pilot_ihp/runs/ihp-mix/final/metrics.json`]**, after
+`ihp-memecc`'s 180,651 um2 at 69.52 %. On sky130 neither has: no run
+exists against that RTL. Dividing 99,923.3 by 181,043 gives **0.552** and
+would make sky130 look **2.7 points** *below* IHP in utilization rather
+than 6.1 above, but that number is not a PDK ratio — it is a PDK
+difference and two RTL revisions of design growth, added together, and
+the terms cannot be separated from it. **Do not quote 0.552 as a
+cross-PDK figure.** The like-for-like comparison is restored by one
+command, `hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-07-memecc`
+or similar, and until it is run the honest statement about the sky130
+cost of the memory hardening and of `MIX` is that it is unmeasured
+**[planned — no date and no artifact]**.
+
+There is now a measured reason to expect that a sky130 re-run would not
+be predictable from synthesis. On IHP, `MIX` cost **+0.92 % of synthesis
+area** and only **+0.22 % of placed area**: the extra XOR2 cells arrived
+with *less* resizer repair, not more, and placement absorbed roughly
+three quarters of the delta **[fact, `docs/15` section 4 head, comparing
+`ihp-memecc` and `ihp-mix`]**. Section 3.2's own place-and-route growth
+factors (1.2733 sky130, 1.2628 IHP) are averages over a whole design and
+say nothing about an increment of a percent. So the sky130 cost is
+unmeasured in the strong sense: it cannot be bounded by scaling the
+sky130 synthesis area either.
 
 | Quantity | **sky130A** | ihp-sg13g2 | Ratio |
 |---|---|---|---|
@@ -484,25 +534,29 @@ like-for-like column, because it hardened the same RTL revision as
 Hold is clean on all three there too, worst **+0.646 ns** at the slow
 corner and **+0.119 ns** at the fast one.
 
-**The IHP column has since moved and the sky130 column has not.** On the
-memory-hardened RTL, run `ihp-memecc`
-(`hw/openlane/pilot_ihp/runs/ihp-memecc/55-openroad-stapostpnr/summary.rpt`)
+**The IHP column has since moved twice and the sky130 column has not
+moved at all.** On the memory-hardened, `MIX`-carrying RTL, run
+`ihp-mix`
+(`hw/openlane/pilot_ihp/runs/ihp-mix/55-openroad-stapostpnr/summary.rpt`)
 **[fact]**:
 
-| Corner | Worst setup | Worst hold | All four vio counters |
-|---|---|---|---|
-| `nom_slow_1p08V_125C` | **+0.4035** | +0.6025 | 0 |
-| `nom_typ_1p20V_25C` | +7.5537 | +0.2891 | 0 |
-| `nom_fast_1p32V_m40C` | +11.8083 | +0.1009 | 0 |
+| Corner | Worst setup | Worst hold | All four vio counters | `ihp-memecc`, for the step before |
+|---|---|---|---|---|
+| `nom_slow_1p08V_125C` | **+0.6315** | +0.6278 | 0 | +0.4035 |
+| `nom_typ_1p20V_25C` | +7.7094 | +0.3041 | 0 | +7.5537 |
+| `nom_fast_1p32V_m40C` | +11.9259 | +0.1180 | 0 | +11.8083 |
 
 IHP still closes all three corners at 20 ns with every violation counter
 at zero, so the qualitative finding of this section survives: sky130
 misses a corner that IHP meets. What does not survive is the *size* of
-the gap as this document states it, because **6.03 ns of the IHP margin
-went to the memory hardening and sky130 has not been asked to pay the
-same bill** (preamble). Any arithmetic below that subtracts an IHP slack
-from a sky130 slack is quoted on the `tmr-reharden` / `sky-04-tmr` pair
-and should stay that way until a sky130 run exists on the current RTL.
+the gap as this document states it, because **5.80 ns of the IHP margin
+has gone, net, since `tmr-reharden`, and sky130 has not been asked to pay
+the same bill** (preamble). The memory hardening took 6.03 ns of it; the
+`MIX` step gave 0.23 ns back — a larger netlist closed *better* on every
+corner — which is worth noting here only as a caution about
+extrapolating slack from netlist size, on either PDK. Any arithmetic below that subtracts an IHP slack from a
+sky130 slack is quoted on the `tmr-reharden` / `sky-04-tmr` pair and
+should stay that way until a sky130 run exists on the current RTL.
 
 **Read as frequency [estimate — a single-point extrapolation from one
 run, and a weak one on the sky130 side: 3.3b shows the flow optimized
@@ -526,14 +580,14 @@ with the thinnest margin +0.1089 ns at `min_ff`, which is
 `PL_RESIZER_HOLD_SLACK_MARGIN: 0.1` working exactly as configured — the
 same behaviour the IHP run shows at +0.119 ns.
 
-On the memory-hardened RTL the IHP column would read
-20 - 7.5537 = 12.446 ns -> **80.3 MHz** typical and
-20 - 0.4035 = 19.597 ns -> **51.0 MHz** slow **[estimate, arithmetic on
-the `ihp-memecc` slacks]**. That is a real and useful number for the IHP
-submission — it is barely above the 50 MHz `tt/info.yaml` declares — but
-it must **not** be put in the table above, because the sky130 column has
-no matching run and the difference would then be reporting design growth
-as a PDK effect.
+On the current IHP RTL the IHP column would read
+20 - 7.7094 = 12.291 ns -> **81.4 MHz** typical and
+20 - 0.6315 = 19.369 ns -> **51.6 MHz** slow **[estimate, arithmetic on
+the `ihp-mix` slacks; `ihp-memecc` gave 80.3 and 51.0 MHz]**. That is a
+real and useful number for the IHP submission — it clears the 50 MHz
+`tt/info.yaml` declares by about 3 % — but it must **not** be put in the
+table above, because the sky130 column has no matching run and the
+difference would then be reporting design growth as a PDK effect.
 
 The critical path is unchanged in kind: it still runs through the SECDED
 XOR trees on the weight-load path, not the neuron scan.
@@ -763,15 +817,18 @@ Both counters move on the corrected netlist and the decomposition above
 was not repeated on it: **98 on sky130** (`sky-04-tmr`,
 `final/metrics.json`, again identical across all nine corners) and **77
 on IHP** (`tmr-reharden`, `docs/20-reharden-and-corners.md` section 8.1)
-**[fact]**. On the memory-hardened IHP RTL the counter reads **84**
-(`ihp-memecc`, again identical across all three corners), and there the
-decomposition *was* repeated and confirms this section's finding on a
-second PDK: **83 of the 84 are CTS clock buffers** (`clkbuf_leaf_*_clk/X`)
-and the eighty-fourth is a resizer-inserted fanout buffer, with every one
-held to `sg13g2_stdcell_typ_1p20V_25C.lib`'s `default_max_fanout` of 8
-rather than to the design's `MAX_FANOUT_CONSTRAINT: 10` **[fact,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/55-openroad-stapostpnr/nom_typ_1p20V_25C/checks.rpt`;
-`docs/15` section 5.3]**. Not one violator is an RTL net on either PDK.
+**[fact]**. On the current IHP RTL the counter reads **82** (`ihp-mix`,
+again identical across all three corners; `ihp-memecc` read 84), and
+there the decomposition *was* repeated and confirms this section's
+finding on a second PDK: **all 82 are CTS clock buffers**
+(`clkbuf_leaf_*_clk/X`, the worst seven at 18 loads), every one held to
+`sg13g2_stdcell_typ_1p20V_25C.lib`'s `default_max_fanout` of 8 rather
+than to the design's `MAX_FANOUT_CONSTRAINT: 10` **[fact,
+`hw/openlane/pilot_ihp/runs/ihp-mix/55-openroad-stapostpnr/nom_typ_1p20V_25C/checks.rpt`;
+`docs/15` section 5.3]**. `ihp-memecc` had 83 clock buffers plus one
+resizer-inserted `fanout924/X`; that cell is absent from the `ihp-mix`
+list, which is the same story as its lower repair-buffer count. Not one
+violator is an RTL net on either PDK.
 There is no corresponding sky130 number for the current RTL. Max cap is no longer uniformly 0 either — `sky-04-tmr`
 reports **one** max-cap violation, at `nom_ss` and `max_ss` and nowhere
 else (section 3.3). One violating pin at the two slowest corners is the
@@ -976,7 +1033,13 @@ LVS all **0**, and 0 antenna-violating nets, exactly as here **[fact,
   is 0.
 - The docs/15 place-and-route growth calibration (1.26) survives a PDK
   change to within 0.8 %, which makes it usable for planning a third
-  technology rather than only this one.
+  technology rather than only this one. **Read that as a whole-design
+  average and nothing finer.** On IHP the same factor has since been
+  measured at 1.2497, 1.2347 and 1.2262 on three consecutive re-hardens
+  of the same design on the same floorplan **[fact, `docs/15` section
+  4.1]**, so it does not transfer to an increment: a one-percent RTL
+  change is not a one-percent placed change, and `docs/15` section 4 head
+  records what happened when this programme assumed otherwise.
 
 **Not proved, and the list is longer than the first one:**
 
@@ -986,11 +1049,11 @@ LVS all **0**, and 0 antenna-violating nets, exactly as here **[fact,
   form "the design runs at 50 MHz" is a statement about a PDK, not about
   the design. `tt/info.yaml`'s `clock_hz: 50000000` is correct for the
   IHP submission it describes and would be wrong on a sky130 shuttle
-  without a re-close. **On the memory-hardened RTL the IHP side is down
-  to +0.40 ns at the slow corner (`ihp-memecc`), so `clock_hz: 50000000`
-  is now correct by about 1 MHz rather than by 24; sky130 has not been
-  re-hardened against that RTL and the gap between the two PDKs is
-  therefore no longer measured.**
+  without a re-close. **On the current RTL the IHP side is down to
+  +0.63 ns at the slow corner (`ihp-mix`, after `ihp-memecc`'s
+  +0.40 ns), so `clock_hz: 50000000` is now correct by about 1.6 MHz
+  rather than by 24; sky130 has not been re-hardened against that RTL and
+  the gap between the two PDKs is therefore no longer measured.**
 - **The sky130 frequency is still not established, and the reason is now
   known.** The run this document originally said had to be made — the
   slow corner inside `PNR_CORNERS` — **has been made**, on both PDKs, and
@@ -1062,12 +1125,16 @@ hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-03-clk26 -c CLOCK_PERIOD=26
 # the corrected-netlist re-harden that sections 3.2 and 3.3 now quote
 hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-04-tmr
 
-# NOT RUN: the sky130 counterpart of the IHP memory-hardening re-harden.
-# Every sky130 number in this file predates hw/rtl/lif_core.v's SECDED
-# memory coding. This is the command that would restore the like-for-like
-# comparison of 3.2 and 3.3; nothing in this document is scaled to stand
-# in for it.
-# hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-07-memecc
+# NOT RUN: the sky130 counterpart of the two IHP re-hardens. Every sky130
+# number in this file predates hw/rtl/lif_core.v's SECDED memory coding
+# AND the MIX transform in hw/rtl/pilot_top.v. This is the command that
+# would restore the like-for-like comparison of 3.2 and 3.3; nothing in
+# this document is scaled to stand in for it. Pin it, the way the IHP
+# side now does -- see the preamble for the blob list ihp-mix consumed:
+#   python3 hw/openlane/pin_rtl.py <commit-ish> \
+#       hw/openlane/pilot_sky130/config.json <dest>
+#   CONFIG=<dest>/config.json hw/openlane/pilot_sky130/run_sky130.sh \
+#       --run-tag sky-07-memecc --force-run-dir <dest>/run
 
 # the gate of section 5, applied by hand
 R=hw/openlane/pilot_sky130/runs/sky-02-signoff/76-misc-reportmanufacturability

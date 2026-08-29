@@ -33,7 +33,7 @@ built at that shape.**
 
 This is no longer a projection. The design has been taken through the
 complete `Classic` flow at 4x2 locally, against the submission's own
-configuration, and it closes to a GDS: **69.52 % utilization, zero
+configuration, and it closes to a GDS: **69.68 % utilization, zero
 detailed-route DRC errors, zero Magic DRC errors, zero Netgen LVS
 errors, zero antenna violations, and zero setup, hold, max-cap and
 max-slew violations across all three timing corners** **[fact, section
@@ -41,44 +41,56 @@ max-slew violations across all three timing corners** **[fact, section
 superseded harden; that check has **not** been re-run against the
 current one (section 5.4).
 
-**The shape survives; the margin does not.** 69.52 % is where the design
-landed after the `lif_core` memory hardening, against 60.91 % before it,
-and at the 70 % planning criterion this record uses that leaves **0.68 %
-of the 4x2 core spare** where the previous run left 12.99 % **[estimate,
-section 4 head]**. 4x2 is still the right shape and it is still the shape
-the submission tree is built at. It is no longer a shape with room in it,
-and the timing margin went the same way: the slow corner closes at
-+0.403 ns, down from +6.436 ns (section 4.6).
+**The shape survives; the margin does not.** 69.68 % is where the design
+landed after the `lif_core` memory hardening and the `MIX` transform,
+against 60.91 % before either, and at the 70 % planning criterion this
+record uses that leaves **0.46 % of the 4x2 core spare** where the
+pre-hardening run left 12.99 % **[estimate, section 4 head]**. 4x2 is
+still the right shape and it is still the shape the submission tree is
+built at. It is no longer a shape with room in it, and the timing margin
+went the same way: the slow corner closes at +0.632 ns, down from
++6.436 ns (section 4.6).
 
-**The tile budget is open, and by a hair.** The run those figures come
-from is dated 2026-08-27 00:03; `hw/rtl/pilot_top.v` was rewritten at
-00:17 to give the third TMR replica an XOR mixing transform, which costs
-**+0.92 %** of synthesis area measured here — more than the 0.68 % that
-was left. A re-harden against the current RTL is running. Until it
-lands, treat this document's areas and margins as the best measurement
-available and not as the answer; the *shape* does not turn on it, only
-whether the 70 % planning criterion is still met inside it. Section 4
-opens with the detail.
+**The tile budget is settled, and the reasoning that used to leave it
+open was wrong.** Earlier revisions of this record argued that 4x2 was
+unresolved because the `MIX` transform's measured **+0.92 %** of
+*synthesis* area was larger than the 0.68 % of core the previous harden
+left spare, and called the 70 % criterion "a coin toss for this design
+rather than a margin". The re-harden those revisions promised has landed
+— `hw/openlane/pilot_ihp/runs/ihp-mix/`, 2026-08-27 01:26, against RTL
+pinned to a named snapshot rather than read live — and it disproves that
+arithmetic. **+0.92 % at synthesis arrived as +0.22 % of placed area**:
+181,043 um2 against `ihp-memecc`'s 180,651 **[fact,
+`design__instance__area__stdcell` in each run's `final/metrics.json`]**.
+Placement absorbed roughly three quarters of the synthesis delta. 4x2
+fits, with **0.46 % of the core spare**, and the slow corner came back
+*better* rather than worse, +0.632 ns against +0.403 ns. Section 4 opens
+with the derivation and with why a synthesis-area delta must not be read
+as a placed-area delta again. What 0.46 % is not is a growth allowance:
+it is 1,204 um2 of placement rows, and everything added from here comes
+out of it — starting with the `lif_core` ECC status ports of section 5.2,
+which were unconnected in this run and were wired up in the tree two days
+after it.
 
 The default 2x2 pilot of docs/06 section B.6 does not fit, and the
-margin is not close. The placed design is **180,651 um2** of standard
+margin is not close. The placed design is **181,043 um2** of standard
 cells **[fact]**. A 2x2 block offers **126,685 um2** of placement rows —
 measured, not interpolated, from the `tt_block_2x2_pgvdd.def` template
-the flow actually uses. That is **142.6 %**: not a tight fit but an
+the flow actually uses. That is **142.9 %**: not a tight fit but an
 impossible one. No 2x2 run was attempted — the number applies this
-design's *measured* placed area to the 2x2 row count, so the 142.6 % is
+design's *measured* placed area to the 2x2 row count, so the 142.9 % is
 an **[estimate]** built on a fact rather than on another estimate, and
 the error runs the wrong way for 2x2: a denser floorplan makes the
 resizer work harder, not less. The floor is firmer still — the
-pre-placement synthesis netlist alone, 146,310 um2, is **115.5 %** of a
+pre-placement synthesis netlist alone, 147,649 um2, is **116.5 %** of a
 2x2 before a single timing-repair buffer exists, and the flow inserted
-30,805 um2 of them.
+29,885 um2 of them.
 
 Every area, utilization and timing figure in this record now comes from
-the memory-hardening re-harden
-`hw/openlane/pilot_ihp/runs/ihp-memecc/` (2026-08-27 00:03), not from
-the superseded `tt/runs/tmr-reharden/` or `tt/runs/tt-harden/`. Section
-4 opens with what that run measured and what it cost.
+the pinned `MIX` re-harden `hw/openlane/pilot_ihp/runs/ihp-mix/`
+(2026-08-27 01:26), not from `hw/openlane/pilot_ihp/runs/ihp-memecc/`,
+`tt/runs/tmr-reharden/` or `tt/runs/tt-harden/`. Section 4 opens with
+what that run measured and what it cost.
 
 This does not change the funding envelope. docs/06 section B.6 already
 carries EUR 560 for the 8-tile option. What changes is the meaning of
@@ -308,149 +320,204 @@ Documented deviations, each with its cost or its reason:
 
 ## 4. Area against the tile budget
 
-**Which run these numbers belong to, and what has moved since.** Every
+**Which run these numbers belong to, and how it was pinned.** Every
 *measured* area, utilization and timing figure in this section comes from
-the memory-hardening re-harden
-`hw/openlane/pilot_ihp/runs/ihp-memecc/`, whose `final/metrics.json` is
-timestamped **2026-08-27 00:03** **[fact, file mtime]**. That run
-supersedes `tt/runs/tmr-reharden/` (2026-08-26 07:19), which in turn
-superseded `tt/runs/tt-harden/`;
-`docs/20-reharden-and-corners.md` section 8.1 carries the
-tt-harden-to-tmr-reharden substitution list and the note below carries
-the tmr-reharden-to-ihp-memecc one. The exceptions are named where they
-occur: the component table of section 4.2 and the models of sections 4.4
-and 4.5 rest on pre-fix local Yosys 0.33 measurements that were **not**
-re-made, and each says so.
+the `MIX` re-harden `hw/openlane/pilot_ihp/runs/ihp-mix/`, whose
+`final/metrics.json` is timestamped **2026-08-27 01:26** **[fact, file
+mtime]**; the flow ran 00:21:45 to 01:26:35. That run supersedes
+`hw/openlane/pilot_ihp/runs/ihp-memecc/` (2026-08-27 00:03), which
+superseded `tt/runs/tmr-reharden/` (2026-08-26 07:19), which superseded
+`tt/runs/tt-harden/`; `docs/20-reharden-and-corners.md` section 8.1
+carries the tt-harden-to-tmr-reharden substitution list, and the note
+below carries the ihp-memecc-to-ihp-mix one. The exceptions are named
+where they occur: the component table of section 4.2 and the models of
+sections 4.4 and 4.5 rest on pre-fix local Yosys 0.33 measurements that
+were **not** re-made, and each says so.
 
-**`ihp-memecc` is itself already one RTL revision behind, and the tile
-budget is therefore still open.** The sub-note at the end of this section
-head has the measurement and the size of it. Read every figure below as
-the best measurement this record holds, not as the settled answer.
+**This is the first re-harden in this record whose sources could not move
+under it, and that is the point of it.** The two before it were each
+invalidated by an `hw/rtl` write that landed minutes after they finished
+(section 8.5), and any config that names `hw/rtl` has that window on
+every run, because lint and synthesis are separate processes reading the
+same path (`docs/20` section 1.2). This one was pinned:
+`hw/openlane/pin_rtl.py` was pointed at a `git stash create` snapshot of
+the working tree, commit-ish
+**`e4c850b3c7c3631e66721825ce829022c960a12e`**, so the run consumed a
+named, immutable source set instead of the live tree. The blobs the run
+compiled, quoted the way `docs/18` section 2.1 and `docs/20` section 1.2
+quote them for pinned runs:
 
-**The re-harden that this record spent a day calling outstanding has
-landed, and it spent the margin.** `hw/rtl/lif_core.v` was rewritten at
-**2026-08-26 07:33**, fourteen minutes after `tmr-reharden` finished
-**[fact, file mtime]**, by the workstream that added SECDED coding to the
+```
+13c523519d55d80bcf0da0b54677a53ab9fb2e22  hw/rtl/pilot_top.v
+b196828f65c271d849cad0ad21536c561d2079af  hw/rtl/lif_core.v
+ac6edac5cb5e759359afe765c0c2f0f56c70acf6  hw/rtl/aer_fifo.v
+62b5f4d2a1eae095d9d4a8634ede55237e2c924d  hw/rtl/tmr_voter.v
+f7c7ec187a0df4eb09a8405dcda285de0fc2e44e  hw/rtl/secded_dec.v
+b5710b8a679c3e378e74953b621b99f0d8dc3014  hw/rtl/secded_enc.v
+e294afcf03e1947906086beeba2fd0c40b29441d  hw/rtl/tt_um_melihakbulut_nssoc.v
+9aaaa394e7a6ef855f5584fb85d53e688ac3e0b5  hw/rtl/npu_regs.vh
+```
+
+**[fact, `git ls-tree e4c850b3:hw/rtl`]**. The first seven are
+`VERILOG_FILES`; the eighth is reached through `VERILOG_INCLUDE_DIRS`,
+which the pinning redirects into the same snapshot, so the `` `include ``
+at `pilot_top.v:570` cannot pick up a live-tree register map behind the
+run's back. The two that carry the substance: `pilot_top.v` at
+**`13c52351`** is the revision that puts `MIX = 1` on `u_cfg_c`, and
+`lif_core.v` at **`b196828f`** is the SECDED-hardened one. `resolved.json`
+records the run reading its Verilog
+from the snapshot directory by absolute path rather than from `hw/rtl`
+**[fact, `.../ihp-mix/resolved.json`, `VERILOG_FILES`]**; that directory
+is disposable and has since been deleted, which is exactly why the blob
+list above is the record and not the path.
+
+**The two hardening steps this run finally measures together.**
+`hw/rtl/lif_core.v` was rewritten at **2026-08-26 07:33**, fourteen
+minutes after `tmr-reharden` finished, adding SECDED coding to the
 `lif_core` memories — a `wchk` weight check field and an `smem`
 neuron-state check field (`hw/rtl/lif_core.v` sections at `wchk` and
 `smem`), 80 flip-flops between them: `wchk` is 8 check bits x 4 weight
-words = 32 and `smem` is 6 check bits x 8 neurons = 48. That RTL has now
-been through the complete `Classic` flow to a GDS in
-`hw/openlane/pilot_ihp/runs/ihp-memecc/`, on `ihp-sg13g2`, against the
-same submission configuration as `tmr-reharden` — the same 4x2
-`tt_block_4x2_pgvdd.def` template, the same `DIE_AREA 0 0 854.40
-313.74`, the same `CLOCK_PERIOD: 20` and the same
-`SYNTH_HIERARCHY_MODE: deferred_flatten`, generated from
+words = 32 and `smem` is 6 check bits x 8 neurons = 48. `ihp-memecc`
+measured that. Then `hw/rtl/pilot_top.v` was rewritten at **2026-08-27
+00:17**, fourteen minutes after *that* run finished, giving replica C of
+the configuration TMR an invertible XOR **mixing** transform (`MIX = 1`
+on `u_cfg_c`) in place of a polarity **[fact, file mtimes]**. `ihp-mix`
+is the first run to carry both, through the complete `Classic` flow to a
+GDS on `ihp-sg13g2`, against the same submission configuration as its
+two predecessors — the same 4x2 `tt_block_4x2_pgvdd.def` template, the
+same `DIE_AREA 0 0 854.40 313.74`, the same `CLOCK_PERIOD: 20` and the
+same `SYNTH_HIERARCHY_MODE: deferred_flatten`, generated from
 `tt/src/config_merged.json` rather than hand-written **[fact,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/resolved.json` and the
-`//derived` key of `hw/openlane/pilot_ihp/config.json`]**. It completed
-with `flow__errors__count: 0` and `design__violations: 0` **[fact,
-`.../ihp-memecc/final/metrics.json`]**.
+`hw/openlane/pilot_ihp/runs/ihp-mix/resolved.json` and the `//derived`
+key of `hw/openlane/pilot_ihp/config.json`]**. It completed with
+`flow__errors__count: 0` and `design__violations: 0` **[fact,
+`.../ihp-mix/final/metrics.json`]**.
 
-What it measured, against the `tmr-reharden` figures this section used to
-carry:
+What it measured, against the two runs this section used to carry:
 
-| Quantity | `tmr-reharden` | **`ihp-memecc`** | Move |
-|---|---|---|---|
-| mapped flip-flops | 1,155 | **1,235** | +80 **[fact]** |
-| post-synthesis cell area | 126,647 um2 | **146,310 um2** | +15.5 % **[estimate]** |
-| **placed standard cells** | 158,268 um2 | **180,651 um2** | **+14.1 %** **[estimate]** |
-| **utilization** | 60.91 % | **69.52 %** | +8.61 points **[estimate]** |
-| **worst-corner setup slack** | +6.436 ns | **+0.403 ns** | **-6.032 ns** **[estimate]** |
+| Quantity | `tmr-reharden` | `ihp-memecc` | **`ihp-mix`** | Move, memecc → mix |
+|---|---|---|---|---|
+| mapped flip-flops | 1,155 | 1,235 | **1,235** | **0** **[fact]** |
+| post-synthesis cell area | 126,647 um2 | 146,310 um2 | **147,649 um2** | +0.92 % **[estimate]** |
+| **placed standard cells** | 158,268 um2 | 180,651 um2 | **181,043 um2** | **+0.22 %** **[estimate]** |
+| **utilization** | 60.91 % | 69.52 % | **69.6756 %** | +0.15 points **[estimate]** |
+| **worst-corner setup slack** | +6.436 ns | +0.403 ns | **+0.6315 ns** | **+0.228 ns** **[estimate]** |
+| placed instances | — | 23,655 | **23,763** | +108 **[fact]** |
 
 Flip-flop and synthesis-area figures from each run's
-`06-yosys-synthesis/reports/stat.json`; placed area and utilization from
-`design__instance__area__stdcell` and `design__instance__utilization` in
-each run's `final/metrics.json`; slack from each run's
+`06-yosys-synthesis/reports/stat.json`; placed area, utilization and
+instance count from `design__instance__area__stdcell`,
+`design__instance__utilization` and `design__instance__count` in each
+run's `final/metrics.json`; slack from each run's
 `55-openroad-stapostpnr/summary.rpt`. **[fact for every column entry; the
 Move column is arithmetic on two measured numbers and is therefore an
-estimate.]**
+estimate.]** The die and core did not move at any step: 268,059 um2 and
+259,837 um2 throughout **[fact, `design__die__area` and
+`design__core__area`]**.
 
 Three consequences, and only the first two matter for the decision.
 
-1. **The tile-budget headroom is spent.** The core did not move — 259,837 um2 of
-   placement rows inside a 268,059 um2 die, unchanged **[fact,
-   `.../ihp-memecc/final/metrics.json`, `design__core__area` and
-   `design__die__area`]** — so the whole of that utilization move is the
-   design growing into a fixed tile. At the 70 % planning criterion this
-   document uses throughout, 180,651 um2 of placed cells needs
-   180,651 / 0.70 = **258,073 um2** of rows against the 259,837 um2 the
-   4x2 core offers. That is **0.68 % spare**, where `tmr-reharden` left
-   12.99 % **[estimate, arithmetic on measured areas]**. **The pilot
-   still fits 4x2 and its shape has not changed** — but there is no
-   longer a margin to plan against, and another RTL increment the size of
-   this one moves the design to a larger tile count, which is money at
-   the shuttle (section 4.3 prices the shapes). Section 4.5 carries the
-   consequence for the other geometries. **This 0.68 % is not the final
-   answer either** — the `MIX` change below post-dates the run and is
-   larger than the margin.
-2. **Timing closes, with almost nothing left.** All three IHP corners are
-   clean — 0 setup, 0 hold, 0 max-cap and 0 max-slew violations
-   everywhere — so this is not a failure. But the slow corner fell from
-   +6.436 ns to **+0.403 ns**, about 6 ns consumed by the memory
-   hardening, which is a slow-corner Fmax of **51.0 MHz** against the
-   50 MHz the design declares **[estimate, arithmetic on a measured
-   slack]**. Section 4.6 states it as what it is.
+1. **The tile budget is settled: 4x2, with 0.46 % of the core spare.**
+   The core did not move — 259,837 um2 of placement rows inside a
+   268,059 um2 die, unchanged since `tt-harden` **[fact,
+   `.../ihp-mix/final/metrics.json`, `design__core__area` and
+   `design__die__area`]** — so the whole of the utilization move across
+   these runs is the design growing into a fixed tile. At the 70 %
+   planning criterion this document uses throughout, 181,043 um2 of
+   placed cells needs 181,043 / 0.70 = **258,633 um2** of rows against
+   the 259,837 um2 the 4x2 core offers, so the spare is
+   259,837 - 258,633 = **1,204 um2, or 0.46 % of the core** **[estimate,
+   arithmetic on measured areas]**. Where `tmr-reharden` left 12.99 % and
+   `ihp-memecc` left 0.68 %, this run leaves 0.46 %. **The pilot fits 4x2
+   and no further run is needed to say so.** What 0.46 % is not is a
+   growth allowance: it is one thousand two hundred square microns, and
+   anything added from here comes out of it — beginning with the
+   `lif_core` ECC status ports of section 5.2, unconnected in this run and
+   connected in the tree on 2026-08-29, which is items 8 and 9 of the
+   developer list in section 8.5. Another RTL increment
+   the size of the memory hardening is a larger tile count, which is
+   money at the shuttle (section 4.3 prices the shapes). Section 4.5
+   carries the consequence for the other geometries.
+2. **Timing closes, and this time it improved.** All three IHP corners
+   are clean — 0 setup, 0 hold, 0 max-cap and 0 max-slew violations
+   everywhere, at every corner **[fact, `timing__setup_vio__count` and
+   siblings, `.../ihp-mix/final/metrics.json`]**. The slow corner reads
+   **+0.6315 ns**, which is 0.228 ns *better* than `ihp-memecc`'s
+   +0.4035 ns despite the larger netlist, and a slow-corner Fmax of
+   **51.6 MHz** against the 50 MHz the design declares **[estimate,
+   arithmetic on a measured slack]**. Against `tmr-reharden`'s +6.436 ns
+   it is still 5.80 ns down: the memory hardening spent that, and `MIX`
+   gave a fraction of it back. Section 4.6 states it as what it is.
 3. **The hardening itself is intact.** The configuration TMR survived
    synthesis: **55 flip-flops under each of `u_cfg_a`, `u_cfg_b` and
    `u_cfg_c`** in the final netlist, and
    `design__instance_unmapped__count: 0` **[fact,
-   `.../ihp-memecc/final/nl/tt_um_melihakbulut_nssoc.nl.v`, counted, and
+   `.../ihp-mix/final/nl/tt_um_melihakbulut_nssoc.nl.v`, counted, and
    `final/metrics.json`]**. Sign-off is clean on every deck the Tiny
    Tapeout configuration runs: Magic DRC 0, Netgen LVS 0 on all seven
    counters, antenna 0 nets / 0 pins, detailed-route DRC 0 (section 5.3).
 
-**And then the tree moved again, fourteen minutes later, exactly as it
-did after `tmr-reharden`.** `hw/rtl/pilot_top.v` was rewritten at
-**2026-08-27 00:17**, against `ihp-memecc`'s 00:03 **[fact, file
-mtimes]**, by the workstream that took the section 4.2 correction one
-step further: replica C of the configuration TMR now carries an
-invertible XOR **mixing** transform (`MIX = 1` on `u_cfg_c`) instead of a
-polarity, so each of its 55 stored bits is an XOR of two or three
-distinct configuration bits and no per-bit structural hash can match it
-against replica A or B (`hw/rtl/pilot_top.v` header section 9 item (e),
-`docs/20` sections 11.3 to 11.6). Section 4.2 below is rewritten for it.
+**What `MIX` is, and what it cost at synthesis.** Replica C of the
+configuration TMR carries an invertible XOR **mixing** transform
+(`MIX = 1` on `u_cfg_c`) instead of a polarity, so each of its 55 stored
+bits is an XOR of two or three distinct configuration bits and no per-bit
+structural hash can match it against replica A or B
+(`hw/rtl/pilot_top.v` header section 9 item (e), `docs/20` sections 11.3
+to 11.6). Section 4.2 below is written for it. Synthesis, same LibreLane
+flow, same configuration:
 
-**What that costs, measured here rather than assumed.** A synthesis-only
-re-run of the same LibreLane flow, same configuration, against the tree
-as it now stands:
-
-| | `ihp-memecc` (00:03) | **current tree** | Delta |
+| | `ihp-memecc` (00:03) | **`ihp-mix`** | Delta |
 |---|---|---|---|
 | post-synthesis cell area | 146,309.97 um2 | **147,648.69 um2** | **+1,338.72 um2, +0.92 %** |
 | cells | 9,449 | **9,487** | +38 |
 | `sg13g2_xor2_1` | 315 | 356 | +41 |
 | `sg13g2_dfrbpq_1` | **1,235** | **1,235** | **0** |
 
-**[fact — run tags `memecc-synthcheck` and `memecc-synthcheck3`,
-`hw/openlane/pilot_ihp/runs/*/06-yosys-synthesis/reports/stat.json`, one
-before and one after the 00:17 write; both return 147,648.69 to the last
-digit, so this is a real delta and not `abc` non-determinism.]** The
-shape of it — XOR2 cells up, flip-flops unchanged — is what a
-combinational rewiring of one bank's write and read sides looks like, and
-it agrees with the matched A/B in `pilot_top.v`'s own header, which
-measures `MIX` at **+1.06 %** with zero extra flip-flops (`docs/20`
-section 11.6).
+**[fact — `06-yosys-synthesis/reports/stat.json` in each run; the
+synthesis-only probes `memecc-synthcheck` and `memecc-synthcheck3`
+returned 147,648.69 to the last digit before the full run did, so this is
+a real delta and not `abc` non-determinism.]** The shape of it — XOR2
+cells up, flip-flops unchanged — is what a combinational rewiring of one
+bank's write and read sides looks like, and it agrees with the matched
+A/B in `pilot_top.v`'s own header, which measures `MIX` at **+1.06 %**
+with zero extra flip-flops (`docs/20` section 11.6).
 
-**That is why the tile budget is open rather than closed.** +0.92 % of
-synthesis area against **0.68 % of spare** is not a rounding difference;
-it is larger than the margin. Carried through the place-and-route growth
-this design shows, 180,651 x 1.0092 = 182,304 um2 placed, which needs
-**260,434 um2** of rows at the 70 % criterion against the 259,837 um2 the
-4x2 core offers — about **0.2 % over** **[estimate, and a weak one: it
-scales a placed area by a synthesis-area ratio, which the resizer is
-under no obligation to honour]**. The honest statement is that the 70 %
-criterion is now a coin toss for this design rather than a margin, and
-only a full re-harden settles it. **One is running against the current
-RTL as this is written; when it lands, every figure in this section is
-requoted from it.** The direction is not in doubt: `MIX` adds area and
-adds nothing to the row count.
+**CORRECTION (2026-08-27): the "coin toss" reading of that +0.92 % was
+wrong, and the run disproves it.** Earlier revisions of this section
+argued that the tile budget was open *because* +0.92 % of synthesis area
+was larger than the 0.68 % of core `ihp-memecc` left spare; they carried
+the arithmetic 180,651 x 1.0092 = 182,304 um2 placed, needing
+260,434 um2 of rows and therefore "about 0.2 % over", and concluded that
+"the 70 % criterion is now a coin toss for this design rather than a
+margin". The measurement is **181,043 um2 placed, +0.22 %** — a third of
+what that scaling predicted, and 1,261 um2 below it. The prediction
+missed by more than the entire margin it was reasoning about.
+
+The reason is stated plainly so that the inference is not repeated. **A
+synthesis-area delta is not a placed-area delta**, and least of all on a
+design this close to its density target. Post-synthesis area is a cell
+sum; placed area is that plus whatever CTS and the resizer add, and those
+two terms are not independent of each other. Here the extra XOR2 cells
+came with **less** repair, not more: timing-repair buffers fell from
+30,805 um2 (2,452 cells) to **29,885 um2 (2,394 cells)** and hold buffers
+from 1,434 to **1,379** **[fact,
+`design__instance__area__class:timing_repair_buffer`,
+`design__instance__count__class:timing_repair_buffer` and
+`design__instance__count__hold_buffer` in each `final/metrics.json`]**.
+Placement absorbed roughly three quarters of the synthesis delta by
+needing less help, which is also why the slow corner came back better.
+The general rule this record should hold to: a synthesis delta bounds
+nothing about the placed result on its own, and where the answer matters
+to a fraction of a percent, the only instrument is a full harden. The
+one thing the old paragraph got right is the direction — `MIX` adds area
+and adds nothing to the row count — and the direction was never the
+question.
 
 Nothing else about the design changes with `MIX`. The voted output is
 bit-identical, the flip-flop count is unchanged at 1,235, and
 `sw/tests/test_synthesis_guards.py` passes on the current RTL — 13 of 13,
 including the mutation that strips `keep_hierarchy` **[fact, run
-2026-08-27]**. What moves is area, and possibly slack.
+2026-08-27]**.
 
 Where a figure below still belongs to `tmr-reharden` or to a pre-fix
 local synthesis, it says so at the point of use.
@@ -464,15 +531,17 @@ extrapolate from it; that step is gone.
 
 | Quantity | Value | Where it comes from |
 |---|---|---|
-| `tt_um_melihakbulut_nssoc`, LibreLane 3.0.5 / Yosys 0.67, `deferred_flatten`, post-synthesis | **146,310 um2** | `hw/openlane/pilot_ihp/runs/ihp-memecc/06-yosys-synthesis/reports/stat.json` **[fact]** |
+| `tt_um_melihakbulut_nssoc`, LibreLane 3.0.5 / Yosys 0.67, `deferred_flatten`, post-synthesis | **147,649 um2** | `hw/openlane/pilot_ihp/runs/ihp-mix/06-yosys-synthesis/reports/stat.json` **[fact]** |
 | mapped flip-flops, all `sg13g2_dfrbpq_1` | **1,235** | same **[fact]** |
-| **placed standard cells, after CTS, timing repair and routing** | **180,651 um2** | `design__instance__area__stdcell`, `.../ihp-memecc/final/metrics.json` **[fact]** |
-| of which timing-repair buffers | 30,805 um2 (2,452 cells) | `design__instance__area__class:timing_repair_buffer`, same file **[fact]** |
-| of which clock buffers and inverters | 3,507 um2 (169 cells) | `clock_buffer` + `clock_inverter` classes, same file **[fact]** |
+| **placed standard cells, after CTS, timing repair and routing** | **181,043 um2** | `design__instance__area__stdcell`, `.../ihp-mix/final/metrics.json` **[fact]** |
+| placed instances, all classes | **23,763** | `design__instance__count`, same file **[fact]** |
+| of which timing-repair buffers | 29,885 um2 (2,394 cells) | `design__instance__area__class:timing_repair_buffer`, same file **[fact]** |
+| of which clock buffers and inverters | 3,485 um2 (167 cells) | `clock_buffer` + `clock_inverter` classes, same file **[fact]** |
 | of which sequential cells | 60,501 um2 | same; 1,235 flops at synthesis and 1,235 placed, so no flip-flop was added or removed after mapping **[fact]** |
-| of which antenna cells | 5.44 um2 (1 cell) | `design__instance__area__class:antenna_cell`, same file **[fact]** |
-| **place-and-route growth factor, this design** | **1.2347** | 180,651 / 146,310 **[estimate, arithmetic on two measured areas]** |
-| same factor on the previous re-harden | 1.2497 | 158,268 / 126,647 **[estimate, same arithmetic on `tmr-reharden`]** |
+| of which antenna cells | **0** (no diode was inserted) | no `design__instance__area__class:antenna_cell` key; `antenna_diodes_count: 0`, same file **[fact]** |
+| **place-and-route growth factor, this design** | **1.2262** | 181,043 / 147,649 **[estimate, arithmetic on two measured areas]** |
+| same factor on `ihp-memecc` | 1.2347 | 180,651 / 146,310 **[estimate]** |
+| same factor on `tmr-reharden` | 1.2497 | 158,268 / 126,647 **[estimate]** |
 | same factor from `aer_fifo` (docs/12) | 1.2843 | 114,645 / 89,266 **[estimate]** |
 
 **The local-Yosys tool-delta row is gone.** The previous revision carried
@@ -486,27 +555,31 @@ with it. What survives is the place-and-route growth factor above, which
 is measured end to end inside one flow and needs no tool-version term.
 
 Applied after the fact, the `aer_fifo`-derived growth factor gives
-146,310 x 1.2843 = 187,905 um2 against a measured 180,651, i.e. **4.0 %
-pessimistic** **[estimate]** — wider than the 2.8 % it showed against
-`tmr-reharden` and the 1.7 % against the superseded harden, so the
-docs/12 calibration is drifting as the design grows, but it still
-transfers between blocks in this project to within about 4 %. It is no
-longer needed here.
+147,649 x 1.2843 = 189,625 um2 against a measured 181,043, i.e. **4.7 %
+pessimistic** **[estimate]** — wider than the 4.0 % it showed against
+`ihp-memecc`, the 2.8 % against `tmr-reharden` and the 1.7 % against the
+superseded harden, so the docs/12 calibration is drifting as the design
+grows and it is drifting in one direction, but it still transfers
+between blocks in this project to within about 5 %. It is no longer
+needed here. The drift now has a named mechanism: this run's own growth
+factor is **1.2262**, the lowest of the four, because the resizer did
+less work on it than on `ihp-memecc` (section 4 head).
 
 Antenna diodes are excluded on purpose: `RUN_HEURISTIC_DIODE_INSERTION`
 defaults to `False` in LibreLane 3.0.5 **[fact, `flows/classic.py`]**,
 which is the same decision docs/12 section 4.5 reached by measurement,
 so the Tiny Tapeout config needs no override for it. The run closed with
 **zero antenna-violating nets and zero antenna-violating pins** **[fact,
-`.../ihp-memecc/46-openroad-checkantennas-1`]**, so nothing was given up
-by leaving it off. It no longer reaches that state with no repair at
-all, which is a change from `tmr-reharden`: the post-global-routing pass
-found 2 violations and fixed them with 2 jumpers and no diode, and the
-detailed router's own repair loop found 1 more and inserted **one**
-diode, 5.44 um2 **[fact, `.../ihp-memecc/42-openroad-repairantennas` and
-`44-openroad-detailedrouting` logs]**. One antenna cell in a 259,837 um2
-core is not a finding; it is recorded because the previous run inserted
-none and a reader comparing the two tables would otherwise wonder.
+`.../ihp-mix/46-openroad-checkantennas-1`]**, so nothing was given up
+by leaving it off. It reaches that state with jumpers alone: the
+post-global-routing pass found **2** violations and closed them with
+**8 jumpers and no diode**, and the detailed router's own repair loop
+found none afterwards, so the final layout carries **zero antenna
+cells** **[fact, `.../ihp-mix/42-openroad-repairantennas` log,
+`GRT-0012` and `GRT-0302`, and `antenna_diodes_count: 0` in
+`final/metrics.json`]**. `ihp-memecc` inserted one diode of 5.44 um2 at
+the same step; the difference is one cell in a 259,837 um2 core and is
+recorded only because the two runs' tables sit next to each other.
 
 ### 4.2 Component areas, and what synthesis did to the TMR
 
@@ -525,28 +598,29 @@ Yosys 0.33. **[fact]**
 | **Flattened, `tt_um_melihakbulut_nssoc`, local Yosys 0.33** | | **105,452** | |
 | **Tiny Tapeout flow, Yosys 0.67, `deferred_flatten`, `tmr-reharden`** | | **126,647** | |
 | **Tiny Tapeout flow, Yosys 0.67, `deferred_flatten`, `ihp-memecc`** | | **146,310** | |
+| **Tiny Tapeout flow, Yosys 0.67, `deferred_flatten`, `ihp-mix`** | | **147,649** | |
 
 Run-to-run spread on the local total is under 0.2 % (105,452 and 105,129
 on the same source in two runs), which is `abc` mapping
 non-determinism.
 
-Read the split in that table carefully: **every row above the last two is
-a pre-fix local Yosys 0.33 measurement and none of them was re-made**, so
-the per-block shares are the shape of the design rather than its current
-size. Only the last row is current, and it is the memory-hardening
+Read the split in that table carefully: **every row above the last three
+is a pre-fix local Yosys 0.33 measurement and none of them was re-made**,
+so the per-block shares are the shape of the design rather than its
+current size. Only the last row is current, and it is the `MIX`
 re-harden's synthesis figure **[fact,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/06-yosys-synthesis/reports/stat.json`]**;
-the row above it is the same measurement on `tmr-reharden` **[fact,
-`tt/runs/tmr-reharden/06-yosys-synthesis/reports/stat.json`]**, kept
-because the two together are the only like-for-like measurement of what
-the `lif_core` memory hardening cost at synthesis: **+19,663 um2, or
-+15.5 %** **[estimate, arithmetic on two measured areas]**. The gap
-between 105,452 and 126,647 is not a tool delta: `docs/20` section 3.1
-decomposes it into roughly half TMR fix and half the `deferred_flatten`
-the fix forces, and neither term is separable from the other on these
-two numbers alone. The further gap to 146,310 is separable, and it is
-the memory hardening on its own, because nothing else changed between
-those two runs.
+`hw/openlane/pilot_ihp/runs/ihp-mix/06-yosys-synthesis/reports/stat.json`]**;
+the two rows above it are the same measurement on `ihp-memecc` and on
+`tmr-reharden` **[fact, the same report file in each run directory]**,
+kept because consecutive pairs are the only like-for-like measurements
+this record has of what each hardening step cost at synthesis: the
+`lif_core` memory hardening **+19,663 um2, or +15.5 %**, and `MIX`
+**+1,339 um2, or +0.92 %** **[estimate, arithmetic on measured areas]**.
+The gap between 105,452 and 126,647 is not a tool delta: `docs/20`
+section 3.1 decomposes it into roughly half TMR fix and half the
+`deferred_flatten` the fix forces, and neither term is separable from the
+other on these two numbers alone. The two further gaps are separable,
+because nothing else changed between the runs on either side of them.
 
 **CORRECTION (2026-08-26): the replicas did NOT survive synthesis, and
 the check below could not have detected it.** This section originally
@@ -609,9 +683,11 @@ unmapped, so under the LibreLane default (`flatten`) the run aborts
 before it can produce a netlist at all. That is a flow-mechanics
 dependency, not a hardening one. With the attribute present, mapped
 flip-flops go from 1,045 to 1,155 in both the ASIC and the ECP5 flow,
-with exactly 55 flops under each replica — and `ihp-memecc` reproduces
-that per-replica count at 1,235 total after the memory hardening
-(section 4 head).
+with exactly 55 flops under each replica — and `ihp-mix` reproduces that
+per-replica count in its own final netlist, 55 under each of `u_cfg_a`,
+`u_cfg_b` and `u_cfg_c` at 1,235 total, with the memory hardening and
+`MIX` both in **[fact,
+`.../ihp-mix/final/nl/tt_um_melihakbulut_nssoc.nl.v`, counted]**.
 
 Why the original check read as confirmation: adding `(* keep *)` left the
 count unchanged, and that was interpreted as "nothing was merged". The
@@ -662,9 +738,9 @@ which is a mild argument that the route is the natural one for TMR built
 this way.
 
 Cross-check against docs/06 section B.3's own capacity model:
-146,310 um2 / 7.26 um2 per `sg13g2_nand2_1` = **20,153 gate
+147,649 um2 / 7.26 um2 per `sg13g2_nand2_1` = **20,337 gate
 equivalents** **[estimate]**. At that document's 4.3 kGE raw per IHP tile
-that is 4.7 tiles; at its 2.5-3 kGE practical per tile it is **6.7-8.1
+that is 4.7 tiles; at its 2.5-3 kGE practical per tile it is **6.8-8.1
 tiles**. The flow-calibrated model below says 8, and the practical band
 now brackets it rather than sitting under it. Two independent estimates,
 and neither of them says four.
@@ -699,42 +775,46 @@ block where the DEF and the flow both say 268,060. The interpolation was
 optimistic about the design's chances, and the corrected numbers make
 the 2x2 case worse, not better.
 
-Utilization needed = the measured placed cell area, 180,651 um2, divided
+Utilization needed = the measured placed cell area, 181,043 um2, divided
 by the placement rows of each shape:
 
 | Shape | Tiles | Utilization needed | Verdict |
 |---|---|---|---|
-| 2x2 | 4 | **142.6 %** | **impossible** |
-| 3x2 | 6 | **93.5 %** | far above anything this project has achieved |
-| **4x2** | **8** | **69.5 %** | **measured: closes, 0 DRC, 0 timing violations — 0.68 % under the 70 % criterion, and see the section 4 head on why that last fraction is not settled** |
-| 6x2 | 12 | 46.0 % | room to grow |
-| 3x4 | 12 | 40.7 % | room to grow |
+| 2x2 | 4 | **142.9 %** | **impossible** |
+| 3x2 | 6 | **93.7 %** | far above anything this project has achieved |
+| **4x2** | **8** | **69.68 %** | **measured: closes, 0 DRC, 0 timing violations — 0.46 % of the core spare against the 70 % criterion, and that is the settled figure, not a projection** |
+| 6x2 | 12 | 46.1 % | room to grow |
+| 3x4 | 12 | 40.8 % | room to grow |
 
 Only the 4x2 row is a measurement; the others apply this design's
 measured placed area to a different die size, which is an **[estimate]**
 because the resizer's work depends on the floorplan it is given. The
 direction of that error is known and unhelpful for the small shapes: a
 denser floorplan makes the resizer work harder, so a real 2x2 run would
-need *more* than 142.6 %, not less.
+need *more* than 142.9 %, not less.
 
 **The 4x2 row is the one that changed character.** It used to be a
 comfortable row — 60.9 % needed against a 70 % criterion. It is now a
-row that clears the criterion by 0.5 points of utilization, or 1,764 um2
-of placement rows out of 259,837 **[estimate, arithmetic on measured
-areas]**. Nothing about the verdict changes: the run closed, with zero
-DRC and zero timing violations, at 69.52 %. What changes is that there
-is no longer a growth allowance behind it — and that an RTL change
-already in the tree but not in that run is, on its own, larger than
-what remains (section 4 head).
+row that clears the criterion by 0.32 points of utilization, or
+**1,204 um2 of placement rows out of 259,837** **[estimate, arithmetic on
+measured areas]**. Nothing about the verdict changes: the run closed,
+with zero DRC and zero timing violations, at 69.68 %. What changes is
+that there is no growth allowance behind it. That is now a measured
+statement rather than a pending one — the RTL change that earlier
+revisions said was "already in the tree but not in that run" is in this
+run. It added 392 um2 of placed cells, which at the 70 % criterion costs
+560 um2 of rows, so the spare went from 1,764 um2 to 1,204 — it took
+about a third of what was left, not all of it (section 4 head).
 
 Reference points for what a utilization figure means here: the sibling
 project's shipped SKY130 Tiny Tapeout design closed at 70.66 %, the
 `aer_fifo` trial in this project landed at 51.8 %, and this design
-closed at 60.91 % before the memory hardening and **69.52 %** after it.
-3x2 is now above every one of those by a wide margin, and this design's
-own achieved figure has moved from below the sibling project's shipped
-number to within 1.1 points of it — which is to say the pilot is now as
-densely packed as the densest thing this programme has manufactured.
+closed at 60.91 % before the memory hardening and **69.68 %** with both
+it and `MIX` in. 3x2 is now above every one of those by a wide margin,
+and this design's own achieved figure has moved from below the sibling
+project's shipped number to within 1.0 point of it — which is to say the
+pilot is now as densely packed as the densest thing this programme has
+manufactured.
 
 One configuration note that follows, and it has stopped being
 hypothetical. The Tiny Tapeout default `PL_TARGET_DENSITY_PCT` is 60,
@@ -742,15 +822,18 @@ and global placement starts from the post-synthesis cell area, not the
 post-repair one. On `tmr-reharden` the global placement step reported
 **48.75 %** and the run needed no help **[fact,
 `tt/runs/tmr-reharden/28-openroad-globalplacement/or_metrics_out.json`,
-`design__instance__utilization`]**. On `ihp-memecc` the same metric reads
-**56.32 %** **[fact,
-`.../ihp-memecc/28-openroad-globalplacement/or_metrics_out.json`]**, and
-OpenROAD's own placement-side figure, which adds a 12,564 um2 pin-density
-adjustment, is **61.15 %** — above the target. **`GPL-0302` fired:**
-"Target density 0.6000 is too low for the available free area.
+`design__instance__utilization`]**. On `ihp-memecc` it read **56.32 %**,
+and on `ihp-mix` it reads **56.83 %** **[fact,
+`.../ihp-mix/28-openroad-globalplacement/or_metrics_out.json`]**;
+OpenROAD's own placement-side figure, which adds a 12,532 um2 pin-density
+adjustment, is **61.65 %** — above the target, against `ihp-memecc`'s
+61.15 %. **`GPL-0302` fired again, with the same text and the same
+remedy:** "Target density 0.6000 is too low for the available free area.
 Automatically adjusting to uniform density 0.6200" **[fact,
-`.../ihp-memecc/28-openroad-globalplacement` log, and the same line in
-`.../ihp-memecc/warning.log`]**.
+`.../ihp-mix/28-openroad-globalplacement/openroad-globalplacement.log`,
+and the same line in `.../ihp-mix/warning.log`]**. That the auto-adjusted
+density is 0.6200 on both runs is worth noting: half a point of starting
+utilization did not move the number OpenROAD picked.
 
 The previous revision of this paragraph predicted that outcome for the
 **3x2** shape and called it "the kind of margin that turns into a
@@ -763,8 +846,8 @@ a clean sign-off, so **no config edit was needed and the submission still
 leaves `src/config.json` byte-identical to the template**. What it does
 mean is that the design has crossed from comfortably below the
 template's default target density to above it, and there is no second
-warning to spend. At 3x2 global placement would now start at **75.7 %**
-against a target of 60 **[estimate, 146,333 / 193,261 on the same
+warning to spend. At 3x2 global placement would now start at **76.4 %**
+against a target of 60 **[estimate, 147,672 / 193,261 on the same
 metric]**, which is not a warning but a floorplan to argue with.
 
 ### 4.4 Why 2x2 fails, in one number
@@ -780,12 +863,12 @@ A 2x2 block at a realistic 70 % utilization holds 126,685 x 0.70 /
 pre-fix tool delta and place-and-route growth together (136,107 /
 105,452). This whole subsection is stated in pre-fix, local Yosys 0.33
 terms, because those are the measurements it rests on and they were not
-re-made (section 4.1). The TMR fix and the `lif_core` memory hardening
-each move every figure in it the same way, upward — together they took
-the measured placed area from 136,107 um2 to 180,651 um2, +32.7 % — so
-they make the 2x2 case worse rather than better and the conclusion is
-unaffected **[estimate on the direction and on the +32.7 %; the pre-fix
-numbers are fact]**.
+re-made (section 4.1). The TMR fix, the `lif_core` memory hardening and
+`MIX` each move every figure in it the same way, upward — together they
+took the measured placed area from 136,107 um2 to 181,043 um2, **+33.0 %**
+— so they make the 2x2 case worse rather than better and the conclusion
+is unaffected **[estimate on the direction and on the +33.0 %; the
+pre-fix numbers are fact]**.
 
 So the observability and hardening set consumes **90 % of a 2x2 block
 before a single neuron is instantiated**. There is no geometry that
@@ -820,44 +903,55 @@ section 4.3 whose placement rows exceed it. **[estimate, except the
 8 x 8 row]**
 
 The cell-area column is **deliberately not** replaced with the
-re-harden's 146,310 um2. That figure comes from a different tool and a
+re-harden's 147,649 um2. That figure comes from a different tool and a
 different hierarchy mode — the flow's Yosys 0.67 with `deferred_flatten`,
 against this column's local Yosys 0.33 `synth -flatten` — and no
 like-for-like local re-measurement was made, so copying it across would
 mix two tools in one column (`docs/20` section 8.1). The last column
 carries the correction instead.
 
-| Geometry | Synapses | Cell area (um2) | Placed (um2) | Min rows at 70 % | Smallest shape, as modelled | Smallest shape, +32.7 % scaled **[estimate]** |
+| Geometry | Synapses | Cell area (um2) | Placed (um2) | Min rows at 70 % | Smallest shape, as modelled | Smallest shape, +33.0 % scaled **[estimate]** |
 |---|---|---|---|---|---|---|
-| 4 x 8 | 32 | 86,684 | 111,884 | 159,834 | 3x2 (6 tiles) | **4x2 (8 tiles)**, 212,144 |
-| 8 x 4 | 32 | 94,190 | 121,572 | 173,674 | 3x2 (6 tiles) | **4x2 (8 tiles)**, 230,513 |
-| **8 x 8** | **64** | **105,245** | **180,651 [fact]** | **258,073** | **4x2 (8 tiles)** | **4x2 (8 tiles), 0.68 % spare** — measured, not scaled |
-| 8 x 16 | 128 | 125,057 | 161,412 | 230,588 | 4x2 (8 tiles) | **6x2 or 3x4 (12 tiles)**, 306,054 |
-| 16 x 8 | 128 | 139,481 | 180,027 | 257,182 | 4x2, 1 % margin | **6x2 or 3x4 (12 tiles)**, 341,350 |
-| 16 x 16 | 256 | 180,778 | 233,330 | 333,328 | 6x2 or 3x4 (12 tiles) | **3x4 (12 tiles) only**, 442,418 |
+| 4 x 8 | 32 | 86,684 | 111,884 | 159,834 | 3x2 (6 tiles) | **4x2 (8 tiles)**, 212,604 |
+| 8 x 4 | 32 | 94,190 | 121,572 | 173,674 | 3x2 (6 tiles) | **4x2 (8 tiles)**, 231,013 |
+| **8 x 8** | **64** | **105,245** | **181,043 [fact]** | **258,633** | **4x2 (8 tiles)** | **4x2 (8 tiles), 0.46 % spare** — measured, not scaled |
+| 8 x 16 | 128 | 125,057 | 161,412 | 230,588 | 4x2 (8 tiles) | **6x2 or 3x4 (12 tiles)**, 306,717 |
+| 16 x 8 | 128 | 139,481 | 180,027 | 257,182 | 4x2, 1 % margin | **6x2 or 3x4 (12 tiles)**, 342,091 |
+| 16 x 16 | 256 | 180,778 | 233,330 | 333,328 | 6x2 or 3x4 (12 tiles) | **3x4 (12 tiles) only**, 443,377 |
 
-The last column applies the measured **+32.7 %** placed-area growth of
-`ihp-memecc` over the superseded pre-fix harden — 180,651 / 136,107,
-which is the TMR fix, the `deferred_flatten` it forces and the `lif_core`
-memory hardening together — to each modelled placed area, and re-runs the
-70 % criterion. It is an **[estimate]** twice over — a scaled model on top
-of an unverified model — and it exists because **five** of the six rows
-change shape under it, which the modelled column hides. The previous
-revision scaled at +16.3 % and moved three rows; the memory hardening
-moves two more. Two of the changes are worth naming, because they are not
-just a bigger number:
+The last column applies the measured **+33.0 %** placed-area growth of
+`ihp-mix` over the superseded pre-fix harden — 181,043 / 136,107 =
+1.3302, which is the TMR fix, the `deferred_flatten` it forces, the
+`lif_core` memory hardening and `MIX` together — to each modelled placed
+area, and re-runs the 70 % criterion. It is an **[estimate]** twice over
+— a scaled model on top of an unverified model — and it exists because
+**five** of the six rows change shape under it, which the modelled column
+hides.
+
+**Recomputed at +33.0 %, no row changes shape against the +32.7 %
+column.** The ratio moved by three tenths of a point and every scaled
+row moved with it — 212,144 → 212,604, 230,513 → 231,013,
+306,054 → 306,717, 341,350 → 342,091, 442,418 → 443,377 — but each stays
+inside the same shape it was already assigned, so the same five rows
+differ from the modelled column and the same one (8 x 8) does not. The
+history is that the pre-fix revision scaled at +16.3 % and moved three
+rows, the memory hardening moved two more, and `MIX` moves none. Two of
+the five are worth naming, because they are not just a bigger number:
 
 - **4 x 8**, the smallest geometry in the table, has left 3x2. There is
   no longer any elaborated geometry of this design that fits six tiles.
-- **16 x 16** has left 6x2. At 442,418 um2 of rows needed it fits **3x4
-  and nothing smaller**, with 0.3 % spare — and section 6 records that
-  Tiny Tapeout's own template comment does not list 3x4 as a purchasable
-  shape. A 256-synapse variant is therefore not a 12-tile design in any
-  shape that is certainly on sale.
+- **16 x 16** has left 6x2. At 443,377 um2 of rows needed it fits **3x4
+  and nothing smaller**, and the spare there has fallen from 0.3 % to
+  **0.09 %** — 407 um2 of a 443,784 um2 core, which is the thinnest
+  number in this table and the row to watch if the scaling is ever
+  trusted at face value. Section 6 records that Tiny Tapeout's own
+  template comment does not list 3x4 as a purchasable shape. A
+  256-synapse variant is therefore not a 12-tile design in any shape that
+  is certainly on sale.
 
 **Superseded areas (2026-08-26, extended 2026-08-27).** Every cell area
-in this table predates the configuration-TMR synthesis fix *and* the
-`lif_core` memory hardening. Before the fix, yosys merged the three
+in this table predates the configuration-TMR synthesis fix, the
+`lif_core` memory hardening *and* `MIX`. Before the fix, yosys merged the three
 55-bit replicas into one bank, so the hardened netlist carried 1,045
 flip-flops where the RTL then declared 1,161; with the fix the mapped
 count was 1,155, and with the memory hardening it is **1,235** against
@@ -870,50 +964,54 @@ it.** `tmr-reharden` found **+16.3 % placed** and **+17.5 % at
 synthesis**, and decomposed the cause: roughly half is the TMR fix
 itself, roughly half is the `deferred_flatten` the fix forces — which the
 estimate did not account for at all. `ihp-memecc` then added the memory
-hardening on top, **+14.1 % placed** and **+15.5 % at synthesis** again.
-The 8 x 8 placed area is 180,651 um2, not 158,268 and not 136,107. Treat
-every absolute area in this table as superseded, read `docs/20` section 8
-for the TMR-fix replacements and the head of section 4 for the memory
-hardening's.
+hardening on top, **+14.1 % placed** and **+15.5 % at synthesis** again,
+and `ihp-mix` added `MIX`, **+0.22 % placed** against **+0.92 % at
+synthesis**. The 8 x 8 placed area is 181,043 um2, not 180,651, not
+158,268 and not 136,107. Treat every absolute area in this table as
+superseded, read `docs/20` section 8 for the TMR-fix replacements and
+the head of section 4 for the other two.
 
-**The 4x2 decision survives both corrections; the margin does not.**
-Utilization went 52.38 % → 60.91 % → **69.52 %**, still inside 8 tiles,
-but the spare against the 70 % planning criterion went 25.2 % → 12.99 %
-→ **0.68 %** **[estimate, arithmetic on measured areas at each step]**.
-The TMR fix also *gained* 1.12 ns on the slow corner despite the larger
-design; the memory hardening gave 6.03 ns of that and more back
-(section 4.6). **The 8 x 8 row's shape column still does not move — but
-it is now the last increment that keeps it there.** Five other rows move,
+**The 4x2 decision survives all three corrections; the margin does not.**
+Utilization went 52.38 % → 60.91 % → 69.52 % → **69.68 %**, still inside
+8 tiles, but the spare against the 70 % planning criterion went 25.2 % →
+12.99 % → 0.68 % → **0.46 %** **[estimate, arithmetic on measured areas
+at each step]**. The TMR fix also *gained* 1.12 ns on the slow corner
+despite the larger design; the memory hardening gave 6.03 ns of that and
+more back, and `MIX` returned 0.23 ns of it (section 4.6). **The 8 x 8
+row's shape column does not move, and this is now measured for the whole
+of the current RTL rather than for part of it.** Five other rows move,
 per the scaled column above.
 
-**The tile budget is still open, and for a smaller reason than before.**
-The re-harden that earlier revisions of this section called outstanding
-has landed and is what the numbers above are quoted from — that much is
-settled. What is not settled is the last percent: `hw/rtl/pilot_top.v`
-changed again fourteen minutes after that run, the `MIX` transform costs
-**+0.92 %** at synthesis measured here, and the spare is **0.68 %**
-(section 4 head). The margin and the outstanding change are the same
-size, so 4x2 at the 70 % criterion is now a question a re-harden answers
-and arithmetic does not. What *is* safe to plan on: the shape is 4x2,
-there is no growth allowance behind it, and the next RTL increment of the
-memory hardening's size is a 12-tile conversation rather than an 8-tile
-one.
+**The tile budget is settled.** Every earlier revision of this paragraph
+called it open, and the last of them made the argument that has now been
+disproved: that the `MIX` transform's **+0.92 %** of synthesis area
+against a **0.68 %** spare made "4x2 at the 70 % criterion a question a
+re-harden answers and arithmetic does not". The re-harden answered it,
+and the arithmetic those revisions used was the wrong arithmetic, not
+merely uncertain — +0.92 % at synthesis is +0.22 % placed, and the spare
+is **0.46 %**, not negative (section 4 head has the derivation and the
+mechanism). The two conclusions that survive verbatim are the useful
+ones: the shape is 4x2, and there is no growth allowance behind it. The
+next RTL increment of the memory hardening's size is a 12-tile
+conversation rather than an 8-tile one, and at 1,204 um2 of spare even
+one the size of `MIX` is worth measuring before it is committed to.
 
 Sanity check on the model: for the 8 x 8 row it predicts 135,840 um2 and
-the flow measured 180,651, so **the model is 24.8 % low** on its one
-calibration point — worse than the 14.2 % it showed against
-`tmr-reharden`, and worse in the same direction. Against the superseded
-harden it was 0.2 % high, which was read at the time as evidence that the
-method worked; it was evidence that both numbers came from the same
-pre-fix netlist. The model carries no term for the TMR fix, for
-`deferred_flatten` or for the memory hardening, which is the whole of the
-gap. **A model that is 25 % low is not a planning instrument any more**;
-the scaled column is the only usable form of this table.
+the flow measured 181,043, so **the model is 25.0 % low** on its one
+calibration point — worse than the 24.8 % it showed against `ihp-memecc`
+and the 14.2 % against `tmr-reharden`, and worse in the same direction
+each time. Against the superseded harden it was 0.2 % high, which was
+read at the time as evidence that the method worked; it was evidence
+that both numbers came from the same pre-fix netlist. The model carries
+no term for the TMR fix, for `deferred_flatten`, for the memory hardening
+or for `MIX`, which is the whole of the gap. **A model that is 25 % low
+is not a planning instrument any more**; the scaled column is the only
+usable form of this table.
 
 The 16 x 8 row was modelled at 257,182 um2 against 4x2's 259,837, a 1 %
-margin, and that margin is gone: scaled it needs about 341,350 um2, so
+margin, and that margin is gone: scaled it needs about 342,091 um2, so
 128 synapses with 16 neurons is a 12-tile design rather than the 4x2
-boundary case. The 8 x 8 row now needs **258,073** um2 against 3x2's
+boundary case. The 8 x 8 row now needs **258,633** um2 against 3x2's
 193,261 — 34 % over, where the modelled 194,439 was under one percent
 over. The default geometry is a 4x2 design and not a 3x2 one by a wide
 distance now, at the 70 % criterion as well as at any criterion this
@@ -934,38 +1032,46 @@ file. If the tile budget is fixed, spend it on axons.
 **Post-route**, with an inserted clock tree and OpenRCX parasitics, at
 the submission's own `CLOCK_PERIOD: 20` (50 MHz, the docs/06 section B.2
 Tiny Tapeout envelope). Three corners, all of them clean. **[fact,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/55-openroad-stapostpnr/summary.rpt`]**
+`hw/openlane/pilot_ihp/runs/ihp-mix/55-openroad-stapostpnr/summary.rpt`]**
 
 | Corner | Worst setup slack | Worst hold slack | Setup vio | Hold vio | Max cap vio | Max slew vio |
 |---|---|---|---|---|---|---|
-| `nom_slow_1p08V_125C` | **+0.403 ns** | +0.603 ns | 0 | 0 | 0 | 0 |
-| `nom_typ_1p20V_25C` | +7.554 ns | +0.289 ns | 0 | 0 | 0 | 0 |
-| `nom_fast_1p32V_m40C` | +11.808 ns | +0.101 ns | 0 | 0 | 0 | 0 |
+| `nom_slow_1p08V_125C` | **+0.6315 ns** | +0.6278 ns | 0 | 0 | 0 | 0 |
+| `nom_typ_1p20V_25C` | +7.7094 ns | +0.3041 ns | 0 | 0 | 0 | 0 |
+| `nom_fast_1p32V_m40C` | +11.9259 ns | +0.1180 ns | 0 | 0 | 0 | 0 |
 
-**This closes, and it closes with almost nothing left.** +0.403 ns of
-setup slack on the slow corner is a **19.60 ns** critical path against a
-20 ns period, i.e. a post-route slow-corner Fmax of about **51.0 MHz**
+**This closes, and it closes with very little left.** +0.6315 ns of
+setup slack on the slow corner is a **19.37 ns** critical path against a
+20 ns period, i.e. a post-route slow-corner Fmax of about **51.6 MHz**
 against the 50 MHz `tt/info.yaml` declares **[estimate, arithmetic on a
-measured slack]**. Every violation counter is zero at every corner and
-`design__violations` is 0 **[fact, same run's `final/metrics.json`]**, so
-this is not a failure and should not be reported as one. It is also not
-margin. The design has 2 % of its period in hand at the slowest corner.
+measured slack]**. Every violation counter is zero at every corner —
+`timing__setup_vio__count`, `timing__hold_vio__count`,
+`design__max_cap_violation__count` and `design__max_slew_violation__count`
+are 0 at each of the three, and `design__violations` is 0 **[fact, same
+run's `final/metrics.json`]** — so this is not a failure and should not
+be reported as one. It is also not margin. The design has about 3 % of
+its period in hand at the slowest corner.
 
-**The memory hardening cost 6.03 ns of that margin.** `tmr-reharden`
-closed the same corner at +6.436 ns; `ihp-memecc` closes it at +0.403 ns
-**[fact, both `55-openroad-stapostpnr/summary.rpt`]**, and the typical
-and fast corners moved by a comparable amount (+11.423 → +7.554 and
-+14.167 → +11.808). That is consistent with the critical path getting
-longer rather than with a placement accident: the path already ran
-through SECDED XOR trees, and the hardening added two more coded fields
-for it to run through **[estimate on the mechanism; the slack numbers are
-fact]**.
+**The memory hardening cost 6.03 ns of margin; `MIX` gave 0.23 ns of it
+back.** `tmr-reharden` closed the slow corner at +6.436 ns, `ihp-memecc`
+at +0.4035 ns, and `ihp-mix` at **+0.6315 ns** **[fact, all three
+`55-openroad-stapostpnr/summary.rpt`]**; the typical and fast corners
+moved the same way at both steps (+11.423 → +7.554 → +7.709 and
++14.167 → +11.808 → +11.926). The memory-hardening drop is consistent
+with the critical path getting longer rather than with a placement
+accident: the path already ran through SECDED XOR trees, and the
+hardening added two more coded fields for it to run through. The `MIX`
+recovery is the opposite kind of result and deserves to be named as a
+surprise rather than smoothed over — a *larger* netlist closed *better*,
+on every corner, with fewer timing-repair buffers (section 4 head). The
+mechanism is not separated by this run **[estimate on both mechanisms;
+the slack numbers are fact]**.
 
 For the record of how this section has moved: `tmr-reharden` was
 **1.12 ns faster** on the slow corner than the pre-fix harden despite
 being 16.3 % larger, which `docs/20` section 2.2 explains by the merged
-55-bit bank being split into three real drivers. That gain has now been
-spent five times over. An older revision of this section compared the
+55-bit bank being split into three real drivers. That gain has still been
+spent several times over. An older revision of this section compared the
 pre-fix +5.314 ns against a pre-layout estimate of +6.08 ns and read the
 gap as the cost of the clock tree and the parasitics; that argument was
 withdrawn when `tmr-reharden` came in above the estimate, and nothing
@@ -974,21 +1080,22 @@ here revives it.
 The critical path still runs through the SECDED XOR trees into the check
 field, i.e. the weight-load path, not the neuron scan. There are no
 max-slew violations at any corner: the resizer fixed them, at a cost of
-30,805 um2 of timing-repair buffers (section 4.1), 2,452 cells against
-`tmr-reharden`'s 2,213.
+29,885 um2 of timing-repair buffers (section 4.1), 2,394 cells against
+`ihp-memecc`'s 2,452 and `tmr-reharden`'s 2,213.
 
-Hold slack on the fast corner is +0.101 ns — thinner than
-`tmr-reharden`'s +0.119 ns, still positive, and it is what the template's
-`PL_RESIZER_HOLD_SLACK_MARGIN: 0.1` targets, so the number is the config
-working to its limit rather than luck. 1,434 of the 2,452 repair buffers
-are hold buffers **[fact, `design__instance__count__hold_buffer`]**.
+Hold slack on the fast corner is +0.1180 ns — a little wider than
+`ihp-memecc`'s +0.1009 ns, and close to `tmr-reharden`'s +0.119 ns. It is
+what the template's `PL_RESIZER_HOLD_SLACK_MARGIN: 0.1` targets, so the
+number is the config working to its limit rather than luck. 1,379 of the
+2,394 repair buffers are hold buffers **[fact,
+`design__instance__count__hold_buffer`]**, down from 1,434.
 
-Power at typical, 50 MHz, from the same run: **4.87 mW** total (4.05 mW
-internal, 0.81 mW switching, 6.26 uW leakage) **[fact,
-`.../ihp-memecc/final/metrics.json`, `power__*__total`]**, against
-4.62 mW on `tmr-reharden`. Worst IR drop on VPWR is **0.612 mV**, 0.05 %
-of the rail **[fact, same file,
-`design_powergrid__drop__worst__net:VPWR`]**.
+Power at typical, 50 MHz, from the same run: **4.88 mW** total (4.06 mW
+internal, 0.82 mW switching, 6.20 uW leakage) **[fact,
+`.../ihp-mix/final/metrics.json`, `power__*__total`]**, against 4.87 mW
+on `ihp-memecc` and 4.62 mW on `tmr-reharden`. Worst IR drop on VPWR is
+**0.481 mV**, 0.04 % of the rail, against `ihp-memecc`'s 0.612 mV
+**[fact, same file, `design_powergrid__drop__worst__net:VPWR`]**.
 
 Still **not** a signoff. Only the nominal interconnect corner was run —
 LibreLane's `nom_*` corners vary process, voltage and temperature but
@@ -1123,13 +1230,14 @@ Tiny Tapeout GDS action produces. The three rows above are all
 pre-memory-hardening, and 0 errors is the only one of their claims that
 survives the hardening.
 
-**Re-measured by the flow's own linter on the current `hw/rtl`
+**Re-measured by the flow's own linter on the pinned sources
 (2026-08-27): 0 errors, 98 warnings** — 46 `UNUSEDPARAM`, 34
 `WIDTHTRUNC`, 8 `WIDTHEXPAND`, **4 `PINMISSING`**, 3 `UNUSEDSIGNAL`, 2
 `PINCONNECTEMPTY`, 1 `SYNCASYNCNET` **[fact,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/01-verilator-lint`, and
-reproduced identically by a synthesis-only re-run on the tree as it
-stands, run tag `memecc-synthcheck`]**.
+`hw/openlane/pilot_ihp/runs/ihp-mix/01-verilator-lint`]**. `MIX` changed
+none of this: `ihp-memecc` reported the same 98 in the same seven
+categories, so the total and the breakdown are identical across the two
+runs.
 
 **The `PINMISSING` count went from 0 to 4, and it is the same class of
 gap section 2.2 closed for `err_cfg`.** All four are on the `lif_core`
@@ -1143,7 +1251,24 @@ SEC and DED pins of section 2.2. This record is not the owner of
 `pilot_top.v` and does not fix it here, but by the docs/08 section 2.3
 convention — a silently repaired upset must reach telemetry — it is a
 defect of exactly the kind that section 8.4 item 1 was raised for, and it
-is recorded here so that it is not discovered at the bench. The two
+is recorded here so that it is not discovered at the bench. It is also
+now on the area budget rather than beside it: the four ports have to
+reach registers, counters and pins, and whatever that costs comes out of
+the 1,204 um2 of core the design has spare (section 4 head).
+
+**And it has since been connected in the tree, after the run, exactly as
+everything else in this record has been.** `hw/rtl/pilot_top.v` was
+rewritten on **2026-08-29** to wire all four ports into
+`CNT_SEC`/`CNT_DED` and the sticky bits **[fact, `git diff` against the
+working tree; the file's blob is no longer the `13c52351` run 5
+consumed]**. That closes the observability gap this paragraph was raised
+for, and it means the run's `PINMISSING` count of 4 and every area
+figure in section 4 belong to the revision *before* it. **What it costs
+is unmeasured**, and by the correction in section 4 head it must not be
+guessed from a synthesis re-run: on this design, at this density, a
+synthesis-area delta was three times the placed-area delta it produced.
+The next harden — pinned, per section 8.5 — is what says whether the
+0.46 % spare survives it. The two
 `PINCONNECTEMPTY` warnings are internal to `lif_core` (an unused
 `syndrome` output on each of two decoder instances) and are a style
 point, not a gap.
@@ -1152,12 +1277,12 @@ point, not a gap.
 `Checker.YosysUnmappedCells` reports zero unmapped instances on the
 current tree as well as on the retained one. **[fact,
 `tt/runs/tt-harden/06-yosys-synthesis/reports/chk.rpt`, `latch.rpt`, and
-`hw/openlane/pilot_ihp/runs/ihp-memecc/07-checker-yosysunmappedcells`
+`hw/openlane/pilot_ihp/runs/ihp-mix/07-checker-yosysunmappedcells`
 with `design__instance_unmapped__count: 0`]**
 
 ### 5.3 The flow
 
-Four runs were done locally through the rootless LibreLane toolchain of
+Five runs were done locally through the rootless LibreLane toolchain of
 docs/12, against the submission's own `src/config_merged.json` — that
 is, the exact configuration the Tiny Tapeout GDS action would use,
 produced by `tt_tool.py --create-user-config`, not a private one.
@@ -1179,31 +1304,46 @@ the `lif_core` memory hardening by fourteen minutes.
 (`hw/openlane/pilot_ihp/runs/ihp-memecc/`, 2026-08-27 00:03): the same
 configuration again, derived mechanically from
 `tt/src/config_merged.json` by `hw/openlane/pilot_ihp/mkconfig.py` so
-that it is the submission's configuration and not a private one. This is
-the run the numbers below and in section 4 are cited against, and it is
-itself one RTL revision behind the tree (section 4 head). Place, CTS,
-timing repair, global and detailed routing, parasitic extraction,
-multi-corner STA, fill, stream-out. Results:
+that it is the submission's configuration and not a private one. Also
+**superseded**: it predates the `MIX` transform by fourteen minutes, the
+third time in this record that an `hw/rtl` write landed within a quarter
+of an hour of a harden finishing (section 8.5).
 
-| Stage | Result, run 4 | Run 3, for comparison |
+**Run 5, the `MIX` re-harden**
+(`hw/openlane/pilot_ihp/runs/ihp-mix/`, 2026-08-27 01:26): the same
+configuration once more, and the first one whose **RTL was pinned** —
+`hw/openlane/pin_rtl.py` against the `git stash create` commit-ish
+`e4c850b3`, so the sources could not move under the run (section 4 head
+carries the blob list). This is the run the numbers below and in
+section 4 are cited against. Place, CTS, timing repair, global and
+detailed routing, parasitic extraction, multi-corner STA, fill,
+stream-out. Results:
+
+| Stage | Result, run 5 | Run 4, for comparison |
 |---|---|---|
-| Global placement | **56.32 %** starting utilization; **`GPL-0302`**: target density 0.60 below the 0.62 minimum feasible, auto-raised, placement converged | 48.75 %, no warning |
-| Clock tree synthesis | inserted; 3,507 um2 of clock buffers and inverters (169 cells) | 3,422 um2 |
-| Post-CTS timing repair | 30,805 um2 of repair buffers (2,452 cells, of which 1,434 hold buffers); utilization rises to **69.52 %** | 28,181 um2 (2,213); 60.91 % |
-| Global routing | 635,954 um wirelength; 2 antenna violations repaired with 2 jumpers, 0 diodes | 542,894 um; 0 violations |
-| Detailed routing | main route converged in 5 iterations, 4205 → 2120 → 2019 → 43 → **0 DRC errors**; antenna repair then inserted **1 diode** and the router closed 51 → 2 → **0**; 452,168 um final wirelength; longest net 862.3 um | 386,429 um; longest 748.6 um; 0 diodes |
-| Antenna, post-detailed-routing | **0 violating nets, 0 violating pins** | 0 / 0 |
+| Global placement | **56.83 %** starting utilization; **`GPL-0302`**: target density 0.60 below the 0.62 minimum feasible, auto-raised, placement converged | 56.32 %, same warning and same 0.62 |
+| Clock tree synthesis | inserted; 3,485 um2 of clock buffers and inverters (167 cells) | 3,507 um2 (169) |
+| Post-CTS timing repair | 29,885 um2 of repair buffers (2,394 cells, of which 1,379 hold buffers); utilization rises to **69.68 %** | 30,805 um2 (2,452, of which 1,434 hold); 69.52 % |
+| Global routing | 643,363 um wirelength; 2 antenna violations repaired with **8 jumpers, 0 diodes** | 635,954 um; 2 violations, 2 jumpers, 0 diodes |
+| Detailed routing | main route converged in 5 iterations, 3981 → 2080 → 1869 → 35 → **0 DRC errors**; the router's own antenna repair then found **nothing to fix and inserted no diode**; 459,379 um final wirelength; longest net 949.7 um | 452,168 um; longest 862.3 um; **1 diode** |
+| Antenna, post-detailed-routing | **0 violating nets, 0 violating pins**; `antenna_diodes_count: 0` | 0 / 0; 1 diode |
 | Post-route STA, 3 corners | **0 setup, 0 hold, 0 max-cap, 0 max-slew violations** (section 4.6) | same |
-| IR drop | 0.612 mV worst on VPWR; 0 power-grid violations | 0.489 mV |
+| IR drop | 0.481 mV worst on VPWR; 0 power-grid violations | 0.612 mV |
 | **Magic DRC** | **0 errors** | 0 |
 | **Netgen LVS** | **0 errors**; 0 unmatched nets, devices, pins or properties | 0 |
-| Stream-out | GDS at `.../ihp-memecc/final/gds/` | 14.9 MB at `tt/runs/tmr-reharden/final/gds/` |
+| Stream-out | GDS at `.../ihp-mix/final/gds/` | at `.../ihp-memecc/final/gds/` |
 | Flow totals | `design__violations: 0`, `flow__errors__count: 0` | same |
+
+Two rows there run against the intuition that a bigger netlist is a
+harder one, and both are recorded rather than explained: run 5 needed
+**fewer** timing-repair buffers than run 4 and **no** antenna diode,
+while routing about 7,200 um more wire. Section 4 head is where that
+matters, because it is why +0.92 % at synthesis became +0.22 % placed.
 
 The written-out die is still the 4x2 tile to the micron: `DIE_AREA` is
 `0 0 854.40 313.74` and `design__die__area` is 268,059 um2 with
 `design__core__area` 259,837 **[fact,
-`.../ihp-memecc/resolved.json` and `final/metrics.json`]**. The gdstk
+`.../ihp-mix/resolved.json` and `final/metrics.json`]**. The gdstk
 read-back that confirmed exactly one top-level cell named
 `tt_um_melihakbulut_nssoc` was done on the `tt-harden` GDS and has not
 been repeated since; the module name and the die are set by the same
@@ -1212,11 +1352,13 @@ still has nothing to complain about, but a submitter who wants the check
 itself should re-run it.
 
 Manufacturability report: **Antenna Passed, LVS Passed, DRC Passed**
-**[fact, `.../ihp-memecc/72-misc-reportmanufacturability/manufacturability.rpt`,
-which carries exactly three `Passed` lines and no failure marker]**.
+**[fact, `.../ihp-mix/72-misc-reportmanufacturability/manufacturability.rpt`,
+which carries exactly three `Passed` lines and no failure marker]** — the
+`docs/18` section 5 wafer.space gate applied to this run would go green
+on the same `grep`. The GDS is 17.9 MB at `.../ihp-mix/final/gds/`.
 
 **[fact, all of it,
-`hw/openlane/pilot_ihp/runs/ihp-memecc/final/metrics.json` and the step
+`hw/openlane/pilot_ihp/runs/ihp-mix/final/metrics.json` and the step
 logs named in the table.]**
 
 `tt/runs/` is gitignored. The superseded `tt-harden` tree kept here has
@@ -1227,39 +1369,41 @@ reports and the flow logs. Its intermediate ODB, DEF, SPEF and SDF dumps
 are gone; re-run the flow if you need them.
 
 One metric is *not* zero and should be said out loud:
-**`design__max_fanout_violation__count: 84`** on run 4 (77 on run 3),
-identically on all three corners — identical because fanout is a
-netlist-topology property and PVT does not move it. LibreLane does not
+**`design__max_fanout_violation__count: 82`** on run 5 (84 on run 4, 77
+on run 3), identically on all three corners — identical because fanout is
+a netlist-topology property and PVT does not move it. LibreLane does not
 gate the flow on it, and the mechanism is worth naming: the `Classic`
 flow instantiates checker steps for setup, hold, max slew and max cap and
 **none for max fanout**, so `design__violations` aggregates to 0 while
-this counter reads 84. The design closes timing anyway, and OpenROAD
+this counter reads 82. The design closes timing anyway, and OpenROAD
 separately warns that `clk` has a fanout of **1,236** terminals
-(`GRT-0281`, 1,156 on run 3) — which is simply the flip-flop count plus
-the port, since every flop is on one clock. Not a submission blocker:
-slew and capacitance are within limits at every corner, which is what
-max-fanout is a proxy for.
+(`GRT-0281`, the same on run 4, 1,156 on run 3) — which is simply the
+flip-flop count plus the port, since every flop is on one clock. Not a
+submission blocker: slew and capacitance are within limits at every
+corner, which is what max-fanout is a proxy for.
 
 An earlier revision of this paragraph gave the fix as "a
 `MAX_FANOUT_CONSTRAINT` and a re-run". **That names the wrong cause.**
 `MAX_FANOUT_CONSTRAINT` is `10` in this very run **[fact —
-`.../ihp-memecc/resolved.json`]**, so it is not an unset knob. The same
+`.../ihp-mix/resolved.json`]**, so it is not an unset knob. The same
 revision also called the counter "nets"; they are output *pins*.
 
 **That decomposition used to be an estimate by analogy with the docs/12
 section 4.4a `aer_fifo` run, because the violator list had been pruned
-away. It is now a measurement, because run 4's list survives.** All 84
-violating pins are held to a limit of **8**, which is
+away. It is a measurement on run 4 and again on run 5, and run 5 makes it
+cleaner.** All 82 violating pins are held to a limit of **8**, which is
 `sg13g2_stdcell_typ_1p20V_25C.lib`'s `default_max_fanout` and not the
-design constraint of 10; **83 of the 84 are CTS clock buffers**
-(`clkbuf_leaf_*_clk/X`, the worst two at 18 loads) and the eighty-fourth
-is a single resizer-inserted fanout buffer, `fanout924/X`, at 9 **[fact,
-`.../ihp-memecc/55-openroad-stapostpnr/nom_typ_1p20V_25C/checks.rpt`]**.
-**Not one violator is an RTL net** — every one is a cell this flow
-inserted itself, and raising the design constraint above the library
-default would have moved none of them. That is the same shape docs/12
-found on `aer_fifo` and the same shape `docs/18` section 3.3c found on
-sky130, now confirmed on this design directly.
+design constraint of 10, and **all 82 are CTS clock buffers**
+(`clkbuf_leaf_*_clk/X`, the worst seven at 18 loads) **[fact,
+`.../ihp-mix/55-openroad-stapostpnr/nom_typ_1p20V_25C/checks.rpt`,
+parsed]**. Run 4 had 83 clock buffers plus one resizer-inserted fanout
+buffer, `fanout924/X` at 9; run 5 has no such cell in the list at all,
+which is the same story as its lower repair-buffer count. **Not one
+violator is an RTL net** — every one is a cell this flow inserted itself,
+and raising the design constraint above the library default would have
+moved none of them. That is the same shape docs/12 found on `aer_fifo`
+and the same shape `docs/18` section 3.3c found on sky130, now confirmed
+on this design twice.
 
 KLayout DRC and the KLayout/Magic XOR are switched off in the Tiny
 Tapeout config (`RUN_KLAYOUT_DRC: 0`, `RUN_KLAYOUT_XOR: 0`, upstream's
@@ -1288,9 +1432,11 @@ tests were re-run against the **final post-route netlist** of the
 template's own `make -B GATES=yes` path, and gave **5 of 5 pass,
 identical to the RTL run** **[fact, against that netlist]**. That netlist
 carried one merged configuration bank instead of three, so the run says
-nothing about the netlist the submission would now ship. The re-harden's
-netlist is at `tt/runs/tmr-reharden/final/nl/` and **the check has not
-been re-run against it** (`docs/20` section 8.1 and section 9 item 3).
+nothing about the netlist the submission would now ship. The current
+netlist is at `hw/openlane/pilot_ihp/runs/ihp-mix/final/nl/` — three real
+banks, the memory hardening and `MIX` — and **the check has not been
+re-run against it**, nor against either intermediate re-harden
+(`docs/20` section 8.1 and section 9 item 3).
 Re-run it before quoting the ROADMAP P1 gate-level smoke bar as met on a
 locally produced netlist; the bar still has to be met on the netlist the
 GDS action produces in any case, which is what `gl_test` does
@@ -1358,30 +1504,32 @@ What it costs, measured against the section 4.3 geometry:
 **[fact, installed PDK]** = 79,720 um2. With the LibreLane default 10 um
 macro halo on each side it reserves 436.64 x 211.34 = **92,280 um2**
 **[fact for the macro, estimate for the halo]**. The logic measures
-180,651 um2 of placed cells **[fact, section 4.1]**, i.e. 258,073 um2 of
-rows at 70 % utilization. Total **350,353 um2** **[estimate]**.
+181,043 um2 of placed cells **[fact, section 4.1]**, i.e. 258,633 um2 of
+rows at 70 % utilization. Total **350,913 um2** **[estimate]**.
 
 | Shape | Tiles | Rows (um2) | Macro + logic fits? |
 |---|---|---|---|
-| 4x2 | 8 | 259,837 | **no** — needs 134.8 % of the rows |
-| 6x2 | 12 | 392,988 | yes, 10.8 % spare |
-| 3x4 | 12 | 443,784 | yes, 21.1 % spare |
+| 4x2 | 8 | 259,837 | **no** — needs 135.1 % of the rows |
+| 6x2 | 12 | 392,988 | yes, 10.7 % spare |
+| 3x4 | 12 | 443,784 | yes, 20.9 % spare |
 
 Each hardening step has widened the gap rather than closing it: 4x2
-needed 110.3 % of the rows before the TMR fix, 122.5 % after it and
-**134.8 %** after the memory hardening, while the 12-tile margins fell
-from 27/35 % spare to 19/28 % and now to **10.8/28 %** — read 6x2's
-10.8 % as the one to watch, because it is the shape Tiny Tapeout's
-template comment certainly sells (section 6 below on 3x4).
+needed 110.3 % of the rows before the TMR fix, 122.5 % after it, 134.8 %
+after the memory hardening and **135.1 %** with `MIX`, while the 12-tile
+margins fell from 27/35 % spare to 19/28 % and now to **10.7/20.9 %** —
+read 6x2's 10.7 % as the one to watch, because it is the shape Tiny
+Tapeout's template comment certainly sells (section 6 below on 3x4).
 
 Two things this arithmetic does not capture, and both make the macro
 variant harder rather than easier. First, the logic would grow again: a
 memory ECC read path and a scrubber are new RTL, and the `lif_core`
 memory hardening is the *load-path* half of that, already measured
 above — the read-path half is not in any of these numbers. Second, a
-macro changes the resizer's job, so the 1.2347 growth factor measured on
+macro changes the resizer's job, so the 1.2262 growth factor measured on
 an all-standard-cell floorplan is not transferable to a floorplan with a
-92,280 um2 obstacle in it.
+92,280 um2 obstacle in it — and section 4 head is the demonstration that
+this factor is not even stable across two consecutive runs of the same
+design on the same floorplan.
 
 **The 8-tile SRAM pilot as described in docs/06 B.6 does not fit.** It
 needs 12 tiles (~EUR 840), or the logic content has to be cut.
@@ -1441,29 +1589,29 @@ failed.
 ## 7. Decision
 
 1. **Submit at 4x2 = 8 tiles (~EUR 560).** The design has been run
-   through the whole flow at that shape and closes at **69.52 %**
-   utilization with zero DRC errors, zero antenna violations and zero
-   timing violations on three corners. That is not a projection. **What
-   it no longer leaves is margin**: 0.68 % of the core is spare against
-   the 70 % planning criterion, down from 12.99 % after the TMR fix and
-   25.2 % before it, and the `MIX` change already in the tree is larger
-   than what remains (section 4 head). The shape is not in doubt — 4x2
-   is what the design needs and no smaller shape is close — but for a
-   PDK whose open views are still described upstream as a pre-production
-   preview (docs/12 section 2.2), submitting with a fraction of a percent
-   in hand is a different proposition from submitting with thirteen. The
-   re-harden now running against the current RTL is what settles whether
-   the 70 % criterion is still met; the *shape* it will report is 4x2
-   either way.
+   through the whole flow at that shape, against pinned sources, and
+   closes at **69.68 %** utilization with zero DRC errors, zero antenna
+   violations and zero timing violations on three corners. That is not a
+   projection, and it is no longer one RTL revision behind the tree
+   either. **What it does not leave is margin**: 0.46 % of the core is
+   spare against the 70 % planning criterion, down from 0.68 % before
+   `MIX`, 12.99 % after the TMR fix and 25.2 % before that (section 4
+   head). The shape is not in doubt — 4x2 is what the design needs and no
+   smaller shape is close — but for a PDK whose open views are still
+   described upstream as a pre-production preview (docs/12 section 2.2),
+   submitting with half a percent in hand is a different proposition from
+   submitting with thirteen. Earlier revisions of this item said a
+   re-harden was still needed to settle whether the criterion was met; it
+   has been run, and the answer is that it is met.
 2. **3x2 = 6 tiles is not the floor, it is a gamble.** It needs
-   **93.5 %**, far above every reference point this project has, and it
-   would start global placement at **75.7 %** against the template's
+   **93.7 %**, far above every reference point this project has, and it
+   would start global placement at **76.4 %** against the template's
    default target density of 60 — over the target before placement
    begins. At 4x2 the same mechanism has already produced a `GPL-0302`
-   warning that the flow absorbed on its own (section 4.3); at 3x2 it
-   would not be absorbable. The EUR 140 saved buys a floorplan problem
+   warning that the flow absorbed on its own, twice (section 4.3); at 3x2
+   it would not be absorbable. The EUR 140 saved buys a floorplan problem
    two weeks before a shuttle close.
-3. **Do not attempt 2x2.** It is **42.6 %** over on measured placed
+3. **Do not attempt 2x2.** It is **42.9 %** over on measured placed
    area, at a utilization no design in or near this project achieves, and
    stripping it to fit deletes the fault tolerance that justifies the
    run.
@@ -1474,7 +1622,7 @@ failed.
    **Done** — docs/06 B.6 now carries the 4x2 = 8-tile flip-flop-RAM
    pilot as the default, records the 2x2 line as superseded with the
    then-current 107.4 % figure, and prices the SRAM-macro variant at 12
-   tiles. That figure is now **142.6 %** (section 4.3); docs/06 has not
+   tiles. That figure is now **142.9 %** (section 4.3); docs/06 has not
    been re-edited for it and the conclusion does not turn on it.
 5. **Keep the 2026-09-07 gate, and re-scope it.** It no longer chooses
    the tile count. It chooses whether the tiles being bought hold a
@@ -1620,25 +1768,34 @@ the `MIX` storage transform, and the re-synthesis returns **147,648.69
 um2 against the run's 146,309.97, +0.92 %, with the flip-flop count
 unchanged at 1,235** **[fact, run tags `memecc-synthcheck` and
 `memecc-synthcheck3`, both returning the same figure to the last digit]**.
+That was answered by run 5, which reproduced 147,648.69 um2 in its own
+synthesis step and then carried it through to a GDS.
 
 Note which half of the check fired each time. The `lif_core` case moved
 the flip-flop count and the `MIX` case did not; the rule is a
 conjunction, so **either** half failing invalidates the place-and-route
 numbers, and this record has now seen one of each. The section 4 head
-carries what the second one costs and why the tile budget is open rather
-than closed because of it. A re-harden against the current RTL is
-running.
+carries what the second one cost.
 
-**Two observations for whoever owns the wave, because this is now a
-pattern and not an accident.** Both invalidations arrived within fifteen
-minutes of a multi-hour harden completing, from workstreams that had no
-way to know one was in flight. A harden of this design costs about
-thirty-two minutes wall clock — run 4 ran 23:32:01 to 00:03:59 **[fact,
-step-directory mtimes]** — so the fix is not to work more carefully but
-to stop starting hardens against a tree that other sessions are still
-writing to, or to pin the sources into the run tag. Until that changes,
-every figure in section 4 should be read with its run tag and its
-timestamp attached, which is why this document quotes both everywhere.
+**The complaint this record made twice has been acted on, and run 5 is
+the result.** Both invalidations arrived within fifteen minutes of a
+multi-hour harden completing, from workstreams that had no way to know
+one was in flight; a harden of this design costs between half an hour and
+just over an hour of wall clock — run 4 ran 23:32:01 to 00:03:59, run 5
+00:21:45 to 01:26:35 **[fact, step-directory mtimes]** — so the fix was
+never to work
+more carefully. It was to stop hardening against a tree other sessions
+are still writing to. **Run 5 pinned its sources**: `pin_rtl.py` against
+the `git stash create` commit-ish `e4c850b3`, absolute paths into a
+snapshot directory, and the blob of every file it read recorded in
+section 4 head. The mechanism proved itself immediately —
+`hw/rtl/pilot_top.v` was written again on 2026-08-29, two days after the
+run, and this time the write does **not** invalidate anything, because
+what run 5 consumed is named rather than inferred. That later write is
+also inert for the netlist: it adds an elaboration guard that fires only
+for `TMR_W < 4`, and `TMR_W` is 55 and fixed by the register map, so
+nothing is instantiated by it. The pinning is what lets that be stated as
+a fact about the run rather than a hope about the tree.
 
 Run locally, all green unless stated:
 
@@ -1649,10 +1806,10 @@ Run locally, all green unless stated:
 | Verbatim scaffolding vs upstream | `gen_tt_submission.py --diff-template` | 11/11 verbatim, plus 2 unchanged upstream bases **[fact]** |
 | Submission cocotb suite | `cd tt/test && make -B` | 5/5 pass **[fact]** |
 | Drift guard | `pytest sw/tests/test_tt_submission.py` | **16/16 pass**, re-counted from `--collect-only` **[fact]**; an earlier revision of this row said 15/15, which was one behind the file. This guard is red whenever `hw/rtl` has been edited and `scripts/gen_tt_submission.py` has not been re-run — a state the tree passes through routinely mid-wave. Re-run the generator, never edit under `tt/` (docs/11 section 8.1) |
-| Lint + synthesis in the sg13g2 flow | `librelane ... -T Yosys.Synthesis` | 0 lint errors, 98 warnings, **146,310 um2, 1,235 flops** in run 4 **[fact, `hw/openlane/pilot_ihp/runs/ihp-memecc/06-yosys-synthesis`]**; **147,648.69 um2, 1,235 flops** on the current tree, which is 0.92 % more (section 4 head) **[fact, run tag `memecc-synthcheck3`]** |
-| Full `Classic` flow at 4x2 | `librelane ... hw/openlane/pilot_ihp/config.json` | closes to GDS: **69.52 %** utilization, 0 route DRC, 0 Magic DRC, 0 Netgen LVS errors, 0 antenna violations, 0 timing violations on 3 corners (section 5.3) **[fact, run 4]** |
+| Lint + synthesis in the sg13g2 flow | `librelane ... -T Yosys.Synthesis` | 0 lint errors, 98 warnings, **147,648.69 um2, 1,235 flops** in run 5 **[fact, `hw/openlane/pilot_ihp/runs/ihp-mix/06-yosys-synthesis`]**, which is 0.92 % more than run 4's 146,310 um2 at the same flip-flop count (section 4 head); the synthesis-only probes `memecc-synthcheck` and `memecc-synthcheck3` returned the same figure to the last digit beforehand **[fact]** |
+| Full `Classic` flow at 4x2 | `CONFIG=<pinned>/config.json librelane ...` | closes to GDS: **69.68 %** utilization, 0 route DRC, 0 Magic DRC, 0 Netgen LVS errors, 0 antenna violations, 0 timing violations on 3 corners (section 5.3) **[fact, run 5, RTL pinned to `e4c850b3`]** |
 | Flip-flop and TMR-bank guards | `pytest sw/tests/test_synthesis_guards.py` | **13/13 pass** on the current RTL, including the mutation that strips `keep_hierarchy` **[fact, 2026-08-27]** |
-| Gate-level smoke on the post-route netlist | `cd tt/test && make -B GATES=yes` | 5/5 pass on the **superseded** `tt-harden` netlist only; **not re-run** against run 3 or run 4 (section 5.4) |
+| Gate-level smoke on the post-route netlist | `cd tt/test && make -B GATES=yes` | 5/5 pass on the **superseded** `tt-harden` netlist only; **not re-run** against runs 3, 4 or 5 (section 5.4) |
 
 Left for the developer, and the first three are owner actions that
 cannot be done from this environment at all:
@@ -1680,35 +1837,47 @@ cannot be done from this environment at all:
    what says it is acceptable to the shuttle.
 5. **Gate-level smoke, twice over.** It was met on the *superseded*
    `tt-harden` post-route netlist and has **not** been re-run against
-   run 3's or run 4's (`.../ihp-memecc/final/nl/`, section 5.4) — do that
-   locally first. The ROADMAP P1 verification bar is the *TT-generated*
-   netlist, which the `gl_test` job in `.github/workflows/gds.yaml`
-   covers automatically against the same five tests. If you want to run
-   either on a laptop, read section 5.4 first.
+   run 3's, run 4's or run 5's (`.../ihp-mix/final/nl/`, section 5.4) —
+   do that locally first. The ROADMAP P1 verification bar is the
+   *TT-generated* netlist, which the `gl_test` job in
+   `.github/workflows/gds.yaml` covers automatically against the same
+   five tests. If you want to run either on a laptop, read section 5.4
+   first.
 6. **KLayout DRC.** Magic DRC and Netgen LVS are clean locally, but the
    Tiny Tapeout config turns the KLayout deck off to save time. Only
    precheck runs it.
-7. **Optional quality item:** 84 max-fanout violations and a 1,236-way
+7. **Optional quality item:** 82 max-fanout violations and a 1,236-way
    clock net (section 5.3). Not a blocker, and section 5.3 now measures
-   that 83 of the 84 are CTS clock buffers held to the library's own
-   limit of 8, so `MAX_FANOUT_CONSTRAINT` is not the lever.
+   that all 82 are CTS clock buffers held to the library's own limit of
+   8, so `MAX_FANOUT_CONSTRAINT` is not the lever.
 8. **Connect `lif_core`'s memory-ECC status ports.** The hardening added
-   `wmem_sec`, `wmem_ded`, `state_sec` and `state_ded`; `pilot_top`
-   connects none of them, so a corrected or detected upset in the weight
-   or neuron-state memory reaches no register, no counter and no pin
-   (section 5.2). This is the same defect as the `err_cfg` gap of
+   `wmem_sec`, `wmem_ded`, `state_sec` and `state_ded`; through run 5
+   `pilot_top` connected none of them, so a corrected or detected upset in
+   the weight or neuron-state memory reached no register, no counter and
+   no pin (section 5.2). This is the same defect as the `err_cfg` gap of
    section 8.4 item 1, in the same file, and it is the one item on this
-   list that changes what the chip can measure on a beam line.
-9. **Re-harden against the current `hw/rtl`, and settle the tile
-   budget.** The `MIX` transform landed after run 4 and costs +0.92 % at
-   synthesis against a spare margin of 0.68 % (section 4 head). A run is
-   in flight; until it lands the 70 % planning criterion is unsettled at
-   4x2 — the *shape* is not.
+   list that changes what the chip can measure on a beam line. **The RTL
+   half of it landed on 2026-08-29**, after run 5 (section 5.2), so what
+   remains is the measurement: whatever it costs comes out of the
+   1,204 um2 the 4x2 core has spare (section 4 head), and it has to be
+   taken from a harden rather than from a synthesis delta — that
+   inference is exactly the one this record got wrong about `MIX`.
+9. **Re-harden against the connected ECC ports.** Run 5 settled the tile
+   budget for the RTL it consumed, and the tree has moved once since. Pin
+   it (section 8.5) and requote section 4 from it. The *shape* is not in
+   question at this size of change; the 0.46 % spare is.
+
+The item that used to sit at number 9 — "re-harden against the current
+`hw/rtl`, and settle the tile budget" — **was done** by run 5, which was
+pinned so that it could not be invalidated by the next `hw/rtl` write.
+It was not, and it is not: the 2026-08-29 write is recorded above as a
+new item rather than as damage to run 5, which is the whole benefit of
+pinning.
 
 Every "placed" figure in this document is measured rather than
-extrapolated, and the design has been through the flow end to end
-including LVS — but measured on the RTL as of 2026-08-27 00:03, not on
-the tree as it stands today (item 9). The remaining unknowns are that
-one, the observability gap in item 8, the ones only the GDS action and
-the precheck can settle, and the two owner actions above that no amount
-of engineering can substitute for.
+extrapolated; the design has been through the flow end to end including
+LVS, on a named, immutable set of source blobs. The remaining unknowns
+are the cost of the ECC-port connection in items 8 and 9, the ones only
+the GDS action and the precheck can settle, the gate-level smoke of
+item 5, and the two owner actions above that no amount of engineering
+can substitute for.
