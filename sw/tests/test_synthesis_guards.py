@@ -29,6 +29,14 @@ Two traps this file is written to avoid
    generic, so test_no_flip_flops_are_lost_to_optimisation compares the
    whole design's flip-flop population before and after optimisation and
    fails on ANY new loss, wherever it appears.
+3. Never leave a bound where the design is already sitting on it. Added
+   2026-08-27. The keep_hierarchy-stripped test used to allow one bank's
+   worth of loss, and the design lost exactly one bank -- so the test
+   passed while the property it was named for, three banks without the
+   attribute, was false. A bound that a passing design touches is a
+   bound that records the tool's behaviour, not the design's intent.
+   That test now allows zero loss, and hw/rtl/pilot_top.v was changed to
+   earn it. docs/20 section 11.
 
 Running against a different RTL tree
 ------------------------------------
@@ -184,6 +192,31 @@ class Census:
     def in_instance(self, needle):
         return sum(1 for n in self.by_instance if needle in n)
 
+    def under(self, *bases):
+        """Flip-flops driving a named register, an ARRAY of that name, or
+        any of the given alias spellings.
+
+        Two reasons this is not just ``by_q[name]``:
+
+        * an array becomes one public net per word after ``memory_map``
+          (``vmem[0]``, ``vmem[1]``, ...), so its bits are spread over
+          several keys rather than sitting under one;
+        * yosys names a flip-flop after whichever public net it happens to
+          resolve first, and a continuous assignment that taps a register
+          makes the tap's name an equally valid answer. ``lif_core.wmem``
+          is exactly that case: since the synapse codewords are assembled
+          with constant-index taps, the mapped netlist calls those 256
+          flip-flops ``w_data_all``. Both spellings name the same storage,
+          so both are accepted and the CELL count is what is asserted.
+        """
+        total = 0
+        for key, count in self.by_q.items():
+            for base in bases:
+                if key == base or key.startswith(base + "["):
+                    total += count
+                    break
+        return total
+
 
 def _census(script_body, workdir):
     out = Path(workdir) / "census.json"
@@ -218,8 +251,11 @@ def _asic_script(force_flatten=False):
     return script
 
 
-def _ecp5_script():
-    return _read_sources() + (
+def _ecp5_script(force_flatten=False):
+    script = _read_sources() + f" hierarchy -top {TOP};"
+    if force_flatten:
+        script += " attrmap -modattr -remove keep_hierarchy;"
+    return script + (
         f" synth_ecp5 -top {TOP};"
         " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;")
 
@@ -251,6 +287,18 @@ def ecp5(workdir):
 @pytest.fixture(scope="module")
 def declared(workdir):
     return _census(_declared_script(), workdir)
+
+
+@pytest.fixture(scope="module")
+def asic_forced(workdir):
+    """The ASIC recipe with keep_hierarchy stripped BEFORE synthesis:
+    a front end that does not read yosys attributes."""
+    return _census(_asic_script(force_flatten=True), workdir)
+
+
+@pytest.fixture(scope="module")
+def ecp5_forced(workdir):
+    return _census(_ecp5_script(force_flatten=True), workdir)
 
 
 # =====================================================================
@@ -302,21 +350,69 @@ def test_the_two_flows_agree_on_the_flip_flop_count(asic, ecp5):
 # 2. the architectural layer holds without the attribute
 # =====================================================================
 @needs_yosys
-def test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy(asic, workdir):
+def test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy(asic,
+                                                               asic_forced):
     """keep_hierarchy is one attribute honoured by one tool. Strip it and
-    the POL polarity coding must still keep replica A and replica B
-    apart, so at most one bank's worth of flip-flops can be lost.
+    the per-replica storage transform must still keep the banks apart, so
+    no flip-flop at all may be lost.
+
+    History, because the bound here moved and the reason matters. This
+    test used to allow `lost <= TMR_W`, one bank, on the reasoning that
+    POL polarity coding separates A from B and C was a bonus. That bound
+    was correct and the design sat exactly on it: measured 2026-08-26 on
+    pinned sources, 1,155 -> 1,100, replica C entirely merged away. A
+    storage bit has two polarities and there are three replicas, so no
+    choice of CFG_POL_C could have done better. `MIX = 1` on replica C
+    (hw/rtl/pilot_top.v, pilot_cfg_bank) makes each of its stored bits an
+    XOR of two or three configuration bits, which no per-bit hash can
+    match against x_i or ~x_i, and the loss went to zero. The tight bound
+    is the point of the test: at `<= TMR_W` this file would have passed
+    just as happily with the third bank gone.
 
     Self-calibrating against the intact run, so growing the design does
     not need this number edited.
     """
-    forced = _census(_asic_script(force_flatten=True), workdir)
-    lost = asic.total - forced.total
-    assert lost <= TMR_W, (
+    lost = asic.total - asic_forced.total
+    assert lost == 0, (
         f"with keep_hierarchy stripped the design lost {lost} flip-flops "
-        f"({asic.total} -> {forced.total}); at most {TMR_W} may go. The "
-        "per-replica POL polarity coding in hw/rtl/pilot_top.v is what "
-        "bounds this, and losing more than one bank means it is gone.")
+        f"({asic.total} -> {asic_forced.total}); none may go. The intact "
+        f"run has {TMR_W} flip-flops under each of {REPLICAS}, so an "
+        "equal total here is what says all three banks are still "
+        "physically distinct. Losing a multiple of "
+        f"{TMR_W} means a replica was hashed into another one: check the "
+        "MIX storage transform in hw/rtl/pilot_top.v, not the attribute.")
+
+
+@needs_yosys
+def test_config_tmr_is_three_banks_without_keep_hierarchy_in_ecp5(ecp5_forced):
+    """The same property in the FPGA flow, and here it can be asserted
+    directly rather than by conservation of flip-flops: synth_ecp5 keeps
+    the replica instance path in the cell names even when the attribute
+    is gone, so each bank can be counted where it lives.
+
+    Measured on pinned fe89f0d sources, before the MIX transform:
+    u_cfg_a 55, u_cfg_b 55, u_cfg_c 0 -- the polarity coding held two
+    banks and lost the third. Mutation-checked 2026-08-26 by reverting
+    `.MIX(1)` on u_cfg_c alone: this test and the ASIC one above are the
+    only two in the file that fail.
+    """
+    found = {r: ecp5_forced.in_instance(f"{r}.") for r in REPLICAS}
+    assert all(v >= TMR_W for v in found.values()), (
+        f"configuration TMR collapsed in the synth_ecp5 netlist once "
+        f"keep_hierarchy was stripped: expected at least {TMR_W} "
+        f"flip-flops per replica, found {found}. Total flip-flops: "
+        f"{ecp5_forced.total}. Nothing but the per-replica storage "
+        "transform holds the banks apart in this run.")
+
+
+@needs_yosys
+def test_the_two_flows_agree_without_keep_hierarchy(asic_forced, ecp5_forced):
+    """Companion to test_the_two_flows_agree_on_the_flip_flop_count, for
+    the attribute-free case. Same canary, same caveat about block-RAM
+    inference."""
+    assert asic_forced.total == ecp5_forced.total, (
+        f"with keep_hierarchy stripped the ASIC netlist has "
+        f"{asic_forced.total} flip-flops and ECP5 has {ecp5_forced.total}.")
 
 
 # =====================================================================
@@ -372,6 +468,11 @@ HARDENED_REGISTERS = {
     # would delete that Hamming distance.
     "u_pilot.u_lif.state": 4,
     "u_pilot.dstate": 2,
+    # The lif_core memory codes have their own section below (LIF_MEMORY)
+    # rather than entries here: their arrays are spread over one public
+    # net per word, and the synapse file's flip-flops are named after the
+    # codeword tap rather than after wmem, so an exact-name lookup would
+    # read zero for a structure that is entirely present.
 }
 
 
@@ -390,6 +491,127 @@ def test_hardened_registers_keep_their_full_width(asic):
         "hardened registers lost flip-flops in the mapped netlist: "
         f"{short}. Each of these exists to be physically present; a "
         "narrower register means synthesis folded part of it away.")
+
+
+# =====================================================================
+# 3b. the lif_core memory hardening is physically there
+# =====================================================================
+# hw/rtl/lif_core.v codes its three memory files after the docs/16
+# fault-injection campaign ranked them as the whole residual
+# silent-corruption risk of the pilot. Widths are the RTL declarations at
+# the default 8x8 pilot build:
+#
+#   wmem  4 b x N_AXONS x N_NEURONS          = 256   data,  unchanged
+#   vmem  16 b x N_NEURONS                   = 128   data,  unchanged
+#   rmem  4 b x N_NEURONS                    =  32   data,  unchanged
+#   wchk  8 b per 16-weight SECDED codeword  =  32   check, added
+#   smem  6 b per neuron state codeword      =  48   check, added
+#
+# The specific hazard here is not the one section 1 exists for. These are
+# not replicas, so opt_merge has nothing to hash them against. The hazard
+# is that a check field is a pure FUNCTION of the data field in every
+# reachable state, so a tool able to reason across sequential state could
+# replace the storage with the encoder and leave a decoder that reports a
+# clean word for a corrupted one -- protection that passes every RTL test
+# and corrects nothing in silicon. Nothing in yosys does that today. This
+# test is what says so tomorrow, and it is the same argument
+# HARDENED_REGISTERS already makes for u_pilot.ecc_check.
+#
+# It is deliberately a separate assertion from
+# test_no_flip_flops_are_lost_to_optimisation: that one would catch the
+# loss as a total, this one names the structure, and a future geometry
+# change moves both numbers together only if they are both derived.
+LIF_MEMORY = {
+    # (aliases the mapped netlist may use, expected flip-flops)
+    "synapse weights (wmem)":     (("u_pilot.u_lif.wmem",
+                                    "u_pilot.u_lif.w_data_all"), 256),
+    "membrane potentials (vmem)": (("u_pilot.u_lif.vmem",), 128),
+    "refractory counters (rmem)": (("u_pilot.u_lif.rmem",), 32),
+    "synapse check field (wchk)": (("u_pilot.u_lif.wchk",), 32),
+    "state check field (smem)":   (("u_pilot.u_lif.smem",), 48),
+}
+
+
+def _assert_lif_memory(census, flow):
+    found = {name: census.under(*aliases)
+             for name, (aliases, _) in LIF_MEMORY.items()}
+    short = {name: f"{found[name]}/{width}"
+             for name, (_, width) in LIF_MEMORY.items()
+             if found[name] < width}
+    assert not short, (
+        f"the lif_core memory hardening is short of flip-flops in the "
+        f"{flow} netlist: {short}. A check field that does not exist as "
+        f"storage is a decoder that always reports a clean word, which "
+        f"passes every RTL test and corrects nothing in silicon. See the "
+        f"MEMORY HARDENING section of hw/rtl/lif_core.v. Total flip-flops "
+        f"in this netlist: {census.total}.")
+
+
+@needs_yosys
+def test_lif_memory_files_and_check_fields_survive_the_asic_flow(asic):
+    _assert_lif_memory(asic, "ASIC (yosys/LibreLane-shaped)")
+
+
+# Total flip-flops of the five coded structures: 416 data + 80 check.
+LIF_MEMORY_FF = sum(width for _, width in LIF_MEMORY.values())
+
+
+@needs_yosys
+def test_lif_memory_survives_the_ecp5_flow(ecp5):
+    """The same question of the FPGA flow, asked by instance path instead
+    of by net name, because the two flows leave different evidence behind
+    and each has to be asked in the terms it answers in.
+
+    synth_ecp5 packs flip-flops into slices and resolves many of their Q
+    nets to names the RTL never used -- measured on this design, a per-
+    structure net-name census reads 384 of the 496 coded flip-flops while
+    the design's total is identical to the ASIC flow's. Counting names
+    there would fail on a naming artifact and say nothing about storage.
+    What synth_ecp5 does keep is the hierarchy in the cell INSTANCE names,
+    which the ASIC flow loses instead (abc renumbers every cell to
+    `_NNNN_`). So this test counts cells under the u_lif instance and the
+    ASIC one counts them by net name; between them the structure is
+    checked in both flows with neither test leaning on the other's
+    weakness.
+    """
+    got = ecp5.in_instance("u_lif.")
+    assert got >= LIF_MEMORY_FF, (
+        f"the lif_core instance holds {got} flip-flops in the synth_ecp5 "
+        f"netlist, fewer than the {LIF_MEMORY_FF} of its coded memory "
+        f"files alone (416 data + 80 check), so part of the hardening is "
+        f"not there. See the MEMORY HARDENING section of "
+        f"hw/rtl/lif_core.v. Total flip-flops in this netlist: "
+        f"{ecp5.total}.")
+
+
+@needs_yosys
+def test_the_ecc_check_fields_are_not_folded_into_their_encoders(asic):
+    """The sharp form of the same question, stated as the ratio the codes
+    were chosen for rather than as five separate widths.
+
+    hw/rtl/lif_core.v picks its two codes on overhead: SECDED (72,64) over
+    the synapse file is 12.5 percent, and the (26,20) code over the
+    combined 20-bit neuron state word is 30 percent -- and it is that
+    second ratio which lets rmem, the structure with the worst measured
+    per-bit rate in the design, ride for free on check bits vmem had to
+    pay for anyway. If synthesis folded either check field away the ratio
+    would read zero here while every functional test still passed, because
+    an RTL simulation cannot see a register that is not in the netlist.
+    """
+    data = (asic.under("u_pilot.u_lif.wmem", "u_pilot.u_lif.w_data_all")
+            + asic.under("u_pilot.u_lif.vmem")
+            + asic.under("u_pilot.u_lif.rmem"))
+    check = (asic.under("u_pilot.u_lif.wchk")
+             + asic.under("u_pilot.u_lif.smem"))
+    assert data == 416, (
+        f"the coded data fields hold {data} flip-flops, expected 416 "
+        "(wmem 256 + vmem 128 + rmem 32 at the 8x8 pilot build)")
+    assert check == 80, (
+        f"the coded check fields hold {check} flip-flops, expected 80 "
+        "(wchk 32 + smem 48). A check field is a pure function of its "
+        "data field, so this is the number a sequential-equivalence "
+        "optimisation would take to zero without breaking a single "
+        "functional test.")
 
 
 @needs_yosys

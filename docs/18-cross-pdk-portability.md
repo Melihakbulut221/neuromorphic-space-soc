@@ -18,7 +18,78 @@ on 2026-08-26]**. Section 5 applies that second gate's logic, literally,
 to the run recorded here.
 
 Convention: **[fact]** = measured in this environment or read out of an
-installed file; **[estimate]** = derived or judged.
+installed file; **[estimate]** = derived or judged; **[planned]** = an
+intention with a date and no artifact (docs/00-index.md).
+
+**Superseded in part, and the corrections are applied in place — read
+this before any number below.** Sections 3.1, 3.2, 3.4, 4 and 5 report
+run `sky-02-signoff`, which hardened the netlist **before** the
+configuration-TMR synthesis fix. `docs/20-reharden-and-corners.md`
+re-hardened the corrected netlist on both PDKs, ran the experiment this
+document proposed, and its section 8.2 lists exactly what changes here.
+Those corrections are applied below, each attributed to the run it came
+from. Two consequences have to be carried through the whole file:
+
+- **Every sky130 figure that states what the design *costs* — slack, area,
+  utilization — is now quoted from `sky-04-tmr`**, hardened 2026-08-26
+  06:35 to 07:04 with `hw/openlane/pilot_sky130/config.json` unchanged
+  apart from the `SYNTH_HIERARCHY_MODE: deferred_flatten` the fix forces
+  **[fact, `runs/sky-04-tmr/resolved.json`]**. Pre-fix figures are kept
+  only where they are one half of a like-for-like comparison that would
+  stop being like-for-like if one half were replaced — the PDK ratios of
+  3.2 and the clock A/B of 3.3b — and each of those is labelled at the
+  point of use.
+- **`sky-04-tmr` is not the current design either, and the two PDKs have
+  now diverged in *revision* as well as in technology.** A concurrent
+  workstream hardened the `lif_core` memories with SECDED after that run
+  — `hw/rtl/lif_core.v` last written **2026-08-26 07:33** — adding a
+  `wchk` check field and an `smem` state codeword. The current RTL maps
+  to **1,235 flip-flops against `sky-04-tmr`'s 1,155**, the extra 80
+  being exactly 32 + 48 **[fact, measured with this repository's own
+  synthesis recipe]**.
+
+  **The IHP side has since been re-hardened against that RTL. The sky130
+  side has not.** Run `ihp-memecc`
+  (`hw/openlane/pilot_ihp/runs/ihp-memecc/`, `final/metrics.json`
+  timestamped 2026-08-27 00:03), same `ihp-sg13g2`, same 4x2 tile, same
+  `CLOCK_PERIOD: 20`, closed to a GDS with `flow__errors__count: 0`:
+  **180,651 um2 placed at 69.52 % utilization** and a worst-corner setup
+  slack of **+0.4035 ns**, against `sky-04-tmr`-era IHP figures of
+  158,268 um2, 60.91 % and +6.4359 ns **[fact,
+  `.../ihp-memecc/final/metrics.json`,
+  `design__instance__area__stdcell` and `design__instance__utilization`,
+  and `.../ihp-memecc/55-openroad-stapostpnr/summary.rpt`;
+  `docs/15-pilot-tile-plan.md` section 4 is the full record]**.
+  Sign-off stayed clean: Magic DRC 0, Netgen LVS 0, antenna 0 nets /
+  0 pins, detailed-route DRC 0.
+
+  **So every sky130 figure in this document — area, utilization, slack,
+  diode count, wirelength, max-fanout — is a
+  pre-memory-hardening measurement, and is now one RTL revision behind
+  the IHP figures it sits next to.** Where this file previously placed
+  the two columns side by side as a like-for-like PDK comparison, that
+  reading no longer holds and each such place now says so. Nothing here
+  is scaled to guess what the hardening costs on sky130; the only honest
+  way to get those numbers is to re-run
+  `hw/openlane/pilot_sky130/run_sky130.sh`, which has **not** been done
+  **[planned — no date and no artifact]**.
+
+- **Even `ihp-memecc` is not the last word.** `hw/rtl/pilot_top.v` was
+  rewritten at **2026-08-27 00:17**, fourteen minutes after that run
+  finished, giving replica C of the configuration TMR an invertible XOR
+  *mixing* transform (`MIX = 1`) in place of a polarity, so that it
+  survives a forced flatten with no `keep_hierarchy` at all. A
+  synthesis-only re-run measures **+0.92 % cell area with the flip-flop
+  count unchanged at 1,235** **[fact, run tags `memecc-synthcheck` and
+  `memecc-synthcheck3` under `hw/openlane/pilot_ihp/runs/`; the RTL's own
+  matched A/B in `hw/rtl/pilot_top.v` header section 9 measures +1.06 %,
+  and `docs/20` section 11.6 tabulates it]**. The IHP figures above are
+  therefore the best measurement available rather than the settled ones,
+  and `docs/15` section 4 marks the tile budget open for that reason.
+
+The one finding that does **not** move with the RTL revision is section
+3.3b's diagnosis, because it is a property of the flow and the PDK — a
+parasitic model, not a netlist. That is why it is the durable result.
 
 **Headline, 2026-08-26.**
 
@@ -35,13 +106,17 @@ installed file; **[estimate]** = derived or judged.
   `manufacturability.rpt` for this run contains exactly three
   `Passed` lines and zero failure markers. Section 5. **[fact]**
 - **Timing did *not* port, and that is the real finding.** At the same
-  20 ns the design closes the typical corner with **+8.2312 ns** of setup
-  slack but **misses the slow corner by -3.8504 ns**, with **536 setup
-  violations** and **3,528 max-slew violations** summed over the three
-  `ss` corners (worst single corner 1,526; a further 38 slew violations
-  sit at `tt`). On IHP the same design at the same 20 ns closed *all three*
-  of its corners, worst slack **+5.3141 ns**. Hold is clean on all nine
-  sky130 corners. Section 3.3. **[fact]**
+  20 ns the design closes the typical corner with **+8.7627 ns** of setup
+  slack but **misses the slow corner by -2.9659 ns**, with **536 setup
+  violations** and **4,756 max-slew violations** summed over the three
+  `ss` corners (worst single corner 1,999; a further 251 slew violations
+  sit at `tt`). On IHP the same RTL at the same 20 ns closed *all three*
+  of its corners, worst slack **+6.4359 ns**. Hold is clean on all nine
+  sky130 corners. Run `sky-04-tmr`; the superseded pre-fix figure was
+  -3.8504 ns. Section 3.3. **[fact]** *The IHP half of that comparison
+  has since moved to **+0.4035 ns** on the memory-hardened RTL, which
+  sky130 has not been re-hardened against — the sign of the finding is
+  unchanged, its size is not; see the preamble and section 3.3.*
 - **The flow does not tell you that.** `design__violations` is **0** and
   the run completes, because the PDK ships
   `TIMING_VIOLATION_CORNERS: ["*tt*"]` and
@@ -50,12 +125,24 @@ installed file; **[estimate]** = derived or judged.
   match-nothing wildcard. Neither is something this configuration chose.
   Section 3.3a. **[fact]**
 - **A slower clock is not the fix, and that was measured too.** A second
-  full run at **26 ns** moves the worst slow-corner slack from -3.8504 ns
-  to only **-3.2007 ns** — **6 ns of extra period buys 0.65 ns where it
-  is needed**, because every place-and-route step except the resizer
-  loads only `DEFAULT_CORNER`, and the `ss` corner is first evaluated on
-  real parasitics at the final STA, after the last repair step has run.
+  full run at **26 ns**, on the pre-fix netlist, moves the worst
+  slow-corner slack from -3.8504 ns to only **-3.2007 ns** — **6 ns of
+  extra period buys 0.65 ns where it is needed**. That measurement
+  stands; `docs/20-reharden-and-corners.md` section 6.3 says so and
+  supplies the reason, which is not the reason this document first gave.
   Section 3.3b. **[fact]**
+- **The cause is a parasitic-model gap, not a corner missing from a
+  list.** The steps that repair timing — CTS and every resizer — already
+  load all nine corners, and the post-CTS setup pass *closes* the slow
+  corner on its own wire estimate. `LAYERS_RC` is null for sky130A, so
+  place-and-route optimizes against one averaged wire-RC number roughly
+  **2.7 ns of WNS more optimistic** than the OpenRCX extraction sign-off
+  uses; only **0.56 ns** of the miss is a genuine interconnect-corner
+  effect. `PNR_CORNERS`, which this document originally proposed as the
+  fix, has since been run and makes the corner **0.382 ns worse** at
+  essentially zero area cost, and post-global-routing repair does not
+  close it either. `docs/20-reharden-and-corners.md` sections 5 and 6 are
+  the experiment; section 3.3b here is the summary. **[fact]**
 
 Run trees under `hw/openlane/*/runs/` are **gitignored**. Every number
 below is therefore quoted in full with the run tag and step directory it
@@ -229,6 +316,15 @@ sky130 column: run **`sky-02-signoff`**, 2026-08-26, via
 IHP column: run **`tt-harden`**, docs/15 section 5.3, re-read here from
 `tt/runs/tt-harden/final/metrics.json` rather than transcribed.
 
+Both are the **pre-fix** netlist, and that is deliberate for 3.1, 3.2
+and 3.4: what those sections measure is a *difference between two PDKs*,
+and the difference is only attributable if both columns hardened the same
+RTL. Section 3.3 is the exception — a slack figure is a statement about
+the design, not about a ratio — so it is re-stated there on the corrected
+netlist from run **`sky-04-tmr`**, and the corresponding IHP figures come
+from the re-harden **`tmr-reharden`**
+(`docs/20-reharden-and-corners.md` sections 4 and 2.2).
+
 ### 3.1 Sign-off [fact]
 
 | Check | Step | **sky130A** | ihp-sg13g2 |
@@ -256,6 +352,38 @@ Tapeout wrapper ties off pins the design does not use), not of the
 technology, and it reproduces to the instance.
 
 ### 3.2 Area and utilization [fact]
+
+**The absolute figures in this table are superseded; the ratio column is
+not.** Both columns predate the configuration-TMR fix. On the corrected
+netlist the placed standard-cell area is **99,923.3 um2 at 66.98 %
+utilization** on sky130A (run `sky-04-tmr`,
+`hw/openlane/pilot_sky130/runs/sky-04-tmr/final/metrics.json`,
+`design__instance__area__stdcell` and `design__instance__utilization`)
+and **158,268 um2 at 60.91 %** on ihp-sg13g2 (run `tmr-reharden`,
+`docs/20-reharden-and-corners.md` sections 4 and 8.1) **[fact]**. The
+cross-PDK ratio therefore moves from 0.623 to **0.631** **[estimate,
+arithmetic on the two measured areas]** — i.e. the PDK comparison this
+table exists to make survives the fix almost unchanged, while the
+headroom statement below gets sharper: sky130 sits **6.1 points above**
+the IHP utilization rather than 4.5. Both of those figures predate the
+`lif_core` SECDED work of the preamble.
+
+**That pair, `sky-04-tmr` against `tmr-reharden`, is the last
+like-for-like one this document has, and it should stay the pair that is
+quoted.** On IHP the memory hardening has since been measured — run
+`ihp-memecc`, **180,651 um2 at 69.52 %** **[fact,
+`hw/openlane/pilot_ihp/runs/ihp-memecc/final/metrics.json`]**. On sky130
+it has **not**: no run exists against that RTL. Dividing 99,923.3 by
+180,651 gives 0.553 and would make sky130 look 2.5 points *below* IHP in
+utilization rather than 6.1 above, but that number is not a PDK ratio —
+it is a PDK difference and one RTL revision of design growth, added
+together, and the two terms cannot be separated from it. **Do not quote
+0.553 as a cross-PDK figure.** The like-for-like comparison is restored
+by one command,
+`hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-07-memecc` or
+similar, and until it is run the honest statement about the sky130 cost
+of the memory hardening is that it is unmeasured **[planned — no date and
+no artifact]**.
 
 | Quantity | **sky130A** | ihp-sg13g2 | Ratio |
 |---|---|---|---|
@@ -314,7 +442,14 @@ difference.
 
 Post-route, with an inserted clock tree and OpenRCX parasitics, at
 `CLOCK_PERIOD: 20`. From
-`hw/openlane/pilot_sky130/runs/sky-02-signoff/55-openroad-stapostpnr/summary.rpt`.
+`hw/openlane/pilot_sky130/runs/sky-04-tmr/55-openroad-stapostpnr/summary.rpt`
+— the **corrected** netlist, 1,155 flip-flops. `sky-02-signoff`, the
+pre-fix run the rest of this document reports, sat at **-3.8504 ns** on
+the same corner; that number is superseded and
+`docs/20-reharden-and-corners.md` section 4 tabulates the move. The
+endpoint counts did not change with the fix: 536 setup-violating
+endpoints summed over the nine corners, 179 at the worst one, before and
+after.
 
 **sky130A ships nine STA corners, not three.** `STA_CORNERS` is
 `nom/min/max` interconnect crossed with `tt_025C_1v80`, `ss_100C_1v60`
@@ -325,57 +460,96 @@ compared.
 
 | Corner | Worst setup | Worst hold | Setup vio | Hold vio | Max cap | Max slew |
 |---|---|---|---|---|---|---|
-| `nom_tt_025C_1v80` | **+8.2312** | +0.3158 | 0 | 0 | 0 | 11 |
-| `min_tt_025C_1v80` | +8.6287 | +0.3144 | 0 | 0 | 0 | 0 |
-| `max_tt_025C_1v80` | +7.9265 | +0.3173 | 0 | 0 | 0 | 27 |
-| `nom_ss_100C_1v60` | **-3.3056** | +0.8898 | **179** | 0 | 0 | **1,195** |
-| `min_ss_100C_1v60` | -2.5968 | +0.8841 | **178** | 0 | 0 | **807** |
-| `max_ss_100C_1v60` | **-3.8504** | +0.8963 | **179** | 0 | 0 | **1,526** |
-| `nom_ff_n40C_1v95` | +12.4846 | +0.1044 | 0 | 0 | 0 | 0 |
-| `min_ff_n40C_1v95` | +12.7433 | **+0.1042** | 0 | 0 | 0 | 0 |
-| `max_ff_n40C_1v95` | +12.2833 | +0.1042 | 0 | 0 | 0 | 0 |
+| `nom_tt_025C_1v80` | **+8.7627** | +0.3176 | 0 | 0 | 0 | 81 |
+| `min_tt_025C_1v80` | +9.1180 | +0.3141 | 0 | 0 | 0 | 13 |
+| `max_tt_025C_1v80` | +8.4664 | +0.3206 | 0 | 0 | 0 | 157 |
+| `nom_ss_100C_1v60` | **-2.4380** | +0.9046 | **179** | 0 | **1** | **1,625** |
+| `min_ss_100C_1v60` | -1.7940 | +0.8962 | **178** | 0 | 0 | **1,132** |
+| `max_ss_100C_1v60` | **-2.9659** | +0.9103 | **179** | 0 | **1** | **1,999** |
+| `nom_ff_n40C_1v95` | +12.8409 | +0.1112 | 0 | 0 | 0 | 0 |
+| `min_ff_n40C_1v95` | +12.9474 | **+0.1089** | 0 | 0 | 0 | 0 |
+| `max_ff_n40C_1v95` | +12.6384 | +0.1134 | 0 | 0 | 0 | 0 |
 
-Against the IHP reference at the same 20 ns:
+Against the IHP reference at the same 20 ns, run `tmr-reharden`
+(`docs/20-reharden-and-corners.md` sections 2.2 and 7.1) — **the
+like-for-like column, because it hardened the same RTL revision as
+`sky-04-tmr`**:
+
+| Corner | Worst setup | All four vio counters |
+|---|---|---|
+| `nom_slow_1p08V_125C` | **+6.4359** | 0 |
+| `nom_typ_1p20V_25C` | +11.4227 | 0 |
+| `nom_fast_1p32V_m40C` | +14.1670 | 0 |
+
+Hold is clean on all three there too, worst **+0.646 ns** at the slow
+corner and **+0.119 ns** at the fast one.
+
+**The IHP column has since moved and the sky130 column has not.** On the
+memory-hardened RTL, run `ihp-memecc`
+(`hw/openlane/pilot_ihp/runs/ihp-memecc/55-openroad-stapostpnr/summary.rpt`)
+**[fact]**:
 
 | Corner | Worst setup | Worst hold | All four vio counters |
 |---|---|---|---|
-| `nom_slow_1p08V_125C` | **+5.3141** | +0.5876 | 0 |
-| `nom_typ_1p20V_25C` | +10.6989 | +0.2711 | 0 |
-| `nom_fast_1p32V_m40C` | +13.8460 | +0.0988 | 0 |
+| `nom_slow_1p08V_125C` | **+0.4035** | +0.6025 | 0 |
+| `nom_typ_1p20V_25C` | +7.5537 | +0.2891 | 0 |
+| `nom_fast_1p32V_m40C` | +11.8083 | +0.1009 | 0 |
+
+IHP still closes all three corners at 20 ns with every violation counter
+at zero, so the qualitative finding of this section survives: sky130
+misses a corner that IHP meets. What does not survive is the *size* of
+the gap as this document states it, because **6.03 ns of the IHP margin
+went to the memory hardening and sky130 has not been asked to pay the
+same bill** (preamble). Any arithmetic below that subtracts an IHP slack
+from a sky130 slack is quoted on the `tmr-reharden` / `sky-04-tmr` pair
+and should stay that way until a sky130 run exists on the current RTL.
 
 **Read as frequency [estimate — a single-point extrapolation from one
 run, and a weak one on the sky130 side: 3.3b shows the flow optimized
-this design against the typical corner only, so the slow-corner figure
-below is what *this* run achieved, not what the design is capable of on
-sky130]:**
+this design against a wire model it is not signed off against, so the
+slow-corner figure below is what *this* run achieved, not what the design
+is capable of on sky130]:**
 
-| | sky130A | ihp-sg13g2 |
+| | sky130A (`sky-04-tmr`) | ihp-sg13g2 (`tmr-reharden`) |
 |---|---|---|
-| Typical-corner path | 20 - 8.2312 = 11.769 ns -> **85.0 MHz** | 20 - 10.6989 = 9.301 ns -> 107.5 MHz |
-| **Slow-corner path** | 20 + 3.8504 = 23.850 ns -> **41.9 MHz** | 20 - 5.3141 = 14.686 ns -> 68.1 MHz |
+| Typical-corner path | 20 - 8.7627 = 11.237 ns -> **89.0 MHz** | 20 - 11.4227 = 8.577 ns -> 116.6 MHz |
+| **Slow-corner path** | 20 + 2.9659 = 22.966 ns -> **43.5 MHz** | 20 - 6.4359 = 13.564 ns -> 73.7 MHz |
 
-So as hardened here the design is roughly **38 % slower at the slow
-corner** on sky130 than on IHP, and 50 MHz — the rate `tt/info.yaml`
-declares and docs/06 section B.2 budgets — **is not met at
-`ss_100C_1v60`**. How much of that 38 % is the process and how much is
-the flow's single-corner optimization is *not* separated by this run;
-3.3b is why that distinction has to be made. Hold is clean
-everywhere, with the thinnest margin +0.1042 ns at the fast corners,
-which is `PL_RESIZER_HOLD_SLACK_MARGIN: 0.1` working exactly as
-configured — the same behaviour the IHP run showed at +0.0988 ns.
+Both columns are the same RTL revision, which is the only reason the
+comparison means anything. So as hardened here the design is roughly
+**41 % slower at the slow corner** on sky130 than on IHP, and 50 MHz —
+the rate `tt/info.yaml` declares and docs/06 section B.2 budgets — **is
+not met at `ss_100C_1v60`**. How much of that 41 % is the process and how
+much is the PnR parasitic model of 3.3b is *not* separated by this run;
+3.3b is why that distinction has to be made. Hold is clean everywhere,
+with the thinnest margin +0.1089 ns at `min_ff`, which is
+`PL_RESIZER_HOLD_SLACK_MARGIN: 0.1` working exactly as configured — the
+same behaviour the IHP run shows at +0.119 ns.
+
+On the memory-hardened RTL the IHP column would read
+20 - 7.5537 = 12.446 ns -> **80.3 MHz** typical and
+20 - 0.4035 = 19.597 ns -> **51.0 MHz** slow **[estimate, arithmetic on
+the `ihp-memecc` slacks]**. That is a real and useful number for the IHP
+submission — it is barely above the 50 MHz `tt/info.yaml` declares — but
+it must **not** be put in the table above, because the sky130 column has
+no matching run and the difference would then be reporting design growth
+as a PDK effect.
 
 The critical path is unchanged in kind: it still runs through the SECDED
 XOR trees on the weight-load path, not the neuron scan.
 
-Power at typical, 1.80 V, 50 MHz: **4.960 mW** (3.530 internal, 1.431
-switching, 0.16 uW leakage), against 4.255 mW at 1.20 V on IHP. Worst IR
-drop 0.070 mV on VPWR and 0.082 mV on VGND, 0 power-grid violations;
-`VSRC_LOC_FILES` is unset, so these are indicative rather than sign-off
-numbers.
+Power at typical, 1.80 V, 50 MHz, **on the pre-fix `sky-02-signoff`
+netlist and not re-measured on the corrected one**: **4.960 mW** (3.530
+internal, 1.431 switching, 0.16 uW leakage), against 4.255 mW at 1.20 V
+on IHP. Worst IR drop 0.070 mV on VPWR and 0.082 mV on VGND, 0
+power-grid violations; on `sky-04-tmr` the equivalent drops are 0.094 mV
+and 0.104 mV with the same 0 violations **[fact,
+`runs/sky-04-tmr/final/metrics.json`]**. `VSRC_LOC_FILES` is unset, so
+all of these are indicative rather than sign-off numbers.
 
 #### 3.3a Why the flow reported `design__violations: 0` anyway [fact]
 
-536 setup violations and 3,566 max-slew violations across the nine
+536 setup violations and 5,007 max-slew violations across the nine
 corners, and the run still finished with `design__violations: 0` and
 `flow__errors__count: 0`. That is not a suppression this configuration
 applied. Read out of the checker steps' own resolved configuration:
@@ -393,17 +567,29 @@ docs/12 section 5 recorded the equivalent trap on IHP
 (`TIMING_VIOLATION_CORNERS` defaults to `*typ*` there) and said it was
 "worth overriding for anything going to silicon". This run is the
 demonstration of why: on IHP the restriction hid nothing, because all
-three corners were clean anyway; on sky130 it hides a 3.85 ns setup miss
-and 1,526 slew violations, and the flow exits 0. **A green LibreLane run
-is not a statement that timing closed.**
+three corners were clean anyway; on sky130 it hides a 2.97 ns setup miss
+and 1,999 slew violations, and the flow exits 0. **A green LibreLane run
+is not a statement that timing closed.** The fix did not change this: it
+hid 3.85 ns and 1,526 violations on `sky-02-signoff` and hides 2.97 ns
+and 1,999 on `sky-04-tmr`, with `design__violations: 0` both times.
 
 For completeness, the max-slew violators at the typical corner are
-marginal — 11 pins at 0.7897 ns against a 0.75 ns
-`MAX_TRANSITION_CONSTRAINT`, i.e. 5 % over — while at `max_ss` there are
-1,526 of them. The constraint itself is the sky130 PDK default, not a
-value this config set.
+marginal — on `sky-02-signoff`, 11 pins at 0.7897 ns against a 0.75 ns
+`MAX_TRANSITION_CONSTRAINT`, i.e. 5 % over. The per-pin decomposition was
+not repeated on `sky-04-tmr`; there the `tt` corners carry 251 of these
+between them against 1,999 at `max_ss`. The constraint itself is the
+sky130 PDK default, not a value this config set.
 
 #### 3.3b Relaxing the clock does not fix it — measured [fact]
+
+Both runs in this subsection are the **pre-fix** netlist, and that is
+correct for what it measures: it is a controlled A/B in which the only
+variable is `CLOCK_PERIOD`, so both arms must harden the same RTL. The
+A/B result stands unchanged after the fix —
+`docs/20-reharden-and-corners.md` section 6.3 re-states it explicitly and
+supplies the reason for it. The *explanation* this subsection originally
+gave, however, was wrong in three specific ways, and the corrected
+account is below the table.
 
 Because the brief's instruction was to keep the IHP clock "unless sky130
 forces otherwise", and section 3.3 shows that it does, a second full run
@@ -436,42 +622,112 @@ at the typical corner — where it was already 8 ns clear — and returned
 almost none of it to the corner that was failing. Max-slew at `max_ss`
 got *worse*.
 
-The mechanism is in the tool, and it is readable in this run's own step
-metrics rather than inferred:
+**The mechanism is not the one this section first proposed.** The
+original account here was that the slow corner is invisible to
+place-and-route until the final STA, and that putting it into
+`PNR_CORNERS` would therefore close it. That has now been tested and it
+is wrong on every limb. What follows is the corrected account, with the
+evidence read out of this document's own runs where the run tree carries
+it and cited to `docs/20-reharden-and-corners.md` where the experiment
+that establishes it is recorded there.
 
-- **Every place-and-route step is single-corner.**
-  `OpenROADStep.run` sets `corners = PNR_CORNERS or [DEFAULT_CORNER]`
-  (`librelane/steps/openroad.py:351`), and `PNR_CORNERS` resolves to
-  `null` here, so `DEFAULT_CORNER` — `nom_tt_025C_1v80` — is the only
-  corner loaded. Confirmed directly: the `or_metrics_out.json` of
-  `36-openroad-stamidpnr-1`, `38-openroad-stamidpnr-2` and
-  `43-openroad-stamidpnr-3` each contain **exactly one**
-  `timing__setup_vio__count__corner:*` key, and it is the `tt` one.
-  Nothing inside the PnR loop ever computes an `ss` number.
-- **The resizer is the exception, and it runs too early to help.**
-  `ResizerStep` overrides that with `RSZ_CORNERS or STA_CORNERS`
-  (`openroad.py:2393`), so `37-openroad-resizertimingpostcts` really does
-  load all nine corners — its log reads all three `ss` libraries
-  **[fact, grepped]**. But it runs post-CTS on *estimated* parasitics and
-  inserted only **22 setup buffers** against 779 hold buffers. The
-  post-route extraction then moves the `ss` corner negative.
-- **There is no repair step after routing.** LibreLane skips both
-  `Repair Design (Post-Global Routing)` and `Resizer Timing Optimizations
-  (Post-Global Routing)` by default, in this run as in the IHP one
+- **The steps that repair timing are already multi-corner, and CTS is
+  one of them.** `OpenROADStep.run` does take
+  `corners = PNR_CORNERS or [DEFAULT_CORNER]`
+  (`librelane/steps/openroad.py:351`), but `CTS` overrides it with
+  `CTS_CORNERS or STA_CORNERS` (`openroad.py:2548`) and **every**
+  `ResizerStep` overrides it with `RSZ_CORNERS or STA_CORNERS`
+  (`openroad.py:2393`). Both resolve to all nine corners with
+  `PNR_CORNERS` unset. In `sky-02-signoff` itself,
+  `35-openroad-cts` and `37-openroad-resizertimingpostcts` each log
+  `Reading timing models for corner` **nine times, once per corner,
+  `ss` included** **[fact, grepped in both step logs]**. The single-corner
+  set is floorplan, placement, routing, the mid-PnR STA reports and the
+  antenna steps — and none of those acts on a slack number
+  (`PL_TIMING_DRIVEN` is `False` and the logged `global_placement`
+  command carries no `-timing_driven`;
+  `docs/20-reharden-and-corners.md` section 5.3).
+- **The single `or_metrics_out.json` key proves nothing about
+  `PNR_CORNERS`.** The observation is real — `36-openroad-stamidpnr-1`,
+  `38-openroad-stamidpnr-2` and `43-openroad-stamidpnr-3` each contain
+  exactly one `timing__setup_vio__count__corner:*` key — but the
+  inference drawn from it was invalid. `STAMidPNR` writes metrics for one
+  corner **unconditionally**: its script iterates the corner dictionary
+  and `break`s on the first entry
+  (`librelane/scripts/openroad/sta/corner.tcl:51-55`). A single key is
+  evidence about that `break`. `docs/20-reharden-and-corners.md` section
+  5.3a demonstrates it directly, with a step that loads two corners and
+  still emits one.
+- **The post-CTS resizer did not run "too early to help" — it closed the
+  slow corner outright.** The earlier claim that it "inserted only 22
+  setup buffers" undercounted its work by an order of magnitude and got
+  the conclusion backwards. In `sky-02-signoff`,
+  `37-openroad-resizertimingpostcts` performed **250 gate upsizes, 21 pin
+  swaps, 22 buffer insertions and 14 buffer removals**, and drove
+  worst-corner WNS from **-9.612 ns to +0.052 ns** **[fact,
+  `runs/sky-02-signoff/37-openroad-resizertimingpostcts/openroad-resizertimingpostcts.log`,
+  `RSZ-0051`/`RSZ-0043`/`RSZ-0040`/`RSZ-0059` and the iteration table]**.
+  It saw the `ss` corner, it worked on it, and on its own parasitic
+  estimate it *passed*.
+- **What it could not see is the wire model.** `LAYERS_RC` is **null**
+  for sky130A **[fact, `runs/sky-04-tmr/resolved.json`]**, so `set_rc.tcl`
+  takes its no-custom-RC branch, calls `set_wire_rc` with no `-corner`,
+  and applies one averaged tech-LEF number to every corner. There is no
+  `max`-interconnect model anywhere inside place-and-route; the only one
+  is in OpenRCX, which runs after the last step that could act on it.
+  `ihp-sg13g2` by contrast ships an explicit per-metal `LAYERS_RC` and
+  only a `nom_*` extraction ruleset, so its two models are close to each
+  other. `docs/20-reharden-and-corners.md` section 6.2.
+- **The size of the gap, measured.** On `sky-06-postgrt` the chain reads
+  +0.084 ns leaving the post-GRT resizer on the routing estimate against
+  **-2.614 ns** at `nom_ss` on the OpenRCX extraction — same PVT, same
+  nominal interconnect corner — and **-3.176 ns** at `max_ss`. So **~2.7
+  ns of WNS is the model gap and only 0.56 ns is a genuine
+  interconnect-corner effect** **[fact,
+  `docs/20-reharden-and-corners.md` section 6.2]**. The same shape is
+  visible in this document's own run: `sky-02-signoff` left the post-CTS
+  resizer at +0.052 ns and signed off at -3.3056 ns on `nom_ss`, a gap of
+  **3.36 ns** **[estimate, arithmetic on two measured slacks]**. The gap
+  is a property of the flow and the PDK, not of a particular netlist,
+  which is why it is the finding that survives the RTL churn described in
+  the preamble.
+- **There is no repair step after routing by default.** LibreLane skips
+  both `Repair Design (Post-Global Routing)` and `Resizer Timing
+  Optimizations (Post-Global Routing)`, in this run as in the IHP one
   (docs/12 section 4) **[fact, `Skipping step` lines in the flow log]**.
-- **So the nine-corner STA at `55-openroad-stapostpnr` is the first and
-  only place the `ss` corner is evaluated on real parasitics**, and by
-  then nothing downstream can act on it.
+  That much of the original account was right — but turning them on has
+  now been tried too, and it does not close the corner either.
 
-**What would actually be needed [estimate — not run here]:** put the slow
-corner inside the optimization loop rather than only inside the final
-report — `PNR_CORNERS` including `nom_ss_100C_1v60`, or `DEFAULT_CORNER`
-moved to it — and re-close. Enabling the post-global-routing repair steps
-would give the flow a second chance after extraction. `CLOCK_PERIOD` is
-the wrong knob and this run is the evidence for that. Estimating the
-achievable sky130 frequency from these two runs is not sound: both were
-optimized against `tt`, so neither measures what the design can do when
-`ss` is the target.
+**What was actually needed, and what testing it showed [fact — this was
+run, in `docs/20-reharden-and-corners.md`]:** the fix proposed here was
+`PNR_CORNERS` including the slow corner, or `DEFAULT_CORNER` moved to it,
+plus the post-global-routing repair steps. `sky-05-pnrcorners` set
+`PNR_CORNERS: ["nom_tt_025C_1v80", "max_ss_100C_1v60"]` against the
+`sky-04-tmr` baseline and moved the slow corner from -2.9659 ns to
+**-3.3475 ns — 0.382 ns worse**, at essentially zero area cost, and the
+layouts are byte-identical through global routing, so it optimized
+nothing; it perturbed the antenna-repair loop and the perturbation landed
+the wrong way. `sky-06-postgrt` added both post-GRT repair steps and
+reached **-3.176 ns**, better than the `PNR_CORNERS` run and still worse
+than the plain baseline, though it removed **42 % of the total** negative
+slack for 1.3 um2. On IHP `PNR_CORNERS` produces a **byte-identical**
+layout and identical slack. `PNR_CORNERS` should be recorded as **tested
+and inert**, not as untested. Sections 5, 6 and 7 of
+`docs/20-reharden-and-corners.md` are the full investigation and are not
+reproduced here.
+
+**The remaining candidates [estimate — not run]**, from
+`docs/20-reharden-and-corners.md` section 6.3, follow from the diagnosis
+rather than from the corner list: populate `LAYERS_RC` for sky130A from
+the OpenRCX `max` ruleset so the PnR estimate matches the corner the
+design is signed off at — a config change, and `ihp-sg13g2` demonstrates
+the shape of it — or use `SIGNAL_WIRE_RC_LAYERS` as a cruder lever on the
+same averaged number. `CLOCK_PERIOD` remains the wrong knob and the A/B
+above is still the evidence for that; what has changed is that the reason
+is now known, and it is that the period does not change the model gap.
+Estimating the achievable sky130 frequency from these runs is not sound,
+because all of them were optimized against a wire model the sign-off does
+not use.
 
 **Everything else in `sky-03-clk26` reproduces `sky-02-signoff`.** Magic
 DRC 0, KLayout DRC 0, Netgen LVS 0, antenna 0/0, XOR 0, route DRC 0, and
@@ -500,8 +756,26 @@ close. `sky130_fd_sc_hd__tt_025C_1v80.lib` declares **no**
 declares `default_max_fanout: 8`, which is tighter than the same
 constraint and binds instead (docs/12 section 4.4a). The Classic flow
 instantiates no max-fanout checker step on either PDK, so neither number
-gates anything. Max cap is 0 at all nine sky130 corners, which is what
-max-fanout is a proxy for.
+gates anything. Max cap is 0 at all nine sky130 corners here, which is
+what max-fanout is a proxy for.
+
+Both counters move on the corrected netlist and the decomposition above
+was not repeated on it: **98 on sky130** (`sky-04-tmr`,
+`final/metrics.json`, again identical across all nine corners) and **77
+on IHP** (`tmr-reharden`, `docs/20-reharden-and-corners.md` section 8.1)
+**[fact]**. On the memory-hardened IHP RTL the counter reads **84**
+(`ihp-memecc`, again identical across all three corners), and there the
+decomposition *was* repeated and confirms this section's finding on a
+second PDK: **83 of the 84 are CTS clock buffers** (`clkbuf_leaf_*_clk/X`)
+and the eighty-fourth is a resizer-inserted fanout buffer, with every one
+held to `sg13g2_stdcell_typ_1p20V_25C.lib`'s `default_max_fanout` of 8
+rather than to the design's `MAX_FANOUT_CONSTRAINT: 10` **[fact,
+`hw/openlane/pilot_ihp/runs/ihp-memecc/55-openroad-stapostpnr/nom_typ_1p20V_25C/checks.rpt`;
+`docs/15` section 5.3]**. Not one violator is an RTL net on either PDK.
+There is no corresponding sky130 number for the current RTL. Max cap is no longer uniformly 0 either — `sky-04-tmr`
+reports **one** max-cap violation, at `nom_ss` and `max_ss` and nowhere
+else (section 3.3). One violating pin at the two slowest corners is the
+same marginal signal the slew counts carry, not a new class of problem.
 
 ### 3.4 Routing and antenna [fact]
 
@@ -580,10 +854,17 @@ result:
   proving PDK-independent is a small but real confirmation that the
   warnings belong to the RTL and not to the technology.
 - **Zero unmapped instances.** `Checker.YosysUnmappedCells` reports
-  `design__instance_unmapped__count: 0`, so the docs/15 section 4.2
-  reasoning about *not* copying the sibling project's
-  `SYNTH_HIERARCHY_MODE: deferred_flatten` workaround holds on sky130
-  too.
+  `design__instance_unmapped__count: 0` on both PDKs. That was originally
+  written as evidence for the docs/15 section 4.2 reasoning about *not*
+  copying the sibling project's `SYNTH_HIERARCHY_MODE: deferred_flatten`
+  workaround; **that reasoning has since been withdrawn on both PDKs**.
+  The configuration-TMR repair builds each replica as a parameterised
+  `keep_hierarchy` module, which makes yosys derive `$paramod` types that
+  the checker counts as unmapped, so `deferred_flatten` is required — and
+  `hw/openlane/pilot_sky130/config.json` now carries it (section 7). The
+  count above is 0 *because* the setting is present, not because it is
+  unnecessary. What genuinely ports is that the same one key fixes it on
+  both technologies.
 - **No PDN, macro, blackbox or halo workaround.** docs/12 sections 7.2 to
   7.4 record three IHP-specific integration defects around the SRAM macro
   (PDN grid not reaching Metal4 macro pins, Magic streamout aborting on a
@@ -666,8 +947,13 @@ than about us.
    config is testing something weaker.
 
 And the caveat about us: **the gate says nothing about timing.** Antenna,
-LVS and DRC are all clean while the slow corner misses setup by 3.85 ns.
-Section 6 is what follows from that.
+LVS and DRC are all clean while the slow corner misses setup by 3.85 ns
+on this run, and by 2.97 ns on the corrected netlist. Section 6 is what
+follows from that. The manufacturability result itself survives the fix:
+`sky-04-tmr` reports route DRC, Magic DRC, KLayout DRC, XOR and Netgen
+LVS all **0**, and 0 antenna-violating nets, exactly as here **[fact,
+`runs/sky-04-tmr/final/metrics.json`;
+`docs/20-reharden-and-corners.md` section 4]**.
 
 ---
 
@@ -695,20 +981,36 @@ Section 6 is what follows from that.
 **Not proved, and the list is longer than the first one:**
 
 - **Timing does not port, and this run is the counter-example.** Same
-  RTL, same constraint, +5.31 ns of slow-corner slack on IHP and -3.85 ns
-  on sky130. Any statement of the form "the design runs at 50 MHz" is a
-  statement about a PDK, not about the design. `tt/info.yaml`'s
-  `clock_hz: 50000000` is correct for the IHP submission it describes and
-  would be wrong on a sky130 shuttle without a re-close.
-- **The sky130 frequency is not established by this work.** Section 3.3b
-  showed that relaxing the period barely moves the failing corner,
-  because the optimization loop never sees it. Both runs recorded here
-  were optimized against `tt`, so **neither measures what the design can
-  do on sky130 when `ss` is the target**. Quoting 41.9 MHz as a sky130
-  capability would be wrong in the same way quoting 50 MHz would be; the
-  honest statement is that the number is unknown until a run with the
-  slow corner inside `PNR_CORNERS` is made, and that run has not been
-  made.
+  RTL, same constraint, +6.44 ns of slow-corner slack on IHP and -2.97 ns
+  on sky130 (`tmr-reharden` against `sky-04-tmr`). Any statement of the
+  form "the design runs at 50 MHz" is a statement about a PDK, not about
+  the design. `tt/info.yaml`'s `clock_hz: 50000000` is correct for the
+  IHP submission it describes and would be wrong on a sky130 shuttle
+  without a re-close. **On the memory-hardened RTL the IHP side is down
+  to +0.40 ns at the slow corner (`ihp-memecc`), so `clock_hz: 50000000`
+  is now correct by about 1 MHz rather than by 24; sky130 has not been
+  re-hardened against that RTL and the gap between the two PDKs is
+  therefore no longer measured.**
+- **The sky130 frequency is still not established, and the reason is now
+  known.** The run this document originally said had to be made — the
+  slow corner inside `PNR_CORNERS` — **has been made**, on both PDKs, and
+  it changes nothing: `sky-05-pnrcorners` lands 0.382 ns *worse* than its
+  baseline with a layout byte-identical through global routing, and on
+  IHP the layout is byte-identical outright
+  (`docs/20-reharden-and-corners.md` sections 5 and 7). Post-global-
+  routing repair was tried as well and reaches -3.176 ns. So the
+  number is unknown not because a corner was missing from a list, but
+  because **the PnR wire-RC estimate and the OpenRCX extraction disagree
+  by about 2.7 ns of WNS on this design** — the flow optimizes against a
+  model it is not signed off against, and only 0.56 ns of the miss is a
+  genuine interconnect-corner effect (section 3.3b,
+  `docs/20-reharden-and-corners.md` section 6.2). Quoting 43.5 MHz as a
+  sky130 capability would be wrong in the same way quoting 50 MHz would
+  be. The number becomes knowable when `LAYERS_RC` is populated for
+  sky130A and the design re-closed against a wire model that matches the
+  sign-off; that has not been done **[planned — named as the first thing
+  to try in `docs/20-reharden-and-corners.md` section 6.3, no date and no
+  artifact yet]**.
 - **This is not a sign-off on either PDK.** Only nominal-to-max
   interconnect corners with no signal-integrity analysis; no
   `VSRC_LOC_FILES`, so the IR numbers are indicative; no formal
@@ -734,8 +1036,8 @@ Section 6 is what follows from that.
   question.
 - **Portability is not a reason to port.** Nothing in this document
   argues that a sky130 tape-out is worth doing. It establishes that the
-  option is open at a known cost — a clock re-close and a slower part —
-  and that is the whole claim.
+  option is open at a known cost — a re-close against a corrected wire
+  model, and a slower part — and that is the whole claim.
 
 **The one-sentence version:** the design is manufacturably portable and
 temporally not, which is exactly the distinction a gate that checks
@@ -750,11 +1052,22 @@ Antenna, LVS and DRC cannot make for you.
 export PDK_ROOT=$HOME/.ciel
 ls -la $PDK_ROOT/sky130A     # -> ciel/sky130/versions/8afc8346.../sky130A
 
-# the run recorded in section 3
+# the run recorded in sections 3.1, 3.2, 3.4, 4 and 5 -- but see 2.1:
+# neither hw/rtl nor config.json is still what this run consumed
 hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-02-signoff
 
 # the relaxed-clock run of section 3.3b
 hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-03-clk26 -c CLOCK_PERIOD=26
+
+# the corrected-netlist re-harden that sections 3.2 and 3.3 now quote
+hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-04-tmr
+
+# NOT RUN: the sky130 counterpart of the IHP memory-hardening re-harden.
+# Every sky130 number in this file predates hw/rtl/lif_core.v's SECDED
+# memory coding. This is the command that would restore the like-for-like
+# comparison of 3.2 and 3.3; nothing in this document is scaled to stand
+# in for it.
+# hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-07-memecc
 
 # the gate of section 5, applied by hand
 R=hw/openlane/pilot_sky130/runs/sky-02-signoff/76-misc-reportmanufacturability
@@ -764,6 +1077,13 @@ grep -c 'Passed ✅' $R/manufacturability.rpt     # must be 3
 If the PDK is not enabled, `run_sky130.sh` refuses to run and prints the
 `ciel enable --pdk-family sky130 <hash>` line to fix it, or accepts
 `ENABLE_PDK=1` to do it itself. `tt/tt/` must be present (2.4).
+
+The corner experiments of section 3.3b are **not** reproduced from this
+file: their configs are generated rather than hand-written and the
+commands are in `docs/20-reharden-and-corners.md` section 10. `sky-04-tmr`
+additionally requires `SYNTH_HIERARCHY_MODE: deferred_flatten`, which the
+configuration-TMR fix forces and which
+`hw/openlane/pilot_sky130/config.json` now carries.
 
 Files this document owns: `hw/openlane/pilot_sky130/config.json`,
 `hw/openlane/pilot_sky130/run_sky130.sh`, and itself.

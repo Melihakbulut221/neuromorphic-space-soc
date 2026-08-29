@@ -393,19 +393,55 @@
 //           survive a total loss of the attributes. Measured: 110
 //           flip-flops under a deliberately forced flatten against 55
 //           before this fix [fact].
-//       Honest limit: only two distinct functions of x_i exist (x_i and
-//       ~x_i), so under a forced flatten bank C merges bitwise into A
-//       and B and the domain degrades to duplication-with-detection.
-//       Polarity coding cannot do better than that, and no encoding
-//       can: a third per-bit function would have to mix in a second
-//       signal, which turns a single upset into a multi-bit error and
-//       defeats the voter it is meant to protect.
+//       Honest limit, and it is a hard one: only two distinct functions
+//       of x_i exist (x_i and ~x_i), so under a forced flatten bank C
+//       merges bitwise into A and B and the domain degrades to
+//       duplication-with-detection. Measured 2026-08-26 on pinned
+//       sources: keep_hierarchy stripped, POL as designed, 1,100
+//       flip-flops -- replica C entirely gone [fact]. No assignment of
+//       CFG_POL_C avoids this; with three replicas and two polarities
+//       one replica always collides bit for bit. Polarity coding
+//       cannot do better, and neither can a constant XOR mask, which is
+//       the same mechanism spelled differently.
 //       Secondary, and tagged as an estimate because this project has
 //       no beam data: complementary storage also decorrelates any
 //       upset mechanism with a preferred direction (a strike or a
 //       total-dose shift that favours 1->0), because the same physical
 //       bias lands as the opposite logical error in replica B
 //       [estimate].
+//   (e) a per-replica STORAGE TRANSFORM that is not a polarity: replica
+//       C stores an invertible XOR mixing of the configuration word
+//       (MIX = 1), so every one of its 55 stored bits is an XOR of two
+//       or three distinct configuration bits. ADDED 2026-08-26 on top
+//       of (d), because (d) provably cannot hold a third bank and the
+//       header used to claim it could. Nothing of the form
+//       `x_i ^ x_j (^ x_k)` equals `x_i` or `~x_i`, so no per-bit hash
+//       can match replica C against A or B -- this is a proof, not a
+//       measurement, and the measurement agrees: keep_hierarchy
+//       stripped, 1,155 flip-flops with no loss at all, in both the
+//       ASIC flow and synth_ecp5 [fact].
+//       What was evaluated and rejected on the way there:
+//         - a per-replica bit ROTATION, the obvious candidate, because
+//           `cfg[(i+k) % 55]` is neither `cfg[i]` nor its inverse. It
+//           does not work. Structural hashing matches on the
+//           flip-flop's (D, EN, reset) signature, not on bit position,
+//           so a rotation relabels which cell holds which bit and
+//           leaves the SET of stored functions unchanged; the rotated
+//           bank hashes into the unrotated one flop for flop. Measured,
+//           replica C rotated by 7, keep_hierarchy stripped: 1,100
+//           flip-flops, identical to polarity alone [fact].
+//         - a per-replica constant XOR MASK. It is a polarity choice by
+//           definition, so it is (d) and inherits (d)'s two-function
+//           ceiling. Not run; it is the design that was already there.
+//       The construction and its inverse are documented at
+//       pilot_cfg_bank. Cost, and it is the real objection to answer:
+//       mixing means one upset in replica C decodes to two or three
+//       wrong bits at its output. That is harmless, because they are
+//       all in one replica and a bitwise majority masks every bit on
+//       which one replica disagrees, however many. An earlier revision
+//       of this header asserted the opposite and used it to conclude
+//       that "no encoding can" do better than (d); both halves of that
+//       were wrong.
 //
 // Flow portability, stated plainly rather than assumed:
 //
@@ -414,12 +450,19 @@
 //       plain `synth_ecp5` FPGA run use the same `flatten` pass, which
 //       honours the attribute. It is NOT portable to a front end that
 //       does not read yosys attributes. That is a real limit, not a
-//       theoretical one, and it is why (d) exists.
-//   (d) is plain Verilog-2005 and depends on no attribute in any tool.
-//       It is the layer that still holds when (c) does not.
-//   Neither is trusted. sw/tests/test_synthesis_guards.py runs both
+//       theoretical one, and it is why (d) and (e) exist.
+//   (d) and (e) are plain Verilog-2005 and depend on no attribute in
+//       any tool. Together they are the layer that still holds when (c)
+//       does not, and (e) is the half of it that holds the THIRD bank:
+//       (d) on its own bounds the loss at one bank and, as measured
+//       above, sits exactly on that bound. Do not read (d) as a
+//       standalone fallback; until 2026-08-26 this header did, and it
+//       was wrong for the whole of that time.
+//   None is trusted. sw/tests/test_synthesis_guards.py runs both
 //       flows, counts the flip-flops in the mapped netlist per replica
-//       bank, and fails if any of them collapses. That test -- not any
+//       bank, and fails if any of them collapses. It also strips
+//       keep_hierarchy and requires the count to be unchanged, which is
+//       the assertion that holds (e) honest. That test -- not any
 //       attribute -- is what keeps this fixed, and it is mutation-checked
 //       against a scratch copy with the fix removed.
 //
@@ -444,6 +487,25 @@
 // The LUT growth is larger than the flip-flop growth because the voter
 // was not being paid for either: with one physical bank feeding all
 // three of its inputs, `(a&b)|(a&c)|(b&c)` folded to a wire.
+//
+// Cost of (e) on top of that, measured 2026-08-27 as a matched A/B on
+// one tree with `.MIX(1)` on u_cfg_c as the only difference [fact]:
+//   sg13g2   +1,490.60 um2, +1.06 % (141,842.95 against 140,352.35);
+//            +89 xor2, -30 mux2, +3 mux4, and ZERO extra flip-flops --
+//            it is combinational rewiring on one bank's write and read
+//            sides, not storage. The mux2 delta is negative because
+//            making the hold explicit lets some per-field enable muxing
+//            collapse.
+//   ECP5 85F +209 TRELLIS_COMB, no extra TRELLIS_FF; Fmax 28.63 ->
+//            26.62 MHz at speed grade 6, seed 0 (target 25 MHz, PASS
+//            both). Read that as congestion, not path delay: nextpnr
+//            reports the critical path through u_pilot.u_lif.wmem and
+//            the busy logic in BOTH runs, so the mixing is not on it
+//            [estimate]. Inside the bank the added paths are
+//            Q -> dec -> mux -> enc -> D, five gate levels, and
+//            Q -> dec -> q, two levels on top of the existing one;
+//            neither is near critical at CLOCK_PERIOD 20 on sg13g2.
+//   docs/20 section 11.6 carries the full tables.
 //
 // Plain Verilog-2005, Icarus-clean.
 `default_nettype none
@@ -863,6 +925,12 @@ module pilot_top #(
     // Per-replica storage polarity, header section 9 option (d). These
     // are TMR_W = 55 bits wide inside the bank; the parameter is carried
     // as 64 bits so the port declaration does not depend on W.
+    //
+    // Polarity separates A from B and can do no more than that: it
+    // offers two functions per bit and there are three replicas. C is
+    // held apart by MIX = 1 below, not by CFG_POL_C, which survives only
+    // for the storage-direction decorrelation argument in the bank
+    // header. Do not add a fourth replica expecting a fourth polarity.
     localparam [63:0] CFG_POL_A = 64'h0000000000000000;  // true
     localparam [63:0] CFG_POL_B = 64'h007FFFFFFFFFFFFF;  // 55 ones
     localparam [63:0] CFG_POL_C = 64'h002AAAAAAAAAAAAA;  // odd bits
@@ -874,6 +942,16 @@ module pilot_top #(
         if (TMR_W > 64) begin : g_tmr_too_wide
             ERROR_pilot_top_TMR_W_exceeds_the_64_bit_cfg_bank_parameters guard ();
         end
+        // The MIX = 1 bank splits the word at W/2 and mixes each half
+        // into the other. Below four bits a half is one bit wide and the
+        // layer-2 rotation `(i+1) % LO` degenerates to the identity, so
+        // a stored bit could fall back to weight 1 and collide with a
+        // polarity bank. Nothing can reach this today -- TMR_W is 55 and
+        // fixed by the register map -- but a future narrowing must not
+        // silently disarm the defence.
+        if (TMR_W < 4) begin : g_tmr_too_narrow
+            ERROR_pilot_top_TMR_W_below_4_disarms_the_cfg_bank_MIX_transform guard ();
+        end
     endgenerate
 
     pilot_cfg_bank #(.W(TMR_W), .RST_VAL(CFG_RST_VAL), .POL(CFG_POL_A))
@@ -884,7 +962,11 @@ module pilot_top #(
         u_cfg_b (.clk(clk), .rst_n(rst_n), .wr_en(cfg_wr_en),
                  .wr_d(cfg_wr_d), .q(cfg_b));
 
-    pilot_cfg_bank #(.W(TMR_W), .RST_VAL(CFG_RST_VAL), .POL(CFG_POL_C))
+    // MIX = 1 on exactly one replica. A and B are already bit-for-bit
+    // distinct from each other by polarity; C is the one that needs a
+    // third storage function, and the XOR mixing is only paid for once.
+    pilot_cfg_bank #(.W(TMR_W), .RST_VAL(CFG_RST_VAL), .POL(CFG_POL_C),
+                     .MIX(1))
         u_cfg_c (.clk(clk), .rst_n(rst_n), .wr_en(cfg_wr_en),
                  .wr_d(cfg_wr_d), .q(cfg_c));
 
@@ -1562,30 +1644,90 @@ endmodule
 //                    the LibreLane/yosys ASIC flow and synth_ecp5, both
 //                    of which use the same `flatten` pass; NOT portable
 //                    to a front end that does not read yosys attributes,
-//                    which is why POL exists.
-//   POL              per-replica storage polarity. Gives the three
-//                    instances different parameters, so yosys derives
-//                    three different module types, and gives bank A and
-//                    bank B different per-bit D functions (x_i against
-//                    ~x_i), so they cannot be hashed together even if
-//                    the hierarchy is flattened away. This is plain
-//                    Verilog and depends on no attribute in any tool.
+//                    which is why the storage transform below exists.
+//   POL + MIX        the per-replica storage TRANSFORM. Each bank stores
+//                    a different function of the configuration word, so
+//                    no two banks have a flip-flop with the same
+//                    (D, EN, reset) signature and structural hashing has
+//                    nothing to match even with the hierarchy gone.
+//                    Plain Verilog-2005; depends on no attribute.
+//
+// The transform, and why it is what it is. What opt_merge hashes is the
+// stored FUNCTION, so the question is how many distinct functions of the
+// configuration word the three banks present:
+//
+//   POL alone gives two. A storage bit has exactly two polarities, x_i
+//   and ~x_i, so with three replicas one of them always collides
+//   bit-for-bit with another. Measured under a forced flatten: 1,100
+//   flip-flops, replica C entirely gone [fact]. No choice of POL
+//   constant improves this, and a constant XOR mask is the same
+//   mechanism under another name -- a per-bit polarity choice -- so it
+//   does not either.
+//
+//   A per-replica bit ROTATION does not help, which is worth stating
+//   because it looks like it should. Structural hashing is indifferent
+//   to bit position: rotating relabels which physical flip-flop holds
+//   which value bit but leaves the SET of stored functions identical, so
+//   the rotated bank hashes into the unrotated one flop for flop.
+//   Measured, replica C rotated by 7 with POL = 0, forced flatten:
+//   1,100 flip-flops -- exactly the polarity result [fact].
+//
+//   MIX = 1 gives a third function by making every stored bit an XOR of
+//   TWO OR THREE distinct configuration bits. Nothing of that form can
+//   equal x_i or ~x_i for any i, so replica C is provably
+//   non-collidable against A and B rather than measured to be. The map
+//   is two unit-triangular XOR layers over GF(2) -- the low half absorbs
+//   the high half, then the high half absorbs the mixed low half through
+//   a rotation -- which is invertible by construction (a product of two
+//   unit-triangular matrices) and whose inverse is the same two layers
+//   run backwards. One XOR per bit each way, no adders, no state.
+//   Measured, forced flatten: 1,155 flip-flops, no loss at all [fact].
+//
+// A note on the objection an earlier revision of this header raised
+// against exactly this construction -- that mixing turns a single upset
+// into a multi-bit error and so defeats the voter. It does turn one
+// upset into two or three wrong bits at q, and against a SINGLE fault
+// that is free: they are all in ONE replica, which is precisely the
+// failure TMR masks. A bitwise majority over three banks corrects every
+// bit on which a single replica disagrees, however many bits that is.
+// The objection confused a multi-bit error inside one replica with a
+// multi-replica error.
+//
+// What it does cost, stated rather than glossed:
+//   - against a DOUBLE fault, two upsets in different replicas are
+//     uncorrectable only if they land on the same bit of the voted
+//     word, and widening replica C's error from one bit to about three
+//     raises that coincidence for a (C, A) or (C, B) pair by about the
+//     same factor -- order 3/55 instead of 1/55 [estimate on the
+//     factor; the widening itself is fact]. It buys the third replica
+//     existing at all, which is a first-order effect traded against a
+//     second-order one.
+//   - replica C alone can no longer be read out bit-for-bit by a
+//     debugger. hw/tb/test_fi_campaign.py deposits into u_cfg_c.bits
+//     and its comment on bit positions being preserved by the storage
+//     transform is true of A and B and no longer true of C; the
+//     campaign still classifies CORRECTED, because the voter masks the
+//     whole replica.
+//   - 1,490 um2 on sg13g2, +1.06 % (section 9 cost table).
 //
 // keep on `bits` is a third, weakest layer: measured on this design it
 // does NOT stop the merge on its own (it preserves the wire name while
 // the storage still disappears), so it is here only to stop opt_clean,
 // never as evidence that the bank survived. The evidence is the
-// flip-flop count in sw/tests/test_synthesis_guards.py.
+// flip-flop count in sw/tests/test_synthesis_guards.py, which now
+// asserts the forced-flatten count as well as the intact one.
 //
-// The stored image is `value ^ POL` and the port presents `bits ^ POL`,
-// so every user of q sees the true configuration value and only the
-// physical cells differ. A debugger reading u_cfg_b.bits sees the
-// complement of the configuration, by design.
+// The stored image is `enc(value) ^ POL` and the port presents
+// `dec(bits ^ POL)`, so every user of q sees the true configuration
+// value and only the physical cells differ. A debugger reading
+// u_cfg_b.bits sees the complement of the configuration and
+// u_cfg_c.bits sees its mixed image, both by design.
 (* keep_hierarchy *)
 module pilot_cfg_bank #(
     parameter integer W       = 55,   // <= 64, guarded at the instance
     parameter [63:0]  RST_VAL = 64'd0,
-    parameter [63:0]  POL     = 64'd0
+    parameter [63:0]  POL     = 64'd0,
+    parameter integer MIX     = 0     // 0 = polarity only, 1 = + XOR mix
 ) (
     input  wire         clk,
     input  wire         rst_n,
@@ -1593,18 +1735,78 @@ module pilot_cfg_bank #(
     input  wire [W-1:0] wr_d,    // per-bit write data, true polarity
     output wire [W-1:0] q        // stored value, true polarity
 );
+    // Split point of the two XOR layers. W >= 4 keeps both halves at
+    // least two bits wide; TMR_W is 55, so LO = 27 and HI = 28.
+    localparam integer LO = W / 2;
+    localparam integer HI = W - LO;
+
+    // enc: true value -> stored image. Layer 1 makes every low bit
+    // `v[i] ^ v[LO+i]` (weight 2). Layer 2 makes every high bit
+    // `v[LO+i] ^ enc_lo[(i+1) % LO]` (weight 3, and the rotation by one
+    // is what stops the layer-2 term cancelling the bit's own value).
+    // No output row has weight 1, which is the whole property.
+    function [W-1:0] cfg_enc(input [W-1:0] v);
+        reg [W-1:0] t;
+        integer i;
+        begin
+            t = v;
+            for (i = 0; i < LO; i = i + 1)
+                t[i] = v[i] ^ v[LO + i];
+            for (i = 0; i < HI; i = i + 1)
+                t[LO + i] = v[LO + i] ^ t[(i + 1) % LO];
+            cfg_enc = t;
+        end
+    endfunction
+
+    // dec: stored image -> true value. The same two layers in reverse.
+    // Layer 2 never touched the low half, so c[(i+1) % LO] below is
+    // still the layer-1 output that enc used.
+    function [W-1:0] cfg_dec(input [W-1:0] c);
+        reg [W-1:0] t;
+        integer i;
+        begin
+            t = c;
+            for (i = 0; i < HI; i = i + 1)
+                t[LO + i] = c[LO + i] ^ c[(i + 1) % LO];
+            for (i = 0; i < LO; i = i + 1)
+                t[i] = c[i] ^ t[LO + i];
+            cfg_dec = t;
+        end
+    endfunction
+
     (* keep *) reg [W-1:0] bits;
 
-    integer i;
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            bits <= RST_VAL[W-1:0] ^ POL[W-1:0];
-        else
-            for (i = 0; i < W; i = i + 1)
-                if (wr_en[i]) bits[i] <= wr_d[i] ^ POL[i];
+    generate
+    if (MIX == 0) begin : g_polarity
+        // Polarity-only replica. Left byte-for-byte as it was: yosys
+        // folds the per-bit hold into an enable flip-flop and the bank
+        // costs W flip-flops and nothing else.
+        integer i;
+        always @(posedge clk or negedge rst_n) begin
+            if (!rst_n)
+                bits <= RST_VAL[W-1:0] ^ POL[W-1:0];
+            else
+                for (i = 0; i < W; i = i + 1)
+                    if (wr_en[i]) bits[i] <= wr_d[i] ^ POL[i];
+        end
+        assign q = bits ^ POL[W-1:0];
+    end else begin : g_mixed
+        // Mixed replica. A stored bit is a function of several value
+        // bits, so a partial write has to re-encode the whole word:
+        // decode, substitute the written bits, encode again. That makes
+        // the hold explicit as a mux instead of a flip-flop enable,
+        // which is the cell cost of this defence.
+        wire [W-1:0] cur = cfg_dec(bits ^ POL[W-1:0]);
+        wire [W-1:0] nxt = (wr_d & wr_en) | (cur & ~wr_en);
+        always @(posedge clk or negedge rst_n) begin
+            if (!rst_n)
+                bits <= cfg_enc(RST_VAL[W-1:0]) ^ POL[W-1:0];
+            else
+                bits <= cfg_enc(nxt) ^ POL[W-1:0];
+        end
+        assign q = cur;
     end
-
-    assign q = bits ^ POL[W-1:0];
+    endgenerate
 endmodule
 
 `default_nettype wire

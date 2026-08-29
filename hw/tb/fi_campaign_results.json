@@ -57,10 +57,10 @@
    28
   ]
  },
- "wall_seconds": 971.7,
- "total": 255,
+ "wall_seconds": 1036.6,
+ "total": 287,
  "histogram": {
-  "MASKED": 126,
+  "MASKED": 158,
   "CORRECTED": 42,
   "DETECTED": 39,
   "SDC": 48,
@@ -170,6 +170,27 @@
    "CORRECTED": 0,
    "DETECTED": 4,
    "SDC": 6,
+   "HANG": 0
+  },
+  "lif_wchk": {
+   "MASKED": 12,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_wchk_unread": {
+   "MASKED": 2,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_smem": {
+   "MASKED": 18,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 0,
    "HANG": 0
   },
   "ecc_port_single": {
@@ -303,6 +324,27 @@
   "dispatch": {
    "n": 18,
    "sdc_stream": 6,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
+  "lif_wchk": {
+   "n": 12,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
+  "lif_wchk_unread": {
+   "n": 2,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
+  "lif_smem": {
+   "n": 18,
+   "sdc_stream": 0,
    "sdc_state_only": 0,
    "tel_differs": 0,
    "latent": 0
@@ -17780,6 +17822,2470 @@
     ],
     [
      -15,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 0,
+   "burst": 0,
+   "delay": 16,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 3,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 3,
+   "burst": 0,
+   "delay": 22,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 7,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 7,
+   "burst": 0,
+   "delay": 19,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 8,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 8,
+   "burst": 1,
+   "delay": 11,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 11,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 11,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 15,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 15,
+   "burst": 1,
+   "delay": 13,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk_unread",
+   "target": "u_lif.wchk",
+   "bit": 24,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk_unread",
+   "target": "u_lif.wchk",
+   "bit": 24,
+   "burst": 1,
+   "delay": 1,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 0,
+   "burst": 1,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 2,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 2,
+   "burst": 0,
+   "delay": 4,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 5,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 5,
+   "burst": 1,
+   "delay": 18,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 18,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 18,
+   "burst": 1,
+   "delay": 17,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 20,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 20,
+   "burst": 0,
+   "delay": 24,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 23,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 23,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 42,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 42,
+   "burst": 0,
+   "delay": 24,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 44,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 44,
+   "burst": 2,
+   "delay": 1,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 47,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 47,
+   "burst": 0,
+   "delay": 22,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
      0
     ]
    ],

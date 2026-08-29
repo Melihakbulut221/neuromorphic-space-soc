@@ -24,14 +24,16 @@ plainly, and it should be read before section 6 is quoted anywhere.
 | Device under test | `hw/rtl/pilot_top.v`, 8 x 8 neurons/axons, EVQ depth 4 |
 | Oracle | `sw/golden/lif_core.py` (`LIFCore`, `LIFConfig`) |
 | Seed | `0x16F12026` |
-| Injections | 255 |
-| Simulated time | 22.23 ms |
-| Wall time | 79.5 s to 84.5 s on an otherwise idle machine; 103 s and 184 s on the same machine under concurrent load (Icarus 12, single-threaded) |
+| Injections | 255 to 2026-08-26; 287 from 2026-08-27 (section 2) |
+| Simulated time | 22.23 ms at 255 injections |
+| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it (Icarus 12, single-threaded; section 8) |
 
-### Two runs, before and after one RTL fix
+### Three runs, kept side by side
 
-This document reports the campaign **twice**, and the two runs are kept
-side by side rather than one overwriting the other.
+This document reports the campaign **three times**, and the runs are
+kept side by side rather than one overwriting the other. That is the
+whole value of the document: it shows what each change to the design did
+to the measured upset response, which a single current number cannot.
 
 - The **pre-fix** run is the measurement that found the deadlock of
   section 5.1. It is the evidence that motivated the change and it is
@@ -39,12 +41,23 @@ side by side rather than one overwriting the other.
 - The **post-fix** run is the same campaign — same seed, same target
   list, same workload, same 255 injections — against
   `hw/rtl/pilot_top.v` with the bounded `D_FETCH` wait of section 5.1
-  in place. Every number in this document is labelled with which run it
-  comes from. Where a section is not labelled the two runs agree.
+  in place.
+- The **post-hardening** run of 2026-08-27 is the same campaign again,
+  against `hw/rtl/lif_core.v` with the SECDED codes on `wmem`, `vmem`
+  and `rmem` that the section 6 ranking asked for. It was run twice:
+  once with the target list untouched, so the comparison with the 255
+  above is exact; and once extended by 32 injections into the 80 check
+  flip-flops the hardening itself added, because a protection whose own
+  storage is unmeasured is a claim (section 3.2).
 
-`hw/tb/fi_campaign_results.json` holds the **post-fix** log, because
-that is the design that exists. Exactly five of the 255 records differ
-between the two runs and section 5.1 lists all five.
+Every number in this document is labelled with which run it comes from.
+Where a section is not labelled the runs agree.
+
+`hw/tb/fi_campaign_results.json` holds the **287-injection
+post-hardening** log, because that is the design that exists. Exactly
+five of the 255 records differ between the pre-fix and post-fix runs and
+section 5.1 lists all five; exactly 43 differ between the post-fix and
+post-hardening runs and section 3.2 accounts for every one.
 
 **Headline, pre-fix [fact].** 255 single-bit injections: **83 MASKED
 (32.5%), 42 CORRECTED (16.5%), 34 DETECTED (13.3%), 91 SDC (35.7%),
@@ -57,17 +70,36 @@ between the two runs and section 5.1 lists all five.
 rate is unchanged at 35.7%. The fix removes the failure class it was
 written for and buys nothing else, which is what it should do.
 
-In both runs every hardened structure kept its promise with zero
+**Headline, post-hardening [fact].** The same 255 injections again:
+**126 MASKED (49.4%), 42 CORRECTED (16.5%), 39 DETECTED (15.3%),
+48 SDC (18.8%), 0 HANG**. Silent corruption falls from 91 to 48, and
+**every one of the 43 records that moved went from SDC to MASKED, in the
+three structures that were hardened and in no others** — `lif_wmem` 9,
+`lif_vmem` 22, `lif_rmem` 12. Not one record moved in the other
+direction, and no record outside those three groups changed at all.
+
+In all three runs every hardened structure kept its promise with zero
 counterexamples — the neuron-core FSM (12/12 detected), the
 configuration TMR domain (15/15 corrected and counted, but read the
 correction of 2026-08-26 in section 4 before quoting that number: the
 replicas it votes on did not exist as three registers in the netlist
 until that date), the SECDED weight word (12/12 singles corrected, 4/4
 doubles detected, E10 substitution exact on every event stream it
-produced). Every silent
-corruption came from a structure the pilot never claimed to protect.
-The ranking of those, and the previously unknown deadlock in the event
-dispatcher, is the result that matters.
+produced). Every silent corruption still comes from a structure the
+pilot does not claim to protect. What changed is which structures those
+are: before the hardening the residual was dominated by the neuron
+core's memories, and after it **85% of the residual silent corruption
+sits in the AER event path** — queue storage, queue pointers, the
+show-ahead adapter and the dispatcher (section 6).
+
+**The result that is not a number.** The corrections are invisible. The
+hardening's four telemetry outputs are left unconnected in
+`hw/rtl/pilot_top.v`, so a corrected upset moves no counter and lights
+no pin, and this campaign — which is only allowed to observe what a
+bench observes — has to classify it MASKED rather than CORRECTED. That
+is why the MASKED column absorbed all 43 records instead of the
+CORRECTED column taking them. Section 4.1 states what it costs and
+section 6 ranks fixing it.
 
 ---
 
@@ -342,11 +374,23 @@ the design the map speaks about, not how exhaustively.
 | Event dispatcher (`dstate`, `evw`) | `dispatch` | 18 | 18 |
 | AER queue pointers (4 x 3 b) | `evq_ptr` | 12 | 24 |
 | Neuron-core FSM state | `lif_fsm` | 4 | 12 |
-| **Total represented** | | **996** | **255** |
+| **Total represented, to 2026-08-26** | | **996** | **255** |
+| Neuron-state ECC check field, `lif_core.smem` [‡] | `lif_smem` | 48 | 18 |
+| Synapse ECC check field, `lif_core.wchk` [‡] | `lif_wchk` (+ unread control) | 32 | 14 |
+| **Total represented, from 2026-08-27** | | **1076** | **287** |
 
 [†] 165 in the RTL, and 55 in the netlist until 2026-08-26 — the three
 replicas were merged into one register bank by synthesis. Corrected in
 `hw/rtl/pilot_top.v` on that date; see section 4 and section 7.4.
+
+[‡] Added to the target list on 2026-08-27, with the memory hardening
+that created them. They are the 80 flip-flops the protection itself
+costs, and section 3.2 explains why leaving them unrepresented would
+have been the configuration-TMR mistake in a different form. They draw
+their injection phases from a second seeded stream (`EXT_RNG` in
+`hw/tb/test_fi_campaign.py`) so that adding them moved no phase of the
+255 injections above; the first 255 records of the 287-injection run are
+field-for-field identical to the 255-injection run [fact].
 
 
 The design held **1160 flip-flops** at this geometry by the same count
@@ -367,9 +411,59 @@ design holds **1167** and the represented share is **85%** with the
 unrepresented count at 171 [fact]. The `dispatch` group's 18 FF above
 is `dstate` and `evw` only, unchanged.
 
+**After the memory hardening of 2026-08-26 [fact].** `hw/rtl/lif_core.v`
+adds 80 flip-flops and no others: `wchk`, 8 SECDED check bits per 16
+weights, 32 bits at 8 x 8; and `smem`, 6 check bits per neuron state
+word, 48 bits at 8 x 8. The design therefore declares **1247**
+flip-flops, the campaign represents **1076** of them (86%), and the
+unrepresented count is unchanged at 171 — the extension covers exactly
+what the hardening added and nothing else.
+
+The +80 is cross-checked mechanically rather than counted by hand:
+a yosys census of the two trees (`proc; flatten; opt_expr; opt_clean;
+simplemap`, the same recipe `sw/tests/test_synthesis_guards.py` uses for
+its declared-flip-flop fixture, pinned yosys 0.67+146) reports **1159**
+flip-flops before the hardening and **1239** after, a delta of exactly
++80 [fact]. The census sits 8 below the hand count in both trees,
+consistently, because `opt_clean` removes the EVQ_OUT drop counter — the
+8 constant bits this section already names as unrepresentable.
+
+### 2.1 How much of the design is protected
+
+The question this document could not answer before the hardening, on the
+same RTL-declaration basis [fact for the counts, and see section 7.4 for
+what an RTL count does and does not license]:
+
+| Mechanism | Structures | FF | Corrects? |
+|---|---|---:|---|
+| SECDED (26,20) on the neuron state word | `vmem` 128 + `rmem` 32 + `smem` 48 | 208 | yes |
+| SECDED (72,64) on the synapse file | `wmem` 256 + `wchk` 32 | 288 | yes |
+| Configuration TMR | `cfg_a/b/c` | 165 | yes |
+| SECDED (72,64) on the weight staging word | `ecc_data` 64 + `ecc_check` 8 | 72 | yes |
+| **Correcting total** | | **733** | |
+| HD-2 encoding + `default` park | `lif_core.state` | 4 | detects only |
+| **Any protection at all** | | **737** | |
+
+**733 of 1247 flip-flops — 58.8% of the design — carry single-error
+correction, and 737 (59.1%) carry some protection.** Before the
+hardening the correcting total was 237 of 1167 (20.3%) and the
+any-protection total 241 (20.7%). The hardening moved 416 flip-flops
+from unprotected to correcting for 80 added ones, so the protected share
+went up by 38 percentage points at a 6.9% increase in register count.
+
+Two things this table is not. It is not a statement about area — the
+correction is cheap in flip-flops and expensive in combinational logic,
+and `hw/rtl/lif_core.v`'s header section 6 carries the measured cell
+areas. And it is not a statement about the *rest* of the design: the 510
+unprotected flip-flops are still 41% of the register count, they are
+where every residual silent corruption in section 3.2 comes from, and
+section 6 ranks them.
+
 ---
 
 ## 3. Measured distribution
+
+### 3.1 Pre-hardening
 
 255 injections, seed `0x16F12026`, **pre-fix** [fact]. `stream` and
 `state` split the SDC column: `stream` = the drained event stream was
@@ -431,7 +525,174 @@ The last two carry over to the post-fix run unchanged: 32 state-only
 SDC and 15 latent registers in both, as does the telemetry-mismatch
 count of 34 [fact].
 
----
+### 3.2 Post-hardening
+
+Same seed, same geometry, same workload, same target list, 2026-08-27,
+against `hw/rtl/lif_core.v` with the SECDED codes on `wmem` and on the
+`{R, V}` neuron state word [fact]. **Exactly three rows move**, so the
+section 3.1 table stands for this run with these three substitutions and
+the new total:
+
+| Group | MASKED | CORRECTED | DETECTED | SDC | HANG | n | SDC rate | stream | state |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `lif_wmem` | 16 | 0 | 0 | 0 | 0 | 16 | 0.0% | 0 | 0 |
+| `lif_vmem` | 24 | 0 | 0 | 0 | 0 | 24 | 0.0% | 0 | 0 |
+| `lif_rmem` | 12 | 0 | 0 | 0 | 0 | 12 | 0.0% | 0 | 0 |
+| **TOTAL** | **126** | **42** | **39** | **48** | **0** | **255** | **18.8%** | **44** | **4** |
+
+**Where the SDC went, per structure [fact].** The comparison is
+record-by-record, not histogram-to-histogram: the two logs carry the
+same 255 injections in the same order, same group, same bit, same drawn
+burst and same drawn delay, so "moved" means one named injection changed
+class.
+
+| Group | SDC before | SDC after | Records that moved | To |
+|---|---:|---:|---:|---|
+| `lif_wmem` (live weights) | 9 / 16 | 0 / 16 | 9 | MASKED |
+| `lif_vmem` | 22 / 24 | 0 / 24 | 22 | MASKED |
+| `lif_rmem` | 12 / 12 | 0 / 12 | 12 | MASKED |
+| `lif_wmem_unread` (control) | 0 / 4 | 0 / 4 | 0 | — |
+| every other group, all 16 of them | 48 | 48 | **0** | — |
+
+Three things in that table are worth saying out loud.
+
+**Nothing moved the wrong way.** Not one record went from MASKED,
+CORRECTED or DETECTED into SDC, and no record outside the three hardened
+groups changed class at all — including `completed`, `out_ok`, the
+status word and the counters, which are compared field by field. A
+hardening that fixes one structure and perturbs another would show up
+here and does not.
+
+**The unread-weight control still reads MASKED**, which means it is
+still doing its job: it was MASKED before the hardening because the
+workload never reads that row, and it is MASKED now for the same reason,
+not because the code corrected it. It bounds the `lif_wmem` result the
+same way it did before and no better.
+
+**All 43 landed in MASKED, and none in CORRECTED.** That is not the code
+failing to report — it is `hw/rtl/pilot_top.v` not listening. Section
+4.1.
+
+The cross-cutting numbers, post-hardening [fact]:
+
+- **23 of the 39 DETECTED outcomes also had a corrupted output**,
+  unchanged from post-fix. The hardening touches no detection path.
+- **4 of the 48 SDC outcomes corrupted only the retained neuron state**,
+  down from 32: 3 `lif_scan` and 1 `evq_ptr`. Every one of the 28
+  state-only corruptions that disappeared was in `vmem`, `rmem` or
+  `wmem`. The three that remain are the mis-steered scan index of
+  section 5.7, which writes a *correct* update to the *wrong* neuron —
+  a code over the state word cannot see that, because the word it
+  protects is written consistently, just to the wrong address.
+- **15 latent registers** and **34 telemetry mismatches**, both
+  unchanged. Neither is in the hardened path.
+
+### 3.3 What the injector deposits into, and why that is the right experiment
+
+This question is asked before the numbers are believed, because getting
+it wrong has already cost this campaign a result once. When the
+configuration TMR replicas became real bank instances, the `cfg_tmr_*`
+targets were still depositing on `cfg_a` — by then a continuously driven
+net, not a register — and had to be moved to the banks' storage
+(`u_cfg_a.bits`; section 4 and `hw/tb/test_fi_campaign.py` target 6).
+The memory hardening has exactly the same shape: there is now a
+corrected read path sitting next to the raw storage, and a deposit into
+one is not the same experiment as a deposit into the other.
+
+**Checked against `hw/rtl/lif_core.v` [fact]:**
+
+- `wmem`, `vmem` and `rmem` are still `reg` arrays and still the
+  storage. The hardening deliberately did not rename or reshape them,
+  and says so at the declaration in those terms — *"they are the arrays
+  `hw/tb/test_fi_campaign.py` deposits upsets into, and a fault map is
+  worth nothing if the target names move under it"*. The campaign's
+  targets `u_lif.wmem[i]`, `u_lif.vmem[j]` and `u_lif.rmem[j]` are
+  unchanged and are flip-flop deposits.
+- The values the datapath consumes are `w_code`, `v_cur` and `r_cur`,
+  which are **wires** driven by `secded_dec` and `lif_state_dec`. The
+  campaign does not touch them, and must not.
+
+**So the experiment being run is: the flip-flop holds the wrong bit, and
+the read path has to cope.** That is the one that models an upset.
+Depositing on the corrected output would model a fault the code cannot
+see by construction — a combinational transient at the decoder output,
+which section 7.4 places outside this fault model — and would measure
+nothing except the datapath downstream of the decoder. **No retargeting
+was needed.**
+
+The evidence that the deposits still land is in the diff rather than in
+the argument. 43 records changed class and all 43 are these three
+targets: the same bit, in the same array, at the same drawn cycle,
+produced a silent corruption before the hardening and does not after. A
+deposit that had stopped landing would have moved nothing, and one that
+had never landed would have been MASKED in both runs. `test_00_control`
+independently refuses to run the campaign at all unless a deposit into
+`u_lif.state` comes back DETECTED (section 1.8).
+
+What the raw-storage choice does **not** settle is the check fields.
+`wchk` and `smem` are 80 flip-flops of storage that did not exist before
+the hardening, they are part of every codeword the decoders read, and
+until 2026-08-27 no injection reached them. That is the same shape of
+gap as the one section 7.4 describes for the TMR replicas — a protection
+believed rather than measured — so the target list was extended.
+
+**Check fields, extension of 2026-08-27 [fact].** 32 injections, drawn
+from a second seeded stream so the 255 above are untouched (section 2):
+
+| Group | Target | Bits | MASKED | CORRECTED | DETECTED | SDC | HANG | n | SDC rate |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `lif_wchk` | `u_lif.wchk` | 0, 3, 7 (codeword 0); 8, 11, 15 (codeword 1) | 12 | 0 | 0 | 0 | 0 | 12 | 0.0% |
+| `lif_wchk_unread` | `u_lif.wchk` | 24 (codeword 3, control) | 2 | 0 | 0 | 0 | 0 | 2 | 0.0% |
+| `lif_smem` | `u_lif.smem` | 0, 2, 5 / 18, 20, 23 / 42, 44, 47 (neurons 0, 3, 7) | 18 | 0 | 0 | 0 | 0 | 18 | 0.0% |
+| **TOTAL** | | | **32** | 0 | 0 | **0** | 0 | **32** | **0.0%** |
+
+Both codewords the `lif_wchk` group hits are ones the workload reads:
+codeword 0 covers axons 0 and 1, codeword 1 covers axons 2 and 3, and
+the stimulus spikes all four. Codeword 3 is the control and is never
+read, exactly like the `lif_wmem_unread` target.
+
+**What that does and does not show.** It shows the protection does not
+import the risk it removes: 32 for 32, no silent corruption, no wrong
+spike, no wrong retained state, no flag. The mechanism is worth naming
+so the zero is not over-read — a single-bit error in a systematic code's
+check field leaves the *data* field untouched, so the only way it could
+corrupt an inference is if the decoder mis-corrected, flipping a data
+bit in response to a syndrome that points at a check bit. **That is the
+failure this group tests for, and it did not occur.** It is a
+smaller claim than "the check bits are safe", and it is the claim the
+experiment supports.
+
+**One consequence that follows from the mechanism rather than from the
+measurement, stated because it belongs in a hardening plan
+[estimate].** The two check fields are not repaired alike. `smem` is
+re-encoded by the scan's write-back on the next event or tick that
+visits that neuron, so an upset in it is gone within a few cycles.
+`wchk` has no such path — the scan never writes `wmem` — so an upset in
+a weight check field persists until the host rewrites that word, and it
+is not announced, because the correction reaches no counter and no pin
+(section 4.1). For the rest of that interval the codeword has spent its
+one-error budget, and a second upset anywhere in the same 72 bits is a
+DED rather than a correction. This campaign is single-bit by
+construction (section 7.4), so it measures none of that; it is an
+argument for wiring the telemetry and for the periodic weight reload of
+section 5.4, not a measured rate.
+
+**Two of the 32 drew a phase identical to the pinned one**, so the
+extension is 30 distinct (target, bit, phase) points and not 32
+[fact]. Section 7.1 applies unchanged.
+
+**The campaign of record is therefore 287 injections [fact]: 158 MASKED
+(55.1%), 42 CORRECTED (14.6%), 39 DETECTED (13.6%), 48 SDC (16.7%),
+0 HANG.** That is the number `hw/tb/fi_campaign_results.json` holds and
+the one to quote for the design as it stands. The 255-injection figure
+of section 3.2 (18.8% SDC) is the one to quote when comparing against
+the pre-hardening run, because it is the same 255 experiments. Both are
+in this document on purpose: the first says what the design does, the
+second says what the change did.
+
+
+
+
 
 ## 4. What held
 
@@ -578,6 +839,70 @@ target in a crossbar row the workload never reads. It came back MASKED
 in all four, which is what makes the `lif_wmem` rate in section 3 a
 statement about weights the datapath actually uses rather than a
 statement about the stimulus.
+
+### 4.1 The memory codes hold — and nothing on the chip says so
+
+**The codes: 84 for 84 [fact].** Post-hardening, at the same seed and
+the same 8 x 8 geometry: `lif_wmem` 16/16, `lif_vmem` 24/24,
+`lif_rmem` 12/12, `lif_wchk` 12/12, `lif_wchk_unread` 2/2 and
+`lif_smem` 18/18 — every single-bit deposit into a coded memory file or
+its check field left the drained event stream and the retained neuron
+state bit-exact against `sw/golden`, with no silent corruption. The
+campaign now enforces that as a pass criterion (`test_04_summary`: *a
+single-bit upset in a coded memory file must never be SDC*), so a future
+edit that bypasses a decoder or widens a word past the code fails the
+suite rather than quietly reducing the number.
+
+**And every one of the 84 classified MASKED. Not one CORRECTED.**
+
+That is not the classifier being conservative; it is the measurement of
+a real gap. `hw/rtl/lif_core.v` raises four level outputs when it
+corrects or fails to correct — `wmem_sec`, `wmem_ded`, `state_sec`,
+`state_ded` — and `hw/rtl/pilot_top.v` leaves **all four unconnected**
+at the `u_lif` instantiation [fact, read off the port map]. `lif_core`'s
+own header records the decision and calls the wiring "the integration
+step that makes these corrections visible in telemetry"; the integration
+step has not been taken. So:
+
+- no counter moves, no sticky latches, no fault pin lights, and
+  `STATUS` reads exactly as it does on a clean run;
+- this campaign, which is allowed to observe only what a bench with an
+  SPI master and a logic analyser observes (section 1.2), has no
+  evidence a correction happened and must call the run MASKED;
+- a host has none either.
+
+**Why that matters more here than it would elsewhere.** This part's
+stated purpose is to *measure* the upset environment. Section 5.5 already
+makes the point that for such a part the counters are the product. The
+hardening has just moved the majority of the design's flip-flops under a
+code that corrects — 416 of them, section 2.1 — and the number of those
+corrections the mission can report is zero. Before the hardening a
+`vmem` upset produced a wrong answer that nobody was told about; after
+it, it produces a right answer that nobody is told about. The second is
+much better and it is still not what a radiation-measurement payload is
+for.
+
+**The uncorrectable case is the sharper end of the same gap
+[estimate, from the mechanism; this campaign is single-bit and does not
+inject doubles into these arrays].** A double-bit error in a neuron
+state word passes the data field through uncorrected with `state_ded`
+raised, and a double-bit error in a weight word triggers the E10 zero
+substitution with `wmem_ded` raised. Both are exactly the fail-operational
+behaviour `lif_core`'s header specifies, and with the outputs
+unconnected both are **silent**: the part degrades as designed and
+announces nothing. The design knows; the chip does not say.
+
+**Cost of closing it [estimate].** `pilot_top` already carries
+`CNT_SEC`, `CNT_DED`, the SEC and DED pins and their stickies, built for
+the weight staging word's SECDED. Wiring the four `lif_core` outputs in
+is an OR into the existing count-enable and sticky-set terms plus edge
+detection on the level outputs, which is the same shape as the
+`tmr_voter` mismatch path already in the block. No new counter, no new
+pin, no new register-map address. The one design question it forces is
+whether a `lif_core` correction should share `CNT_SEC` with the staging
+word or get its own counter — sharing loses the ability to tell an array
+upset from a staging upset, and the register map has spare addresses.
+This is item 1 of section 6.2.
 
 ---
 
@@ -778,6 +1103,18 @@ corrects.
 
 ### 5.3 The neuron state file is unprotected, and its corruption persists
 
+> **Superseded by the hardening of 2026-08-26, and kept in full.** The
+> measurement below is what motivated the change and it is not
+> withdrawn: at the time it was taken, `vmem` and `rmem` had no
+> protection of any kind. `hw/rtl/lif_core.v` now codes `{R, V}` as one
+> SECDED (26,20) word per neuron, and the re-run of 2026-08-27 puts the
+> same 24 `vmem` and the same 12 `rmem` injections — same bits, same
+> phases, same seed — at **0/24 and 0/12 SDC** (section 3.2). Read this
+> section as the diagnosis, not as the current behaviour. The
+> *persistence* argument it makes is the part that survives and is worth
+> keeping: it is why the fix had to correct rather than detect, and
+> `lif_core.v`'s header records that reasoning.
+
 `vmem` 22/24 SDC, `rmem` 12/12 SDC [fact]. Together 160 flip-flops with
 no protection of any kind — no parity, no ECC, no TMR, and deliberately
 not even on the reset net (docs/10 section 3).
@@ -820,6 +1157,17 @@ issuing `STATE_CLR` at frame boundaries, which is a host policy
 available today at zero silicon cost.
 
 ### 5.4 Weight storage is protected on the way in and unprotected once there
+
+> **Superseded by the hardening of 2026-08-26, and kept in full.** The
+> gap this section names — protected staging word, unprotected array —
+> is closed: `lif_core.wmem` now sits under one SECDED (72,64) codeword
+> per 16 weights, and the same 16 live-weight injections that were 9/16
+> SDC here are **0/16** in the re-run of 2026-08-27 (section 3.2). The
+> zero-silicon host mitigation below is still worth having, for the
+> reason `lif_core.v`'s header gives: the load port's read-modify-write
+> re-encodes a whole word, so a full image reload leaves every codeword
+> exactly clean, which bounds the accumulation of a second error in a
+> word the code can only correct one error in.
 
 The ECC path is clean (section 4): 12/12 singles corrected, 4/4 doubles
 detected, 7/7 scrub repairs. But that protects the 72-bit
@@ -933,6 +1281,12 @@ its conclusions were not imported.
 ---
 
 ## 6. Ranking for the next hardening wave
+
+### 6.1 The ranking that drove wave 4 (pre-hardening)
+
+Kept because it is the reasoning the change was made on, and because a
+ranking is only checkable against what happened next. Everything in this
+subsection is the pre-hardening measurement.
 
 Two rankings, because they answer different questions and the wrong one
 leads to the wrong wave.
@@ -1257,29 +1611,31 @@ Relationship to the rest of the verification programme:
 
 ### Notes for the integrator
 
-- `hw/tb/fi_campaign_results.json` is a generated artifact of the
-  campaign. `.gitignore` (integrator-owned) currently covers
-  `hw/tb/sim_build*/` and `hw/tb/results_*.xml` but not this file. It
-  should either be committed as evidence — which is what the sibling
-  programme does with its equivalent, and what section 8 above assumes
-  when it calls the log an acceptance baseline — or added to
-  `.gitignore`. Committing it is the recommendation.
-  `hw/tb/fi_campaign_results_4x8.json`, the alternate-geometry log,
-  falls under whichever decision is taken; it is evidence of the same
-  kind but not the acceptance baseline.
+- **Resolved 2026-08-26.** `hw/tb/fi_campaign_results.json` was
+  committed as evidence, which was this section's recommendation, and
+  `hw/tb/fi_campaign_results_4x8.json` with it. Both are tracked and
+  neither is in `.gitignore`. The consequence, stated so it is not
+  discovered later: the log is a versioned artifact now, so a campaign
+  re-run shows up as a diff, and *that diff is the measurement*. The
+  memory hardening of 2026-08-26 is legible in git history as 43 records
+  changing class in that file and nothing else moving.
 - `hw/tb/results_fi_*.xml` and `hw/tb/sim_build_fi_*/` are already
   covered by the existing patterns; no change needed. The unsuffixed
   `results_fi.xml` and `sim_build_fi/` of the first revision are no
   longer produced and can be deleted from a working tree that has them.
-- `hw/tb/Makefile` (the `TB=<block>` dispatcher, not owned by this
-  track) lists `TB_FRAGMENTS := regbank lif secded tmr pilot`. Adding
-  `fi` to that list would make `make TB=fi` work alongside the other
-  suites and would be consistent with the docs/11 section 2 convention.
-  It was deliberately **not** added here, because the campaign should
-  stay off the default sweep: at 80 s it is six times the LIF sweep
-  (14.2 s), which is the next slowest suite in the repository. If it is
-  added, it should be as an explicit goal, never as part of a bare
-  `make`.
+- **Resolved 2026-08-26, the other way.** `hw/tb/Makefile` now reads
+  `TB_FRAGMENTS := regbank lif secded tmr pilot scrub fi`, so `make
+  TB=fi` works. This section had argued against adding it; the argument
+  was about the *default sweep*, and the dispatcher is not the default
+  sweep — `make TB=fi` is an explicit goal, which is exactly the
+  condition the argument allowed. The thing to keep true is that a bare
+  `make` in `hw/tb` must not pull the campaign in. It does not.
+  The cost figure that argument used has moved, and by a lot. The
+  campaign was 80 s when this was written; after the memory hardening
+  put two SECDED decoders and an encoder in the neuron core's per-cycle
+  read path, the same 255 injections take **674 s** on this machine
+  (section 8). That makes the case for keeping it off the default sweep
+  stronger than it was, not weaker.
 - ROADMAP: this closes the fault-injection half of the wave-3 work item
   and is evidence for the G1 verification bar. No ROADMAP edit was made
   from this track.

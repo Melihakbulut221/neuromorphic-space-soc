@@ -67,6 +67,18 @@ allowed to declare an answer correct. Every record additionally carries
 `out_ok`, so the share of DETECTED outcomes that also corrupted the
 output is reportable rather than buried.
 
+One consequence of that rule is worth stating before the numbers are
+read. Since the memory hardening of 2026-08-26, lif_core corrects
+single-bit upsets in wmem / vmem / rmem and reports them on four LEVEL
+outputs (wmem_sec, wmem_ded, state_sec, state_ded) -- which
+hw/rtl/pilot_top.v leaves UNCONNECTED. Nothing on the register side
+counts them, so those corrections reach no counter and no pin, and this
+classifier, which reads only what the chip reports, has to call them
+MASKED rather than CORRECTED. That is not a defect in the classifier: it
+is the measurement of a real gap, and docs/16 section 4 reports it as
+one. A correction the mission cannot see is a correction the mission
+cannot report.
+
 The compared output is the whole observable result of the run: the
 ordered stream of 16-bit event words drained from EVQ_OUT, and the final
 neuron state file (V and R for every neuron) read back through
@@ -139,6 +151,25 @@ from golden.regmap_gen import ADDR  # noqa: E402
 # ---------------------------------------------------------------------
 CAMPAIGN_SEED = 0x16F1_2026
 RNG = random.Random(CAMPAIGN_SEED)
+
+# A SECOND, independent stream for targets added after the campaign of
+# record was frozen. Everything drawn from RNG must keep drawing the same
+# numbers in the same order, or the 255 records docs/16 reports are not
+# comparable with the run that follows them. Appending a target to
+# target_list() would shift every later draw, so the groups named in
+# EXT_GROUPS draw from EXT_RNG instead and the campaign of record is
+# untouched: measured, the first 255 records of an extended run are
+# field-for-field identical to the 255 of the unextended one.
+EXT_RNG = random.Random(CAMPAIGN_SEED ^ 0xECC_0001)
+
+# Added 2026-08-27, after the memory hardening of hw/rtl/lif_core.v. The
+# hardening put 80 new flip-flops into the design -- the SECDED check
+# fields wchk (8 bits per 16 weights) and smem (6 bits per neuron) -- and
+# a check field is state like any other: an upset in it is an upset in
+# the codeword. A protection whose own storage is unmeasured is a claim,
+# which is the same mistake the configuration-TMR domain made in a
+# different form, so the check fields are targets now.
+EXT_GROUPS = ("lif_wchk", "lif_wchk_unread", "lif_smem")
 
 CLK_NS = 10          # 100 MHz simulation clock, as every other suite
 HALF = 20            # serial half period: SER_SCK = clk/4, the fast limit
@@ -687,7 +718,7 @@ async def injection(dut, geo, group, target, bits, burst, delay,
     return rec
 
 
-def phases(n, pin_first=True):
+def phases(n, pin_first=True, rng=None):
     """Seeded injection phases as (burst, delay) pairs.
 
     With pin_first, phase 0 is pinned to the first busy cycle of the first
@@ -695,11 +726,16 @@ def phases(n, pin_first=True):
     reachable at. Queue storage and pointers use pin_first=False: at the
     first busy cycle only one event has been written, so a pinned phase
     would deposit into slots the burst is about to overwrite.
+
+    `rng` selects the stream. The default is the campaign of record's;
+    EXT_GROUPS draw from EXT_RNG so that adding a target cannot move the
+    phases of the targets that were measured before it.
     """
+    rng = RNG if rng is None else rng
     out = [(0, 0)] if pin_first else []
     while len(out) < n:
-        b = RNG.randrange(len(BURSTS))
-        out.append((b, RNG.randrange(BURST_WINDOW[b])))
+        b = rng.randrange(len(BURSTS))
+        out.append((b, rng.randrange(BURST_WINDOW[b])))
     return out[:n]
 
 
@@ -851,6 +887,40 @@ def target_list(n_neurons, n_axons, q_depth):
     #     on the only structure in the design that can deadlock.
     t += [("dispatch", "dstate", [0, 1], 5, True),
           ("dispatch", "evw", [0, 2, 14, 15], 2, True)]
+
+    # 13. The SECDED CHECK FIELDS of the coded memory files. Added
+    #     2026-08-27, after the hardening of hw/rtl/lif_core.v; they draw
+    #     from EXT_RNG so the twelve groups above keep the phases docs/16
+    #     reports.
+    #
+    #     A check field is storage, and hardening pays for it in
+    #     flip-flops: +32 for wchk (8 SECDED check bits per 16 weights)
+    #     and +48 for smem (6 bits per neuron state word) at 8 x 8. If an
+    #     upset in one of those 80 bits could corrupt an inference the
+    #     protection would be importing the risk it removes, so the
+    #     question has to be asked with a deposit rather than answered
+    #     with an argument -- the code is systematic and a single-bit
+    #     error in the check field is a single-bit error in the codeword,
+    #     but that is a property of the code, not evidence about this
+    #     instantiation of it.
+    #
+    #     `wchk` and `smem` are flat packed vectors (lif_core.v header
+    #     section 5), so the bit index is global: check bit b of weight
+    #     codeword w is wchk[w*8 + b], and check bit b of neuron j is
+    #     smem[j*6 + b].
+    wpw, st_c = 16, 6
+    n_wword = (syn + wpw - 1) // wpw
+    live_wword = (live + wpw - 1) // wpw
+    t += [("lif_wchk", "u_lif.wchk", [w * 8 + b for b in (0, 3, 7)], 2, True)
+          for w in range(live_wword)]
+    # The same control the wmem group carries, for the same reason: a
+    # codeword the workload never reads must come back MASKED, or the
+    # lif_wchk rate would be a statement about the stimulus.
+    if n_wword > live_wword:
+        t += [("lif_wchk_unread", "u_lif.wchk", [(n_wword - 1) * 8], 2, True)]
+    t += [("lif_smem", "u_lif.smem", [j * st_c + b for b in (0, 2, 5)],
+           2, True)
+          for j in spread(n_neurons, 3)]
 
     return t
 
@@ -1024,8 +1094,9 @@ async def test_01_structural_injections(dut):
     for group, path, bits, n_phase, pin_first in \
             target_list(n_neurons, n_axons, q_depth):
         latent_regs = lat.get(path, ())
+        rng = EXT_RNG if group in EXT_GROUPS else RNG
         for bit in bits:
-            for b, d in phases(n_phase, pin_first):
+            for b, d in phases(n_phase, pin_first, rng):
                 await injection(dut, geo, group, path, bit, b, d,
                                 latent_regs=latent_regs)
     dut._log.info(f"structural injections: {len(RESULTS)}")
@@ -1205,3 +1276,17 @@ async def test_04_summary(dut):
     dbl = groups.get("ecc_port_double", {})
     assert dbl and dbl["DETECTED"] == sum(dbl.values()), \
         f"a double-bit weight-word upset must be DETECTED, got {dbl}"
+    # The memory hardening of 2026-08-26 (hw/rtl/lif_core.v header section
+    # MEMORY HARDENING) makes one promise and it is checkable here: every
+    # bit of wmem, vmem, rmem and of the two check fields now sits inside
+    # a systematic SECDED codeword, so ANY single-bit upset in any of them
+    # is corrected on the read path and no single-bit upset in any of them
+    # may produce a silent corruption. This is the criterion that would
+    # fail if a future edit -- a wider word, a bypassed decoder, a read
+    # port that forgets to decode -- quietly took the protection away.
+    coded = {c: sum(groups.get(g, {}).get(c, 0) for g in (
+        "lif_wmem", "lif_wmem_unread", "lif_vmem", "lif_rmem",
+        "lif_wchk", "lif_wchk_unread", "lif_smem")) for c in CLASSES}
+    assert sum(coded.values()) > 0 and coded["SDC"] == 0, \
+        f"a single-bit upset in a coded memory file must never be SDC, " \
+        f"got {coded}"
