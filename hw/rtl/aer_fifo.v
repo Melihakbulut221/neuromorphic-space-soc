@@ -83,6 +83,39 @@ module aer_fifo #(
 
     localparam [DROP_W-1:0] DROP_MAX = {DROP_W{1'b1}};
 
+    // These four pointers are the highest-rate silent corruptor measured
+    // anywhere in the pilot, and they are unprotected. The fault-injection
+    // campaign put 24 single-bit upsets into them and 22 corrupted the
+    // drained event stream with nothing flagged: whole bursts re-emitted,
+    // events duplicated, events lost, events fabricated, and an unwritten
+    // slot presented as a spike. An event interface has no sequence number
+    // and no length field -- docs/10 section 7.1 freezes the word at TYPE
+    // plus a 10-bit ID -- so a consumer cannot tell any of those from a
+    // real spike train. Twelve flip-flops, one percent of the register
+    // count, carry 46 percent of the design's residual silent corruption
+    // (docs/16 section 5.2).
+    //
+    // TMR here is the best protection-per-flip-flop available in the
+    // design and it is the named next hardening step. Whoever takes it:
+    // the obvious implementation does not work. Three pointer replicas
+    // written from the same enable and the same increment are provably
+    // equivalent, so yosys `opt_dff` normalises them and `opt_merge`
+    // hashes them into one bank -- the design ships one physical pointer
+    // read three times, a voter that agrees with itself, and a claim in
+    // the datasheet that is false. That is not hypothetical: it is
+    // exactly what happened to the configuration TMR in pilot_top.v, it
+    // survived review because a check read a null result as a positive
+    // one, and it was caught only by counting flip-flop cells in the real
+    // hardened netlist. Use the pattern that was proven to work there --
+    // `pilot_cfg_bank`, keep_hierarchy plus an XOR mix that makes the
+    // replicas structurally non-equivalent rather than merely
+    // differently-polarised -- and extend
+    // `sw/tests/test_synthesis_guards.py` to count these banks too, with
+    // a mutation check, before believing any of it. Note also that this
+    // module is a formally proven leaf instantiated twice and named in
+    // several .sby file lists, so the four proofs and the eleven cocotb
+    // tests are part of the change, not a follow-up to it.
+    //
     // Pointers carry one extra wrap bit; occupancy is their difference.
     reg [AW:0] wr_ptr;
     reg [AW:0] rd_ptr;
