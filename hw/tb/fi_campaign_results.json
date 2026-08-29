@@ -57,11 +57,11 @@
    28
   ]
  },
- "wall_seconds": 1036.6,
+ "wall_seconds": 509.5,
  "total": 287,
  "histogram": {
-  "MASKED": 158,
-  "CORRECTED": 42,
+  "MASKED": 79,
+  "CORRECTED": 121,
   "DETECTED": 39,
   "SDC": 48,
   "HANG": 0
@@ -75,22 +75,22 @@
    "HANG": 0
   },
   "lif_vmem": {
-   "MASKED": 24,
-   "CORRECTED": 0,
+   "MASKED": 0,
+   "CORRECTED": 24,
    "DETECTED": 0,
    "SDC": 0,
    "HANG": 0
   },
   "lif_rmem": {
-   "MASKED": 12,
-   "CORRECTED": 0,
+   "MASKED": 0,
+   "CORRECTED": 12,
    "DETECTED": 0,
    "SDC": 0,
    "HANG": 0
   },
   "lif_wmem": {
-   "MASKED": 16,
-   "CORRECTED": 0,
+   "MASKED": 3,
+   "CORRECTED": 13,
    "DETECTED": 0,
    "SDC": 0,
    "HANG": 0
@@ -173,8 +173,8 @@
    "HANG": 0
   },
   "lif_wchk": {
-   "MASKED": 12,
-   "CORRECTED": 0,
+   "MASKED": 0,
+   "CORRECTED": 12,
    "DETECTED": 0,
    "SDC": 0,
    "HANG": 0
@@ -187,8 +187,8 @@
    "HANG": 0
   },
   "lif_smem": {
-   "MASKED": 18,
-   "CORRECTED": 0,
+   "MASKED": 0,
+   "CORRECTED": 18,
    "DETECTED": 0,
    "SDC": 0,
    "HANG": 0
@@ -234,21 +234,21 @@
    "n": 24,
    "sdc_stream": 0,
    "sdc_state_only": 0,
-   "tel_differs": 0,
+   "tel_differs": 24,
    "latent": 0
   },
   "lif_rmem": {
    "n": 12,
    "sdc_stream": 0,
    "sdc_state_only": 0,
-   "tel_differs": 0,
+   "tel_differs": 12,
    "latent": 0
   },
   "lif_wmem": {
    "n": 16,
    "sdc_stream": 0,
    "sdc_state_only": 0,
-   "tel_differs": 0,
+   "tel_differs": 13,
    "latent": 0
   },
   "lif_wmem_unread": {
@@ -332,7 +332,7 @@
    "n": 12,
    "sdc_stream": 0,
    "sdc_state_only": 0,
-   "tel_differs": 0,
+   "tel_differs": 12,
    "latent": 0
   },
   "lif_wchk_unread": {
@@ -346,7 +346,7 @@
    "n": 18,
    "sdc_stream": 0,
    "sdc_state_only": 0,
-   "tel_differs": 0,
+   "tel_differs": 18,
    "latent": 0
   },
   "ecc_port_single": {
@@ -381,7 +381,7 @@
  "detected_with_wrong_output": 23,
  "state_only_divergence": 4,
  "latent_register_corruption": 15,
- "telemetry_mismatch": 34,
+ "telemetry_mismatch": 113,
  "injections": [
   {
    "group": "lif_fsm",
@@ -1269,14 +1269,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1284,7 +1284,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1338,7 +1338,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1346,14 +1346,14 @@
    "bit": 0,
    "burst": 1,
    "delay": 9,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1361,7 +1361,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1415,7 +1415,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1423,14 +1423,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1438,7 +1438,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1492,7 +1492,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1500,14 +1500,14 @@
    "bit": 4,
    "burst": 2,
    "delay": 4,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1515,7 +1515,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1569,7 +1569,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1577,14 +1577,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1592,7 +1592,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1646,7 +1646,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1654,14 +1654,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 18,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1669,7 +1669,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1723,7 +1723,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1731,14 +1731,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1746,7 +1746,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1800,7 +1800,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1808,14 +1808,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 6,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1823,7 +1823,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1877,7 +1877,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1885,14 +1885,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1900,7 +1900,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1954,7 +1954,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1962,14 +1962,14 @@
    "bit": 0,
    "burst": 2,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1977,7 +1977,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2031,7 +2031,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2039,14 +2039,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2054,7 +2054,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2108,7 +2108,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2116,14 +2116,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 2,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2131,7 +2131,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2185,7 +2185,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2193,14 +2193,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2208,7 +2208,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2262,7 +2262,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2270,14 +2270,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2285,7 +2285,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2339,7 +2339,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2347,14 +2347,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2362,7 +2362,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2416,7 +2416,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2424,14 +2424,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2439,7 +2439,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2493,7 +2493,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2501,14 +2501,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2516,7 +2516,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2570,7 +2570,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2578,14 +2578,14 @@
    "bit": 0,
    "burst": 2,
    "delay": 9,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2593,7 +2593,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2647,7 +2647,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2655,14 +2655,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2670,7 +2670,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2724,7 +2724,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2732,14 +2732,14 @@
    "bit": 4,
    "burst": 2,
    "delay": 19,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2747,7 +2747,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2801,7 +2801,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2809,14 +2809,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2824,7 +2824,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2878,7 +2878,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2886,14 +2886,14 @@
    "bit": 11,
    "burst": 2,
    "delay": 23,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2901,7 +2901,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2955,7 +2955,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2963,14 +2963,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2978,7 +2978,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3032,7 +3032,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -3040,14 +3040,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 16,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3055,7 +3055,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3109,7 +3109,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3117,14 +3117,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3132,7 +3132,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3186,7 +3186,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3194,14 +3194,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 7,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3209,7 +3209,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3263,7 +3263,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3271,14 +3271,14 @@
    "bit": 1,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3286,7 +3286,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3340,7 +3340,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3348,14 +3348,14 @@
    "bit": 1,
    "burst": 1,
    "delay": 16,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3363,7 +3363,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3417,7 +3417,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3425,14 +3425,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3440,7 +3440,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3494,7 +3494,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3502,14 +3502,14 @@
    "bit": 3,
    "burst": 2,
    "delay": 15,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3517,7 +3517,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3571,7 +3571,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3579,14 +3579,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3594,7 +3594,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3648,7 +3648,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3656,14 +3656,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 11,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3671,7 +3671,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3725,7 +3725,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3733,14 +3733,14 @@
    "bit": 1,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3748,7 +3748,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3802,7 +3802,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3810,14 +3810,14 @@
    "bit": 1,
    "burst": 0,
    "delay": 20,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3825,7 +3825,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3879,7 +3879,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3887,14 +3887,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3902,7 +3902,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3956,7 +3956,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -3964,14 +3964,14 @@
    "bit": 3,
    "burst": 2,
    "delay": 2,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3979,7 +3979,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4033,7 +4033,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4041,14 +4041,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4056,7 +4056,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4110,7 +4110,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4118,14 +4118,14 @@
    "bit": 0,
    "burst": 1,
    "delay": 14,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 7,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4133,7 +4133,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4187,7 +4187,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4195,14 +4195,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4210,7 +4210,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4264,7 +4264,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4272,14 +4272,14 @@
    "bit": 3,
    "burst": 1,
    "delay": 6,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 7,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4287,7 +4287,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4341,7 +4341,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4349,14 +4349,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4364,7 +4364,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4418,7 +4418,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4503,14 +4503,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4518,7 +4518,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4572,7 +4572,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4580,14 +4580,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 5,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 16,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4595,7 +4595,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4649,7 +4649,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4657,14 +4657,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4672,7 +4672,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4726,7 +4726,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4811,14 +4811,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4826,7 +4826,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4880,7 +4880,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4888,14 +4888,14 @@
    "bit": 3,
    "burst": 1,
    "delay": 8,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 5,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4903,7 +4903,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -4957,7 +4957,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -4965,14 +4965,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -4980,7 +4980,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -5034,7 +5034,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -5119,14 +5119,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -5134,7 +5134,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -5188,7 +5188,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -5196,14 +5196,14 @@
    "bit": 3,
    "burst": 1,
    "delay": 10,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 4,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -5211,7 +5211,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -5265,7 +5265,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem_unread",
@@ -17833,14 +17833,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -17848,7 +17848,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -17902,7 +17902,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -17910,14 +17910,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 16,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -17925,7 +17925,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -17979,7 +17979,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -17987,14 +17987,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18002,7 +18002,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18056,7 +18056,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18064,14 +18064,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 22,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 7,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18079,7 +18079,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18133,7 +18133,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18141,14 +18141,14 @@
    "bit": 7,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 19,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18156,7 +18156,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18210,7 +18210,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18218,14 +18218,14 @@
    "bit": 7,
    "burst": 0,
    "delay": 19,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 7,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18233,7 +18233,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18287,7 +18287,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18295,14 +18295,14 @@
    "bit": 8,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18310,7 +18310,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18364,7 +18364,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18372,14 +18372,14 @@
    "bit": 8,
    "burst": 1,
    "delay": 11,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 4,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18387,7 +18387,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18441,7 +18441,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18449,14 +18449,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18464,7 +18464,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18518,7 +18518,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18526,14 +18526,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18541,7 +18541,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18595,7 +18595,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18603,14 +18603,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 8,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18618,7 +18618,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18672,7 +18672,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk",
@@ -18680,14 +18680,14 @@
    "bit": 15,
    "burst": 1,
    "delay": 13,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 3,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18695,7 +18695,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18749,7 +18749,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wchk_unread",
@@ -18911,14 +18911,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -18926,7 +18926,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -18980,7 +18980,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -18988,14 +18988,14 @@
    "bit": 0,
    "burst": 1,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19003,7 +19003,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19057,7 +19057,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19065,14 +19065,14 @@
    "bit": 2,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19080,7 +19080,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19134,7 +19134,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19142,14 +19142,14 @@
    "bit": 2,
    "burst": 0,
    "delay": 4,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19157,7 +19157,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19211,7 +19211,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19219,14 +19219,14 @@
    "bit": 5,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19234,7 +19234,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19288,7 +19288,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19296,14 +19296,14 @@
    "bit": 5,
    "burst": 1,
    "delay": 18,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19311,7 +19311,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19365,7 +19365,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19373,14 +19373,14 @@
    "bit": 18,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19388,7 +19388,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19442,7 +19442,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19450,14 +19450,14 @@
    "bit": 18,
    "burst": 1,
    "delay": 17,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19465,7 +19465,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19519,7 +19519,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19527,14 +19527,14 @@
    "bit": 20,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19542,7 +19542,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19596,7 +19596,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19604,14 +19604,14 @@
    "bit": 20,
    "burst": 0,
    "delay": 24,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19619,7 +19619,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19673,7 +19673,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19681,14 +19681,14 @@
    "bit": 23,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19696,7 +19696,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19750,7 +19750,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19758,14 +19758,14 @@
    "bit": 23,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19773,7 +19773,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19827,7 +19827,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19835,14 +19835,14 @@
    "bit": 42,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19850,7 +19850,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19904,7 +19904,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19912,14 +19912,14 @@
    "bit": 42,
    "burst": 0,
    "delay": 24,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -19927,7 +19927,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -19981,7 +19981,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -19989,14 +19989,14 @@
    "bit": 44,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -20004,7 +20004,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -20058,7 +20058,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -20066,14 +20066,14 @@
    "bit": 44,
    "burst": 2,
    "delay": 1,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -20081,7 +20081,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -20135,7 +20135,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -20143,14 +20143,14 @@
    "bit": 47,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -20158,7 +20158,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -20212,7 +20212,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_smem",
@@ -20220,14 +20220,14 @@
    "bit": 47,
    "burst": 0,
    "delay": 22,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -20235,7 +20235,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -20289,7 +20289,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "ecc_port_single",

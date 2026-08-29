@@ -853,6 +853,33 @@ single-bit upset in a coded memory file must never be SDC*), so a future
 edit that bypasses a decoder or widens a word past the code fails the
 suite rather than quietly reducing the number.
 
+**CLOSED 2026-08-27 — the wiring was done and this campaign re-run.**
+`hw/rtl/pilot_top.v` now connects all four outputs and counts them on
+`CNT_SEC`/`CNT_DED` with their sticky bits. At the same seed and
+geometry the distribution moves from 158 MASKED / 42 CORRECTED / 39
+DETECTED / 48 SDC / 0 HANG to **79 MASKED / 121 CORRECTED / 39 DETECTED
+/ 48 SDC / 0 HANG** [fact] — 79 injections cross from MASKED to
+CORRECTED. The silent-corruption count is unchanged at 48, which is the
+expected result and worth saying plainly: wiring telemetry changes what
+the chip can *report*, never what it computes.
+
+Two notes from doing it. The counters are shared with the weight-load
+and scrub codec rather than split per domain, because `CNT_SEC` is
+defined generically in `regmap.yaml`; the cost is that a host cannot
+tell a synapse-array correction from a load-path one, and per-domain
+attribution is a named follow-up rather than something to bolt on.
+`FAULT_ADDR` is deliberately not written from the core's path, since it
+holds a loader-address-space index — so a `DED_SEEN` with an unchanged
+`FAULT_ADDR` means the uncorrectable word was inside the core, which is
+the one bit of attribution the aggregate does preserve. And both domains
+can raise an event in the same cycle: two branches of one always block
+writing the same counter would keep only the last, dropping an event on
+exactly the busy cycles a radiation counter exists to record, so the
+increment is computed once, adds the number of events, and saturates.
+
+The finding as originally written, retained because it is the reasoning
+that produced the fix:
+
 **And every one of the 84 classified MASKED. Not one CORRECTED.**
 
 That is not the classifier being conservative; it is the measurement of

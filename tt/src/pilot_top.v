@@ -1324,6 +1324,43 @@ module pilot_top #(
     // reset, so it needs no sticky flop on this side.
     wire lif_err_cfg;
 
+    // ECC status from the neuron core's own protected memories. These are
+    // level outputs, asserted for the cycle in which a read used a word
+    // the decoder acted on. Until 2026-08-27 all four were left
+    // unconnected here, so the codes corrected and nothing on the chip
+    // said so: the fault-injection campaign measured 84 corrections and
+    // had to classify every one MASKED, because a host with an SPI master
+    // sees no counter move, no sticky latch and no fault pin. For a part
+    // whose stated purpose is to measure the upset environment, the
+    // counters are the product (docs/16 section 4.1).
+    wire lif_wmem_sec, lif_wmem_ded, lif_state_sec, lif_state_ded;
+
+    // The core's corrections join the same CNT_SEC/CNT_DED counters as
+    // the weight-load and scrub codec. Those registers are defined
+    // generically ("Corrected single-bit ECC events", regmap.yaml 0x70),
+    // so the aggregate is what the map already promises. The cost, stated
+    // rather than hidden: a host reading CNT_SEC cannot tell a synapse
+    // array correction from a load-path one. Per-domain attribution needs
+    // its own counters, a regmap entry and the checked conventions that
+    // come with one (docs/10 section 10, npu_regbank.v, test_regmap.py);
+    // it is a named follow-up, not a thing to bolt on here.
+    wire lif_ecc_sec = lif_wmem_sec  || lif_state_sec;
+    wire lif_ecc_ded = lif_wmem_ded  || lif_state_ded;
+
+    // Both ECC domains can report in the same cycle, and a counter that
+    // is written from two branches of one always block keeps only the
+    // last one -- which would silently drop an event on exactly the busy
+    // cycles a radiation counter exists to record. So the increment is
+    // computed once, adds the number of events, and saturates; the codec
+    // path below no longer touches cnt_sec/cnt_ded itself.
+    wire [1:0] sec_events = {1'b0, lif_ecc_sec} + {1'b0, (ecc_obs && dec_sec)};
+    wire [1:0] ded_events = {1'b0, lif_ecc_ded} + {1'b0, (ecc_obs && dec_ded)};
+
+    wire [CNT_W:0]     cnt_sec_sum  = {1'b0, cnt_sec} + {{(CNT_W-1){1'b0}}, sec_events};
+    wire [CNT_W:0]     cnt_ded_sum  = {1'b0, cnt_ded} + {{(CNT_W-1){1'b0}}, ded_events};
+    wire [CNT_W-1:0]   cnt_sec_next = cnt_sec_sum[CNT_W] ? CNT_MAX : cnt_sec_sum[CNT_W-1:0];
+    wire [CNT_W-1:0]   cnt_ded_next = cnt_ded_sum[CNT_W] ? CNT_MAX : cnt_ded_sum[CNT_W-1:0];
+
     lif_core #(
         .N_NEURONS (N_NEURONS),
         .N_AXONS   (N_AXONS)
@@ -1357,7 +1394,11 @@ module pilot_top #(
         .dbg_r          (dbg_r),
         .dbg_wr_en      (wr_ok && s_n_data),
         .dbg_wr_v       (reg_wdata[15:0]),
-        .dbg_wr_r       (reg_wdata[19:16])
+        .dbg_wr_r       (reg_wdata[19:16]),
+        .wmem_sec       (lif_wmem_sec),
+        .wmem_ded       (lif_wmem_ded),
+        .state_sec      (lif_state_sec),
+        .state_ded      (lif_state_ded)
     );
 
     // -----------------------------------------------------------------
@@ -1464,16 +1505,30 @@ module pilot_top #(
                 end
             end
 
+            // ---- Neuron-core memory ECC ------------------------------
+            // Counted on the same registers as the codec path below. The
+            // core's outputs are levels, one cycle per acted-on read, so
+            // they are sampled here exactly like any other event; a read
+            // that the decoder did not act on holds them low.
+            // FAULT_ADDR is deliberately NOT written from here: it holds
+            // a weight-word index from the loader's address space, and a
+            // neuron-state or synapse-array address is not in it. A
+            // DED_SEEN with an unchanged FAULT_ADDR therefore means the
+            // uncorrectable word was inside the core, which is the one
+            // bit of attribution this aggregate does preserve.
+            if (sec_events != 2'd0) begin
+                sticky_sec <= 1'b1;
+                cnt_sec    <= cnt_sec_next;
+            end
+            if (ded_events != 2'd0) begin
+                sticky_ded <= 1'b1;
+                cnt_ded    <= cnt_ded_next;
+            end
+
             // ---- ECC observation, scrub and load hand-off ------------
             if (ecc_obs) begin
-                if (dec_sec) begin
-                    sticky_sec <= 1'b1;
-                    if (cnt_sec != CNT_MAX) cnt_sec <= cnt_sec + 1'b1;
-                end
                 if (dec_ded) begin
-                    sticky_ded <= 1'b1;
                     fault_addr <= w_addr_cmt;
-                    if (cnt_ded != CNT_MAX) cnt_ded <= cnt_ded + 1'b1;
                 end
                 if (scrub_now) begin
                     ecc_data  <= dec_data;
