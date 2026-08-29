@@ -178,9 +178,15 @@ def test_tree_matches_the_generator(gen, built):
 # 4. assertions about the submission, read off the tree on disk
 # ---------------------------------------------------------------------
 def test_tile_shape_is_the_documented_decision(info_yaml):
-    assert info_yaml["project"]["tiles"] == "4x2", (
-        "docs/15-pilot-tile-plan.md decides 4x2 = 8 tiles; info.yaml says "
-        f"{info_yaml['project']['tiles']!r}"
+    # 4x2 until 2026-08-30, when the re-harden measured it over the 70 %
+    # planning criterion (docs/22: 71.489 % and 5,527 um2 short). Both
+    # twelve-tile shapes were then hardened and compared in docs/23, and
+    # 6x2 won on routing, timing, antenna and clock skew -- not on area,
+    # since both clear the criterion with room to spare. 6x2 is also the
+    # only one of the two confirmed purchasable on TTIHP26b.
+    assert info_yaml["project"]["tiles"] == "6x2", (
+        "docs/23-tile-shape-decision.md decides 6x2 = 12 tiles; info.yaml "
+        f"says {info_yaml['project']['tiles']!r}"
     )
 
 

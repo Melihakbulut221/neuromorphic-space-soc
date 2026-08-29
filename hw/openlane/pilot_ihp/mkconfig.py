@@ -43,6 +43,18 @@ SRC = os.path.join(REPO, "tt", "src", "config_merged.json")
 # IHP PDK ships one OpenRCX ruleset (nom_*) where sky130 ships three.
 PNR_CORNERS = ["nom_typ_1p20V_25C", "nom_slow_1p08V_125C"]
 
+# docs/23: the twelve-tile shape decision. Both entries are twelve tiles
+# at the same shuttle price; they differ in aspect ratio and, because the
+# tile grid is not a constant-area grid, in die area. DIE_AREA is copied
+# verbatim from tt/tt/tech/ihp-sg13g2/tile_sizes.yaml rather than
+# recomputed, and the pin-frame DEF is the matching one from the same
+# clone, so a shape variant cannot drift from the tile definition
+# tt-support-tools would use.
+SHAPES = {
+    "3x4": ("0 0 636.96 710.64", "tt_block_3x4_pgvdd.def"),
+    "6x2": ("0 0 1289.28 313.74", "tt_block_6x2_pgvdd.def"),
+}
+
 
 def derive():
     pairs = json.load(open(SRC), object_pairs_hook=list)
@@ -51,7 +63,11 @@ def derive():
         if k == "VERILOG_FILES":
             v = ["dir::../../rtl/" + os.path.basename(x.split("::", 1)[1]) for x in v]
         elif k == "FP_DEF_TEMPLATE":
-            v = "dir::../../../tt/tt/tech/ihp-sg13g2/def/tt_block_4x2_pgvdd.def"
+            # Rebase the path, keep the FILE. Hard-coding the 4x2 DEF here
+            # was safe only while the submission was 4x2; docs/23 moved it
+            # to 6x2 and a hard-coded name would have silently hardened
+            # the baseline at a tile shape the submission no longer uses.
+            v = "dir::../../../tt/tt/tech/ihp-sg13g2/def/" + os.path.basename(v)
         out.append((k, v))
     out.append(("VERILOG_INCLUDE_DIRS", ["dir::../../rtl"]))
     out.append(
@@ -106,7 +122,32 @@ def derive():
             "config.json apart from RUN_KLAYOUT_DRC.",
         ),
     ]
-    return base, variant, flat, drc
+    shapes = {}
+    for name, (die, deftpl) in SHAPES.items():
+        pairs = []
+        for k, v in out:
+            if k == "DIE_AREA":
+                v = die
+            elif k == "FP_DEF_TEMPLATE":
+                v = "dir::../../../tt/tt/tech/ihp-sg13g2/def/" + deftpl
+            pairs.append((k, v))
+        pairs.append(("RUN_KLAYOUT_DRC", 1))
+        pairs.append(
+            (
+                "//variant",
+                f"docs/23: the pilot at the {name} twelve-tile shape. Exactly two "
+                "keys differ from config.json -- DIE_AREA and FP_DEF_TEMPLATE, "
+                "both taken from tt/tt/tech/ihp-sg13g2 -- plus RUN_KLAYOUT_DRC, "
+                "which is raised to 1 so that one run per shape produces the "
+                "whole sign-off set instead of needing the separate "
+                "config.klayoutdrc.json pass docs/22 section 2.4 had to make. "
+                "Everything else, including CLOCK_PERIOD, PL_TARGET_DENSITY_PCT "
+                "and SYNTH_HIERARCHY_MODE, is the submission's own value, so a "
+                "difference between the two shapes is attributable to the shape.",
+            )
+        )
+        shapes[name] = pairs
+    return base, variant, flat, drc, shapes
 
 
 def render(pairs):
@@ -131,13 +172,15 @@ def blobs():
 
 
 def main():
-    base, variant, flat, drc = derive()
+    base, variant, flat, drc, shapes = derive()
     targets = {
         os.path.join(HERE, "config.json"): render(base),
         os.path.join(HERE, "config.pnrcorners.json"): render(variant),
         os.path.join(HERE, "config.flatten.json"): render(flat),
         os.path.join(HERE, "config.klayoutdrc.json"): render(drc),
     }
+    for name, pairs in shapes.items():
+        targets[os.path.join(HERE, f"config.{name}.json")] = render(pairs)
     if "--check" in sys.argv:
         bad = 0
         for path, want in targets.items():

@@ -254,6 +254,7 @@ silicon and no radiation data, and the licence is unsigned.
 | `docs/20-reharden-and-corners.md` | Re-harden after the configuration-TMR fix, and why `PNR_CORNERS` cannot close the SKY130 slow corner. Supersedes area and timing figures in `docs/15` and `docs/18`. |
 | `docs/21-pilot-datasheet.md` | Pre-silicon device datasheet for the submitted pilot. |
 | `docs/22-reharden-wave5.md` | Re-harden after the wave-5 AER pointer TMR, and the tile budget it breaks. Supersedes area, utilization and timing figures in `docs/15`, `docs/18`, `docs/20` and `docs/21`; its section 6 is the location-by-location correction list. |
+| `docs/23-tile-shape-decision.md` | Both twelve-tile shapes hardened and compared after `docs/22` put the design over the 4x2 budget. Decides **6x2**, on routing convergence, timing and clock skew rather than on area — both shapes clear the utilization criterion with room to spare. Records that 3x4 is not confirmed purchasable on TTIHP26b. |
 | `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
 | `README.md` | Project summary and repository layout. |
 | `ROADMAP.md` | Phased plan with gates and external clocks. |

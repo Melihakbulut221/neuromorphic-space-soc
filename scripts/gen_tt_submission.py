@@ -72,11 +72,28 @@ DESCRIPTION = (
 )
 CLOCK_HZ = 50_000_000
 
-# Tile shape. Decided in docs/15-pilot-tile-plan.md section 4 against
-# measured post-techmap area and the placement rows of the tt-support-tools
-# DEF templates: 2x2 is impossible, 3x2 needs a utilization no reference
-# point in this project has reached, 4x2 closes with margin.
-TILES = "4x2"
+# Tile shape. First set to 4x2 by docs/15-pilot-tile-plan.md section 4;
+# moved to 6x2 by docs/23-tile-shape-decision.md.
+#
+# 4x2 is no longer viable on the planning criterion. docs/22 section 9
+# measures the current design at 185,755 um2 placed into a 259,837 um2
+# 4x2 core -- 71.489 % utilization against a 70 % criterion, i.e. 2.13 %
+# of the core short. It still routed DRC-clean, so that is a planning
+# failure rather than a flow failure, but it leaves no headroom at all.
+#
+# Twelve tiles come in two shapes at the same price, and docs/23 hardens
+# both rather than scaling the 4x2 numbers. 6x2 wins: 47.29 %
+# utilization, zero setup, hold, max-slew and max-cap violations on all
+# three corners, detailed routing converged in a single pass of five
+# iterations, zero antenna diodes required. 3x4 buys 5.4 points more
+# utilization headroom that the design does not need, and pays for it
+# with one 6.27 ps hold violation at the fast corner, a second
+# detailed-route pass, and a purchasability on TTIHP26b that could not be
+# confirmed -- tile_sizes.yaml and the shuttle's own pinned DEF set carry
+# 3x4, but the ttihp-verilog-template info.yaml comment lists no
+# four-row shape. 6x2 is in that comment, is in Tiny Tapeout's billing
+# table at twelve tiles, and has shipped on ttihp25a, 25b and 26a.
+TILES = "6x2"
 
 # RTL copied verbatim from hw/rtl. Order matters twice: source_files[0] is
 # what tt-support-tools check_ports reads first, so the top level leads,
@@ -680,20 +697,23 @@ def info_yaml() -> str:
     lines.append('  language:     "Verilog"')
     lines.append("")
     lines.append("  # 50 MHz. A local place-and-route of this design at this tile")
-    lines.append("  # shape closes with +5.31 ns of setup slack and +0.59 ns of")
+    lines.append("  # shape closes with +1.23 ns of setup slack and +0.60 ns of")
     lines.append("  # hold slack on the slow corner (sg13g2_stdcell 1.08 V, 125 C),")
     lines.append("  # with a clock tree and extracted parasitics: zero setup, hold,")
     lines.append("  # max-cap and max-slew violations on all three PVT corners.")
-    lines.append("  # Not a signoff; see docs/15 section 4.6 in the source")
+    lines.append("  # Not a signoff; see docs/23 section 3 in the source")
     lines.append("  # repository.")
     lines.append(f"  clock_hz:     {CLOCK_HZ}")
     lines.append("")
-    lines.append("  # Tile shape. docs/15 section 4: placed, this design is 136,107")
-    lines.append("  # um2 of sg13g2 standard cells. A 2x2 block offers 126,685 um2")
-    lines.append("  # of placement rows and cannot hold it; 4x2 offers 259,837 um2,")
-    lines.append("  # and a full local harden at 4x2 closes at 52.38 % utilization")
-    lines.append("  # with zero detailed-route DRC errors and zero antenna")
-    lines.append("  # violations.")
+    lines.append("  # Tile shape. docs/23: placed, this design is 185,840 um2 of")
+    lines.append("  # sg13g2 standard cells, which no longer fits the 70 % planning")
+    lines.append("  # criterion in a 4x2 core of 259,837 um2 (docs/22 measures")
+    lines.append("  # 71.489 %). 6x2 offers 392,988 um2 and a full local harden")
+    lines.append("  # there closes at 47.29 % utilization with zero detailed-route")
+    lines.append("  # DRC errors, zero Magic and KLayout DRC, zero LVS errors and")
+    lines.append("  # zero antenna violations. The alternative twelve-tile shape,")
+    lines.append("  # 3x4, was hardened too and is the runner-up on every count")
+    lines.append("  # except utilization; docs/23 has both side by side.")
     lines.append(f'  tiles: "{TILES}"')
     lines.append("")
     lines.append(f'  top_module:  "{TOP_MODULE}"')
@@ -1014,12 +1034,16 @@ Tiny Tapeout TTIHP26b submission, {TILES} tiles, IHP SG13G2.
 
 The design has been taken through a full local LibreLane `Classic` run
 at {TILES} against this repository's own `src/config_merged.json`. It closes
-at 52.38 % utilization with zero detailed-route DRC errors, zero antenna
+at 47.29 % utilization with zero detailed-route DRC errors, zero Magic
+DRC errors, zero KLayout DRC errors, zero Netgen LVS errors, zero antenna
 violations, and zero setup, hold, max-cap and max-slew violations across
-all three PVT corners. The tile shape was chosen on measured area:
-placed, the design is 136,107 um2 of standard cells, and a 2x2 block
-offers 126,685 um2 of placement rows. Full working in
-`docs/15-pilot-tile-plan.md` in the source repository.
+all three PVT corners. The tile shape was chosen on measured area, and
+re-chosen when the design outgrew the first choice: placed, the design is
+185,840 um2 of standard cells, which overruns the 70 % planning criterion
+in a 4x2 core of 259,837 um2. Both twelve-tile shapes were then hardened
+rather than estimated, and {TILES} won. Full working in
+`docs/15-pilot-tile-plan.md` and `docs/23-tile-shape-decision.md` in the
+source repository.
 
 That local run is evidence, not a substitute for the GDS action and the
 Tiny Tapeout precheck, which are what actually gate a submission.

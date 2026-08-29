@@ -13,21 +13,24 @@ project:
   language:     "Verilog"
 
   # 50 MHz. A local place-and-route of this design at this tile
-  # shape closes with +5.31 ns of setup slack and +0.59 ns of
+  # shape closes with +1.23 ns of setup slack and +0.60 ns of
   # hold slack on the slow corner (sg13g2_stdcell 1.08 V, 125 C),
   # with a clock tree and extracted parasitics: zero setup, hold,
   # max-cap and max-slew violations on all three PVT corners.
-  # Not a signoff; see docs/15 section 4.6 in the source
+  # Not a signoff; see docs/23 section 3 in the source
   # repository.
   clock_hz:     50000000
 
-  # Tile shape. docs/15 section 4: placed, this design is 136,107
-  # um2 of sg13g2 standard cells. A 2x2 block offers 126,685 um2
-  # of placement rows and cannot hold it; 4x2 offers 259,837 um2,
-  # and a full local harden at 4x2 closes at 52.38 % utilization
-  # with zero detailed-route DRC errors and zero antenna
-  # violations.
-  tiles: "4x2"
+  # Tile shape. docs/23: placed, this design is 185,840 um2 of
+  # sg13g2 standard cells, which no longer fits the 70 % planning
+  # criterion in a 4x2 core of 259,837 um2 (docs/22 measures
+  # 71.489 %). 6x2 offers 392,988 um2 and a full local harden
+  # there closes at 47.29 % utilization with zero detailed-route
+  # DRC errors, zero Magic and KLayout DRC, zero LVS errors and
+  # zero antenna violations. The alternative twelve-tile shape,
+  # 3x4, was hardened too and is the runner-up on every count
+  # except utilization; docs/23 has both side by side.
+  tiles: "6x2"
 
   top_module:  "tt_um_melihakbulut_nssoc"
 

@@ -58,6 +58,35 @@ VARIANTS = {
             "RUN_POST_GRT_RESIZER_TIMING": True,
         },
     ),
+    # docs/23. The twelve-tile shape decision is taken on ihp-sg13g2,
+    # which is the shuttle PDK; these two exist so the cross-PDK claim of
+    # docs/18 can be re-measured at the shape that wins rather than
+    # staying stale at a 4x2 that stopped routing (docs/22 section 5).
+    # DIE_AREA is copied verbatim from tt/tt/tech/sky130A/tile_sizes.yaml
+    # and the DEF is the matching `pg` pin-frame from the same clone, so
+    # the sky130 tile geometry is the tooling's own and not a conversion
+    # of the IHP one. 3x4 is the larger of the two shapes in both PDKs by
+    # closely similar margins -- 452,649 / 404,499 = +11.90 % on IHP,
+    # 260,160 / 232,623 = +11.84 % on sky130 -- but that is read off the
+    # two tile_sizes.yaml files, not assumed from one of them.
+    "3x4": (
+        "docs/23: the 3x4 twelve-tile shape, 508.76 x 511.36 um of sky130A "
+        "die. Two keys against the 4x2 baseline, both taken from "
+        "tt/tt/tech/sky130A.",
+        {
+            "DIE_AREA": "0 0 508.76 511.36",
+            "FP_DEF_TEMPLATE": "dir::../../../tt/tt/tech/sky130A/def/tt_block_3x4_pg.def",
+        },
+    ),
+    "6x2": (
+        "docs/23: the 6x2 twelve-tile shape, 1030.40 x 225.76 um of sky130A "
+        "die. Two keys against the 4x2 baseline, both taken from "
+        "tt/tt/tech/sky130A.",
+        {
+            "DIE_AREA": "0 0 1030.40 225.76",
+            "FP_DEF_TEMPLATE": "dir::../../../tt/tt/tech/sky130A/def/tt_block_6x2_pg.def",
+        },
+    ),
 }
 
 

@@ -7,7 +7,7 @@ repository. Do not edit here; edit the source repository and regenerate.
 
 # NSSOC-P1 fault-tolerant spiking neuron pilot
 
-Tiny Tapeout TTIHP26b submission, 4x2 tiles, IHP SG13G2.
+Tiny Tapeout TTIHP26b submission, 6x2 tiles, IHP SG13G2.
 
 - Datasheet source: [docs/info.md](docs/info.md)
 - Top module: `tt_um_melihakbulut_nssoc`
@@ -15,13 +15,17 @@ Tiny Tapeout TTIHP26b submission, 4x2 tiles, IHP SG13G2.
 ## Status
 
 The design has been taken through a full local LibreLane `Classic` run
-at 4x2 against this repository's own `src/config_merged.json`. It closes
-at 52.38 % utilization with zero detailed-route DRC errors, zero antenna
+at 6x2 against this repository's own `src/config_merged.json`. It closes
+at 47.29 % utilization with zero detailed-route DRC errors, zero Magic
+DRC errors, zero KLayout DRC errors, zero Netgen LVS errors, zero antenna
 violations, and zero setup, hold, max-cap and max-slew violations across
-all three PVT corners. The tile shape was chosen on measured area:
-placed, the design is 136,107 um2 of standard cells, and a 2x2 block
-offers 126,685 um2 of placement rows. Full working in
-`docs/15-pilot-tile-plan.md` in the source repository.
+all three PVT corners. The tile shape was chosen on measured area, and
+re-chosen when the design outgrew the first choice: placed, the design is
+185,840 um2 of standard cells, which overruns the 70 % planning criterion
+in a 4x2 core of 259,837 um2. Both twelve-tile shapes were then hardened
+rather than estimated, and 6x2 won. Full working in
+`docs/15-pilot-tile-plan.md` and `docs/23-tile-shape-decision.md` in the
+source repository.
 
 That local run is evidence, not a substitute for the GDS action and the
 Tiny Tapeout precheck, which are what actually gate a submission.
