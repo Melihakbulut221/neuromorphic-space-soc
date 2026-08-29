@@ -70,14 +70,16 @@ output is reportable rather than buried.
 One consequence of that rule is worth stating before the numbers are
 read. Since the memory hardening of 2026-08-26, lif_core corrects
 single-bit upsets in wmem / vmem / rmem and reports them on four LEVEL
-outputs (wmem_sec, wmem_ded, state_sec, state_ded) -- which
-hw/rtl/pilot_top.v leaves UNCONNECTED. Nothing on the register side
-counts them, so those corrections reach no counter and no pin, and this
-classifier, which reads only what the chip reports, has to call them
-MASKED rather than CORRECTED. That is not a defect in the classifier: it
-is the measurement of a real gap, and docs/16 section 4 reports it as
-one. A correction the mission cannot see is a correction the mission
-cannot report.
+outputs (wmem_sec, wmem_ded, state_sec, state_ded). Until 2026-08-27
+hw/rtl/pilot_top.v left all four UNCONNECTED, so those corrections
+reached no counter and no pin and this classifier -- which reads only
+what the chip reports -- had to call them MASKED rather than CORRECTED.
+They are wired now and the same injections classify CORRECTED, which is
+why the histogram moved without the design computing anything
+differently. The rule that produced the earlier number is unchanged and
+is the point: a correction the mission cannot see is a correction the
+mission cannot report, and this campaign will keep saying MASKED until
+it can see it. docs/16 section 4.1 carries both numbers.
 
 The compared output is the whole observable result of the run: the
 ordered stream of 16-bit event words drained from EVQ_OUT, and the final
@@ -864,8 +866,48 @@ def target_list(n_neurons, n_axons, q_depth):
 
     # 9. AER queue pointers, both queues. Each pointer carries one extra
     #    wrap bit, so the whole width is walked rather than sampled.
-    t += [("evq_ptr", f"{q}.{p}_ptr", ptr, 2, False)
-          for q in ("u_evq_in", "u_evq_out") for p in ("wr", "rd")]
+    #
+    #    The target is the REPLICA STORAGE, `u_{w,r}ptr_{a,b,c}.bits`, and
+    #    one deposit lands in one replica: that, and only that, is a
+    #    single-event upset in a pointer. Until 2026-08-29 this group
+    #    named `{u_evq_in,u_evq_out}.{wr,rd}_ptr`, which since the pointer
+    #    TMR of hw/rtl/aer_fifo.v is the VOTED wire rather than storage --
+    #    the same trap the configuration TMR hit on 2026-08-26 and for the
+    #    same reason (item 6 above). Two things were wrong with it, not
+    #    one:
+    #
+    #      * it is not a flip-flop, so no physical upset corresponds to
+    #        the deposit; and
+    #      * Icarus holds a deposit on a driven net until the driver
+    #        RE-EVALUATES, and the voter's inputs stop changing as soon as
+    #        the pointer stops moving, so the deposit persisted for the
+    #        rest of the run. It modelled a permanent stuck-at on the
+    #        voter output node, not a transient at the voter input.
+    #
+    #    That is why the group kept reporting its pre-TMR result -- 23 SDC
+    #    and 1 HANG of 24 on 2026-08-29 [fact] -- against three replicas
+    #    and a majority vote. It was a measurement of a node nothing
+    #    claims to protect. Retargeted, the same 24 phases classify 72
+    #    injections and the campaign pass criteria in test_04 require
+    #    every one of them to be CORRECTED.
+    #
+    #    The three replicas are injected AT THE SAME DRAWN PHASES rather
+    #    than drawing their own, so `phases()` still consumes exactly the
+    #    numbers it consumed before this change and the groups drawn after
+    #    this one -- evq_mem, evq_hold, dispatch -- keep the phases docs/16
+    #    reports. Only the pointer group's own records move.
+    #
+    #    Bit positions are per replica, not per pointer. Banks A and B
+    #    store the pointer and its complement, so bit i of `bits` is bit i
+    #    of the pointer; bank C stores an XOR mixing, so bit i of `bits`
+    #    decodes to two or three wrong pointer bits (aer_fifo.v,
+    #    aer_ptr_bank header). Both are single-replica faults and a
+    #    bitwise majority masks each of them, which is the point of the
+    #    mixing rather than a weakness of it.
+    t += [("evq_ptr",
+           tuple(f"{q}.u_{p}ptr_{r}.bits" for r in ("a", "b", "c")),
+           ptr, 2, False)
+          for q in ("u_evq_in", "u_evq_out") for p in ("w", "r")]
 
     # 10. AER queue storage, every slot of both queues.
     t += [("evq_mem", f"{q}.mem[{i}]", [0, 14], 2, False)
@@ -1093,12 +1135,17 @@ async def test_01_structural_injections(dut):
 
     for group, path, bits, n_phase, pin_first in \
             target_list(n_neurons, n_axons, q_depth):
-        latent_regs = lat.get(path, ())
+        # A tuple of paths is a set of targets that share one drawn phase
+        # -- the three replicas of a TMR domain, injected one at a time.
+        # The draw happens once, so adding a replica cannot move the
+        # phases of any group drawn after this one (target_list item 9).
+        paths = path if isinstance(path, tuple) else (path,)
         rng = EXT_RNG if group in EXT_GROUPS else RNG
         for bit in bits:
             for b, d in phases(n_phase, pin_first, rng):
-                await injection(dut, geo, group, path, bit, b, d,
-                                latent_regs=latent_regs)
+                for one in paths:
+                    await injection(dut, geo, group, one, bit, b, d,
+                                    latent_regs=lat.get(one, ()))
     dut._log.info(f"structural injections: {len(RESULTS)}")
 
 
@@ -1290,3 +1337,30 @@ async def test_04_summary(dut):
     assert sum(coded.values()) > 0 and coded["SDC"] == 0, \
         f"a single-bit upset in a coded memory file must never be SDC, " \
         f"got {coded}"
+    # The pointer TMR of hw/rtl/aer_fifo.v, on the same footing. This one
+    # is written in two halves because the failure it exists to catch is
+    # not a broken voter but a MIS-TARGETED INJECTOR: before 2026-08-29
+    # this group deposited into the voted wire, which is not storage, and
+    # reported 23 SDC and 0 CORRECTED out of 24 against a working TMR
+    # (target_list item 9). A campaign that measures nothing must fail
+    # rather than report zeros, so:
+    #
+    #   (a) every pointer target is a replica's storage register. A future
+    #       edit that re-points this group at `wr_ptr` or `rd_ptr` fails
+    #       here even on a simulator that would classify such a deposit
+    #       the same way; and
+    #   (b) every one of those upsets is corrected -- masked at the
+    #       outputs AND counted in CNT_TMR. Not merely "no SDC": an upset
+    #       that never reached the flip-flop would come back MASKED, which
+    #       is exactly the quiet nothing this criterion is here to catch.
+    ptr_paths = sorted({r["target"] for r in RESULTS
+                        if r["group"] == "evq_ptr"})
+    assert ptr_paths and all(p.endswith(".bits") for p in ptr_paths), \
+        f"every evq_ptr target must be a pointer replica's storage " \
+        f"register (aer_ptr_bank.bits), not the voted wire, or the group " \
+        f"is measuring a node the TMR does not claim to protect: " \
+        f"{ptr_paths}"
+    ptr = groups.get("evq_ptr", {})
+    assert ptr and ptr["CORRECTED"] == sum(ptr.values()), \
+        f"a single-replica AER pointer upset must always be CORRECTED -- " \
+        f"masked by the vote and counted in CNT_TMR -- got {ptr}"

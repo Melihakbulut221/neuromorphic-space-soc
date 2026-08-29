@@ -24,13 +24,13 @@ plainly, and it should be read before section 6 is quoted anywhere.
 | Device under test | `hw/rtl/pilot_top.v`, 8 x 8 neurons/axons, EVQ depth 4 |
 | Oracle | `sw/golden/lif_core.py` (`LIFCore`, `LIFConfig`) |
 | Seed | `0x16F12026` |
-| Injections | 255 to 2026-08-26; 287 from 2026-08-27 (section 2) |
-| Simulated time | 22.23 ms at 255 injections |
-| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it (Icarus 12, single-threaded; section 8) |
+| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29 (section 2) |
+| Simulated time | 22.23 ms at 255 injections; 28.77 ms at 335 |
+| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it; 892 s for 335 injections on a loaded machine (Icarus 12, single-threaded; section 8) |
 
-### Three runs, kept side by side
+### Four runs, kept side by side
 
-This document reports the campaign **three times**, and the runs are
+This document reports the campaign **four times**, and the runs are
 kept side by side rather than one overwriting the other. That is the
 whole value of the document: it shows what each change to the design did
 to the measured upset response, which a single current number cannot.
@@ -49,15 +49,27 @@ to the measured upset response, which a single current number cannot.
   above is exact; and once extended by 32 injections into the 80 check
   flip-flops the hardening itself added, because a protection whose own
   storage is unmeasured is a claim (section 3.2).
+- The **post-wave-5** run of 2026-08-29 is the current one. Three things
+  changed under it: `hw/rtl/aer_fifo.v` triplicated the four AER queue
+  pointers; the injector was **retargeted** onto the pointer replicas'
+  storage, because the old targets had become voted wires and the group
+  was reporting a number about a node nothing protects (section 3.3);
+  and `hw/rtl/pilot_top.v` gained the bounded `oh_req` wait of section
+  5.7, for a deadlock this run found. It is 335 injections: the 24
+  pointer records are replaced by 72, and the other 263 are unchanged
+  targets.
 
 Every number in this document is labelled with which run it comes from.
 Where a section is not labelled the runs agree.
 
-`hw/tb/fi_campaign_results.json` holds the **287-injection
-post-hardening** log, because that is the design that exists. Exactly
+`hw/tb/fi_campaign_results.json` holds the **335-injection
+post-wave-5** log, because that is the design that exists. Exactly
 five of the 255 records differ between the pre-fix and post-fix runs and
 section 5.1 lists all five; exactly 43 differ between the post-fix and
-post-hardening runs and section 3.2 accounts for every one.
+post-hardening runs and section 3.2 accounts for every one; and between
+the post-hardening run and this one **exactly one common record changed
+class** — `evq_hold` / `oh_req`, HANG to DETECTED — with the 24 pointer
+records retired and 72 new ones taking their place (section 3.4).
 
 **Headline, pre-fix [fact].** 255 single-bit injections: **83 MASKED
 (32.5%), 42 CORRECTED (16.5%), 34 DETECTED (13.3%), 91 SDC (35.7%),
@@ -78,28 +90,54 @@ three structures that were hardened and in no others** — `lif_wmem` 9,
 `lif_vmem` 22, `lif_rmem` 12. Not one record moved in the other
 direction, and no record outside those three groups changed at all.
 
-In all three runs every hardened structure kept its promise with zero
+**Headline, post-wave-5 [fact].** 335 injections, 2026-08-29: **79
+MASKED (23.6%), 193 CORRECTED (57.6%), 37 DETECTED (11.0%), 26 SDC
+(7.8%), 0 HANG**. The AER pointer group goes from 22 SDC and 1 HANG of
+24 to **0 SDC of 72**, every one of the 72 corrected and counted; the
+show-ahead adapter's one HANG becomes DETECTED under the bounded wait of
+section 5.7. Of the 263 targets this run shares with the previous one,
+**exactly one record changed class** and it is that HANG.
+
+**Read the three headline denominators before comparing any two of
+them**, because they are not the same experiment: 255, 287 and 335
+injections. The 32 added on 2026-08-27 are the memory hardening's own
+check-field flip-flops, which did not exist before it; the 48 net added
+on 2026-08-29 are the pointer TMR's replicas, likewise. **The only
+defensible before/after figure for the memory hardening is 35.7% → 18.8%
+SDC on the identical 255 injections** (section 3.2). Pairing 35.7% with
+16.7% — or now with 7.8% — divides by a denominator the earlier run did
+not have, and section 3.4 gives the like-for-like arithmetic for the
+pointer TMR the same way.
+
+In all four runs every hardened structure kept its promise with zero
 counterexamples — the neuron-core FSM (12/12 detected), the
 configuration TMR domain (15/15 corrected and counted, but read the
 correction of 2026-08-26 in section 4 before quoting that number: the
 replicas it votes on did not exist as three registers in the netlist
 until that date), the SECDED weight word (12/12 singles corrected, 4/4
 doubles detected, E10 substitution exact on every event stream it
-produced). Every silent corruption still comes from a structure the
+produced), and now the AER pointer TMR (72/72 corrected and counted —
+and read section 3.3 before quoting *that* number, because the day
+before, the same group reported 23 SDC against the same working
+hardware). Every silent corruption still comes from a structure the
 pilot does not claim to protect. What changed is which structures those
-are: before the hardening the residual was dominated by the neuron
-core's memories, and after it **85% of the residual silent corruption
-sits in the AER event path** — queue storage, queue pointers, the
-show-ahead adapter and the dispatcher (section 6).
+are: before the memory hardening the residual was dominated by the
+neuron core's memories; after it the AER event path dominated; and after
+the pointer TMR the residual is 26 records of which **19 are in the AER
+event path that is still unprotected** — queue storage 7, the
+show-ahead adapter 6, the dispatcher 6 — with the neuron scan at 6 and
+the register bank at 1. The pointers have left that list entirely.
 
-**The result that is not a number.** The corrections are invisible. The
-hardening's four telemetry outputs are left unconnected in
-`hw/rtl/pilot_top.v`, so a corrected upset moves no counter and lights
-no pin, and this campaign — which is only allowed to observe what a
-bench observes — has to classify it MASKED rather than CORRECTED. That
-is why the MASKED column absorbed all 43 records instead of the
-CORRECTED column taking them. Section 4.1 states what it costs and
-section 6 ranks fixing it.
+**The result that is not a number.** The corrections *were* invisible.
+Until 2026-08-27 the memory hardening's four telemetry outputs were left
+unconnected in `hw/rtl/pilot_top.v`, so a corrected upset moved no
+counter and lit no pin, and this campaign — which is only allowed to
+observe what a bench observes — had to classify it MASKED rather than
+CORRECTED. That is why the MASKED column absorbed all 43 records instead
+of the CORRECTED column taking them. The wiring was then done and the
+same injections classify CORRECTED; the pointer TMR was wired to
+`CNT_TMR` from the start, which is why its 72 corrections are visible.
+Section 4.1 carries both numbers and what the gap cost.
 
 ---
 
@@ -326,9 +364,29 @@ of these is false [fact, all passing]:
   self-test, not a data point.
 
 `test_04_summary` additionally fails if the campaign shrinks below 200
-injections, if any FSM injection is not DETECTED, if any single TMR
-replica upset is SDC, if any single-bit weight-word upset is not
-CORRECTED, or if any double-bit weight-word upset is not DETECTED.
+injections, if any FSM injection is not DETECTED, if any single
+configuration-TMR replica upset is SDC, if any single-bit weight-word
+upset is not CORRECTED, if any double-bit weight-word upset is not
+DETECTED, or if any single-bit upset in a coded memory file is SDC.
+
+**Added 2026-08-29, and it is a criterion about the harness as much as
+about the design.** Two more clauses cover the AER pointer TMR:
+
+- every `evq_ptr` target must be a replica's storage register
+  (`...u_{w,r}ptr_{a,b,c}.bits`), not the voted `wr_ptr` / `rd_ptr`
+  wire; and
+- every one of those injections must be CORRECTED — masked at the
+  outputs *and* counted in `CNT_TMR`.
+
+The first exists because this campaign has now twice deposited into a
+continuously driven voter output and reported the result as if it said
+something about the replicas (the configuration domain on 2026-08-26,
+the pointers on 2026-08-29; section 3.3). The second is deliberately
+stronger than "never SDC": an injection that never reached a flip-flop
+comes back MASKED, and MASKED is exactly the quiet nothing a
+mis-targeted injector produces. Both clauses would have failed the
+campaign at HEAD on 2026-08-29 instead of letting it report 23 SDC and
+zero corrections against a working TMR.
 
 Every one of those criteria is an RTL criterion and none of them can
 fail because a structure vanished in synthesis; `test_04_summary` would
@@ -378,10 +436,20 @@ the design the map speaks about, not how exhaustively.
 | Neuron-state ECC check field, `lif_core.smem` [‡] | `lif_smem` | 48 | 18 |
 | Synapse ECC check field, `lif_core.wchk` [‡] | `lif_wchk` (+ unread control) | 32 | 14 |
 | **Total represented, from 2026-08-27** | | **1076** | **287** |
+| AER pointer TMR replicas, `aer_ptr_bank.bits` [§] | `evq_ptr` | +24 | +48 |
+| **Total represented, from 2026-08-29** | | **1100** | **335** |
 
 [†] 165 in the RTL, and 55 in the netlist until 2026-08-26 — the three
 replicas were merged into one register bank by synthesis. Corrected in
 `hw/rtl/pilot_top.v` on that date; see section 4 and section 7.4.
+
+[§] The `evq_ptr` row above counts 12 flip-flops and 24 injections
+because that is what the pointers were: four 3-bit registers. Since the
+pointer TMR of 2026-08-29 they are twelve `aer_ptr_bank` instances, 36
+flip-flops, and the campaign injects into all of them — one replica at
+a time, three replicas per drawn phase, so 72 injections against the
+same 24 phases (section 3.3). The `+24 / +48` row is the delta, so the
+`evq_ptr` row and this one together read 36 FF and 72 injections.
 
 [‡] Added to the target list on 2026-08-27, with the memory hardening
 that created them. They are the 80 flip-flops the protection itself
@@ -411,16 +479,43 @@ design holds **1167** and the represented share is **85%** with the
 unrepresented count at 171 [fact]. The `dispatch` group's 18 FF above
 is `dstate` and `evw` only, unchanged.
 
+The section 5.7 fix of 2026-08-29 does the same thing to the other end
+of the pipe: `oh_wait[5:0]` and `oh_timeout` are 7 more flip-flops the
+target list does not inject into, and the `evq_hold` group's 35 FF above
+is unchanged. Both bounded-wait counters are among the unrepresented
+flip-flops, which is worth stating rather than leaving implicit — the
+structures that convert a hang into a report are themselves unmeasured
+by this campaign, and an upset in one of them is an unmeasured way to
+get the hang back. Section 7.3.
+
 **A note on the several flip-flop totals in this document, because they
 look like a contradiction and are not.** Each is a measurement of the
 design as it stood when that section was written, and the design grew
-three times during the work this document reports:
+five times during the work this document reports:
 
 | total | the design it describes |
 |---|---|
 | 1,161 | before the dispatcher-deadlock fix (quoted in the section 7.4 correction) |
 | 1,167 | after that fix adds `fetch_wait` and `fetch_timeout` |
 | 1,247 | after the memory hardening of section 2.1 |
+| 1,274 | after the AER pointer TMR of 2026-08-29 adds 24 replica flip-flops |
+| 1,281 | after the show-ahead bounded wait of section 5.7 adds `oh_wait` and `oh_timeout` |
+
+The last two are measured with the same census, on 2026-08-29:
+**1,281 declared, 1,275 mapped, 6 lost to optimisation** at HEAD, and
+1,274 declared with only the `oh_req` fix reverted [fact]. The 6 lost is
+the same constant recorded before and after the configuration-TMR fix
+and before and after the pointer TMR, so nothing new is disappearing.
+
+Against that census the represented share is **1,100 of 1,281, or 86%**,
+with 181 flip-flops unrepresented — and the two numbers come from
+different counting methods, which is the caveat this paragraph exists
+for. 1,100 is hand-counted from the RTL declarations in the coverage
+table above; 1,281 is the yosys census. They disagree by a handful of
+flops for the reasons in the paragraph below, so read 86% as accurate to
+about half a percentage point, and read the *named* unrepresented
+structures in section 7.3 rather than the residual as the statement of
+what is not covered.
 
 Re-measured at HEAD on 2026-08-27 with `sw/tests/test_synthesis_guards.py`'s
 own census: **1,241 declared, 1,235 mapped, 6 lost to optimisation**
@@ -475,12 +570,20 @@ any-protection total 241 (20.7%). The hardening moved 416 flip-flops
 from unprotected to correcting for 80 added ones, so the protected share
 went up by 38 percentage points at a 6.9% increase in register count.
 
+**After the pointer TMR of 2026-08-29 [fact].** The four AER queue
+pointers join the correcting column: 36 flip-flops where there were 12,
+voted bitwise and reported on `CNT_TMR`. On the re-measured declared
+census of 1281 (section 2) that is **769 of 1281 correcting (60.0%)**
+and 773 (60.3%) with any protection, for 24 added flip-flops — the
+cheapest protected-share increase in the programme so far, and the one
+with the largest measured effect per bit (section 5.2).
+
 Two things this table is not. It is not a statement about area — the
 correction is cheap in flip-flops and expensive in combinational logic,
 and `hw/rtl/lif_core.v`'s header section 6 carries the measured cell
-areas. And it is not a statement about the *rest* of the design: the 510
-unprotected flip-flops are still 41% of the register count, they are
-where every residual silent corruption in section 3.2 comes from, and
+areas. And it is not a statement about the *rest* of the design: the 508
+unprotected flip-flops are still 40% of the register count, they are
+where every residual silent corruption in section 3.4 comes from, and
 section 6 ranks them.
 
 ---
@@ -609,7 +712,14 @@ The cross-cutting numbers, post-hardening [fact]:
   a code over the state word cannot see that, because the word it
   protects is written consistently, just to the wrong address.
 - **15 latent registers** and **34 telemetry mismatches**, both
-  unchanged. Neither is in the hardened path.
+  unchanged. Neither is in the hardened path. The telemetry-mismatch
+  count is the one number in this list that has since moved a long way,
+  and not because anything got worse: wiring the `lif_core` ECC outputs
+  took it to 113 on the same 287 injections and the pointer TMR took it
+  to 185 on 335, because `telemetry_ok` is false whenever a counter
+  moved that a clean bring-up does not move — which, outside the two
+  telemetry groups, is the design correctly reporting the upset it was
+  given. Section 3.4.
 
 ### 3.3 What the injector deposits into, and why that is the right experiment
 
@@ -642,7 +752,55 @@ Depositing on the corrected output would model a fault the code cannot
 see by construction — a combinational transient at the decoder output,
 which section 7.4 places outside this fault model — and would measure
 nothing except the datapath downstream of the decoder. **No retargeting
-was needed.**
+was needed** for the memories.
+
+#### The pointers needed one, and it was missed for a day
+
+**The same trap, the second time [fact].** The pointer TMR of
+`hw/rtl/aer_fifo.v` landed on 2026-08-29 and turned `wr_ptr` and
+`rd_ptr` from registers into voted wires driven by six `aer_ptr_bank`
+instances per queue. The `evq_ptr` targets still named
+`u_evq_in.wr_ptr` and its three siblings. Those names still resolved,
+the campaign still ran, and it reported **23 SDC and 1 HANG out of 24,
+with zero CORRECTED** — its pre-TMR result to within one outcome,
+against three replicas and a proven majority vote.
+
+Two things were wrong with that deposit, not one:
+
+- `wr_ptr` is not a flip-flop, so no physical upset corresponds to it.
+  A deposit there models a fault arriving at the voter *output*, a node
+  nothing in this design claims to protect.
+- Icarus holds a deposit on a driven net until the driver
+  **re-evaluates**, and the voter's inputs stop changing as soon as the
+  pointer stops moving. So the deposit did not decay after a cycle: it
+  persisted for the rest of the run. What was measured was a permanent
+  stuck-at on the voted node, which is a harsher fault than the one the
+  fault model claims and a fault no single upset can cause.
+
+That is why the number looked like the pre-TMR number. It was not a
+statement about the replicas at all.
+
+**Retargeted 2026-08-29 [fact].** The group now deposits into
+`{u_evq_in,u_evq_out}.u_{w,r}ptr_{a,b,c}.bits`, the banks' storage
+registers, and each injection lands in exactly one replica — which is
+what a single-event upset in a triplicated pointer is. The three
+replicas are injected at the **same drawn phases** rather than drawing
+their own, so `phases()` consumes exactly the numbers it consumed
+before and the groups drawn after this one (`evq_mem`, `evq_hold`,
+`dispatch`) keep the phases this document already reports. Only the
+pointer group's own records moved.
+
+Bit positions are per replica. Banks A and B store the pointer and its
+exact complement, so bit *i* of `bits` is bit *i* of the pointer; bank C
+stores an XOR mixing, so bit *i* of `bits` decodes to two or three wrong
+pointer bits (`aer_fifo.v`, `aer_ptr_bank` header). Both are
+single-replica faults and a bitwise majority masks each of them, which
+is the point of the mixing rather than a weakness of it — and the
+measurement below is what turns that from an argument into a result.
+
+The pass criteria of section 1.8 now enforce both halves, so the next
+edit that re-points this group at a driven net fails the suite instead
+of reporting zeros.
 
 The evidence that the deposits still land is in the diff rather than in
 the argument. 43 records changed class and all 43 are these three
@@ -705,14 +863,100 @@ section 5.4, not a measured rate.
 extension is 30 distinct (target, bit, phase) points and not 32
 [fact]. Section 7.1 applies unchanged.
 
-**The campaign of record is therefore 287 injections [fact]: 158 MASKED
-(55.1%), 42 CORRECTED (14.6%), 39 DETECTED (13.6%), 48 SDC (16.7%),
-0 HANG.** That is the number `hw/tb/fi_campaign_results.json` holds and
-the one to quote for the design as it stands. The 255-injection figure
-of section 3.2 (18.8% SDC) is the one to quote when comparing against
-the pre-hardening run, because it is the same 255 experiments. Both are
-in this document on purpose: the first says what the design does, the
-second says what the change did.
+**The campaign of record as it stood on 2026-08-27 was 287 injections
+[fact]: 158 MASKED (55.1%), 42 CORRECTED (14.6%), 39 DETECTED (13.6%),
+48 SDC (16.7%), 0 HANG.** Then the ECC telemetry was wired (section
+4.1), which moved 79 records from MASKED to CORRECTED and nothing else,
+taking the same 287 to 79 / 121 / 39 / 48 / 0. Section 3.4 carries the
+current run.
+
+**On quoting any of these against any other.** The 16.7% above is a
+correct number and it is **not** the number to place next to the
+pre-hardening 35.7%. They have different denominators — 287 against 255
+— and the 32 extra injections are all in the newly created check fields,
+all MASKED, so the difference between 16.7% and 18.8% is entirely the
+arithmetic of adding 32 non-SDC records to the bottom of a fraction and
+says nothing about the design. **The like-for-like figure for the memory
+hardening is 91/255 = 35.7% to 48/255 = 18.8%**, the same 255
+experiments before and after, which is section 3.2.
+
+### 3.4 Post-wave-5 — the campaign of record
+
+Same seed, same geometry, same workload, 2026-08-29, against
+`hw/rtl/aer_fifo.v` with the pointer TMR, `hw/rtl/pilot_top.v` with the
+bounded `oh_req` wait of section 5.7, and the `evq_ptr` targets moved
+onto the replica storage (section 3.3). **335 injections, 892 s wall,
+28.77 ms simulated [fact]:**
+
+| Group | MASKED | CORRECTED | DETECTED | SDC | HANG | n | SDC rate | stream | state |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `evq_hold` | 7 | 0 | 1 | 6 | 0 | 14 | 42.9% | 6 | 0 |
+| `dispatch` | 8 | 0 | 4 | 6 | 0 | 18 | 33.3% | 6 | 0 |
+| `lif_scan` | 15 | 0 | 0 | 6 | 0 | 21 | 28.6% | 3 | 3 |
+| `evq_mem` | 25 | 0 | 0 | 7 | 0 | 32 | 21.9% | 7 | 0 |
+| `regbank_cfg` | 9 | 1 | 5 | 1 | 0 | 16 | 6.2% | 1 | 0 |
+| `lif_wmem` | 3 | 13 | 0 | 0 | 0 | 16 | 0.0% | 0 | 0 |
+| `lif_wmem_unread` (control) | 4 | 0 | 0 | 0 | 0 | 4 | 0.0% | 0 | 0 |
+| `lif_vmem` | 0 | 24 | 0 | 0 | 0 | 24 | 0.0% | 0 | 0 |
+| `lif_rmem` | 0 | 12 | 0 | 0 | 0 | 12 | 0.0% | 0 | 0 |
+| `lif_wchk` | 0 | 12 | 0 | 0 | 0 | 12 | 0.0% | 0 | 0 |
+| `lif_wchk_unread` (control) | 2 | 0 | 0 | 0 | 0 | 2 | 0.0% | 0 | 0 |
+| `lif_smem` | 0 | 18 | 0 | 0 | 0 | 18 | 0.0% | 0 | 0 |
+| `lif_fsm` | 0 | 0 | 12 | 0 | 0 | 12 | 0.0% | 0 | 0 |
+| `evq_ptr` | 0 | **72** | 0 | **0** | 0 | 72 | 0.0% | 0 | 0 |
+| `cfg_tmr_a` | 0 | 5 | 0 | 0 | 0 | 5 | 0.0% | 0 | 0 |
+| `cfg_tmr_b` | 0 | 5 | 0 | 0 | 0 | 5 | 0.0% | 0 | 0 |
+| `cfg_tmr_c` | 0 | 5 | 0 | 0 | 0 | 5 | 0.0% | 0 | 0 |
+| `ecc_port_single` | 0 | 12 | 0 | 0 | 0 | 12 | 0.0% | 0 | 0 |
+| `ecc_port_double` | 0 | 0 | 4 | 0 | 0 | 4 | 0.0% | 0 | 0 |
+| `ecc_ff` | 0 | 7 | 0 | 0 | 0 | 7 | 0.0% | 0 | 0 |
+| `regbank_cnt` | 5 | 4 | 9 | 0 | 0 | 18 | 0.0% | 0 | 0 |
+| `telemetry_primed` | 1 | 3 | 2 | 0 | 0 | 6 | 0.0% | 0 | 0 |
+| **TOTAL** | **79** | **193** | **37** | **26** | **0** | **335** | **7.8%** | **23** | **3** |
+
+**What moved, record by record [fact].** The two logs share 263 targets
+— everything except the 24 retired pointer targets — and the comparison
+is field-by-field, not histogram-to-histogram:
+
+| | count | |
+|---|---:|---|
+| common records | 263 | of which **1** changed class |
+| the one that changed | 1 | `evq_hold` / `oh_req` / bit 0 / burst 0 / delay 0: **HANG → DETECTED** |
+| retired targets (voted pointer wires) | 24 | were 23 SDC + 1 HANG; not a physical fault (section 3.3) |
+| new targets (pointer replica storage) | 72 | **72 CORRECTED, 0 SDC, 0 HANG** |
+
+Nothing else moved: not a class, not `completed`, not `out_ok`, not a
+status word, not a counter. That is the point of drawing the three
+replicas at the same phases — `evq_mem`, `evq_hold` and `dispatch` are
+drawn *after* `evq_ptr` from the same stream, and a change in how many
+numbers the pointer group consumed would have re-rolled all three.
+
+The cross-cutting numbers, post-wave-5 [fact]:
+
+- **20 of the 37 DETECTED outcomes also had a corrupted output**, and
+  the ratio changed only by the one HANG that became a detection.
+- **3 of the 26 SDC outcomes corrupted only the retained neuron state**,
+  down from 4: the one `evq_ptr` state-only corruption is gone with the
+  target that produced it. The remaining three are all the mis-steered
+  scan index of section 5.7.
+- **15 latent registers**, unchanged.
+- **185 telemetry mismatches**, up from 113. `telemetry_ok` compares
+  against the same bring-up with no deposit, so outside the two
+  telemetry groups a mismatch means the design **correctly counted the
+  event it was given** — and 72 of the 72 new pointer injections
+  incremented `CNT_TMR`, which is exactly the 72-record rise. This
+  number goes up when the chip reports more, which is the direction it
+  should move.
+
+**The like-for-like figure for the pointer TMR.** The wave-5 change
+cannot be quoted as 16.7% → 7.8%: those are 287 and 335 injections and
+the added 48 are all corrections in hardware that did not exist before.
+The defensible comparison is per-structure and is the one section 5.2
+gives — the pointers went from **22 SDC of 24** to **0 SDC of 72** — and
+on the 263 targets the two runs share, SDC went from **26 of 263 to 26
+of 263**, unchanged, which is what a change confined to the pointers
+should do. Wave 5 removed a structure from the SDC list; it did not
+improve any other structure and does not claim to.
 
 
 
@@ -821,6 +1065,26 @@ counts once (one event per rising edge of mismatch). A configuration
 rewrite repairs all three replicas, which is what the bring-up of the
 next injection does.
 
+**AER pointer TMR: 72/72 CORRECTED [fact, 2026-08-29].** All three bits
+of all four pointers across all three replicas, two phases each, one
+replica per injection. Zero SDC, zero detected failures, zero hangs:
+every one was masked by the bitwise majority, produced a bit-exact
+event stream and neuron state, and incremented `CNT_TMR` through
+`aer_fifo`'s `ptr_mismatch`. It is the same result as the configuration
+domain with one structural difference that runs the other way: here all
+three replicas are reloaded from the **voted** next-state every cycle,
+so the corrupted replica is repaired on the next clock edge instead of
+persisting for the run — which is why these injections count once and
+then leave no residue, and why `evq_ptr` shows no latent corruption.
+
+**Read this number together with section 3.3.** On 2026-08-28 the same
+hardware, measured by the same campaign, reported 23 SDC and zero
+corrections in this group. The hardware did not change; the injector was
+pointed at a driven wire instead of at a flip-flop. The 72/72 is the
+measurement; the day in between is the reason section 1.8 now has a pass
+criterion that fails the suite when the pointer targets are not storage
+registers.
+
 **SECDED weight word, single-bit: 12/12 CORRECTED [fact].** Twelve
 codeword positions walked across both fields (data bits 0, 7, 19, 31,
 33, 47, 58, 63; check bits 64, 67, 70, 71), rotating over all four
@@ -880,12 +1144,17 @@ suite rather than quietly reducing the number.
 **CLOSED 2026-08-27 — the wiring was done and this campaign re-run.**
 `hw/rtl/pilot_top.v` now connects all four outputs and counts them on
 `CNT_SEC`/`CNT_DED` with their sticky bits. At the same seed and
-geometry the distribution moves from 158 MASKED / 42 CORRECTED / 39
-DETECTED / 48 SDC / 0 HANG to **79 MASKED / 121 CORRECTED / 39 DETECTED
-/ 48 SDC / 0 HANG** [fact] — 79 injections cross from MASKED to
-CORRECTED. The silent-corruption count is unchanged at 48, which is the
-expected result and worth saying plainly: wiring telemetry changes what
-the chip can *report*, never what it computes.
+geometry the 287-injection distribution moves from 158 MASKED / 42
+CORRECTED / 39 DETECTED / 48 SDC / 0 HANG to **79 MASKED / 121 CORRECTED
+/ 39 DETECTED / 48 SDC / 0 HANG** [fact] — 79 injections cross from
+MASKED to CORRECTED. The silent-corruption count is unchanged at 48,
+which is the expected result and worth saying plainly: wiring telemetry
+changes what the chip can *report*, never what it computes.
+
+(That 287-injection figure is the last one before wave 5. The current
+335-injection run is section 3.4; the 84 coded-memory injections are
+unchanged in it — still 0 SDC — and 79 of them still classify CORRECTED
+for the reason recorded here.)
 
 Two notes from doing it. The counters are shared with the weight-load
 and scrub codec rather than split per domain, because `CNT_SEC` is
@@ -1076,6 +1345,16 @@ routes into `D_FETCH` are covered**, including the `u_evq_in.wr_ptr`
 one, which matters because that route does not involve `dstate` at all
 and a fix that only hardened the state encoding would have missed it.
 
+**One footnote on that second route, added 2026-08-29.** The
+`u_evq_in.wr_ptr` target no longer exists: the pointer is a voted wire
+now and the campaign injects into the replica storage instead (section
+3.3), so this route is exercised in the current target list only
+through `dstate`. That is not a loss of coverage for the *fix* — the
+bound is on `D_FETCH` and does not care how the FSM got there — but it
+does mean the current campaign no longer demonstrates a pointer-driven
+entry into `D_FETCH`, and it cannot, because the vote now masks the
+pointer upset before the dispatcher sees it.
+
 Three of the five also produced the golden event stream and the golden
 neuron state after recovering, so for those the fix converted a wedged
 part into a correct answer plus a flag. The other two recovered and
@@ -1107,7 +1386,20 @@ arm reverted to its single-exit form the test fails at the BUSY poll
 with "the dispatcher never left D_FETCH: BUSY still high 512 cycles
 after an upset put the FSM there with no read outstanding".
 
-### 5.2 AER queue pointers are the highest-rate silent corruptor — 22/24 SDC
+### 5.2 AER queue pointers were the highest-rate silent corruptor — 22/24 SDC, now 0/72
+
+> **Superseded by the pointer TMR of 2026-08-29, and kept in full.** The
+> measurement below is what motivated the change and it is not
+> withdrawn: at the time it was taken, the four queue pointers were four
+> plain registers with no protection of any kind, and they carried the
+> highest per-bit silent-corruption rate measured anywhere in the pilot.
+> `hw/rtl/aer_fifo.v` now holds each pointer in three `aer_ptr_bank`
+> replicas behind a bitwise majority vote, and reports a corrected
+> disagreement on `ptr_mismatch`, which `pilot_top.v` counts on
+> `CNT_TMR` and latches in `STATUS.TMR_SEEN`. Read this section as the
+> diagnosis. The post-TMR measurement is at the end of it, and the
+> retargeting the measurement needed first — which took a day and one
+> false result to get right — is section 3.3.
 
 Twelve flip-flops — `wr_ptr` and `rd_ptr` of both queues, three bits
 each including the wrap bit — and **21 of 24 injections corrupted the
@@ -1151,6 +1443,56 @@ even cheaper partial measure is a redundancy check on `level` (the
 pointer difference) that raises `ERR_CFG` when the two queues disagree
 with their own occupancy history — but that detects rather than
 corrects.
+
+#### After the TMR: 72 for 72 corrected
+
+**The estimate was right about the cost and the campaign now measures
+the benefit [fact].** The pointers are twelve `aer_ptr_bank` instances,
+36 flip-flops, 24 more than before — the estimate said 24 and it was
+exact. On 2026-08-29, with the injector aimed at the replica storage
+(section 3.3), **all 72 single-replica upsets across the twelve banks
+came back CORRECTED**: the drained event stream and the retained neuron
+state were bit-exact against `sw/golden` in every one, and every one
+moved `CNT_TMR`, so the correction is reported rather than silent.
+`evq_ptr` goes from 22 SDC of 24 to **0 SDC of 72**, and from one
+flagged outcome of 24 to 72 of 72.
+
+Three things that result does *not* say, because a zero is easy to
+over-read:
+
+- It is a **single-replica** result. `formal/aer_fifo_props.v` assumes
+  at most one faulty replica per pointer, the campaign injects one at a
+  time, and neither says anything about two upsets landing on the same
+  bit of two replicas before the voted feedback repairs them. The
+  repair happens on the next clock edge, so that window is one cycle
+  wide; this campaign does not measure it (section 7.4).
+- It covers **replica C's mixing** as well as A and B. A single upset
+  in bank C decodes to two or three wrong pointer bits at the voter
+  input, which is the price of the storage transform that keeps
+  synthesis from hashing the three banks together. All 24 of C's
+  injections are in the 72, and the vote masked every one — the widened
+  error is still one replica, and a bitwise majority does not care how
+  many bits of one replica are wrong.
+- It says nothing about the queue **storage**, which is unprotected and
+  is now the AER path's SDC contributor (`evq_mem`, section 6).
+
+**The one HANG this group produced on 2026-08-29 was an artefact, and
+here is the evidence [fact].** Before the retarget the campaign
+returned a HANG at `u_evq_in.wr_ptr`, bit 1, burst 0, delay 14.
+Replayed with a cycle-by-cycle trace: the deposit left the *voted*
+write pointer stuck at `001` — a driven net Icarus never re-evaluated,
+because the pointer stopped moving (section 3.3) — the read pointer
+swept the whole 3-bit space re-reading stale slots, the same burst was
+emitted twice, EVQ_OUT filled, `lif_core` held its next spike against
+the full queue and `STATUS.BUSY` stayed high. That is **not a
+deadlock**: draining EVQ_OUT once frees the queue and the design goes
+idle, which was measured directly — after one drain the design reported
+idle and the queue was empty. It reads as HANG only because the harness
+waits for idle *before* draining, and the fault it models is a
+permanent stuck-at on a voter output, which no single upset can cause.
+The corresponding real experiment, a deposit in one replica, is
+CORRECTED. Contrast section 5.7's `oh_req` HANG, which was replayed the
+same way and *was* a genuine deadlock: no host action clears it.
 
 ### 5.3 The neuron state file is unprotected, and its corruption persists
 
@@ -1303,7 +1645,7 @@ and carries the same remedy: **the driver must rewrite `W_ADDR` and
 The bring-up in this very campaign already does, which is why the
 campaign itself is not contaminated by it.
 
-### 5.7 The show-ahead adapter and the neuron scan
+### 5.7 The show-ahead adapter and the neuron scan — including a second deadlock
 
 `evq_hold` 6/14 SDC (42.9%) with `oh_valid` and `u_evq_out.rd_valid`
 both 2/2 [fact]: a one-bit valid flag on a one-deep adapter either
@@ -1316,6 +1658,60 @@ same valid-flag pattern) and `jj` (2/6, the scan index, which re-steers
 which neuron an update lands on). `out_event` was 0/6 — the emitted word
 is written one cycle before it is consumed, so its live window is
 narrow.
+
+#### `oh_req` could deadlock the output path — found 2026-08-29, fixed
+
+**The second silent hang in the pilot, and the same shape as the
+first [fact].** The 2026-08-29 campaign returned a HANG in this group:
+`evq_hold`, target `oh_req`, bit 0, burst 0, delay 0. Reproduced by
+instrumented replay and the mechanism read directly off the trace.
+
+`oh_req` is the adapter's "a queue read is outstanding" flag. It is set
+only together with `fo_rd_en`, cleared only by `fo_rd_valid`, and the
+arming condition is gated on `!oh_req`. An upset that sets it with no
+read outstanding therefore waits for a grant that will never be
+requested: the adapter never issues another read, EVQ_OUT never
+advances, and the queue fills. In the replay, sixteen cycles after the
+deposit the design sat with `oh_req` = 1, `oh_valid` = 0, `fo_rd_en` =
+0, `fo_rd_valid` = 0 and EVQ_OUT full at 4 of 4, and stayed there for
+the rest of the run. `lif_core` then held its next spike against the
+full queue, `STATUS.BUSY` went high and stayed high, and no flag, no
+counter and no fault pin moved.
+
+**Why it is a deadlock and not the backpressure it looks like.** With
+`oh_valid` low, neither observer can free the entry: a serial EVQ_OUT
+read returns VALID = 0 and an `AER_OUT_ACK` edge pops nothing. The host
+sees `EVQ_STAT.OUT_FILL` reporting events it cannot get out. Only
+`CTRL.SOFT_RST` or a reset recovers it. That distinguishes it sharply
+from the pointer HANG discussed in section 5.2, which is ordinary
+backpressure a single host read clears.
+
+**The fix, same as section 5.1's [fact].** `hw/rtl/pilot_top.v` header
+section 8: a 6-bit `oh_wait` counter bounds the `oh_req` wait at
+`OH_WAIT_MAX` = 63 cycles. On expiry the adapter clears `oh_req`,
+re-arms on the next cycle and pulses `oh_timeout`, which latches
+`sticky_errcfg`, so `STATUS.ERR_CFG` and the ERR pin report it. Cost: 7
+flip-flops and a comparator [fact, counted from the RTL declarations;
+declared census 1274 before, 1281 after]. Nothing is lost by the
+recovery: an `oh_req` with no read behind it is by construction a state
+in which the queue dequeued nothing, so the re-armed read fetches the
+word that was next all along — measured, the replay recovers with the
+correct next event and the run then matches `sw/golden`.
+
+**Regression test.** `hw/tb/test_pilot_top.py`,
+`test_show_ahead_stranded_request_recovers_and_is_flagged`. It deposits
+`oh_req` = 1 with one word presented and one still queued, pops the
+presented word on the `AER_OUT_ACK` pin, and then observes only
+host-visible results: `AER_OUT_VLD` rises again on its own inside a
+bounded number of cycles (measured: 60) carrying the correct next
+event, `STATUS.ERR_CFG` is set, the ERR pin is high, `STATUS_CLR`
+clears it, and the remaining events drain in golden order.
+**Mutation-checked [fact]:** with the bounded wait removed the test
+fails at the `AER_OUT_VLD` poll with "the adapter never issued another
+read", and the other 26 tests of that suite still pass — so the mutant
+is killed by this test and by nothing else.
+
+#### The general finding
 
 This is where the sibling programme's "small routing state carries the
 highest per-bit rate" observation does carry over, and it is worth
@@ -1383,12 +1779,20 @@ measured, the weighting is arithmetic on the section 2 FF counts]:
    one a spacecraft operator would notice first. Implemented in
    `pilot_top.v` section 8 at a cost of 7 flip-flops and one
    comparator; the post-fix campaign turns all 5 HANGs into DETECTED and
-   changes nothing else (section 5.1). Items 2 to 6 below are still
-   open.
-2. **TMR the four AER queue pointers.** 12 FF, top-three per-bit rate,
-   `tmr_voter.v` already verified and proven, and the corruption it
-   removes is the kind no consumer can detect (fabricated and duplicated
-   spikes).
+   changes nothing else (section 5.1). The **same treatment was applied
+   to the show-ahead adapter on 2026-08-29**, for a second silent
+   deadlock this campaign found in `oh_req` — same shape, same cost, and
+   section 5.7 has the mechanism, the fix and the mutation check.
+2. **TMR the four AER queue pointers. — DONE, and re-measured [fact].**
+   12 FF, top-three per-bit rate, `tmr_voter.v` already verified and
+   proven, and the corruption it removes is the kind no consumer can
+   detect (fabricated and duplicated spikes). Implemented in
+   `hw/rtl/aer_fifo.v` on 2026-08-29 as twelve `aer_ptr_bank` instances
+   behind a bitwise majority, at the estimated cost of exactly 24 extra
+   flip-flops, and reported to the host on `CNT_TMR` through
+   `ptr_mismatch`. The re-run puts the group at 72/72 CORRECTED, 0 SDC
+   (sections 3.4 and 5.2). It also cost a day of measuring the wrong
+   node, which section 3.3 records rather than quietly fixes.
 3. **Make the telemetry self-checking.** A counter/sticky disagreement
    comparator raising `ERR_CFG`, plus the host-side cross-check, at
    roughly 48 FF of coverage. This protects the measurement the whole
@@ -1424,7 +1828,8 @@ binary encoding would hold in 3 bits, and the Hamming-distance-2
 even-parity encoding holds in 4 (an earlier revision of this section
 said two). Across this campaign they were **50 for 50** — 12 FSM,
 15 TMR replica, 12 ECC single, 4 ECC double, 7 scrub — with not one
-silent corruption between them. They are the reason the design has a
+silent corruption between them, and with the pointer TMR of 2026-08-29
+the same sentence covers **122 for 122** at a further cost of 24 FF. They are the reason the design has a
 story at all, and the list above is what it would take to make the rest
 of the block deserve the same sentence.
 
@@ -1446,6 +1851,15 @@ independently by the encoding argument and by `formal/lif_ctrl_props.v`.
 Treat the *ordering* in section 6 as the result and the individual
 percentages as indicative.
 
+`evq_ptr` at 72/72 CORRECTED is the largest single-group sample in the
+campaign and the rule of three still puts the one-sided 95% bound on the
+missed rate at about 4%. It is also the group with the most independent
+support: the vote is `tmr_voter.v`'s expressions verbatim, proven
+exhaustively in `formal/tmr_voter.sby`, and `formal/aer_fifo_props.v`
+re-proves the queue's four properties *under* a single-replica pointer
+fault rather than beside it. The campaign result is the measurement that
+the RTL the proofs describe is the RTL the design instantiates.
+
 ### 7.2 One workload, and only a second geometry
 
 The campaign of record is 8 x 8 neurons/axons, EVQ depth 4, one
@@ -1457,25 +1871,33 @@ single cheapest way to test that, and it has not been done.
 
 A second **geometry** has now been run [fact].
 `make -f Makefile.fi N_NEURONS=4 N_AXONS=8` completes with all five
-tests passing: 251 injections, **103 MASKED, 42 CORRECTED, 36 DETECTED,
-70 SDC, 0 HANG** (27.9% SDC), log in
-`hw/tb/fi_campaign_results_4x8.json`. It corroborates the section 6
-ordering without reproducing the rates: `rmem` 100%, queue pointers
-95.8%, `vmem` 62.5%, the EVQ_OUT adapter 50%, `wmem` 25%. Every
-hardened structure held again — 12/12 FSM DETECTED, 15/15 TMR
-CORRECTED, 12/12 ECC singles CORRECTED, 4/4 doubles DETECTED — and the
-`lif_wmem_unread` control came back 4/4 MASKED. The top of the per-bit
-table is therefore not an artefact of one elaboration; the exact
-percentages are.
+tests passing. Pre-hardening it was 251 injections, **103 MASKED, 42
+CORRECTED, 36 DETECTED, 70 SDC, 0 HANG** (27.9% SDC), and it
+corroborated the section 6 ordering without reproducing the rates:
+`rmem` 100%, queue pointers 95.8%, `vmem` 62.5%, the EVQ_OUT adapter
+50%, `wmem` 25%. The top of the per-bit table was therefore not an
+artefact of one elaboration; the exact percentages were.
 
-Two caveats on that second run. It uses a **different weight seed**
+**Re-run at wave 5 on 2026-08-29 [fact]:** 325 injections, **88 MASKED,
+185 CORRECTED, 38 DETECTED, 14 SDC, 0 HANG** (4.3% SDC), 707 s wall, log
+in `hw/tb/fi_campaign_results_4x8.json`. Every hardened structure held
+again — 12/12 FSM DETECTED, 15/15 configuration TMR CORRECTED, **72/72
+pointer TMR CORRECTED**, 12/12 ECC singles CORRECTED, 4/4 doubles
+DETECTED, 0 SDC across every coded memory file — and both unread
+controls came back MASKED. The residual is the same three structures as
+at 8 x 8 and in the same order: the show-ahead adapter 5/14 (35.7%), the
+dispatcher 4/18 (22.2%), the neuron scan 4/19 (21.1%), with queue
+storage at 1/32. Two elaborations, two workloads, the same surviving
+list.
+
+Two caveats on that second geometry. It uses a **different weight seed**
 (4, not 10), because the five workload constraints of section 1.4 are a
 property of the resulting spike train and the 8 x 8 seed does not
 satisfy them at 4 x 8 — so it is a different workload as well as a
 different geometry, and the comparison is of orderings rather than of
-numbers. And the injection count differs (251 against 255) because the
+numbers. And the injection count differs (325 against 335) because the
 target list is built from the geometry: a 4-neuron scan index is one
-bit narrower.
+bit narrower and there are fewer weight codewords to reach.
 
 The geometry is followed automatically — the campaign reads
 `CFG_NEUR`/`CFG_AXON` back and builds its target list and its golden
@@ -1498,7 +1920,11 @@ have been a statement about the workload. It is fenced off, not solved.
 Deposits land inside the AER stimulus windows only. Four structures are
 therefore untouched (152 FF); together with the EVQ_OUT drop counter,
 which cannot increment by design, and four isolated control flops, they
-make up the 164 flip-flops section 2 does not represent:
+made up the 164 flip-flops section 2 did not represent when this
+section was written. The two bounded-wait counters added since are a
+fifth entry and a different reason — they are inside the window and
+simply have no target — taking the list to 166 FF of named structures
+plus the isolated flops:
 
 - **the serial shift engine** (80 FF) — live only during a serial frame.
   Reaching it needs the injection scheduled against the frame rather
@@ -1519,6 +1945,19 @@ make up the 164 flip-flops section 2 does not represent:
 - **the SYNC echo path and the EVQ_IN read register** (34 FF) — the
   workload contains no SYNC barrier, so half of this is untested by
   construction.
+- **the two bounded-wait counters** (`fetch_wait` + `fetch_timeout`,
+  `oh_wait` + `oh_timeout`, 14 FF, added 2026-08-29 to this list) — the
+  structures that convert a silent hang into a reported one. An upset in
+  `fetch_wait` or `oh_wait` shortens or lengthens a wait that is
+  otherwise never near its bound, which is harmless; an upset in either
+  `*_timeout` flop fabricates an `ERR_CFG` the host cannot distinguish
+  from a real one. **Unmeasured**, and the cheapest remaining gap to
+  close: they are named registers live inside the injection window, and
+  the `EXT_GROUPS` mechanism of section 2 exists precisely so a target
+  can be appended without moving any drawn phase. It was left out of
+  this wave to keep the run a single-variable change against the
+  previous one, not because it is hard. It is the first item for the
+  next campaign.
 
 ### 7.4 The fault model is single-bit, flip-flop only, at RTL
 
@@ -1561,6 +2000,23 @@ Two things close the gap, and only the second is mechanical:
   *name* in the netlist while the storage still merged, so any guard
   that greps for a signal name is satisfied by a design that has
   already lost the redundancy.
+
+**There is a second implicit precondition, and it failed twice
+[fact].** Every result in section 4 also assumes *the injector is aimed
+at storage*. Twice now a hardening turned a register into a
+continuously driven wire — the configuration replicas on 2026-08-26,
+the queue pointers on 2026-08-29 — and twice the target list kept
+naming the old signal, which still resolved and still produced numbers.
+The configuration case was caught before it reported anything wrong; the
+pointer case reported 23 SDC and zero corrections against a working TMR
+for a day (section 3.3). Neither a longer run nor a better oracle would
+have found either. What finds them is a criterion that names the target
+*shape* rather than the outcome, which is why section 1.8's new clause
+asserts that every pointer target path ends in a bank's storage register
+and that every such injection is CORRECTED rather than merely not-SDC.
+The general rule this campaign now works to: **when a hardening replaces
+a register with a voted or decoded wire, the target list is part of the
+change.**
 
 ### 7.5 This says nothing about rates
 
@@ -1637,7 +2093,17 @@ directly — runs on the same machine took 79.5, 80.5, 81.1, 83.5, 84.5,
 103 and 184 s as the load average went from near zero to 14 of 20 cores —
 so a CI job should budget three minutes rather than ninety seconds. The
 22.23 ms of simulated time is the machine-independent figure for
-comparing hosts; the 4 x 8 geometry is 15.47 ms and about 58 s.
+comparing hosts; the 4 x 8 geometry was 15.47 ms and about 58 s.
+
+**Both of those cost figures are superseded and the direction is up
+[fact].** The memory hardening put two SECDED decoders and an encoder in
+the neuron core's per-cycle read path, and the wave-5 run adds 48
+injections on top: the 335-injection campaign of section 3.4 took
+**892 s of wall time for 28.77 ms of simulated time**, and the 325
+injections at 4 x 8 took **707 s for 20.03 ms**, both on a machine
+carrying a load average of about 12 of 20 cores throughout. A CI job
+should budget twenty minutes, and the argument for keeping this suite
+off the default sweep is correspondingly stronger.
 
 Relationship to the rest of the verification programme:
 
@@ -1656,9 +2122,10 @@ Relationship to the rest of the verification programme:
   acceptance baseline for any later campaign — an FPGA saboteur run or a
   beam campaign inherits this target list, these classes and this seed,
   and any structure whose measured behaviour disagrees with this file is
-  a finding. It now holds the post-fix run; the pre-fix numbers survive
-  in this document, in the headline, in section 3 and in the section 5.1
-  table of the five records that changed.
+  a finding. It now holds the 335-injection post-wave-5 run; the earlier
+  numbers survive in this document, in the headline, in sections 3.1 to
+  3.4, in the section 5.1 table of the five records that changed and in
+  the section 3.4 table of the one that changed this time.
 
 ### Notes for the integrator
 

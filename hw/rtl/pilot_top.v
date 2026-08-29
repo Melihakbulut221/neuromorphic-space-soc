@@ -434,6 +434,31 @@
 // either observer can consume. Nothing here reads aer_fifo's rd_data
 // combinationally, so the queue stays retargetable.
 //
+// oh_req is the adapter's "a read is outstanding" flag, and it is the
+// second structure in this module that can wait forever. It is set only
+// together with fo_rd_en and cleared only by fo_rd_valid, so a
+// single-bit upset that sets it with no read outstanding waits for a
+// grant that will never be requested: the arming condition below is
+// gated on !oh_req, so no further read is ever issued, EVQ_OUT never
+// advances again, and the queue fills. lif_core then holds its next
+// spike against a full queue, STATUS.BUSY stays high and nothing is
+// flagged. Unlike the ordinary full-queue backpressure this looks like,
+// the host cannot clear it by reading EVQ_OUT -- oh_valid is low, so a
+// read pops nothing -- so only CTRL.SOFT_RST or a reset recovers it.
+// That is the same silent-hang failure class as the D_FETCH wait of
+// section 5.1 in docs/16, reached from a different flip-flop, and it is
+// measured: the fault-injection campaign's `evq_hold` group hits it from
+// a deposit into oh_req.
+//
+// It gets the same treatment. A granted read answers in one cycle, so
+// OH_WAIT_MAX = 63 cycles of waiting is far past any legitimate reply;
+// past it the adapter clears oh_req, re-arms on the next cycle and
+// pulses oh_timeout, which latches sticky_errcfg exactly as
+// fetch_timeout does. Nothing is lost by the recovery: oh_req without a
+// read outstanding is by construction a state in which the queue has
+// dequeued nothing, so the re-armed read fetches the word that was next
+// all along.
+//
 // =====================================================================
 // 9. Configuration TMR: why the replicas are submodules, not three regs
 // =====================================================================
@@ -1185,6 +1210,15 @@ module pilot_top #(
     reg         oh_valid, oh_req;
     reg [15:0]  oh_data;
 
+    // Bound on the oh_req wait (header section 8). Same shape and same
+    // width as the dispatcher's FETCH_WAIT: a granted queue read answers
+    // in one cycle, so 63 is generous, and 6 bits keeps the counter to 6
+    // flip-flops.
+    localparam integer OH_WAIT_W = 6;
+    localparam [OH_WAIT_W-1:0] OH_WAIT_MAX = {OH_WAIT_W{1'b1}};
+    reg [OH_WAIT_W-1:0] oh_wait;
+    reg                 oh_timeout;
+
     wire        lif_out_valid;
     wire [15:0] lif_out_event;
     reg         sync_push;
@@ -1253,22 +1287,41 @@ module pilot_top #(
 
     always @(posedge clk or negedge blk_rst_n) begin
         if (!blk_rst_n) begin
-            oh_valid <= 1'b0;
-            oh_req   <= 1'b0;
-            oh_data  <= 16'd0;
-            fo_rd_en <= 1'b0;
+            oh_valid   <= 1'b0;
+            oh_req     <= 1'b0;
+            oh_data    <= 16'd0;
+            fo_rd_en   <= 1'b0;
+            oh_wait    <= {OH_WAIT_W{1'b0}};
+            oh_timeout <= 1'b0;
         end else begin
-            fo_rd_en <= 1'b0;
+            fo_rd_en   <= 1'b0;
+            oh_timeout <= 1'b0;
             if (fo_rd_valid) begin
                 oh_data  <= fo_rd_data;
                 oh_valid <= 1'b1;
                 oh_req   <= 1'b0;
+                oh_wait  <= {OH_WAIT_W{1'b0}};
             end else if (oh_pop) begin
                 oh_valid <= 1'b0;
+            end
+            // The bounded wait of header section 8. An oh_req that no
+            // read will ever answer is abandoned rather than waited on
+            // forever, and the abandonment is reported. The arm below
+            // reads the CURRENT oh_req, which is still set in this
+            // cycle, so the re-arm happens on the next one.
+            if (oh_req && !fo_rd_valid) begin
+                if (oh_wait == OH_WAIT_MAX) begin
+                    oh_req     <= 1'b0;
+                    oh_wait    <= {OH_WAIT_W{1'b0}};
+                    oh_timeout <= 1'b1;
+                end else begin
+                    oh_wait <= oh_wait + 1'b1;
+                end
             end
             if (!oh_valid && !oh_req && !fo_rd_valid && !fo_empty && !fo_rd_en) begin
                 fo_rd_en <= 1'b1;
                 oh_req   <= 1'b1;
+                oh_wait  <= {OH_WAIT_W{1'b0}};
             end
         end
     end
@@ -1748,6 +1801,10 @@ module pilot_top #(
             // A dispatcher that waited out D_FETCH was hung; the recovery
             // to D_IDLE is silent unless it is recorded here.
             if (fetch_timeout) sticky_errcfg <= 1'b1;
+            // The same for the show-ahead adapter (header section 8): an
+            // oh_req with no read behind it wedges the output path
+            // outright, and its recovery must not be silent either.
+            if (oh_timeout) sticky_errcfg <= 1'b1;
 
             // ---- FAULT_CLR (npu_regbank C2 re-export) ----------------
             // A clear coincident with its own event restarts the

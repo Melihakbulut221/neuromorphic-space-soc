@@ -57,13 +57,13 @@
    18
   ]
  },
- "wall_seconds": 56.1,
- "total": 251,
+ "wall_seconds": 706.7,
+ "total": 325,
  "histogram": {
-  "MASKED": 103,
-  "CORRECTED": 42,
-  "DETECTED": 36,
-  "SDC": 70,
+  "MASKED": 88,
+  "CORRECTED": 185,
+  "DETECTED": 38,
+  "SDC": 14,
   "HANG": 0
  },
  "groups": {
@@ -75,24 +75,24 @@
    "HANG": 0
   },
   "lif_vmem": {
-   "MASKED": 9,
-   "CORRECTED": 0,
+   "MASKED": 0,
+   "CORRECTED": 24,
    "DETECTED": 0,
-   "SDC": 15,
+   "SDC": 0,
    "HANG": 0
   },
   "lif_rmem": {
-   "MASKED": 0,
-   "CORRECTED": 0,
+   "MASKED": 2,
+   "CORRECTED": 10,
    "DETECTED": 0,
-   "SDC": 12,
+   "SDC": 0,
    "HANG": 0
   },
   "lif_wmem": {
-   "MASKED": 12,
-   "CORRECTED": 0,
+   "MASKED": 2,
+   "CORRECTED": 14,
    "DETECTED": 0,
-   "SDC": 4,
+   "SDC": 0,
    "HANG": 0
   },
   "lif_wmem_unread": {
@@ -145,10 +145,10 @@
    "HANG": 0
   },
   "evq_ptr": {
-   "MASKED": 1,
-   "CORRECTED": 0,
+   "MASKED": 0,
+   "CORRECTED": 72,
    "DETECTED": 0,
-   "SDC": 23,
+   "SDC": 0,
    "HANG": 0
   },
   "evq_mem": {
@@ -161,8 +161,8 @@
   "evq_hold": {
    "MASKED": 7,
    "CORRECTED": 0,
-   "DETECTED": 0,
-   "SDC": 7,
+   "DETECTED": 2,
+   "SDC": 5,
    "HANG": 0
   },
   "dispatch": {
@@ -170,6 +170,27 @@
    "CORRECTED": 0,
    "DETECTED": 3,
    "SDC": 4,
+   "HANG": 0
+  },
+  "lif_wchk": {
+   "MASKED": 1,
+   "CORRECTED": 5,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_wchk_unread": {
+   "MASKED": 2,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_smem": {
+   "MASKED": 0,
+   "CORRECTED": 18,
+   "DETECTED": 0,
+   "SDC": 0,
    "HANG": 0
   },
   "ecc_port_single": {
@@ -211,23 +232,23 @@
   },
   "lif_vmem": {
    "n": 24,
-   "sdc_stream": 12,
-   "sdc_state_only": 3,
-   "tel_differs": 0,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 24,
    "latent": 0
   },
   "lif_rmem": {
    "n": 12,
-   "sdc_stream": 8,
-   "sdc_state_only": 4,
-   "tel_differs": 0,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 10,
    "latent": 0
   },
   "lif_wmem": {
    "n": 16,
-   "sdc_stream": 1,
-   "sdc_state_only": 3,
-   "tel_differs": 0,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 14,
    "latent": 0
   },
   "lif_wmem_unread": {
@@ -280,10 +301,10 @@
    "latent": 0
   },
   "evq_ptr": {
-   "n": 24,
-   "sdc_stream": 21,
-   "sdc_state_only": 2,
-   "tel_differs": 0,
+   "n": 72,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 72,
    "latent": 0
   },
   "evq_mem": {
@@ -295,7 +316,7 @@
   },
   "evq_hold": {
    "n": 14,
-   "sdc_stream": 7,
+   "sdc_stream": 5,
    "sdc_state_only": 0,
    "tel_differs": 0,
    "latent": 0
@@ -305,6 +326,27 @@
    "sdc_stream": 4,
    "sdc_state_only": 0,
    "tel_differs": 0,
+   "latent": 0
+  },
+  "lif_wchk": {
+   "n": 6,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 5,
+   "latent": 0
+  },
+  "lif_wchk_unread": {
+   "n": 2,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
+  "lif_smem": {
+   "n": 18,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 18,
    "latent": 0
   },
   "ecc_port_single": {
@@ -337,9 +379,9 @@
   }
  },
  "detected_with_wrong_output": 20,
- "state_only_divergence": 13,
+ "state_only_divergence": 1,
  "latent_register_corruption": 14,
- "telemetry_mismatch": 34,
+ "telemetry_mismatch": 177,
  "injections": [
   {
    "group": "lif_fsm",
@@ -995,14 +1037,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1010,7 +1052,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1044,7 +1086,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1052,14 +1094,14 @@
    "bit": 0,
    "burst": 1,
    "delay": 4,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1067,7 +1109,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1101,7 +1143,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1109,14 +1151,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1124,7 +1166,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1158,7 +1200,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1166,70 +1208,14 @@
    "bit": 4,
    "burst": 2,
    "delay": 4,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     9,
-     0
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -23,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_vmem",
-   "target": "u_lif.vmem[0]",
-   "bit": 11,
-   "burst": 0,
-   "delay": 0,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1237,13 +1223,13 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    0,
     3,
+    0,
     1,
     0
    ],
@@ -1271,7 +1257,64 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_vmem",
+   "target": "u_lif.vmem[0]",
+   "bit": 11,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1279,14 +1322,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 1,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1294,13 +1337,13 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    0,
     3,
+    0,
     1,
     0
    ],
@@ -1328,7 +1371,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1336,14 +1379,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1351,13 +1394,15 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
     3,
-    1
+    0,
+    1,
+    0
    ],
    "exp_events": [
     3,
@@ -1367,8 +1412,8 @@
    ],
    "state": [
     [
-     -21938,
-     0
+     -3,
+     1
     ],
     [
      -2,
@@ -1383,7 +1428,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1391,14 +1436,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 16,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1406,7 +1451,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1440,7 +1485,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1448,14 +1493,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1463,7 +1508,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1497,7 +1542,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1505,14 +1550,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 5,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1520,7 +1565,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1554,7 +1599,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1562,14 +1607,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1577,14 +1622,14 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    1,
     3,
     0,
+    1,
     0
    ],
    "exp_events": [
@@ -1599,7 +1644,7 @@
      1
     ],
     [
-     -16,
+     -2,
      0
     ],
     [
@@ -1611,7 +1656,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1619,14 +1664,14 @@
    "bit": 4,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1634,14 +1679,14 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    1,
     3,
     0,
+    1,
     0
    ],
    "exp_events": [
@@ -1656,7 +1701,7 @@
      1
     ],
     [
-     -16,
+     -2,
      0
     ],
     [
@@ -1668,7 +1713,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1676,14 +1721,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1691,14 +1736,14 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    1,
     3,
     0,
+    1,
     0
    ],
    "exp_events": [
@@ -1713,7 +1758,7 @@
      1
     ],
     [
-     -16,
+     -2,
      0
     ],
     [
@@ -1725,7 +1770,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1733,14 +1778,14 @@
    "bit": 11,
    "burst": 0,
    "delay": 1,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1748,14 +1793,14 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    1,
     3,
     0,
+    1,
     0
    ],
    "exp_events": [
@@ -1770,7 +1815,7 @@
      1
     ],
     [
-     -16,
+     -2,
      0
     ],
     [
@@ -1782,7 +1827,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1790,14 +1835,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1805,13 +1850,14 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
     3,
     0,
+    1,
     0
    ],
    "exp_events": [
@@ -1826,7 +1872,7 @@
      1
     ],
     [
-     -21945,
+     -2,
      0
     ],
     [
@@ -1838,7 +1884,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1846,70 +1892,14 @@
    "bit": 15,
    "burst": 0,
    "delay": 9,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -21945,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -23,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_vmem",
-   "target": "u_lif.vmem[3]",
-   "bit": 0,
-   "burst": 0,
-   "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -1917,7 +1907,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -1951,7 +1941,64 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_vmem",
+   "target": "u_lif.vmem[3]",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -1959,71 +2006,14 @@
    "bit": 0,
    "burst": 2,
    "delay": 17,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": true,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -22,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_vmem",
-   "target": "u_lif.vmem[3]",
-   "bit": 4,
-   "burst": 0,
-   "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2031,7 +2021,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2065,7 +2055,64 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_vmem",
+   "target": "u_lif.vmem[3]",
+   "bit": 4,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2073,14 +2120,14 @@
    "bit": 4,
    "burst": 2,
    "delay": 4,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2088,7 +2135,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2118,11 +2165,11 @@
      0
     ],
     [
-     -36,
+     -23,
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_vmem",
@@ -2130,6 +2177,291 @@
    "bit": 11,
    "burst": 0,
    "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_vmem",
+   "target": "u_lif.vmem[3]",
+   "bit": 11,
+   "burst": 2,
+   "delay": 2,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_vmem",
+   "target": "u_lif.vmem[3]",
+   "bit": 15,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_vmem",
+   "target": "u_lif.vmem[3]",
+   "bit": 15,
+   "burst": 0,
+   "delay": 11,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_rmem",
+   "target": "u_lif.rmem[0]",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_rmem",
+   "target": "u_lif.rmem[0]",
+   "bit": 0,
+   "burst": 2,
+   "delay": 16,
    "class": "MASKED",
    "completed": true,
    "out_ok": true,
@@ -2165,289 +2497,6 @@
     [
      -3,
      1
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -23,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_vmem",
-   "target": "u_lif.vmem[3]",
-   "bit": 11,
-   "burst": 2,
-   "delay": 2,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": true,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -1592,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_vmem",
-   "target": "u_lif.vmem[3]",
-   "bit": 15,
-   "burst": 0,
-   "delay": 0,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    0,
-    1,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -22004,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_vmem",
-   "target": "u_lif.vmem[3]",
-   "bit": 15,
-   "burst": 0,
-   "delay": 11,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0,
-    3
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -3,
-     1
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_rmem",
-   "target": "u_lif.rmem[0]",
-   "bit": 0,
-   "burst": 0,
-   "delay": 0,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    1
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     0
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -23,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_rmem",
-   "target": "u_lif.rmem[0]",
-   "bit": 0,
-   "burst": 2,
-   "delay": 16,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": true,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     0
     ],
     [
      -2,
@@ -2470,14 +2519,14 @@
    "bit": 1,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2485,12 +2534,13 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
     3,
+    0,
     1,
     0
    ],
@@ -2518,7 +2568,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2526,11 +2576,11 @@
    "bit": 1,
    "burst": 2,
    "delay": 15,
-   "class": "SDC",
+   "class": "MASKED",
    "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
     "cnt_sec": 0,
@@ -2560,7 +2610,7 @@
    "state": [
     [
      -3,
-     3
+     1
     ],
     [
      -2,
@@ -2583,14 +2633,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2598,13 +2648,15 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
     3,
-    1
+    0,
+    1,
+    0
    ],
    "exp_events": [
     3,
@@ -2614,8 +2666,8 @@
    ],
    "state": [
     [
-     0,
-     5
+     -3,
+     1
     ],
     [
      -2,
@@ -2630,7 +2682,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2638,14 +2690,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 11,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2653,67 +2705,12 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
     3,
-    0,
-    1
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -1,
-     7
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -23,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_rmem",
-   "target": "u_lif.rmem[3]",
-   "bit": 0,
-   "burst": 0,
-   "delay": 0,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
     0,
     1,
     0
@@ -2738,11 +2735,68 @@
      0
     ],
     [
-     -52,
+     -23,
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_rmem",
+   "target": "u_lif.rmem[3]",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2750,14 +2804,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 2,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2765,11 +2819,12 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
+    3,
     0,
     1,
     0
@@ -2794,11 +2849,11 @@
      0
     ],
     [
-     -52,
+     -23,
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2806,14 +2861,14 @@
    "bit": 1,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2821,11 +2876,12 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
+    3,
     0,
     1,
     0
@@ -2850,11 +2906,11 @@
      0
     ],
     [
-     -21,
+     -23,
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2862,14 +2918,14 @@
    "bit": 1,
    "burst": 1,
    "delay": 7,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2877,7 +2933,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -2907,11 +2963,11 @@
      0
     ],
     [
-     -1,
-     1
+     -23,
+     0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2919,14 +2975,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -2934,11 +2990,12 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
+    3,
     0,
     1,
     0
@@ -2963,11 +3020,11 @@
      0
     ],
     [
-     0,
-     5
+     -23,
+     0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_rmem",
@@ -2975,71 +3032,14 @@
    "bit": 3,
    "burst": 1,
    "delay": 3,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": true,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -49,
-     0
-    ],
-    [
-     -1,
-     7
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "lif_wmem",
-   "target": "u_lif.wmem[0]",
-   "bit": 0,
-   "burst": 0,
-   "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 1,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3047,7 +3047,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3081,7 +3081,64 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_wmem",
+   "target": "u_lif.wmem[0]",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 14,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3089,14 +3146,14 @@
    "bit": 0,
    "burst": 2,
    "delay": 6,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 3,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3104,7 +3161,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3138,7 +3195,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3146,14 +3203,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3161,13 +3218,13 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
-    0,
     3,
+    0,
     1,
     0
    ],
@@ -3195,7 +3252,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3203,14 +3260,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 17,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 7,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3218,7 +3275,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3252,7 +3309,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3260,14 +3317,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3275,7 +3332,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3309,7 +3366,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3317,14 +3374,14 @@
    "bit": 0,
    "burst": 1,
    "delay": 4,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 6,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3332,7 +3389,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3366,7 +3423,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3374,14 +3431,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3389,7 +3446,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3411,7 +3468,7 @@
      1
     ],
     [
-     13,
+     -2,
      0
     ],
     [
@@ -3423,7 +3480,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3488,14 +3545,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3503,7 +3560,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3529,7 +3586,7 @@
      0
     ],
     [
-     -52,
+     -49,
      0
     ],
     [
@@ -3537,7 +3594,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3545,14 +3602,14 @@
    "bit": 0,
    "burst": 1,
    "delay": 5,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 5,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3560,7 +3617,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3594,7 +3651,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3602,14 +3659,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3617,7 +3674,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3643,7 +3700,7 @@
      0
     ],
     [
-     -73,
+     -49,
      0
     ],
     [
@@ -3651,7 +3708,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3716,14 +3773,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3731,7 +3788,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3765,7 +3822,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3773,14 +3830,14 @@
    "bit": 0,
    "burst": 0,
    "delay": 6,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 10,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3788,7 +3845,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3822,7 +3879,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3830,14 +3887,14 @@
    "bit": 3,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 14,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3845,7 +3902,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3879,7 +3936,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem",
@@ -3887,14 +3944,14 @@
    "bit": 3,
    "burst": 1,
    "delay": 4,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
-    "cnt_sec": 0,
+    "cnt_sec": 6,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
@@ -3902,7 +3959,7 @@
    },
    "pins": {
     "err": 0,
-    "sec_seen": 0,
+    "sec_seen": 1,
     "ded_seen": 0,
     "tmr_seen": 0
    },
@@ -3936,7 +3993,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "lif_wmem_unread",
@@ -5252,7 +5309,7 @@
   },
   {
    "group": "cfg_tmr_a",
-   "target": "cfg_a",
+   "target": "u_cfg_a.bits",
    "bit": 0,
    "burst": 0,
    "delay": 0,
@@ -5309,7 +5366,7 @@
   },
   {
    "group": "cfg_tmr_a",
-   "target": "cfg_a",
+   "target": "u_cfg_a.bits",
    "bit": 12,
    "burst": 0,
    "delay": 0,
@@ -5366,7 +5423,7 @@
   },
   {
    "group": "cfg_tmr_a",
-   "target": "cfg_a",
+   "target": "u_cfg_a.bits",
    "bit": 16,
    "burst": 0,
    "delay": 0,
@@ -5423,7 +5480,7 @@
   },
   {
    "group": "cfg_tmr_a",
-   "target": "cfg_a",
+   "target": "u_cfg_a.bits",
    "bit": 32,
    "burst": 0,
    "delay": 0,
@@ -5480,7 +5537,7 @@
   },
   {
    "group": "cfg_tmr_a",
-   "target": "cfg_a",
+   "target": "u_cfg_a.bits",
    "bit": 43,
    "burst": 0,
    "delay": 0,
@@ -5537,7 +5594,7 @@
   },
   {
    "group": "cfg_tmr_b",
-   "target": "cfg_b",
+   "target": "u_cfg_b.bits",
    "bit": 0,
    "burst": 0,
    "delay": 0,
@@ -5594,7 +5651,7 @@
   },
   {
    "group": "cfg_tmr_b",
-   "target": "cfg_b",
+   "target": "u_cfg_b.bits",
    "bit": 12,
    "burst": 0,
    "delay": 0,
@@ -5651,7 +5708,7 @@
   },
   {
    "group": "cfg_tmr_b",
-   "target": "cfg_b",
+   "target": "u_cfg_b.bits",
    "bit": 16,
    "burst": 0,
    "delay": 0,
@@ -5708,7 +5765,7 @@
   },
   {
    "group": "cfg_tmr_b",
-   "target": "cfg_b",
+   "target": "u_cfg_b.bits",
    "bit": 32,
    "burst": 0,
    "delay": 0,
@@ -5765,7 +5822,7 @@
   },
   {
    "group": "cfg_tmr_b",
-   "target": "cfg_b",
+   "target": "u_cfg_b.bits",
    "bit": 43,
    "burst": 0,
    "delay": 0,
@@ -5822,7 +5879,7 @@
   },
   {
    "group": "cfg_tmr_c",
-   "target": "cfg_c",
+   "target": "u_cfg_c.bits",
    "bit": 0,
    "burst": 0,
    "delay": 0,
@@ -5879,7 +5936,7 @@
   },
   {
    "group": "cfg_tmr_c",
-   "target": "cfg_c",
+   "target": "u_cfg_c.bits",
    "bit": 12,
    "burst": 0,
    "delay": 0,
@@ -5936,7 +5993,7 @@
   },
   {
    "group": "cfg_tmr_c",
-   "target": "cfg_c",
+   "target": "u_cfg_c.bits",
    "bit": 16,
    "burst": 0,
    "delay": 0,
@@ -5993,7 +6050,7 @@
   },
   {
    "group": "cfg_tmr_c",
-   "target": "cfg_c",
+   "target": "u_cfg_c.bits",
    "bit": 32,
    "burst": 0,
    "delay": 0,
@@ -6050,7 +6107,7 @@
   },
   {
    "group": "cfg_tmr_c",
-   "target": "cfg_c",
+   "target": "u_cfg_c.bits",
    "bit": 43,
    "burst": 0,
    "delay": 0,
@@ -7972,404 +8029,11 @@
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_in.wr_ptr",
+   "target": "u_evq_in.u_wptr_a.bits",
    "bit": 0,
    "burst": 1,
    "delay": 8,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -7,
-     0
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -67,
-     0
-    ],
-    [
-     -88,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.wr_ptr",
-   "bit": 0,
-   "burst": 0,
-   "delay": 14,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -2,
-     0
-    ],
-    [
-     -18,
-     0
-    ],
-    [
-     -108,
-     0
-    ],
-    [
-     -60,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.wr_ptr",
-   "bit": 1,
-   "burst": 0,
-   "delay": 16,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -8,
-     0
-    ],
-    [
-     -5,
-     0
-    ],
-    [
-     -90,
-     0
-    ],
-    [
-     -42,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.wr_ptr",
-   "bit": 1,
-   "burst": 2,
-   "delay": 16,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": true,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -2,
-     0
-    ],
-    [
-     9,
-     0
-    ],
-    [
-     -43,
-     0
-    ],
-    [
-     -31,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.wr_ptr",
-   "bit": 2,
-   "burst": 0,
-   "delay": 16,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -5,
-     0
-    ],
-    [
-     -9,
-     0
-    ],
-    [
-     -75,
-     0
-    ],
-    [
-     -54,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.wr_ptr",
-   "bit": 2,
-   "burst": 0,
-   "delay": 15,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -5,
-     0
-    ],
-    [
-     -9,
-     0
-    ],
-    [
-     -75,
-     0
-    ],
-    [
-     -54,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.rd_ptr",
-   "bit": 0,
-   "burst": 2,
-   "delay": 15,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1,
-    0,
-    0,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -3,
-     1
-    ],
-    [
-     -16,
-     0
-    ],
-    [
-     -67,
-     0
-    ],
-    [
-     -62,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.rd_ptr",
-   "bit": 0,
-   "burst": 1,
-   "delay": 10,
-   "class": "MASKED",
+   "class": "CORRECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
@@ -8380,13 +8044,13 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
     3,
@@ -8418,88 +8082,32 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_in.rd_ptr",
-   "bit": 1,
+   "target": "u_evq_in.u_wptr_b.bits",
+   "bit": 0,
    "burst": 1,
    "delay": 8,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0,
-    1
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -5,
-     0
-    ],
-    [
-     -16,
-     0
-    ],
-    [
-     -56,
-     0
-    ],
-    [
-     -54,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.rd_ptr",
-   "bit": 1,
-   "burst": 2,
-   "delay": 4,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
+   "out_ok": true,
    "spikes_ok": true,
-   "state_ok": false,
+   "state_ok": true,
    "status": 6,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
     3,
@@ -8519,104 +8127,50 @@
      1
     ],
     [
-     -16,
+     -2,
      0
     ],
     [
-     -46,
+     -49,
      0
     ],
     [
-     -33,
+     -23,
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_in.rd_ptr",
-   "bit": 2,
-   "burst": 0,
-   "delay": 15,
-   "class": "SDC",
-   "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
-   "counters": {
-    "cnt_sec": 0,
-    "cnt_ded": 0,
-    "cnt_ovf": 0,
-    "cnt_oor": 0,
-    "cnt_tmr": 0
-   },
-   "pins": {
-    "err": 0,
-    "sec_seen": 0,
-    "ded_seen": 0,
-    "tmr_seen": 0
-   },
-   "got_events": [
-    3,
-    0
-   ],
-   "exp_events": [
-    3,
-    0,
-    1,
-    0
-   ],
-   "state": [
-    [
-     -5,
-     0
-    ],
-    [
-     -9,
-     0
-    ],
-    [
-     -75,
-     0
-    ],
-    [
-     -54,
-     0
-    ]
-   ],
-   "telemetry_ok": true
-  },
-  {
-   "group": "evq_ptr",
-   "target": "u_evq_in.rd_ptr",
-   "bit": 2,
+   "target": "u_evq_in.u_wptr_c.bits",
+   "bit": 0,
    "burst": 1,
-   "delay": 6,
-   "class": "SDC",
+   "delay": 8,
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
    "status": 6,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
     3,
     0,
-    1
+    1,
+    0
    ],
    "exp_events": [
     3,
@@ -8626,34 +8180,34 @@
    ],
    "state": [
     [
-     -5,
+     -3,
+     1
+    ],
+    [
+     -2,
      0
     ],
     [
-     -16,
+     -49,
      0
     ],
     [
-     -58,
-     0
-    ],
-    [
-     -54,
+     -23,
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.wr_ptr",
+   "target": "u_evq_in.u_wptr_a.bits",
    "bit": 0,
    "burst": 0,
-   "delay": 0,
-   "class": "SDC",
+   "delay": 14,
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -8661,16 +8215,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    61680,
     3,
     0,
     1,
@@ -8700,18 +8253,18 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.wr_ptr",
+   "target": "u_evq_in.u_wptr_b.bits",
    "bit": 0,
-   "burst": 2,
-   "delay": 9,
-   "class": "SDC",
+   "burst": 0,
+   "delay": 14,
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -8719,18 +8272,19 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
     3,
     0,
-    1
+    1,
+    0
    ],
    "exp_events": [
     3,
@@ -8756,18 +8310,75 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.wr_ptr",
+   "target": "u_evq_in.u_wptr_c.bits",
+   "bit": 0,
+   "burst": 0,
+   "delay": 14,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_a.bits",
    "bit": 1,
-   "burst": 1,
-   "delay": 3,
-   "class": "SDC",
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -8775,23 +8386,17 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
     3,
     0,
-    61680,
-    61680,
-    1,
-    0,
-    61680,
-    61680,
     1,
     0
    ],
@@ -8819,18 +8424,132 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.wr_ptr",
+   "target": "u_evq_in.u_wptr_b.bits",
+   "bit": 1,
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_c.bits",
+   "bit": 1,
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_a.bits",
    "bit": 1,
    "burst": 2,
    "delay": 16,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -8838,20 +8557,18 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
     3,
     0,
     1,
-    0,
-    3,
     0
    ],
    "exp_events": [
@@ -8878,18 +8595,1329 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.wr_ptr",
+   "target": "u_evq_in.u_wptr_b.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_c.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_a.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_b.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_c.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_a.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_b.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_wptr_c.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_a.bits",
+   "bit": 0,
+   "burst": 2,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_b.bits",
+   "bit": 0,
+   "burst": 2,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_c.bits",
+   "bit": 0,
+   "burst": 2,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_a.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 10,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_b.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 10,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_c.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 10,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_a.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 8,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_b.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 8,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_c.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 8,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_a.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 4,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_b.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 4,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_c.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 4,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_a.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_b.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_c.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 15,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_a.bits",
    "bit": 2,
    "burst": 1,
    "delay": 6,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -8897,19 +9925,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    61680,
-    61680,
     3,
     0,
     1,
@@ -8939,18 +9963,987 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.wr_ptr",
+   "target": "u_evq_in.u_rptr_b.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_in.u_rptr_c.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_a.bits",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_b.bits",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_c.bits",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_a.bits",
+   "bit": 0,
+   "burst": 2,
+   "delay": 9,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_b.bits",
+   "bit": 0,
+   "burst": 2,
+   "delay": 9,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_c.bits",
+   "bit": 0,
+   "burst": 2,
+   "delay": 9,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_a.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 3,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_b.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 3,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_c.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 3,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_a.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_b.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_c.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_a.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_b.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_c.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_a.bits",
    "bit": 2,
    "burst": 0,
    "delay": 12,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -8958,19 +10951,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    61680,
-    61680,
     3,
     0,
     1,
@@ -9000,18 +10989,132 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.rd_ptr",
+   "target": "u_evq_out.u_wptr_b.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 12,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_wptr_c.bits",
+   "bit": 2,
+   "burst": 0,
+   "delay": 12,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_a.bits",
    "bit": 0,
    "burst": 1,
    "delay": 6,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -9019,22 +11122,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    61680,
-    3,
-    0,
-    1,
-    61680,
     3,
     0,
     1,
@@ -9064,18 +11160,18 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.rd_ptr",
+   "target": "u_evq_out.u_rptr_b.bits",
    "bit": 0,
    "burst": 1,
    "delay": 6,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -9083,22 +11179,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    61680,
-    3,
-    0,
-    1,
-    61680,
     3,
     0,
     1,
@@ -9128,18 +11217,246 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.rd_ptr",
+   "target": "u_evq_out.u_rptr_c.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_a.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_b.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_c.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_a.bits",
    "bit": 1,
    "burst": 0,
    "delay": 1,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -9147,21 +11464,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    61680,
-    61680,
-    3,
-    0,
-    61680,
-    61680,
     3,
     0,
     1,
@@ -9191,18 +11502,132 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.rd_ptr",
+   "target": "u_evq_out.u_rptr_b.bits",
+   "bit": 1,
+   "burst": 0,
+   "delay": 1,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_c.bits",
+   "bit": 1,
+   "burst": 0,
+   "delay": 1,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_a.bits",
    "bit": 1,
    "burst": 2,
    "delay": 12,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -9210,21 +11635,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    1,
-    0,
-    1,
-    0,
     3,
     0,
     1,
@@ -9254,18 +11673,132 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.rd_ptr",
+   "target": "u_evq_out.u_rptr_b.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 12,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_c.bits",
+   "bit": 1,
+   "burst": 2,
+   "delay": 12,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_a.bits",
    "bit": 2,
    "burst": 1,
    "delay": 2,
-   "class": "SDC",
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -9273,19 +11806,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    61680,
-    61680,
     3,
     0,
     1,
@@ -9315,18 +11844,18 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_ptr",
-   "target": "u_evq_out.rd_ptr",
+   "target": "u_evq_out.u_rptr_b.bits",
    "bit": 2,
    "burst": 1,
-   "delay": 6,
-   "class": "SDC",
+   "delay": 2,
+   "class": "CORRECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
    "status": 6,
    "counters": {
@@ -9334,19 +11863,15 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 1
    },
    "pins": {
     "err": 0,
     "sec_seen": 0,
     "ded_seen": 0,
-    "tmr_seen": 0
+    "tmr_seen": 1
    },
    "got_events": [
-    3,
-    0,
-    61680,
-    61680,
     3,
     0,
     1,
@@ -9376,7 +11901,235 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_c.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 2,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_a.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_b.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "evq_ptr",
+   "target": "u_evq_out.u_rptr_c.bits",
+   "bit": 2,
+   "burst": 1,
+   "delay": 6,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 1
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 1
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -11323,12 +14076,12 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "SDC",
+   "class": "DETECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
-   "status": 2,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
@@ -11337,12 +14090,17 @@
     "cnt_tmr": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
    },
-   "got_events": [],
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
    "exp_events": [
     3,
     0,
@@ -11375,12 +14133,12 @@
    "bit": 0,
    "burst": 1,
    "delay": 0,
-   "class": "SDC",
+   "class": "DETECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
+   "out_ok": true,
+   "spikes_ok": true,
    "state_ok": true,
-   "status": 2,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
@@ -11389,13 +14147,15 @@
     "cnt_tmr": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
    },
    "got_events": [
     3,
+    0,
+    1,
     0
    ],
    "exp_events": [
@@ -13012,6 +15772,1488 @@
     ]
    ],
    "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 14,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 0,
+   "burst": 0,
+   "delay": 16,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 7,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 3,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 14,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 3,
+   "burst": 0,
+   "delay": 2,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 14,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 7,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 14,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_wchk",
+   "target": "u_lif.wchk",
+   "bit": 7,
+   "burst": 2,
+   "delay": 14,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk_unread",
+   "target": "u_lif.wchk",
+   "bit": 8,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_wchk_unread",
+   "target": "u_lif.wchk",
+   "bit": 8,
+   "burst": 1,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 0,
+   "burst": 0,
+   "delay": 12,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 2,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 2,
+   "burst": 2,
+   "delay": 13,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 5,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 5,
+   "burst": 1,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 6,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 6,
+   "burst": 1,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 8,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 8,
+   "burst": 0,
+   "delay": 4,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 11,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 11,
+   "burst": 1,
+   "delay": 9,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 18,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 18,
+   "burst": 1,
+   "delay": 8,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 20,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 20,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 23,
+   "burst": 0,
+   "delay": 0,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "lif_smem",
+   "target": "u_lif.smem",
+   "bit": 23,
+   "burst": 0,
+   "delay": 3,
+   "class": "CORRECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 1,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 1,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "exp_events": [
+    3,
+    0,
+    1,
+    0
+   ],
+   "state": [
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -49,
+     0
+    ],
+    [
+     -23,
+     0
+    ]
+   ],
+   "telemetry_ok": false
   },
   {
    "group": "ecc_port_single",

@@ -1354,6 +1354,136 @@ async def test_dispatcher_stranded_in_fetch_recovers_and_is_flagged(dut):
         f"the recovered run raised a new flag: STATUS {st:#x}"
 
 
+# The adapter gives up after OH_WAIT_MAX = 63 cycles. Same reasoning as
+# FETCH_TIMEOUT_POLL above: the claim is "the wait is bounded", not "the
+# bound is 63", so a change to OH_WAIT_MAX must not touch this file while
+# an unbounded wait must still fail here rather than time the suite out.
+OH_TIMEOUT_POLL = 512
+
+
+@cocotb.test()
+async def test_show_ahead_stranded_request_recovers_and_is_flagged(dut):
+    """A show-ahead adapter stranded on oh_req gives up, and says so.
+
+    The second silent-hang structure in the pilot, found by the
+    fault-injection campaign's `evq_hold` group and fixed in pilot_top.v
+    header section 8. `oh_req` means "a queue read is outstanding". It is
+    set only together with `fo_rd_en` and cleared only by `fo_rd_valid`,
+    and the arming condition is gated on `!oh_req`, so a single-bit upset
+    that sets it with no read outstanding stops the adapter from ever
+    issuing another read.
+
+    That is worse than the ordinary full-queue backpressure it resembles.
+    EVQ_OUT still holds events and reports them in EVQ_STAT.OUT_FILL, but
+    `oh_valid` is low, so neither observer can pop one: a serial EVQ_OUT
+    read returns VALID = 0 and an AER_OUT_ACK edge pops nothing. The
+    queue then fills, lif_core holds its next spike against a full queue,
+    STATUS.BUSY stays high and nothing is flagged. No host action clears
+    it -- only CTRL.SOFT_RST or a reset.
+
+    The stimulus below is the campaign's deposit, `oh_req` = 1, landing
+    3 ns after a clock edge with a word presented and a second word still
+    in the queue. Every observation is one a bench with a logic analyser
+    and an SPI master could make: the AER_OUT_VLD pin, the ERR pin, and
+    the register view. Reverting the bounded wait to its single-exit form
+    fails check 1 at the AER_OUT_VLD poll -- the second word is never
+    presented -- rather than failing an internal-signal assertion.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    await state_clr(p)
+    await wr(p, ADDR["CFG_THRESH"], 1)
+    await wr(p, ADDR["CFG_SYNSHIFT"], 0)
+    await wr(p, ADDR["CFG_FLAGS"], 0)          # leak off
+    # As in test_evq_out_is_show_ahead: axon 1 drives exactly two neurons
+    # over threshold, so one event leaves a word in the adapter AND a word
+    # in the queue -- which is what makes a stranded adapter observable.
+    weights = [[0] * n_neurons for _ in range(n_axons)]
+    weights[1][2] = 7
+    weights[1][3] = 7
+    await load_weights(p, weights, n_neurons)
+    await wr(p, ADDR["CTRL"], CTRL_EN)
+
+    await wr(p, ADDR["EVQ_IN"], TYPE_SPIKE | 1)
+    for _ in range(20):
+        if not (await rd(p, ADDR["STATUS"])) & ST_BUSY:
+            break
+    else:
+        raise AssertionError("the event never retired")
+
+    assert uo(dut, AER_OUT_VLD) == 1, "the first word must be presented"
+    assert uio_out_nibble(dut) == 2
+    assert ((await rd(p, ADDR["EVQ_STAT"])) >> 8) & 0xFF == 2, \
+        "two events must be outstanding, or a stranded adapter is invisible"
+    assert not (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG
+    assert uo(dut, ERR) == 0, "nothing has gone wrong yet"
+
+    # ---- the upset: a read outstanding that was never requested -------
+    await RisingEdge(dut.clk)
+    await Timer(3, unit="ns")
+    dut.u_pilot.oh_req.value = 1
+
+    # ---- the pop that exposes it --------------------------------------
+    # On the pin, not over the serial port: a serial frame is longer than
+    # the timeout, so a pin pop is what shows the adapter empty-handed.
+    p.set_ui(AER_OUT_ACK, 1)
+    for _ in range(6):
+        await RisingEdge(dut.clk)
+    p.set_ui(AER_OUT_ACK, 0)
+    await RisingEdge(dut.clk)
+    await Timer(1, unit="ns")
+    assert uo(dut, AER_OUT_VLD) == 0, "the pin pop must retire the first word"
+
+    # ---- 1. the second word is presented again, with no host action ---
+    for waited in range(1, OH_TIMEOUT_POLL + 1):
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ns")
+        if uo(dut, AER_OUT_VLD):
+            break
+    else:
+        raise AssertionError(
+            f"the adapter never issued another read: AER_OUT_VLD still low "
+            f"{OH_TIMEOUT_POLL} cycles after an upset set oh_req with no "
+            f"read outstanding, with EVQ_OUT still holding an event. That "
+            f"is the silent deadlock of docs/16 section 5.7 -- the output "
+            f"path is wedged with nothing flagged and only CTRL.SOFT_RST "
+            f"recovers it.")
+    dut._log.info(f"the adapter gave up after {waited} cycles")
+    assert uio_out_nibble(dut) == 3, \
+        "the re-armed read must fetch the word that was next all along"
+
+    # ---- 2 and 3. the recovery is recorded, and reaches the pin -------
+    assert uo(dut, ERR) == 1, \
+        "a bounded wait that recovers silently is still a silent failure: " \
+        "the ERR pin must report it with no serial frame"
+    await realign(dut)
+    assert (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "the abandoned queue read must latch STATUS.ERR_CFG"
+    await wr(p, ADDR["STATUS_CLR"], ST_ERR_CFG)
+    assert not (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "the core was never parked, so STATUS_CLR clears the record"
+    assert uo(dut, ERR) == 0
+
+    # ---- 4. and the output path works, word for word ------------------
+    word = await rd(p, ADDR["EVQ_OUT"])
+    assert word & (1 << 31) and (word & 0xF) == 3, \
+        f"the second event must survive the recovery, got {word:#010x}"
+    assert (await rd(p, ADDR["STATUS"])) & ST_OUT_EMPTY
+    assert ((await rd(p, ADDR["EVQ_STAT"])) >> 8) & 0xFF == 0
+
+    # A second event still flows, so the adapter is not left half-armed.
+    await wr(p, ADDR["EVQ_IN"], TYPE_SPIKE | 1)
+    for _ in range(20):
+        if not (await rd(p, ADDR["STATUS"])) & ST_BUSY:
+            break
+    else:
+        raise AssertionError("the follow-up event never retired")
+    assert [(await rd(p, ADDR["EVQ_OUT"])) & 0xF for _ in range(2)] == [2, 3]
+    st = await rd(p, ADDR["STATUS"])
+    assert not st & (ST_ERR_CFG | ST_DED_SEEN | ST_OVF_SEEN), \
+        f"the recovered run raised a new flag: STATUS {st:#x}"
+
+
 # ---------------------------------------------------------------------
 # 6. register-map conformance
 # ---------------------------------------------------------------------
