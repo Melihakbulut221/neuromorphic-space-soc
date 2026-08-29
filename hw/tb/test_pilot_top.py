@@ -40,6 +40,11 @@ Coverage, in the order the tests appear:
                  D_FETCH, whose bounded wait must clear BUSY on its own
                  and report the recovery (docs/16 section 5.1)
   register map   the FAULT_CLR bit assignment against regmap.yaml
+  EVQ_OUT loss   output backpressure is lossless and must raise no flag,
+                 a pointer upset that destroys the SYNC echo is counted
+                 in CNT_EVQ_OUT_OVF and attributed away from the input
+                 queue, and that counter saturates and survives both
+                 CTRL.SOFT_RST and a coincident clear (section 5.1)
 
 Run: cd hw/tb && make -f Makefile.pilot
 """
@@ -74,6 +79,7 @@ ERR, SEC, DED, TMR = 4, 5, 6, 7
 ADDR_ECC_INJ_POS = 0x0A0
 ADDR_TMR_INJ = 0x0A4
 ADDR_CNT_TMR = 0x0A8
+ADDR_CNT_EVQ_OUT_OVF = 0x0AC
 
 # STATUS / CTRL / ECC_INJ field masks, named so the tests read as intent
 ST_BUSY, ST_IN_EMPTY, ST_OUT_EMPTY = 1 << 0, 1 << 1, 1 << 2
@@ -92,6 +98,7 @@ FCLR_EVQ_OVF = 1 << FIELDS["FAULT_CLR"]["CNT_EVQ_OVF"]
 FCLR_AXON_OOR = 1 << FIELDS["FAULT_CLR"]["CNT_AXON_OOR"]
 FCLR_FAULT_ADDR = 1 << FIELDS["FAULT_CLR"]["FAULT_ADDR"]
 FCLR_CNT_TMR = 1 << 5
+FCLR_CNT_EVQ_OUT_OVF = 1 << 6
 
 TYPE_SPIKE, TYPE_TICK, TYPE_SYNC = 0 << 14, 1 << 14, 2 << 14
 
@@ -1398,3 +1405,266 @@ async def test_fault_clr_bit_assignment(dut):
     await wr(p, ADDR["FAULT_CLR"], FCLR_DED)
     assert await rd(p, ADDR["CNT_DED"]) == 0
     await wr(p, ADDR_TMR_INJ, 0)
+
+
+# ---------------------------------------------------------------------
+# 7. EVQ_OUT event loss (pilot_top.v section 5.1)
+# ---------------------------------------------------------------------
+async def _all_neurons_fire(p, dut):
+    """Configure a core in which one SPIKE fires every neuron.
+
+    Returns (n_neurons, n_axons). One event emits a whole scan's worth
+    of spikes, which is how the tests below reach output backpressure --
+    the only state in which an EVQ_OUT write can be refused at all.
+    """
+    n_neurons, n_axons = await geometry(p)
+    await state_clr(p)
+    await wr(p, ADDR["CFG_THRESH"], 1)
+    await wr(p, ADDR["CFG_SYNSHIFT"], 0)
+    await wr(p, ADDR["CFG_FLAGS"], 0)                  # leak off
+    weights = [[0] * n_neurons for _ in range(n_axons)]
+    for j in range(n_neurons):
+        weights[1][j] = 7
+    await load_weights(p, weights, n_neurons)
+    await wr(p, ADDR["CTRL"], CTRL_EN)
+    return n_neurons, n_axons
+
+
+async def _fill_output_queue(p, dut):
+    """Back the output queue up for real, and return with it full.
+
+    Bursts are pushed until fo_full is asserted with nothing forced: the
+    queue is genuinely full, lif_core is genuinely holding a spike it
+    will retry, and no event has been lost. That is the state the SYNC
+    echo has to meet to be destroyed, and reaching it through the front
+    door keeps these tests out of aer_fifo's internals -- its pointers
+    are triplicated and polarity-coded, so a deposit into them would be
+    a deposit into an encoding this file does not own.
+    """
+    for _ in range(4):
+        await wr(p, ADDR["EVQ_IN"], TYPE_SPIKE | 1)
+    for _ in range(600):
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ns")
+        if int(dut.u_pilot.fo_full.value):
+            return
+    raise AssertionError("the output queue never filled")
+
+
+@cocotb.test()
+async def test_output_backpressure_is_not_an_overflow(dut):
+    """A full EVQ_OUT is backpressure, and backpressure loses nothing.
+
+    lif_core holds a refused spike in out_pend and re-presents it, so a
+    stalled write is retried rather than dropped. aer_fifo's own drop
+    counter cannot know that -- it counts `wr_en && full`, which is one
+    "drop" per stalled CLOCK CYCLE -- and until now STATUS.OVF_SEEN was
+    driven from the same expression, so an ordinary dense event latched
+    an overflow and lit the ERR pin with nothing lost. That is why
+    pilot_top.v does not publish fo_drop and why the sticky is now driven
+    from the one output-side write that is genuinely lost (section 5.1).
+
+    Nothing here is an upset: this is the clean-run baseline that any
+    EVQ_OUT fault report has to stay quiet through.
+    """
+    p = await reset(dut)
+    n_neurons, _ = await _all_neurons_fire(p, dut)
+
+    # Three bursts, so the emission count exceeds the output path for
+    # every geometry this design elaborates -- including the one where
+    # EVQ_OUT_DEPTH equals the neuron count and a single burst would fit.
+    rounds = 3
+    for _ in range(rounds):
+        await wr(p, ADDR["EVQ_IN"], TYPE_SPIKE | 1)
+
+    # Let the burst run into the full queue without draining it, long
+    # enough that a per-cycle counter would be far into its range.
+    for _ in range(600):
+        await RisingEdge(dut.clk)
+
+    assert int(dut.u_pilot.fo_full.value) == 1, \
+        "the burst must actually fill EVQ_OUT, or this test proves nothing"
+    stalled = int(dut.u_pilot.u_evq_out.drop_cnt.value)
+    assert stalled > 1, \
+        f"aer_fifo's counter must be ticking on the stall, got {stalled}"
+
+    st = await rd(p, ADDR["STATUS"])
+    assert not st & ST_OVF_SEEN, (
+        f"lossless output backpressure must not set OVF_SEEN "
+        f"(STATUS {st:#x}); aer_fifo counted {stalled} refused writes and "
+        f"lost none of them")
+    assert uo(dut, ERR) == 0, "and it must not light the ERR pin"
+    assert await rd(p, ADDR_CNT_EVQ_OUT_OVF) == 0, \
+        "CNT_EVQ_OUT_OVF counts lost events, not stall cycles"
+    assert await rd(p, ADDR["CNT_EVQ_OVF"]) == 0, \
+        "and the input queue never overflowed at all"
+
+    # The proof that nothing was lost: every spike still comes out, in
+    # the ascending scan order of docs/10 E8, once per burst.
+    got = [word & 0x3FF for word in await drain(p)]
+    expected = list(range(n_neurons)) * rounds
+    assert got == expected, \
+        f"the stalled bursts lost events: {got} != {expected}"
+    assert not (await rd(p, ADDR["STATUS"])) & ST_OVF_SEEN
+
+
+@cocotb.test()
+async def test_lost_sync_echo_is_counted_and_flagged(dut):
+    """A SYNC echo that meets a full output queue is lost, and counted.
+
+    This is the one write EVQ_OUT can actually lose. lif_core holds a
+    refused spike and retries it; the SYNC echo is a one-shot pulse, so a
+    queue that is full in the cycle it is written destroys it with no
+    retry. The dispatcher's own guard is what normally makes that
+    unreachable -- it decides on !fo_full AND !lif_busy, and the second
+    term forbids any lif_core write in the intervening cycle, so nothing
+    can fill the queue underneath the decision. Only a fault in the queue
+    state between the decision and the write can do it, which is the
+    class docs/16 section 5.2 measures.
+
+    The state is therefore built directly: the queue is filled for real
+    by backpressure and the echo pulse is driven into it. Nothing inside
+    aer_fifo is touched -- its pointers are triplicated now, so a
+    single-replica upset is masked and it takes a fault the voter cannot
+    see, which is a statement about the queue and not about this
+    register.
+
+    The failure shape is the reason the counter exists: sticky_sync is
+    set from the same pulse, so STATUS.SYNC_DONE reports the barrier
+    complete while the barrier word the host is blocking on is gone.
+    Before this register the chip could raise OVF_SEEN and offer no
+    number for it, and CNT_EVQ_OVF -- the input queue's counter -- stayed
+    at zero, so the operator could not even tell which queue it was.
+    """
+    p = await reset(dut)
+    await _all_neurons_fire(p, dut)
+    await _fill_output_queue(p, dut)
+
+    st = await rd(p, ADDR["STATUS"])
+    assert not st & (ST_OVF_SEEN | ST_SYNC_DONE), \
+        f"a full queue on its own must record nothing: STATUS {st:#x}"
+    assert int(dut.u_pilot.fo_full.value) == 1, "the queue must still be full"
+
+    # One echo pulse into the full queue. sync_word is deposited so the
+    # word that is about to be destroyed is identifiable if it ever
+    # reappears at the output.
+    echo = TYPE_SYNC | 0x2A5
+    dut.u_pilot.sync_word.value = echo
+    await RisingEdge(dut.clk)                 # settle mid-cycle first
+    await Timer(1, unit="ns")
+    # A deposit, not a Force: the dispatcher's own `sync_push <= 1'b0` at
+    # the next edge ends the pulse, so this is exactly the one-cycle
+    # shape the RTL produces. A released force would hold the old value
+    # until that assignment lands and would count a second cycle.
+    dut.u_pilot.sync_push.value = 1
+    await RisingEdge(dut.clk)                 # the echo is refused here
+    await Timer(1, unit="ns")
+
+    assert int(dut.u_pilot.cnt_evqo.value) == 1, \
+        "the lost echo must be counted in the cycle it is lost"
+    assert int(dut.u_pilot.sticky_ovf.value) == 1, "and must latch OVF_SEEN"
+    await RisingEdge(dut.clk)
+
+    st = await rd(p, ADDR["STATUS"])
+    assert st & ST_OVF_SEEN, f"OVF_SEEN must be set, STATUS {st:#x}"
+    assert st & ST_SYNC_DONE, (
+        "SYNC_DONE is set from the same pulse that was lost -- that is the "
+        "fault this counter has to quantify, not a reason to skip it")
+    assert uo(dut, ERR) == 1, "the ERR pin must show it"
+
+    assert await rd(p, ADDR_CNT_EVQ_OUT_OVF) == 1, \
+        "the host must be able to read the count of lost output events"
+    assert await rd(p, ADDR["CNT_EVQ_OVF"]) == 0, (
+        "attribution: the INPUT queue counter must stay at zero, which is "
+        "the whole reason this is a second register and not an aggregate")
+
+    # The echo really is gone: draining the queue yields the stalled
+    # spikes and never the barrier word.
+    for word in await drain(p):
+        assert word != echo, "the SYNC echo was supposed to have been dropped"
+        assert (word & 0xC000) != TYPE_SYNC, \
+            "no SYNC word may reach the output at all"
+
+    # CTRL.SOFT_RST is the recovery for this fault. docs/16 section 5.1
+    # records that it zeroes CNT_EVQ_OVF while OVF_SEEN stays set,
+    # because that counter lives inside aer_fifo on the block reset net.
+    # This one is in the register process on rst_n, next to the sticky it
+    # accompanies, so the recovery cannot make the two disagree.
+    await wr(p, ADDR["CTRL"], CTRL_EN | CTRL_SOFT_RST)
+    assert await rd(p, ADDR_CNT_EVQ_OUT_OVF) == 1, \
+        "SOFT_RST must not erase the evidence it is recovering from"
+    assert (await rd(p, ADDR["STATUS"])) & ST_OVF_SEEN
+
+
+@cocotb.test()
+async def test_evq_out_ovf_counter_saturates_and_clears(dut):
+    """CNT_EVQ_OUT_OVF saturates, and a coincident clear keeps the event.
+
+    Both are house conventions the other fault counters already follow:
+    a counter that wraps would report a quiet part after enough upsets,
+    and a FAULT_CLR that lands on the same edge as a drop must restart
+    the count at 1 rather than swallow it (aer_fifo.v states the rule for
+    drop_clr; pilot_top.v applies it to every counter it owns).
+
+    The drop condition is held asserted -- a genuinely full queue plus a
+    held echo pulse -- which turns one rare upset into one per clock and
+    makes both properties reachable in a few microseconds.
+    """
+    p = await reset(dut)
+    await _all_neurons_fire(p, dut)
+    await _fill_output_queue(p, dut)
+
+    width = len(dut.u_pilot.cnt_evqo)
+    cnt_max = (1 << width) - 1
+
+    dut.u_pilot.sync_push.value = Force(1)
+    await RisingEdge(dut.clk)
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.evqo_drop.value) == 1, "the drop must be held"
+
+    for _ in range(cnt_max + 16):
+        await RisingEdge(dut.clk)
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.cnt_evqo.value) == cnt_max, (
+        f"the counter must saturate at {cnt_max}, read "
+        f"{int(dut.u_pilot.cnt_evqo.value)}")
+
+    # A clear that commits on the same edge as a drop must land on 1.
+    async def watch():
+        while True:
+            await RisingEdge(dut.clk)
+            await Timer(1, unit="ns")
+            if int(dut.u_pilot.fclr_evqo.value):
+                await RisingEdge(dut.clk)
+                await Timer(1, unit="ns")
+                return int(dut.u_pilot.cnt_evqo.value)
+
+    watcher = cocotb.start_soon(watch())
+    await wr(p, ADDR["FAULT_CLR"], FCLR_CNT_EVQ_OUT_OVF)
+    after_clear = await watcher
+    assert after_clear == 1, (
+        f"a clear coincident with its own drop must restart the counter at "
+        f"1, not lose the event; it read {after_clear}")
+
+    dut.u_pilot.sync_push.value = Release()
+    for _ in range(4):
+        await RisingEdge(dut.clk)
+
+    # With the drop gone the count stands still, and it is the pilot-only
+    # bit 6 that clears it, not the map's bit 2.
+    held = await rd(p, ADDR_CNT_EVQ_OUT_OVF)
+    assert held > 0, "the forced drops must have left a count behind"
+    await wr(p, ADDR["FAULT_CLR"], FCLR_EVQ_OVF)
+    assert await rd(p, ADDR_CNT_EVQ_OUT_OVF) == held, (
+        "FAULT_CLR b2 is CNT_EVQ_OVF; it must not clear the pilot-only "
+        "output-queue counter")
+    await wr(p, ADDR["FAULT_CLR"], FCLR_CNT_EVQ_OUT_OVF)
+    assert await rd(p, ADDR_CNT_EVQ_OUT_OVF) == 0
+    assert await rd(p, ADDR_CNT_TMR) == 0, "b6 must not touch CNT_TMR"
+
+    # The sticky is a STATUS bit and STATUS_CLR owns it: a FAULT_CLR of
+    # one counter must not erase a record the other queue made.
+    assert (await rd(p, ADDR["STATUS"])) & ST_OVF_SEEN, \
+        "FAULT_CLR must not clear STATUS.OVF_SEEN"
+    await wr(p, ADDR["STATUS_CLR"], ST_OVF_SEEN)
+    assert not (await rd(p, ADDR["STATUS"])) & ST_OVF_SEEN

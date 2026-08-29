@@ -4,6 +4,16 @@ software-port semantics, docs/10 section 7.2), drop-counter clear and
 saturation, read-on-empty refusal, and reset mid-traffic. A Python
 scoreboard model mirrors the contract; the randomized test drives both
 against the same stimulus. Fully port-driven, Icarus-clean.
+
+The last four tests are the pointer-TMR group and are the exception to
+"fully port-driven": they reach into the replica banks and corrupt the
+stored image directly, because that is the fault docs/16 section 5.2
+measured and there is no port that produces it. They are the simulation
+half of the evidence for the pointer TMR; the other half is
+sw/tests/test_synthesis_guards.py, which is what says the replicas exist
+as separate cells in the netlist, and formal/aer_fifo_props.v P7/P8,
+which is what says the masking holds for every fault of the class rather
+than the ones enumerated here.
 """
 
 import random
@@ -328,4 +338,210 @@ async def test_reset_mid_traffic(dut):
     for ev in events:
         assert await pop(dut) == ev
     assert dut.empty.value == 1
+    assert int(dut.drop_cnt.value) == 0
+
+
+# =====================================================================
+# pointer TMR (hw/rtl/aer_fifo.v, docs/16 section 5.2)
+# =====================================================================
+# The six replica banks of the two pointers. Each is an aer_ptr_bank
+# instance holding one AW+1 bit pointer replica in `bits`, and `bits` is
+# the STORED IMAGE, not the pointer: replica b holds the complement and
+# replica c an XOR mixing of it. That is deliberate and it is why these
+# tests flip a bit of `bits` rather than of the pointer value -- an upset
+# lands on a physical cell, and in replica c one such cell carries two or
+# three pointer bits at once, which is the harder case and the one the
+# voter has to mask anyway.
+PTR_BANKS = ("u_wptr_a", "u_wptr_b", "u_wptr_c",
+             "u_rptr_a", "u_rptr_b", "u_rptr_c")
+
+
+def ptr_width(dut):
+    """AW + 1: the pointer width, wrap bit included."""
+    return int(dut.AW.value) + 1
+
+
+def observable(dut):
+    """Everything a consumer of this module can see, except rd_valid,
+    which is a one-cycle strobe and therefore not comparable across a
+    clock edge. If a masked fault is really masked, none of this moves.
+    """
+    return (int(dut.level.value), int(dut.full.value),
+            int(dut.empty.value), int(dut.rd_data.value),
+            int(dut.drop_cnt.value))
+
+
+def flip(bank, bit):
+    """Flip one stored bit of one replica: the fault model of docs/16."""
+    bank.bits.value = int(bank.bits.value) ^ (1 << bit)
+
+
+@cocotb.test()
+async def test_pointer_replicas_agree_and_are_quiet(dut):
+    """No traffic pattern raises ptr_mismatch. A disagreement flag that
+    fired during ordinary work would be worth nothing as telemetry, and
+    the pilot counts it into CNT_TMR and lights a pin from it.
+    """
+    width, depth, _ = params(dut)
+    await reset(dut)
+    assert dut.ptr_mismatch.value == 0, "mismatch out of reset"
+    events = [random.getrandbits(width) for _ in range(depth)]
+    for ev in events:
+        await push(dut, ev)
+        assert dut.ptr_mismatch.value == 0, "mismatch during fill"
+    for _ in range(4):  # writes into a full FIFO: pointers must not move
+        await push(dut, 0)
+        assert dut.ptr_mismatch.value == 0, "mismatch on a dropped write"
+    for i, ev in enumerate(events):
+        assert await pop(dut) == ev
+        assert dut.ptr_mismatch.value == 0, f"mismatch during drain at {i}"
+    # and the three replicas of each pointer hold the same pointer value
+    for a, b, c in (("u_wptr_a", "u_wptr_b", "u_wptr_c"),
+                    ("u_rptr_a", "u_rptr_b", "u_rptr_c")):
+        qa = int(getattr(dut, a).q.value)
+        qb = int(getattr(dut, b).q.value)
+        qc = int(getattr(dut, c).q.value)
+        assert qa == qb == qc, f"replicas diverged: {a}={qa} {b}={qb} {c}={qc}"
+
+
+@cocotb.test()
+async def test_single_replica_fault_is_masked_and_reported(dut):
+    """Every bit of every replica, one at a time: the queue's observable
+    state does not move, ptr_mismatch reports the correction, and the
+    next clock edge repairs the replica from the vote.
+
+    The repair is not decoration. Without it a replica stays wrong until
+    the pointer next changes, and the second upset of a mission meets a
+    domain already carrying the first -- which is the difference between
+    a TMR domain that tolerates one fault at a time and one that
+    tolerates one fault ever.
+    """
+    width, _, _ = params(dut)
+    pw = ptr_width(dut)
+    await reset(dut)
+    for ev in range(5):  # move both pointers off zero and off each other
+        await push(dut, (ev + 1) & ((1 << width) - 1))
+    for _ in range(2):
+        await pop(dut)
+    await Timer(1, unit="ns")
+    ref = observable(dut)
+    assert dut.ptr_mismatch.value == 0
+
+    for name in PTR_BANKS:
+        bank = getattr(dut, name)
+        for bit in range(pw):
+            good = int(bank.bits.value)
+            flip(bank, bit)
+            await Timer(1, unit="ns")
+            assert dut.ptr_mismatch.value == 1, (
+                f"{name} bit {bit} corrupted and ptr_mismatch stayed low: "
+                "a corrected upset that is not reported is the silence "
+                "docs/16 section 5.2 is about")
+            assert observable(dut) == ref, (
+                f"{name} bit {bit}: single-replica fault reached the "
+                f"outputs, {observable(dut)} != {ref}")
+            await RisingEdge(dut.clk)   # idle edge: reload from the vote
+            await Timer(1, unit="ns")
+            assert int(bank.bits.value) == good, (
+                f"{name} bit {bit} was not repaired by the voted "
+                f"feedback: 0x{int(bank.bits.value):X} != 0x{good:X}")
+            assert dut.ptr_mismatch.value == 0, (
+                f"{name} bit {bit}: mismatch still asserted after repair")
+            assert observable(dut) == ref
+
+
+@cocotb.test()
+async def test_pointer_fault_does_not_corrupt_the_event_stream(dut):
+    """The docs/16 section 5.2 experiment, re-run against the protected
+    pointers. That table is a list of what an unprotected pointer upset
+    did to the drained stream -- whole bursts re-emitted, events
+    duplicated, events lost, events fabricated, an unwritten slot
+    presented as a spike -- none of which a consumer can tell from a real
+    spike train, because docs/10 section 7.1 freezes the event word at
+    TYPE plus a 10-bit ID with no sequence number and no length.
+
+    The burst is the one from that table, truncated to DEPTH so that the
+    queue is never asked to hold more than it has: this suite is run at
+    DEPTH 2, 8 and the default 64, and a burst that overflowed would be
+    testing the drop path instead of the pointers.
+
+    One replica bit is corrupted during the fill and one during the
+    drain, and the drained sequence must be the golden sequence exactly:
+    same events, same order, same count.
+    """
+    width, depth, _ = params(dut)
+    pw = ptr_width(dut)
+    golden = [1, 2, 5, 6, 4, 2][:depth]
+    fill_at = min(1, len(golden) - 1)
+    drain_at = min(3, len(golden) - 1)
+    await reset(dut)
+    for name in PTR_BANKS:
+        bank = getattr(dut, name)
+        for bit in range(pw):
+            seen_mismatch = False
+            for i, ev in enumerate(golden):
+                if i == fill_at:              # fault during the fill
+                    flip(bank, bit)
+                    await Timer(1, unit="ns")
+                    seen_mismatch |= dut.ptr_mismatch.value == 1
+                await push(dut, ev)
+            got = []
+            for i in range(len(golden)):
+                if i == drain_at:             # fault during the drain
+                    flip(bank, bit)
+                    await Timer(1, unit="ns")
+                    seen_mismatch |= dut.ptr_mismatch.value == 1
+                got.append(await pop(dut))
+            assert seen_mismatch, (
+                f"{name} bit {bit}: neither injection was reported")
+            assert got == golden, (
+                f"{name} bit {bit}: drained {got}, expected {golden}")
+            assert dut.empty.value == 1, (
+                f"{name} bit {bit}: queue not empty after the drain, "
+                f"level={int(dut.level.value)}")
+            assert int(dut.drop_cnt.value) == 0, (
+                f"{name} bit {bit}: a pointer fault caused a drop")
+
+
+@cocotb.test()
+async def test_pointer_fault_under_simultaneous_read_write(dut):
+    """The same fault with both ports active, which is the case where a
+    corrupted pointer has the most to break: the write index, the read
+    index and the full/empty decision are all in flight on the same edge.
+    """
+    width, depth, _ = params(dut)
+    pw = ptr_width(dut)
+    await reset(dut)
+    half = depth // 2
+    for i in range(half):
+        await push(dut, (0x100 + i) & ((1 << width) - 1))
+    expected = [(0x100 + i) & ((1 << width) - 1) for i in range(half)]
+    got = []
+    nxt = 0x200
+    dut.rd_en.value = 1
+    for step in range(4 * pw):
+        bank = getattr(dut, PTR_BANKS[step % len(PTR_BANKS)])
+        flip(bank, step % pw)
+        await Timer(1, unit="ns")
+        assert dut.ptr_mismatch.value == 1, "injection not reported"
+        word = nxt & ((1 << width) - 1)
+        nxt += 1
+        dut.wr_en.value = 1
+        dut.wr_data.value = word
+        expected.append(word)
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ns")
+        assert int(dut.level.value) == half, (
+            f"step {step}: level moved to {int(dut.level.value)} during a "
+            f"1R1W stream, expected {half}")
+        if dut.rd_valid.value == 1:
+            got.append(int(dut.rd_data.value))
+    dut.wr_en.value = 0
+    await RisingEdge(dut.clk)
+    dut.rd_en.value = 0
+    await Timer(1, unit="ns")
+    if dut.rd_valid.value == 1:
+        got.append(int(dut.rd_data.value))
+    assert got == expected[:len(got)], (
+        f"order broken under injection: {got} vs {expected[:len(got)]}")
     assert int(dut.drop_cnt.value) == 0

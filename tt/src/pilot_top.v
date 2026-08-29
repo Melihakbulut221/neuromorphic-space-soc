@@ -142,7 +142,7 @@
 //       ECC-protected word (section 5). An injected upset is therefore
 //       visible when they are read back, and disappears after a scrub.
 //       That is the demonstrator, not an accident.
-//   D5. Three registers outside regmap.yaml occupy the unmapped region
+//   D5. Four registers outside regmap.yaml occupy the unmapped region
 //       of the same 4 KB window (section 5). They are pilot-only
 //       observability and do not change the register-map contract.
 //
@@ -184,8 +184,11 @@
 //     10 SYNC   -> held until lif_core is idle, then echoed into EVQ_OUT
 //                  and STATUS.SYNC_DONE is set (section 7.1 barrier)
 //     11        -> dropped; the register map defines no counter for it
-//   EVQ_OUT <- lif_core spikes (never dropped: out_ready = !full) and
-//              SYNC echoes, drained through a one-deep holding register
+//   EVQ_OUT <- lif_core spikes (held, not dropped: lif_core keeps a
+//              refused spike in out_pend and re-presents it, so the
+//              write is retried, never lost) and SYNC echoes (a
+//              one-shot pulse, so a refused echo IS lost -- section
+//              5.1), drained through a one-deep holding register
 //              shared by the AER_OUT pins and the serial EVQ_OUT read.
 //
 // That holding register is not a buffer for its own sake: it is the
@@ -219,10 +222,17 @@
 //   0x0A8 CNT_TMR      RO  saturating count of voter disagreement
 //                          episodes (one per rising edge of mismatch),
 //                          cleared by FAULT_CLR bit 5.
+//   0x0AC CNT_EVQ_OUT_OVF
+//                      RO  saturating count of OUTPUT-queue writes that
+//                          were refused and lost. Cleared by FAULT_CLR
+//                          bit 6. Section 5.1 is why this register
+//                          exists, why it is pilot-only, and why it is
+//                          NOT aer_fifo's own drop counter.
 //
-// FAULT_CLR bit 5 is the fourth pilot-only object in this section and it
-// is allocated the same way as the three registers above: from space the
-// architecture register map leaves unassigned. regmap/regmap.yaml is the
+// FAULT_CLR bits 5 and 6 are the fourth and sixth pilot-only objects in
+// this section and they are allocated the same way as the registers
+// above: from space the architecture register map leaves unassigned.
+// regmap/regmap.yaml is the
 // single source of truth for FAULT_CLR and it allocates exactly five
 // bits, b0 CNT_SEC, b1 CNT_DED, b2 CNT_EVQ_OVF, b3 CNT_AXON_OOR, b4
 // FAULT_ADDR, with "bits [31:5] ignored". All five are implemented here
@@ -232,6 +242,104 @@
 // them. CNT_TMR is not in the map, so its clear cannot be either; b5 is
 // the first free bit and is inert in the architecture block, so one
 // FAULT_CLR write of 0x3F clears everything in either implementation.
+// CNT_EVQ_OUT_OVF takes b6 on the same argument, so the portable
+// clear-everything write is now 0x7F.
+//
+// ---------------------------------------------------------------------
+// 5.1 Why EVQ_OUT gets its own counter, and why it is not fo_drop
+// ---------------------------------------------------------------------
+//
+// The fault-injection campaign (docs/16 section 5.2) found one pointer
+// injection that raised STATUS.OVF_SEEN while CNT_EVQ_OVF still read
+// zero: the overflow was on the OUTPUT queue and only the input queue's
+// drop counter is exposed. The obvious repair is to stop sinking
+// u_evq_out's drop_cnt (`fo_drop`) and give it a register. That repair
+// is wrong, and the reason is measured rather than argued.
+//
+// aer_fifo counts `wr_en && full` -- a REFUSED write. Its header is
+// explicit that this is EVQ_IN semantics, where the software port
+// presents a word once and loses it: "a link-side producer gets lossless
+// backpressure by gating wr_en with !full". EVQ_OUT's producers are not
+// that. lif_core holds a refused spike in out_pend and re-presents it on
+// every subsequent cycle until out_ready, so `fo_wr_en` stays high for
+// the whole stall and aer_fifo counts one "drop" per CLOCK CYCLE of
+// ordinary backpressure while losing nothing at all. Measured on this
+// design [fact]: 8 x 8 with EVQ_OUT_DEPTH = 4, one SPIKE event that
+// fires all eight neurons, host not draining -- fo_drop reaches 223 and
+// is heading for its 255 saturation, and every one of the eight spikes
+// is eventually delivered. Publishing that number as an event-loss count
+// would be worse than publishing nothing. The original sink was right;
+// only the reason recorded next to it was incomplete.
+//
+// The same measurement condemns the sticky. Until now STATUS.OVF_SEEN
+// was set by `fo_wr_en && fo_full`, so the run above also latched
+// OVF_SEEN and lit the ERR pin with no event lost and no upset present.
+// That contradicts regmap/regmap.yaml, which defines the bit as "at
+// least one software-port event dropped at a full input queue", and a
+// fault pin that lights during ordinary bursty inference is a pin an
+// operator learns to ignore. No existing test caught it because the
+// end-to-end harness drains after every command, which its own docstring
+// says is deliberate.
+//
+// So the question is not "which register does fo_drop deserve" but "what
+// does EVQ_OUT actually lose". Exactly one writer can lose a word:
+//
+//   lif_core spikes  cannot be lost at the write port. out_pend holds
+//                    the spike and lif_core's busy output includes
+//                    out_pend, so the write is retried, not dropped.
+//   SYNC echo        CAN be lost. sync_push is a one-shot pulse: the
+//                    dispatcher qualifies the D_ISSUE decision with
+//                    !fo_full, but the write lands one cycle later, and
+//                    if the queue reports full in that cycle the echo is
+//                    gone with no retry. Under normal operation the
+//                    guard is airtight -- the decision also requires
+//                    !lif_busy, which forbids any lif_core write in the
+//                    same or the next cycle, so fo_full cannot change
+//                    underneath it. It is breakable only by an upset to
+//                    the queue pointers in that one cycle, which is
+//                    precisely the class docs/16 section 5.2 measures.
+//
+// A lost SYNC echo is the worst-shaped fault in this block: sticky_sync
+// is set from the same pulse, so STATUS.SYNC_DONE reports the barrier
+// complete while the barrier word the host is waiting for never arrives.
+// That is a fault the chip announces and could not quantify, which is
+// the defect docs/16 named. `evqo_drop = sync_push && fo_full` is
+// therefore both the counter's increment and the output-queue term of
+// STATUS.OVF_SEEN, and the backpressure term is gone from both.
+//
+// Two costs, stated rather than hidden:
+//
+//   - the campaign's one flagged pointer injection was flagged by the
+//     backpressure term, so with this change it is no longer flagged.
+//     That is not a loss of coverage: the term also fired on a clean
+//     run, so it carried no information about the upset [fact].
+//   - an upset that clears `full` while the queue really is full makes
+//     aer_fifo accept and OVERWRITE a stored word. That is a genuine
+//     EVQ_OUT event loss and this counter cannot see it, because no
+//     write was refused. It is a read/write pointer integrity problem
+//     and it belongs to pointer protection, not to a drop counter.
+//
+// Pilot-only rather than an entry in regmap/regmap.yaml, for three
+// reasons. The architecture block cannot lose a SYNC echo any more than
+// this one can outside an upset, so every mesh node would carry a
+// counter for a condition its own map calls impossible. The fault block
+// is contiguous from 0x70 to 0x88, so a new counter lands at 0x8C and
+// the checked convention "one clear bit per fault-block register in
+// offset order" (sw/tests/test_regmap.py) would hand it FAULT_CLR bit 5
+// -- the bit the pilot already spends on CNT_TMR -- renumbering CNT_TMR
+// and breaking the portable clear write that regmap.yaml's own FAULT_CLR
+// description promises. And the YAML edit would pull in
+// sw/golden/secded.py, docs/10 section 10 and hw/rtl/npu_regbank.v for a
+// register whose whole content is a pilot measurement. CNT_TMR set the
+// precedent for exactly this shape and this register follows it.
+//
+// Unlike CNT_EVQ_OVF, this counter lives in this module's register
+// process on rst_n, not inside aer_fifo on blk_rst_n. docs/16 section
+// 5.1 records the consequence of the other arrangement: CTRL.SOFT_RST --
+// the recovery for this very fault -- zeroes CNT_EVQ_OVF while
+// STATUS.OVF_SEEN stays set, leaving the telemetry self-inconsistent.
+// The counter and its sticky share a reset domain here, so a recovery
+// cannot make them disagree.
 //
 // =====================================================================
 // 6. Geometry
@@ -616,9 +724,9 @@ module pilot_top #(
         end
         // The five normative FAULT_CLR bits are pinned here for two
         // reasons: this module re-exports bit 2 straight into two aer_fifo
-        // drop_clr ports, and the pilot-only CNT_TMR clear is allocated
-        // immediately above them (section 5). Both break silently if
-        // regmap.yaml renumbers the register.
+        // drop_clr ports, and the pilot-only CNT_TMR and CNT_EVQ_OUT_OVF
+        // clears are allocated immediately above them (section 5). Both
+        // break silently if regmap.yaml renumbers the register.
         if (BIT_FAULT_CLR_CNT_SEC != 0 || BIT_FAULT_CLR_CNT_DED != 1
             || BIT_FAULT_CLR_CNT_EVQ_OVF != 2
             || BIT_FAULT_CLR_CNT_AXON_OOR != 3
@@ -676,6 +784,7 @@ module pilot_top #(
     localparam [6:0] SA_ECC_INJ_POS   = 12'h0A0 >> 2;
     localparam [6:0] SA_TMR_INJ       = 12'h0A4 >> 2;
     localparam [6:0] SA_CNT_TMR       = 12'h0A8 >> 2;
+    localparam [6:0] SA_CNT_EVQ_OUT_OVF = 12'h0AC >> 2;
 
     // -----------------------------------------------------------------
     // Input synchronizers. Every asynchronous pin gets two flops before
@@ -848,8 +957,10 @@ module pilot_top #(
     reg [63:0] ecc_data;
     reg [7:0]  ecc_check;
 
-    // fault counters
-    reg [CNT_W-1:0] cnt_sec, cnt_ded, cnt_oor, cnt_tmr;
+    // fault counters. cnt_evqo is the pilot-only EVQ_OUT event-loss
+    // counter of section 5.1; it is a register here and not u_evq_out's
+    // own drop_cnt on purpose, and that section is the whole argument.
+    reg [CNT_W-1:0] cnt_sec, cnt_ded, cnt_oor, cnt_tmr, cnt_evqo;
     reg [WORD_W-1:0] fault_addr;
 
     // FAULT_CLR decode. regmap/regmap.yaml is the single source of truth
@@ -875,6 +986,16 @@ module pilot_top #(
     // reg_wdata with the generated BIT_FAULT_CLR_CNT_TMR instead.
     localparam integer PILOT_BIT_FAULT_CLR_CNT_TMR = 5;
     wire fclr_tmr = fclr_wr && reg_wdata[PILOT_BIT_FAULT_CLR_CNT_TMR];
+
+    // Second pilot-only clear, allocated on the same argument: the next
+    // free bit above the five the map declares (section 5.1 is why
+    // CNT_EVQ_OUT_OVF is pilot-only in the first place). Bit 2 is NOT
+    // reused for it -- one clear bit per counter is the convention the
+    // architecture block is checked against, and a host that cleared the
+    // input-queue counter would otherwise silently zero an unrelated
+    // output-queue measurement.
+    localparam integer PILOT_BIT_FAULT_CLR_CNT_EVQ_OUT_OVF = 6;
+    wire fclr_evqo = fclr_wr && reg_wdata[PILOT_BIT_FAULT_CLR_CNT_EVQ_OUT_OVF];
 
     localparam [CNT_W-1:0] CNT_MAX = {CNT_W{1'b1}};
 
@@ -1020,6 +1141,7 @@ module pilot_top #(
     wire [15:0] fi_rd_data;
     wire [$clog2(EVQ_IN_DEPTH):0] fi_level;
     wire [CNT_W-1:0] fi_drop;
+    wire        fi_ptr_mm;
     reg         fi_rd_en;
 
     // Two producers: the serial EVQ_IN register and the AER_IN pin
@@ -1047,7 +1169,8 @@ module pilot_top #(
         .empty    (fi_empty),
         .level    (fi_level),
         .drop_clr (fclr_ovf),
-        .drop_cnt (fi_drop)
+        .drop_cnt (fi_drop),
+        .ptr_mismatch (fi_ptr_mm)
     );
 
     // -----------------------------------------------------------------
@@ -1057,6 +1180,7 @@ module pilot_top #(
     wire [15:0] fo_rd_data;
     wire [$clog2(EVQ_OUT_DEPTH):0] fo_level;
     wire [CNT_W-1:0] fo_drop;
+    wire        fo_ptr_mm;
     reg         fo_rd_en;
     reg         oh_valid, oh_req;
     reg [15:0]  oh_data;
@@ -1084,8 +1208,41 @@ module pilot_top #(
         .empty    (fo_empty),
         .level    (fo_level),
         .drop_clr (fclr_ovf),
-        .drop_cnt (fo_drop)
+        .drop_cnt (fo_drop),
+        .ptr_mismatch (fo_ptr_mm)
     );
+
+    // Pointer-TMR telemetry from the two queues. hw/rtl/aer_fifo.v votes
+    // three replicas of each queue pointer and reports a corrected
+    // disagreement on ptr_mismatch. That report is half the protection:
+    // an upset that is corrected and not counted is indistinguishable
+    // from no upset at all, and measuring the upset environment is what
+    // this part is for. The queues therefore feed the counter the
+    // configuration domain already has, on the same convention -- one
+    // CNT_TMR event per rising edge, so a disagreement that persists
+    // across cycles is counted once and simultaneous edges from two
+    // sources are counted once. CNT_TMR is an episode counter, not a
+    // bit-error count (section 5).
+    //
+    // The edge register sits in the fault-counter block on rst_n rather
+    // than on blk_rst_n, so CTRL.SOFT_RST -- the recovery for exactly
+    // this class of fault -- cannot erase the evidence that it happened
+    // (docs/16 section 5.1 records what the other arrangement costs).
+    wire evq_ptr_mismatch = fi_ptr_mm || fo_ptr_mm;
+    reg  evq_mm_q;
+    wire evq_ptr_edge = evq_ptr_mismatch && !evq_mm_q;
+
+    // Every TMR correction in the pilot, from the configuration domain
+    // or from a queue pointer, in one event.
+    wire tmr_event = mismatch_edge || evq_ptr_edge;
+
+    // The EVQ_OUT event loss, and the only one there is: a SYNC echo
+    // refused by a full queue. sync_push is a one-shot, so a refused
+    // echo is gone, while a refused lif_core spike is merely held and
+    // retried -- which is why fo_drop above, an aer_fifo "wr_en && full"
+    // count, measures stall cycles here rather than lost events and is
+    // still sunk. Section 5.1 carries the measurement and the argument.
+    wire evqo_drop = sync_push && fo_full;
 
     // The one-entry show-ahead adapter of section 8, and what both
     // output observers see. A pop by either one frees it; if both pop in
@@ -1432,8 +1589,10 @@ module pilot_top #(
             cnt_ded       <= {CNT_W{1'b0}};
             cnt_oor       <= {CNT_W{1'b0}};
             cnt_tmr       <= {CNT_W{1'b0}};
+            cnt_evqo      <= {CNT_W{1'b0}};
             fault_addr    <= {WORD_W{1'b0}};
             mismatch_q    <= 1'b0;
+            evq_mm_q      <= 1'b0;
             ecc_commit    <= 1'b0;
             ld_pend       <= 1'b0;
             ld_zero       <= 1'b0;
@@ -1451,6 +1610,7 @@ module pilot_top #(
             soft_rst      <= 1'b0;
             ecc_commit    <= wr_ok && s_w_data_hi;
             mismatch_q    <= cfg_mismatch;
+            evq_mm_q      <= evq_ptr_mismatch;
 
             // ---- writes ----------------------------------------------
             if (wr_locked)
@@ -1560,12 +1720,21 @@ module pilot_top #(
 
             // ---- fault counters and stickies -------------------------
             if (ev_dropped_oor && cnt_oor != CNT_MAX) cnt_oor <= cnt_oor + 1'b1;
-            if (mismatch_edge) begin
+            if (tmr_event) begin
                 sticky_tmr <= 1'b1;
                 if (cnt_tmr != CNT_MAX) cnt_tmr <= cnt_tmr + 1'b1;
             end
-            if ((fi_wr_en && fi_full) || (fo_wr_en && fo_full))
+            // STATUS.OVF_SEEN is "an event was dropped", not "a queue
+            // was busy". The EVQ_IN term is a software-port write into a
+            // full queue, exactly as regmap.yaml defines the bit. The
+            // EVQ_OUT term used to be `fo_wr_en && fo_full`, which also
+            // fires on ordinary lossless backpressure -- measured, one
+            // eight-spike event latches it and lights the ERR pin with
+            // nothing lost -- so it is now the one output-side write
+            // that is genuinely lost. Section 5.1.
+            if ((fi_wr_en && fi_full) || evqo_drop)
                 sticky_ovf <= 1'b1;
+            if (evqo_drop && cnt_evqo != CNT_MAX) cnt_evqo <= cnt_evqo + 1'b1;
             if (sync_push) sticky_sync <= 1'b1;
             if (!cfg_valid && ctrl_en) sticky_errcfg <= 1'b1;
             // A parked neuron core is latched into the sticky bit as
@@ -1598,9 +1767,15 @@ module pilot_top #(
                 fault_addr <= (ecc_obs && dec_ded) ? w_addr_cmt
                                                    : {WORD_W{1'b0}};
             if (fclr_tmr) begin
-                cnt_tmr    <= {{(CNT_W-1){1'b0}}, mismatch_edge};
-                sticky_tmr <= mismatch_edge;
+                cnt_tmr    <= {{(CNT_W-1){1'b0}}, tmr_event};
+                sticky_tmr <= tmr_event;
             end
+            // sticky_ovf is deliberately NOT touched here: it is cleared
+            // by STATUS_CLR like every other STATUS sticky, and it is
+            // shared with the input queue, so a FAULT_CLR of one of the
+            // two counters must not clear a record the other one made.
+            if (fclr_evqo)
+                cnt_evqo <= {{(CNT_W-1){1'b0}}, evqo_drop};
         end
     end
 
@@ -1661,6 +1836,8 @@ module pilot_top #(
             SA_ECC_INJ_POS:   rdata_r = {25'd0, ecc_inj_pos};
             SA_TMR_INJ:       rdata_r = {22'd0, tmr_inj};
             SA_CNT_TMR:       rdata_r = {{(32 - CNT_W){1'b0}}, cnt_tmr};
+            SA_CNT_EVQ_OUT_OVF:
+                              rdata_r = {{(32 - CNT_W){1'b0}}, cnt_evqo};
             default:          rdata_r = 32'd0;   // unmapped, incl. WO
         endcase
     end
@@ -1675,7 +1852,12 @@ module pilot_top #(
     assign tmr_seen   = sticky_tmr;
 
     // Deliberately unread bits, sunk so lint and synthesis agree that
-    // they are unused rather than accidentally dropped.
+    // they are unused rather than accidentally dropped. fo_drop is here
+    // by measurement, not by omission: for this instance aer_fifo's
+    // "wr_en && full" counter counts backpressure CYCLES rather than
+    // lost events, so it is not the output queue's drop count and must
+    // not be published as one. CNT_EVQ_OUT_OVF at 0x0AC is, and section
+    // 5.1 is the whole argument.
     wire _unused = &{1'b0, dec_syndrome, enc_code, fo_drop,
                      tmr_inj[7:6], evw[13:10], 1'b0};
 

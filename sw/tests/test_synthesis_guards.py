@@ -75,6 +75,27 @@ SOURCES = [
 TMR_W = 55
 REPLICAS = ("u_cfg_a", "u_cfg_b", "u_cfg_c")
 
+# The second replicated domain: the AER queue pointers of hw/rtl/aer_fifo.v.
+#
+# docs/16 section 5.2 measured these twelve flip-flops as the highest-rate
+# silent corruptor in the design -- 22 of 24 injections corrupted the
+# drained event stream with nothing flagged -- and they are now three
+# aer_ptr_bank instances per pointer behind a voter. The merge hazard is
+# sharper here than in the configuration domain, not softer: all three
+# replicas are loaded from ONE net (the voted next pointer), which is
+# exactly the signature opt_merge hashes on, so without the per-replica
+# storage transform the collapse is not a possibility but the expected
+# outcome.
+#
+# Two queue instances, two pointers each, three replicas each. The width
+# is EVQ_*_DEPTH's address width plus the wrap bit: pilot_top defaults
+# both queues to 4 entries, so AW = 2 and each bank is 3 flip-flops.
+PTR_W = 3
+PTR_QUEUES = ("u_evq_in", "u_evq_out")
+PTR_BANKS = ("u_wptr_a", "u_wptr_b", "u_wptr_c",
+             "u_rptr_a", "u_rptr_b", "u_rptr_c")
+PTR_REPLICAS = tuple(f"{q}.{b}" for q in PTR_QUEUES for b in PTR_BANKS)
+
 # Flip-flops the design declares, counted after `proc` and before any
 # optimisation pass has run. Asserted rather than hardcoded: the tests
 # below measure it every time and compare against the mapped netlist.
@@ -262,10 +283,28 @@ def _ecp5_script(force_flatten=False):
 
 def _declared_script():
     """Every flip-flop the RTL declares, one cell per bit, with no
-    optimisation pass having had a chance to remove any of them."""
+    optimisation pass having had a chance to remove any of them.
+
+    keep_hierarchy is stripped before the flatten, and that is load
+    bearing rather than tidy. `flatten` skips a module carrying the
+    attribute, so a bank module survives as a MODULE DEFINITION and is
+    counted once however many times it is instantiated. The
+    configuration domain hid this: its three banks carry three different
+    parameter sets, so yosys derives three module types and three
+    instances, and the count came out right by coincidence. The pointer
+    banks do not -- twelve instances share three derived types -- so
+    without this line the declared census reads 9 pointer flip-flops for
+    the 36 the RTL declares, and
+    test_no_flip_flops_are_lost_to_optimisation, whose whole job is
+    comparing the two numbers, silently compares the wrong one. Measured
+    2026-08-29: adding this line changes nothing at all on the pre-TMR
+    sources (1241 either way) and takes the post-TMR declared count from
+    1239 to 1266, which is 1241 - 12 + 36 + 1 [fact].
+    """
     return _read_sources() + (
-        f" hierarchy -top {TOP}; proc; flatten; opt_expr; opt_clean;"
-        " simplemap;")
+        f" hierarchy -top {TOP}; proc;"
+        " attrmap -modattr -remove keep_hierarchy; flatten;"
+        " opt_expr; opt_clean; simplemap;")
 
 
 @pytest.fixture(scope="module")
@@ -325,6 +364,57 @@ def test_config_tmr_is_three_banks_in_the_ecp5_flow(ecp5):
     _assert_three_banks(ecp5, "synth_ecp5")
 
 
+# =====================================================================
+# 1b. the AER queue pointers are twelve physical banks
+# =====================================================================
+def _assert_pointer_banks(census, flow, exact=True):
+    found = {r: census.in_instance(f"{r}.") for r in PTR_REPLICAS}
+    ok = (all(v == PTR_W for v in found.values()) if exact
+          else all(v >= PTR_W for v in found.values()))
+    assert ok, (
+        f"AER pointer TMR collapsed in the {flow} netlist: expected "
+        f"{PTR_W} flip-flops per replica bank, found {found}. All three "
+        f"replicas of a pointer are loaded from the same voted net, so "
+        f"opt_dff + opt_merge hash them into one bank unless the "
+        f"per-replica storage transform keeps them apart -- and a voter "
+        f"reading one physical pointer three times agrees with itself "
+        f"while the queue silently re-emits, duplicates, loses and "
+        f"fabricates events (docs/16 section 5.2). See the pointer TMR "
+        f"section of hw/rtl/aer_fifo.v. Total flip-flops in this "
+        f"netlist: {census.total}.")
+
+
+@needs_yosys
+def test_pointer_tmr_is_three_banks_per_pointer_in_the_asic_flow(asic):
+    _assert_pointer_banks(asic, "ASIC (yosys/LibreLane-shaped)")
+
+
+@needs_yosys
+def test_pointer_tmr_is_three_banks_per_pointer_in_the_ecp5_flow(ecp5):
+    _assert_pointer_banks(ecp5, "synth_ecp5")
+
+
+@needs_yosys
+def test_pointer_tmr_survives_a_flow_that_ignores_keep_hierarchy(ecp5_forced):
+    """The attribute-free case for the pointers, asked of synth_ecp5
+    because that flow keeps the replica instance path in the cell names
+    even once keep_hierarchy is gone, so each bank can be counted where
+    it lives. The ASIC side of the same question is
+    test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy, which
+    allows zero lost flip-flops across the whole design and therefore
+    covers this domain too.
+
+    What is holding the banks apart here is one XOR layer: replica a
+    stores the pointer true, replica b its complement, replica c a
+    mixing in which every stored bit is a function of two or three
+    pointer bits. Polarity alone provably cannot hold three replicas --
+    a storage bit has two polarities -- and the configuration domain
+    measured exactly that bound before its own MIX was added.
+    """
+    _assert_pointer_banks(ecp5_forced, "synth_ecp5, keep_hierarchy stripped",
+                          exact=False)
+
+
 @needs_yosys
 def test_the_two_flows_agree_on_the_flip_flop_count(asic, ecp5):
     """A canary, not a specification. Today both flows map every
@@ -371,16 +461,24 @@ def test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy(asic,
 
     Self-calibrating against the intact run, so growing the design does
     not need this number edited.
+
+    Both replicated domains are inside this number. The configuration
+    banks are 55 flip-flops each and the twelve AER pointer banks are
+    PTR_W each, so a loss that is a multiple of 55 points at
+    hw/rtl/pilot_top.v and a small loss at hw/rtl/aer_fifo.v; either way
+    the answer is in a storage transform and not in an attribute.
     """
     lost = asic.total - asic_forced.total
     assert lost == 0, (
         f"with keep_hierarchy stripped the design lost {lost} flip-flops "
         f"({asic.total} -> {asic_forced.total}); none may go. The intact "
-        f"run has {TMR_W} flip-flops under each of {REPLICAS}, so an "
-        "equal total here is what says all three banks are still "
+        f"run has {TMR_W} flip-flops under each of {REPLICAS} and "
+        f"{PTR_W} under each of the twelve pointer banks, so an "
+        "equal total here is what says every one of those banks is still "
         "physically distinct. Losing a multiple of "
-        f"{TMR_W} means a replica was hashed into another one: check the "
-        "MIX storage transform in hw/rtl/pilot_top.v, not the attribute.")
+        f"{TMR_W} means a configuration replica was hashed into another "
+        "one (check the MIX storage transform in hw/rtl/pilot_top.v); a "
+        f"smaller loss points at the pointer banks in hw/rtl/aer_fifo.v.")
 
 
 @needs_yosys
@@ -736,3 +834,53 @@ def test_config_tmr_survives_the_real_hardening_flow():
             f"the recipe tests above this is the structure that would "
             f"have been fabricated. See hw/rtl/pilot_top.v header "
             f"section 9. Total flip-flops in this netlist: {len(flops)}.")
+
+
+# The RTL file whose banks the test below counts. Its modification time
+# is the provenance discriminator: a run produced before it cannot be
+# expected to contain the structure it introduced.
+_PTR_RTL = RTL / "aer_fifo.v"
+
+
+def test_pointer_tmr_survives_the_real_hardening_flow():
+    """The pointer banks in the netlist LibreLane actually produced, the
+    same question test_config_tmr_survives_the_real_hardening_flow asks
+    of the configuration domain.
+
+    Skipped unless a run POSTDATES hw/rtl/aer_fifo.v, and that condition
+    is deliberately about provenance rather than about the netlist. A
+    skip that looked for the banks and gave up when they were missing
+    would skip on precisely the symptom this file exists to catch. Every
+    run on disk when the pointer TMR was written predates it -- the
+    configuration domain needed its own re-harden for the same reason,
+    which is what tt/runs/tmr-reharden is -- so this reports nothing
+    until someone re-hardens, and then reports on the real artifact.
+    """
+    netlists = _hardening_netlists()
+    if not netlists:
+        pytest.skip(
+            "no deferred_flatten LibreLane run with a final netlist; "
+            "produce one with hw/openlane/pilot_sky130/run_sky130.sh")
+
+    rtl_mtime = _PTR_RTL.stat().st_mtime
+    fresh = [(run, nl) for run, nl in netlists
+             if nl.stat().st_mtime >= rtl_mtime]
+    if not fresh:
+        pytest.skip(
+            f"every LibreLane run on disk predates {_PTR_RTL.name}, which "
+            "is where the pointer banks are declared; re-harden to close "
+            "this check")
+
+    for run, nl in fresh:
+        text = nl.read_text()
+        cells = _NETLIST_CELL.findall(text)
+        flops = [name for ctype, name in cells if _is_flop(ctype)]
+        found = {r: sum(1 for n in flops if f"{r}." in n)
+                 for r in PTR_REPLICAS}
+        assert all(v == PTR_W for v in found.values()), (
+            f"AER pointer TMR collapsed in {nl.relative_to(ROOT)}: "
+            f"expected {PTR_W} flip-flops per replica bank, found "
+            f"{found}. This is the shipped netlist of run {run.name}, so "
+            f"this is the structure that would have been fabricated. See "
+            f"the pointer TMR section of hw/rtl/aer_fifo.v. Total "
+            f"flip-flops in this netlist: {len(flops)}.")

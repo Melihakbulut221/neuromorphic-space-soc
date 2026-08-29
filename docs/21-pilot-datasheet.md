@@ -210,7 +210,7 @@ events it can still get out.
 ### 2.3 Register bank
 
 The programmer's view. It implements the subset of `regmap/regmap.yaml`
-listed in section 5.3 plus three pilot-only observability registers, all
+listed in section 5.3 plus four pilot-only observability registers, all
 addresses and reset values taken from the generated header
 `hw/rtl/npu_regs.vh` and never hand-copied — an elaboration guard fails
 the build if the generator moves a field this module encodes

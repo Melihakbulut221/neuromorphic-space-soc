@@ -314,7 +314,7 @@ Documented deviations, each with its cost or its reason:
 | D2 | `CFG_NEUR` is read-only and reports the geometry | `lif_core` has no runtime active-neuron count and no golden reference for one; `CFG_AXON` is fully writable and does drive the docs/10 section 6 drop rule |
 | D3 | `W_ADDR` is a weight-word index, not a byte address | One 16-weight word per commit; auto-increments on `W_DATA_HI` exactly as the register map specifies |
 | D4 | `W_DATA_LO`/`W_DATA_HI` read back the *stored* ECC data field | They are the physical data field, so an injected upset is visible until it is scrubbed. That is the demonstrator |
-| D5 | Three pilot-only registers at 0x0A0, 0x0A4, 0x0A8 | `ECC_INJ_POS`, `TMR_INJ`, `CNT_TMR`; they sit in the unmapped region of the same window and do not change the register-map contract |
+| D5 | Four pilot-only registers at 0x0A0, 0x0A4, 0x0A8, 0x0AC | `ECC_INJ_POS`, `TMR_INJ`, `CNT_TMR`, `CNT_EVQ_OUT_OVF`; they sit in the unmapped region of the same window and do not change the register-map contract. The fourth was added 2026-08-29, when the fault-injection campaign showed an output-queue overflow raising `STATUS.OVF_SEEN` with no count behind it. It is pilot-scoped deliberately: the architecture map's fault block is contiguous to 0x88, so a promoted counter would land on the `FAULT_CLR` bit `CNT_TMR` already owns and break the portable clear-everything write the map itself promises |
 
 ---
 
