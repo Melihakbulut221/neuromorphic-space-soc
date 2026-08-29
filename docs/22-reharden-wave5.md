@@ -6,6 +6,13 @@ specific figures in `docs/15`, `docs/18`, `docs/20` and `docs/21` — the
 exact list, with replacement numbers, is section 6. **None of those
 documents is edited here.**
 
+**Read section 9 first if you are taking a number out of this document.**
+The RTL moved from `c5a5a6e` to `0448282` while these runs were
+executing. Sections 1 to 8 report `c5a5a6e` and are internally
+consistent; section 9 is a second complete IHP sign-off at `0448282` and
+is **the current one**. The conclusions do not change — they get slightly
+worse — but the figures do.
+
 Three jobs, all consequences of commit `c5a5a6e`:
 
 1. **Close the last open wave-5 item.** `sw/tests/test_synthesis_guards.py`
@@ -57,6 +64,14 @@ Three jobs, all consequences of commit `c5a5a6e`:
 - **Total power is measured again**: **5.119 mW** at 50 MHz on the
   typical corner, against the 4.36 mW `docs/21` carries from the pre-fix
   design and marks "not yet re-measured".
+- **The RTL moved mid-run and the pinning caught it.** A concurrent
+  session rewrote `hw/rtl/pilot_top.v` at 22:25 and committed `0448282`
+  at 23:11, both while these runs were executing. Because every run here
+  reads a `pin_rtl.py` snapshot rather than `hw/rtl`, none of them can
+  have read a mixed source. Section 9 re-hardens at `0448282`:
+  **1,275 flip-flops, 185,755 um2, 71.489 %, -2.13 % against the
+  criterion**, slow corner +0.9121 ns, clean on every deck. The tile
+  verdict of section 4 holds and gets 0.43 points worse.
 
 ---
 
@@ -722,17 +737,30 @@ the current text, the replacement, and the source in a `wave5-ihp`,
    the design is buildable on sky130 at all. Section 5.3.
 3. **The tile decision itself.** Section 4.3 lists the options and the
    numbers that bear on each. It is the owner's call and the shuttle
-   closes 2026-09-21.
+   closes 2026-09-21. Option 2 has since been made runnable by a
+   concurrent session: `hw/openlane/pilot_ihp/mkconfig.py` now emits
+   `config.6x2.json` (`DIE_AREA 0 0 1289.28 313.74`) and
+   `config.3x4.json` (`0 0 636.96 710.64`) **[fact, both files, written
+   2026-08-30 00:13]**. Neither has been hardened and neither is
+   reported here. `config.json`, from which every run in this document
+   derives, is byte-unchanged by that work **[fact, `git diff`]**.
 4. **Gate-level simulation against this netlist.** `docs/20` section 8.1
    already flags the smoke test as stale against `tmr-reharden`; it is
-   staler now. `tt/runs/wave5-ihp/final/nl/` is the netlist to re-run it
-   against.
+   staler now. `tt/runs/wave5-ihp-b/final/nl/` is the netlist to re-run
+   it against.
 5. **Whole-suite verification counts.** Only
    `sw/tests/test_synthesis_guards.py` was run here (17 passed). The
    `docs/21` section 7.1 figure of "152 passed, 1 skipped" should be
    re-derived rather than patched.
 6. **No power analysis with annotated activity.** The 5.119 mW of
-   section 2.1 is the flow's own estimate from defaults.
+   section 2.1 and the 5.191 mW of section 9.3 are the flow's own
+   estimates from defaults.
+7. **KLayout DRC at `0448282`.** Section 2.4 closes the deck at
+   `c5a5a6e`; the `0448282` re-harden of section 9 ran the submission
+   config, which leaves `RUN_KLAYOUT_DRC: 0`. Re-running
+   `hw/openlane/pilot_ihp/config.klayoutdrc.json` pinned to `0448282` is
+   a one-command repeat of section 2.4 and should be done before
+   submission.
 
 ---
 
@@ -782,3 +810,183 @@ snapshot directory.
 `tt/runs/` and `hw/openlane/*/runs/` are gitignored. The `pin_rtl.py`
 snapshots are disposable and regenerable from `c5a5a6e`; the blob table
 in section 1.2 is the record, not the path.
+
+---
+
+## 9. Addendum: the RTL moved during this work, and the sign-off at `0448282`
+
+Nothing above this line is edited. Where a figure here supersedes one
+above, it says so.
+
+### 9.1 What happened
+
+| Time | Event |
+|---|---|
+| 21:18 | `pin_rtl.py c5a5a6e` writes the snapshots; runs start |
+| 22:14 | `wave5-ihp` writes `final/nl/` |
+| 22:25:46 | **a concurrent session rewrites `hw/rtl/pilot_top.v`** |
+| 23:11:55 | that session commits **`0448282`**, "Measure the pointer TMR properly, and fix the deadlock that measuring found" |
+| 23:32 | `pin_rtl.py 0448282`; `wave5-ihp-b` starts |
+
+**[fact, file mtimes and `git log`.]**
+
+This is the third time this project has had a source change land inside a
+running flow — `docs/20` section 1.2 records the first, where a
+half-finished `lif_core.v` aborted a run at
+`Checker.YosysSynthChecks`. **This time nothing was lost**, and the
+reason is worth stating because it is the whole point of the mechanism:
+every run in sections 1 to 8 reads an absolute path into a `pin_rtl.py`
+snapshot, so the 22:25 rewrite was invisible to them. The `resolved.json`
+of each run names the snapshot, and section 1.2's blob table names what
+was in it. A run that had named `hw/rtl` would have been synthesising
+`b5863d44` at 21:20 and could have been read back later against
+`a1fdc4ce`, with nothing on disk to say which.
+
+`0448282` also swept `docs/22-reharden-wave5.md` into itself while this
+document was mid-draft — it was in the working tree at the time. That is
+mechanical, not a review, and the integrator should treat the committed
+revision as a snapshot of an unfinished draft rather than as an
+accepted one.
+
+### 9.2 The RTL delta
+
+One file changed: `hw/rtl/pilot_top.v`, **`b5863d44` → `a1fdc4ce`**, 62
+insertions and 5 deletions **[fact, `git diff --stat c5a5a6e 0448282`]**.
+`hw/rtl/aer_fifo.v` is **unchanged at `c6f26c16`**, so everything section
+3 says about the pointer banks is unaffected — the guard was re-run
+against the current tree and against both netlists and is **17 passed, 0
+skipped** in each case **[fact]**.
+
+The change is a bounded-wait re-arm and a host-visible fault latch for a
+deadlock in the show-ahead adapter, described in the `0448282` commit
+message as "seven flip-flops, mutation-checked". The harden confirms the
+count exactly: **1,275 mapped flip-flops against 1,268, +7** **[fact]**.
+
+### 9.3 Sign-off at `0448282`
+
+`tt/runs/wave5-ihp-b`, same submission config, same 4x2 tile, same
+`CLOCK_PERIOD: 20`, pinned to `0448282`.
+
+| Quantity | `wave5-ihp` (`c5a5a6e`) | **`wave5-ihp-b` (`0448282`)** | Delta |
+|---|---|---|---|
+| Mapped flip-flops | 1,268 | **1,275** | **+7** |
+| Synthesis cells | 9,754 | **9,821** | +0.69 % |
+| Synthesis cell area | 151,556.53 um2 | **151,789.11 um2** | +0.15 % |
+| Placed cells, excl. fill | 12,322 | **12,424** | +0.83 % |
+| Instances incl. fill | 23,584 | **23,685** | +0.43 % |
+| **Placed cell area** | 184,969 um2 | **185,755 um2** | **+0.42 %** |
+| of which sequential | 62,117.8 um2 | **62,460.7 um2** | +0.55 % |
+| of which timing-repair buffers | 29,721.7 um2 (2,389) | **30,111.8 um2 (2,414)** | +1.31 % |
+| of which clock buffers | 3,224.19 um2 | **3,365.71 um2** | +4.39 % |
+| Die / core area | 268,059 / 259,837 um2 | **268,059 / 259,837 um2** | fixed by the tile |
+| **Utilization** | 71.1867 % | **71.4890 %** | **+0.302 pts** |
+| Routed wirelength | 469,324 um | **480,088 um** | +2.29 % |
+| Route DRC / Magic DRC / Netgen LVS | 0 / 0 / 0 | **0 / 0 / 0** | — |
+| LVS unmatched nets / devices / pins / properties | 0 / 0 / 0 / 0 | **0 / 0 / 0 / 0** | — |
+| Antenna-violating nets / pins | 0 / 0 | **0 / 0** | — |
+| Antenna diodes | 4 | **6** | +2 |
+| Unmapped instances | 0 | **0** | — |
+| Power-grid violations | 0 | **0** | — |
+| Disconnected pins | 6 | **6** | — |
+| Max-fanout counter | 85 | **85** | not gated |
+| `design__violations` / `flow__errors__count` | 0 / 0 | **0 / 0** | — |
+| Total power, 50 MHz typical | 5.119 mW | **5.191 mW** | +1.4 % |
+| **Setup slack, `nom_slow_1p08V_125C`** | +1.1554 ns | **+0.9121 ns** | **-0.243 ns** |
+| Setup slack, `nom_typ_1p20V_25C` | +8.0521 ns | **+7.8999 ns** | -0.152 ns |
+| Setup slack, `nom_fast_1p32V_m40C` | +12.1355 ns | **+11.9855 ns** | -0.150 ns |
+| Hold slack, slow / fast | +0.6204 / +0.1093 ns | **+0.6218 / +0.1180 ns** | — |
+| Setup / hold / max-cap / max-slew violations, all corners | 0 | **0** | — |
+
+**[fact for every entry, `tt/runs/wave5-ihp-b/final/metrics.json`,
+`06-yosys-synthesis/reports/stat.json` and
+`55-openroad-stapostpnr/summary.rpt`; the Delta column is arithmetic.]**
+
+Manufacturability: **Antenna Passed, LVS Passed, DRC Passed** **[fact]**.
+KLayout DRC was **not** re-run at `0448282`; section 2.4's zero is a
+`c5a5a6e` result. Given +0.42 % of cell area and an unchanged tile, a
+different KLayout outcome would be surprising, but it is not measured
+**[estimate]**.
+
+Pointer banks in `tt/runs/wave5-ihp-b/final/nl/`: **3 in each of the
+twelve**, 36 total, out of 1,275; configuration banks 55/55/55 **[fact,
+counted with the guard's own predicate]**.
+
+This is the first run in the series to give back slack rather than take
+it — -0.243 ns on the slow corner. It is also the first increment that is
+almost purely sequential logic on an existing path rather than new
+parallel structure, which is consistent with the section 2.3 caution
+that netlist size does not predict slack in either direction
+**[estimate on the mechanism; the slacks are fact]**. Slow-corner Fmax is
+**52.4 MHz**, still above the declared 50 MHz **[estimate]**.
+
+### 9.4 The tile verdict at `0448282`
+
+| Quantity | `wave5-ihp` (`c5a5a6e`) | **`wave5-ihp-b` (`0448282`)** |
+|---|---|---|
+| Placed cell area | 184,969 um2 | **185,755 um2** |
+| Utilization | 71.1867 % | **71.4890 %** |
+| Core needed at the 70 % criterion | 264,241 um2 | **265,364 um2** |
+| **Shortfall against the criterion** | -4,404 um2 (**-1.70 %**) | **-5,527 um2 (-2.13 %)** |
+| Budget consumed | 101.70 % | **102.13 %** |
+| Cell area to shed to reach exactly 70 % | 3,083 um2 | **3,869 um2** |
+
+**[fact for placed area and utilization; the criterion arithmetic is an
+estimate on them.]**
+
+**Section 4's verdict stands and is 0.43 points worse.** The design is
+over the planning budget by **5,527 um2, 2.13 % of the core**. The
+deadlock fix of `0448282` is a correctness fix and is not a candidate for
+removal, so this is not headroom that can be recovered by reverting it —
+it is the demonstration that section 4.2's "there is no headroom left for
+a further increment" was accurate within one commit of being written. The
+options in section 4.3 are unchanged; the trim figure in option 3 moves
+from 3,083 um2 to **3,869 um2**.
+
+The growth factor for the `docs/15` section 4.5 scaled column also moves:
+**185,755 / 136,107 = 1.3648, +36.5 %** rather than the +35.9 % section
+4.3 gives **[estimate]**. No row changes shape against the +35.9 %
+column.
+
+### 9.5 What section 6 should carry instead
+
+Section 6 is written against `c5a5a6e` and every row in it remains
+correct for that commit. For an integrator applying the corrections to
+`docs/15`, `docs/18`, `docs/20` and `docs/21` **now**, these are the rows
+whose replacement value should come from `wave5-ihp-b` instead:
+
+| Quantity | §6 gives (`c5a5a6e`) | **use instead (`0448282`)** |
+|---|---|---|
+| Mapped flip-flops | 1,268 | **1,275** |
+| Synthesis cells | 9,754 | **9,821** |
+| Post-synthesis cell area | 151,556.53 um2 | **151,789.11 um2** |
+| Placed standard cells | 184,969 um2 | **185,755 um2** |
+| Placed instances | 23,584 | **23,685** |
+| Utilization | 71.1867 % | **71.4890 %** |
+| Worst slow-corner setup slack | +1.1554 ns | **+0.9121 ns** |
+| Typ / fast setup slack | +8.0521 / +12.1355 ns | **+7.8999 / +11.9855 ns** |
+| Worst hold, fast corner | +0.1093 ns | **+0.1180 ns** |
+| Slow-corner Fmax | 53.1 MHz | **52.4 MHz** |
+| Total power, typical | 5.119 mW | **5.191 mW** |
+| Core needed at 70 % | 264,241 um2 | **265,364 um2** |
+| Spare against the criterion | -1.70 % | **-2.13 %** |
+| Growth factor for `docs/15` §4.5 | 1.3590 (+35.9 %) | **1.3648 (+36.5 %)** |
+| `docs/15` §4.5 scaled column | 217,214 / 236,023 / 313,369 / 349,509 / 452,993 | **218,137 / 237,026 / 314,701 / 350,994 / 454,917** |
+| Run path in `docs/21` §7.1 | `tt/runs/wave5-ihp/` | **`tt/runs/wave5-ihp-b/`** |
+
+Rows in section 6 **not** listed here are unchanged: the twelve pointer
+banks at 3 each, the configuration banks at 55 each, every zero in the
+sign-off, the die and core areas, the disconnected-pin count, the
+KLayout DRC zero (which remains a `c5a5a6e` measurement, section 9.3),
+and the whole of section 6.2, since no sky130 run exists at either
+commit.
+
+### 9.6 Reproducing section 9
+
+```bash
+python3 hw/openlane/pin_rtl.py 0448282 tt/src/config_merged.json /tmp/pin-ihp-w5b
+mkdir -p tt/runs/wave5-ihp-b
+CONFIG=/tmp/pin-ihp-w5b/config.json hw/openlane/pilot_ihp/run_ihp.sh \
+    --run-tag wave5-ihp-b --force-run-dir $PWD/tt/runs/wave5-ihp-b
+python3 hw/openlane/signoff_report.py tt/runs/wave5-ihp tt/runs/wave5-ihp-b
+.venv/bin/python -m pytest sw/tests/test_synthesis_guards.py -q
+```
