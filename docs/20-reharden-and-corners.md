@@ -5,6 +5,37 @@ section 9 are not run. Supersedes specific figures in `docs/15` and
 `docs/18` — the exact list, with replacement numbers, is section 8.
 Neither of those documents is edited here.
 
+**Superseded in turn, 2026-08-29 — read this before quoting any area,
+utilization, flip-flop or slack figure below.** This document reports
+the `tmr-reharden` run of 2026-08-26, which hardened the netlist after
+the configuration-TMR fix (`e45d52d`) and *before* two later rounds of
+hardening: the `lif_core` memory ECC of 2026-08-27 and the AER pointer
+TMR of 2026-08-29 (`c5a5a6e`). Every physical figure in the Headline and
+in section 2 therefore describes a netlist that no longer exists —
+including the 60.91 % utilization, the 158,268 um2 of placed cells, the
+1,155 flip-flops, the +6.436 ns slow-corner slack, and the "4x2 still
+fits, with 13.0 % of the core spare" conclusion drawn from them.
+
+The replacement figures are **not restated here**, deliberately.
+`docs/22-reharden-wave5.md` is the document that re-hardens the current
+netlist and its **section 6.3 is a location-by-location correction list
+for this document** — each row naming what this document says, what
+replaces it, and which artifact the replacement was read from. That is
+where the current numbers live. A further IHP run
+(`tt/runs/wave5-ihp-b/`) was still executing when this note was written,
+so the exact values in `docs/22` may move again; `docs/22` is the
+authority on its own status, and nothing in this document should be
+quoted without checking it first.
+
+The *findings* of this document are not withdrawn and do not depend on
+the superseded numbers: `PNR_CORNERS` does not close the sky130 slow
+corner and cannot, post-global-routing repair does not close it either,
+and the cause is a parasitic-model gap rather than a corner list
+(sections 4 to 7). Those conclusions are about the flow, not about a
+particular netlist's area. The sky130 side has its own separate problem
+as of 2026-08-29 — the 4x2 no longer routes at all — which is
+`docs/22` section 5, not this document.
+
 Two jobs, both consequences of commit `e45d52d`:
 
 1. **Re-harden.** Every area and timing figure in `docs/15` predates the

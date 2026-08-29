@@ -9,6 +9,35 @@ Convention, as everywhere in this repository: **[fact]** = measured in
 this environment on 2026-08-26, or read out of an installed file or a
 live API response; **[estimate]** = derived or judged.
 
+**Correction, 2026-08-29 — the formal task count in this document is
+superseded.** Every "37" below is the 2026-08-26 measurement and was
+correct on that date. Re-measured today, `make -C formal -n everything
+| grep -c "sby -f"` returns **45**, over **seven** property sets rather
+than six. The whole difference is one new set: `formal/lif_mem.sby`
+contributes 8 tasks and did not exist when this document was written.
+Every other set is unchanged in count, and 37 + 8 = 45 exactly. The
+current breakdown is `aer_fifo` 4, `lif_ctrl` 8, `lif_mem` 8,
+`npu_regbank` 5, `scrub` 9, `secded` 3, `tmr_voter` 8.
+**[fact]** The dated figures are left in place below and each is marked
+where it appears; nothing in the parity argument against borg changes,
+because borg still has no formal programme to compare against
+(section 5.1).
+
+**On the pass result, stated precisely.** The 2026-08-26 run reported
+37 of 37 `DONE (PASS)` and that result stands for the suite as it was
+that day. It is **not** evidence that the eight added tasks pass, and
+this document does not claim they do. A full
+`make -C formal everything` was started on 2026-08-29 to close that gap;
+it was still executing when this note was written, so section 3.1's
+formal row is left at its dated 2026-08-26 value rather than being
+replaced by a result that does not exist yet. The suite is now long
+enough that this matters: `formal/aer_fifo.sby` records **5 min 48 s**
+for its `bmc` task and **29 min 19 s** for its `cover` task on the
+pinned toolchain on an idle machine, and the pointer-TMR fault model is
+what made the cover task seven times more expensive than it was on the
+pre-TMR sources. Anyone re-running the suite should budget hours, not
+the "~40 min wall" section 4 records for the whole `test` tier.
+
 Borg is a much larger and more mature project than this one: an
 open-source GPU with a Chisel/Scala RTL flow, a Nix-pinned toolchain, a
 RISC-V CPU that boots mainline Linux on real ULX3S hardware, a Vulkan
@@ -92,7 +121,7 @@ Three tiers, all green. **[fact]**
 |---|---|---|
 | Python golden models and evidence checks | `.venv/bin/python -m pytest -q` (root; `pytest.ini` sets `testpaths = sw/tests`) | **145 passed** in 0.50s, 0 failed |
 | Cocotb RTL | `cd hw/tb && make -f <Makefile{,.regbank,.lif,.secded,.tmr,.scrub,.pilot,.fi}>` | **183 test cases, 0 failures, 15 skipped, 168 passed** across 8 suites and 13 elaborations |
-| Formal | `make -C formal everything` | **37 of 37 SymbiYosys tasks `DONE (PASS)`, 0 FAIL, 0 ERROR** |
+| Formal | `make -C formal everything` | **37 of 37 SymbiYosys tasks `DONE (PASS)`, 0 FAIL, 0 ERROR** — as of 2026-08-26. The suite is **45** tasks as of 2026-08-29; see the correction at the head of this document |
 
 Cocotb per-suite, counted from the `results*.xml` written by this run
 (the terminal summary only shows the last elaboration of a
@@ -108,7 +137,21 @@ The 37 formal tasks are the `[tasks]` sections of the six `.sby` files:
 `aer_fifo` 4, `lif_ctrl` 8, `npu_regbank` 5, `scrub` 9, `secded` 3,
 `tmr_voter` 8. They cover 528 `assert`/`cover` statements across the six
 `*_props.v` files, and they run on both the `smtbmc` and `abc` engines.
-**[fact]**
+**[fact, 2026-08-26]**
+
+*Superseded 2026-08-29.* The `lif_mem` set has since been added, taking
+the suite to **45** tasks over **seven** `.sby` files (`aer_fifo` 4,
+`lif_ctrl` 8, `lif_mem` 8, `npu_regbank` 5, `scrub` 9, `secded` 3,
+`tmr_voter` 8). The property total is also stale, and the 528 above
+cannot be reproduced from the current tree by any counting rule tried
+here, so it is replaced rather than adjusted: `grep -ohE '\b(assert|
+cover)\s*\(' formal/*_props.v | wc -l` returns **542** over the **eight**
+`*_props.v` files, of which 460 are in the original six. **[fact]** The
+per-file counts are `aer_fifo` 35, `lif_ctrl` 83, `lif_mem` 51,
+`lif_mem_codec` 31, `npu_regbank` 224, `scrub` 71, `secded` 32,
+`tmr_voter` 15. Eight property files map to seven property sets because
+`formal/lif_mem.sby` drives both `lif_mem_props.v` and
+`lif_mem_codec_props.v`.
 
 `sw/tests/test_flow_evidence.py` deserves a separate mention: its 16
 tests are not unit tests of the design, they re-derive the sign-off
@@ -294,7 +337,7 @@ the two and both were low.
 
 | Check | What it asserts | Borg's status | Our status | Evidence | Verdict for us |
 |---|---|---|---|---|---|
-| `test` | 11 suites exit 0 under `make test-all` | Green (`32897833928`); four of the preceding ten runs hit the 6h hosted timeout | 145 pytest + 183 cocotb (0 fail) + 37/37 formal, all green, ~40 min wall | `pytest -q`; `make -f Makefile.*` in `hw/tb`; `make -C formal everything` | **Pass today** |
+| `test` | 11 suites exit 0 under `make test-all` | Green (`32897833928`); four of the preceding ten runs hit the 6h hosted timeout | 145 pytest + 183 cocotb (0 fail) + 37/37 formal, all green, ~40 min wall — all four figures dated 2026-08-26; the formal suite is 45 tasks as of 2026-08-29 and takes far longer than 40 min (correction at the head of this document) | `pytest -q`; `make -f Makefile.*` in `hw/tb`; `make -C formal everything` | **Pass today** |
 | `gds-ihp` | An IHP harden completes, exit 0 | Green (`32481339590`), but self-described as diagnostic-only on a non-shuttle 8x4 shape with an unvalidated `CLOCK_UNCERTAINTY_CONSTRAINT` | Full `Classic` flow at 4x2 completes with `flow__errors__count: 0`, locally, on the action's own config | `tt/runs/tt-harden/final/metrics.json`; `tt/runs/tt-harden/resolved.json` | **Pass if we ran it** — the assertion is met locally; it has never run in CI |
 | `gds-wafer-space` | Antenna + LVS + DRC all pass, machine-checked | Green (`32849867662`), after two failures | Cannot run: no GF180MCU flow, no `chip_top`, no pads or sealring. The gate *rule* is satisfied on sg13g2 (0/0/0) and on ttihp26b | `hw/openlane/aer_fifo/runs/trial-03-signoff/final/metrics.json` | **Not applicable** as written; the underlying gate passes on our PDK |
 | `gds-sky130` | Hosted TT GDS + precheck + gl_test on sky130A | **Never executed** (`total_count: 0`); no badge in their README | No sky130 evidence. A local harden is in progress concurrently | `gh api .../workflows/gds-sky130.yaml/runs` | **Cannot pass yet** — and neither, so far, can borg |
@@ -305,8 +348,14 @@ the two and both were low.
 
 ### 5.1 Ahead
 
-**Formal verification.** We have 37 SymbiYosys proof tasks over 528
-properties, all passing. Borg has none. This was checked rather than
+**Formal verification.** We have **45** SymbiYosys proof tasks over
+**542** `assert`/`cover` statements — 37 over 528 when this was written
+on 2026-08-26, re-counted 2026-08-29. Of those, 37 are on record as
+passing, from the 2026-08-26 full-suite run; the eight `lif_mem` tasks
+added since have not yet been through a completed full-suite run here,
+so "all passing" is narrowed to "37 of 37 passing as of 2026-08-26".
+Borg has none, which is the only thing this comparison turns on and is
+unaffected. This was checked rather than
 assumed: `gh api search/code?q=repo:gonsolo/borg+extension:sby` returns
 0; `docs/A2_gap_analysis.md` contains no occurrence of "formal",
 "assert property" or "model check"; the one `assert` in
@@ -408,6 +457,15 @@ document. **[fact]**
   reason to doubt them, but which binary proved them is an accident of
   the filesystem. Nothing in this repository pins it, and nothing would
   notice if that directory were deleted or upgraded.
+
+  *Re-checked 2026-08-29, and the point is sharper than when it was
+  written.* `command -v sby` still returns nothing, so the fallback is
+  still what resolves the binary — but the glob now selects a **different
+  checkout**: `make -C formal -n everything` expands to
+  `/home/hasanmelih/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/sby`,
+  not the `gt2n-soc` path above. **[fact]** Nothing in this repository
+  changed to cause that. The prover moved because the filesystem moved,
+  which is the failure mode this bullet predicted, observed.
 
 Every one of those is the problem the flake solves.
 

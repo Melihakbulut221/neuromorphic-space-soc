@@ -807,14 +807,114 @@ decides whether to reload the slice.
 
 The fault-injection campaign of `docs/16-fault-injection-campaign.md`
 flips one bit of one architectural flip-flop at a time in RTL simulation
-and judges the result against the golden model. 255 injections, seed
-`0x16F12026`, 8 x 8 geometry, 22.23 ms of simulated time. Outcomes are
-classified MASKED (no effect), CORRECTED (a mechanism repaired it and
-counted it), DETECTED (the device flagged it), SDC (silent data
-corruption — wrong output or wrong retained state, nothing flagged) and
-HANG.
+and judges the result against the golden model. Outcomes are classified
+MASKED (no effect), CORRECTED (a mechanism repaired it and counted it),
+DETECTED (the device flagged it), SDC (silent data corruption — wrong
+output or wrong retained state, nothing flagged) and HANG.
 
-**Headline, current design [measured]:**
+**Corrected 2026-08-29.** Revision 0.1 of this section printed a
+255-injection distribution — 91 SDC, 35.7% — under the heading
+"Headline, **current design**". That label was wrong by the time it was
+read: the 255-injection run predates the `lif_core` memory hardening of
+2026-08-27 and the AER pointer TMR of 2026-08-29, so it described a
+design this datasheet no longer describes. It was the most quotable
+stale figure in the repository. The superseded table is retained at the
+end of this section rather than deleted, because a datasheet that
+silently improves its own numbers is not auditable.
+
+**Headline, campaign of record [measured].** Read out of
+`hw/tb/fi_campaign_results.json` at commit `0448282`: **335 injections**,
+seed `0x16f12026`, 8 x 8 geometry, 891.6 s of wall time. Simulated time
+28.77 ms, per `docs/16` section 3.4.
+
+| Outcome | Count | Share |
+|---|---:|---:|
+| MASKED | 79 | 23.6% |
+| CORRECTED | 193 | 57.6% |
+| DETECTED | 37 | 11.0% |
+| **SDC** | **26** | **7.8%** |
+| HANG | 0 | 0% |
+
+**Do not pair 7.8% with 35.7%.** They are not the same experiment and
+the difference between them is not all design improvement. The
+335-injection run injects into 80 flip-flops of memory check field and
+24 flip-flops of pointer replica that did not exist in the 255-injection
+design; those 80 added injections are corrections and maskings in
+hardware the earlier run had no way to sample, so putting one over the
+other divides by a denominator the earlier run did not have. That is
+arithmetic, not a result. `docs/16` states the rule and gives the two
+defensible comparisons, both of which are like-for-like:
+
+- **Memory hardening:** 91/255 = 35.7% SDC → 48/255 = 18.8% SDC, the
+  identical 255 injections before and after (`docs/16` section 3.2).
+- **Pointer TMR:** per structure — the AER pointers went from **22 SDC
+  of 24** to **0 SDC of 72** (`docs/16` section 5.2); and across the 263
+  targets the post-hardening and post-wave-5 runs share, SDC is **26 of
+  263 in both** (`docs/16` section 3.4). Wave 5 removed one structure
+  from the SDC list and moved nothing else, which is what a change
+  confined to the pointers should do.
+
+  *One caution on the "22", noted 2026-08-29 and not resolved here.*
+  `docs/16` states this figure two ways: **22** SDC and 1 HANG of 24 in
+  its section 3.4 headline and in section 5.2, and **23** SDC and 1 HANG
+  of 24 in the retired-targets row of section 3.4 and in section 5.1.
+  The two cannot both be right — 23 + 1 would leave nothing else in a
+  group of 24, and the pre-hardening rate this datasheet is superseding
+  is 91.7% of 24, which is exactly 22. This document therefore uses 22
+  and flags the disagreement rather than quietly picking a side;
+  `docs/16` owns the campaign and is where it should be settled.
+
+**Every hardened structure held, with zero counterexamples [measured,
+from the `groups` object of the campaign log]:**
+
+| Structure | Group(s) | Result |
+|---|---|---|
+| Neuron-core FSM | `lif_fsm` | 12/12 DETECTED |
+| Configuration TMR | `cfg_tmr_a/b/c` | 15/15 CORRECTED, counted and pinned — read section 6.3 before quoting this |
+| AER pointer TMR | `evq_ptr` | 72/72 CORRECTED, 0 SDC, 0 HANG — read `docs/16` section 3.3 before quoting this |
+| SECDED single-bit | `ecc_port_single` | 12/12 CORRECTED |
+| SECDED double-bit | `ecc_port_double` | 4/4 DETECTED, never miscorrected |
+| Scrub / ECC storage loop | `ecc_ff` | 7/7 CORRECTED |
+| Membrane potentials, hardened | `lif_vmem` | 24/24 CORRECTED |
+| Refractory counters, hardened | `lif_rmem` | 12/12 CORRECTED |
+| Synapse weights, hardened | `lif_wmem` | 13 CORRECTED + 3 MASKED of 16, 0 SDC |
+| Neuron-state and synapse check fields | `lif_smem`, `lif_wchk` | 18/18 and 12/12 CORRECTED |
+
+**Every silent corruption still comes from a structure this device does
+not claim to protect**, and there are now five such structures rather
+than nine. Per-structure SDC, current campaign [measured; flip-flop
+counts are the RTL declaration counts of `docs/16` section 2]:
+
+| Structure | Group | Flip-flops | SDC | n | SDC rate |
+|---|---|---:|---:|---:|---:|
+| EVQ_OUT show-ahead adapter / read port | `evq_hold` | 35 | 6 | 14 | 42.9% |
+| Event dispatcher | `dispatch` | 18 | 6 | 18 | 33.3% |
+| Neuron scan and emission state | `lif_scan` | 23 | 6 | 21 | 28.6% |
+| AER queue storage | `evq_mem` | 128 | 7 | 32 | 21.9% |
+| Register-bank configuration | `regbank_cfg` | 75 | 1 | 16 | 6.2% |
+| every other group | — | — | **0** | 234 | 0.0% |
+
+Cross-cutting, same log [measured]: **20 of the 37 DETECTED outcomes
+also had a corrupted output**; **3 of the 26 SDC outcomes corrupted only
+the retained neuron state**, all three the mis-steered scan index;
+**15 latent register corruptions**; **185 telemetry mismatches**, which
+rise when the device reports *more*, not less — 72 of them are the
+pointer injections correctly incrementing `CNT_TMR`.
+
+Two failure classes were found by this campaign and fixed. The event
+dispatcher could enter its fetch state without an outstanding read and
+wait there forever, leaving `STATUS.BUSY` stuck high; five of 255
+injections hit it, and a bounded wait with a timeout that raises
+`ERR_CFG` costs 7 flip-flops and one comparator. The same shape recurred
+in the show-ahead adapter's `oh_req` and took the same fix; it is the
+**one** record out of 263 common targets that changed class between the
+post-hardening and post-wave-5 runs, HANG to DETECTED. In both cases
+nothing else moved — not one MASKED, CORRECTED or SDC record changed
+class.
+
+**Superseded table, retained [measured on 2026-08-26, describing a
+design that no longer exists].** 255 injections, before the memory
+hardening and the pointer TMR:
 
 | Outcome | Count | Share |
 |---|---:|---:|
@@ -824,38 +924,12 @@ HANG.
 | **SDC** | **91** | **35.7%** |
 | HANG | 0 | 0% |
 
-**Every hardened structure held, with zero counterexamples [measured]:**
-
-| Structure | Result |
-|---|---|
-| Neuron-core FSM | 12/12 DETECTED; all twelve parked in S_SAFE and recovered via SOFT_RST |
-| Configuration TMR | 15/15 CORRECTED, counted and pinned — but read section 6.3 before quoting this |
-| SECDED single-bit | 12/12 CORRECTED, inference bit-exact, CNT_DED = 0 |
-| SECDED double-bit | 4/4 DETECTED, never miscorrected; E10 substitution exact on the event stream in all four |
-| Scrub loop | 7/7 CORRECTED with the stored word read back byte-identical to the loaded word |
-
-**Every silent corruption came from a structure this device does not
-claim to protect.** Per-structure SDC rates [measured]:
-
-| Structure | Flip-flops | SDC rate | n |
-|---|---:|---:|---:|
-| Refractory counters (`rmem`) | 32 | 100.0% | 12 |
-| Membrane potentials (`vmem`) | 128 | 91.7% | 24 |
-| AER queue pointers | 12 | 91.7% | 24 |
-| Live synapse weights (`wmem`) | 256 | 56.2% | 16 |
-| EVQ_OUT adapter / valid flags | 35 | 42.9% | 14 |
-| Event dispatcher | 18 | 33.3% | 18 |
-| Neuron scan state | 23 | 28.6% | 21 |
-| AER queue storage | 128 | 21.9% | 32 |
-| Register-bank configuration | 75 | 6.2% | 16 |
-
-One failure class was found by this campaign and fixed: the event
-dispatcher could enter its fetch state without an outstanding read and
-wait there forever, leaving `STATUS.BUSY` stuck high. Five of 255
-injections hit it. A bounded wait with a timeout that raises `ERR_CFG`
-costs 7 flip-flops and one comparator; after the fix all five outcomes
-become DETECTED and **nothing else moves** — not one MASKED, CORRECTED
-or SDC record changes class.
+Its per-structure SDC rates, superseded by the table above, were:
+`rmem` 100.0% of 12, `vmem` 91.7% of 24, AER queue pointers 91.7% of 24,
+`wmem` 56.2% of 16, EVQ_OUT adapter 42.9% of 14, dispatcher 33.3% of 18,
+neuron scan 28.6% of 21, AER queue storage 21.9% of 32, register-bank
+configuration 6.2% of 16. The first four are the structures that were
+hardened; the last five are unchanged and are the current table.
 
 ### 6.3 Correction: the configuration TMR did not physically exist until 2026-08-26
 
@@ -920,18 +994,52 @@ it is meant to protect.
 
 ### 6.4 What is not protected, and the residual risk
 
-**The honest statement.** Roughly a third of single-bit upsets injected
-into this device's architectural flip-flops produce a wrong result that
-nothing on the chip flags — 91 of 255, 35.7% [measured]. Every one of
-them came from a structure the device does not claim to protect, which
-is a statement about design honesty and not a mitigation: the protected
-structures are a minority of the flip-flops, and the unprotected
-majority carries the network's live state. A host that reads only this
+**The honest statement, corrected 2026-08-29.** This paragraph opened
+"roughly a third of single-bit upsets ... 91 of 255, 35.7% [measured]".
+That was the pre-hardening campaign and is superseded; see section 6.2.
+On the campaign of record it is **26 of 335, 7.8% [measured]** — and
+the two figures must not be paired, for the denominator reason section
+6.2 gives. The qualitative statement is what survives the correction and
+it survives unchanged: **every silent corruption still comes from a
+structure the device does not claim to protect.** That is a statement
+about design honesty and not a mitigation — the unprotected structures
+still carry the event path and the queue storage, and three of the six
+items below are unchanged by two rounds of hardening. A host that reads only this
 device's fault counters and fault pins will, on those occasions, be told
 that nothing happened while the spike stream or the neuron state is
 wrong. There is no mechanism in this device that closes that gap, and
 none is claimed. The specific unprotected structures, in order of how
 much of that risk they are expected to carry, are:
+
+**Corrected 2026-08-29 — items 1, 2 and 3 below have since been
+hardened and are no longer unprotected.** The list is retained in its
+original order because the *reasoning* in each item is why the hardening
+was done, and the reasoning is the auditable part. What changed, read
+from `hw/tb/fi_campaign_results.json`:
+
+- **Item 1, live synapse weights (`wmem`).** 56.2% SDC of 16 → **0 SDC
+  of 16** (13 CORRECTED, 3 MASKED), with a `wchk` check field that is
+  itself 12/12 CORRECTED. The host-reload mitigation is no longer the
+  only defence; it remains good driver practice.
+- **Item 2, neuron state (`vmem`, `rmem`).** 91.7% and 100.0% SDC →
+  **0 SDC of 24 and 0 SDC of 12**, all 36 CORRECTED, with an `smem`
+  check field at 18/18 CORRECTED. The "no parity, no ECC, no TMR"
+  sentence in that item is superseded outright.
+- **Item 3, AER queue pointers.** 91.7% SDC of 24 → **0 SDC of 72**, all
+  72 CORRECTED and counted on `CNT_TMR`. The sentence "it is not in this
+  device" was true when written and is now false; the pointer TMR
+  landed in `hw/rtl/aer_fifo.v` at commit `c5a5a6e`. Read `docs/16`
+  section 3.3 before quoting the 72/72, and section 6.3 of this document
+  for why a redundant structure measured correct at RTL is not yet
+  proved present in silicon.
+
+Items 4, 5 and 6 are **unchanged and still current** on the
+335-injection campaign: telemetry is still unprotected in both
+directions (13 of 18 `regbank_cnt` injections still moved a counter or a
+flag with the output correct), latent register corruption is still
+**15** injections, and the `STATUS.OVF_SEEN` / `CNT_EVQ_OVF` gap is
+still there. So are the five structures listed in section 6.2's current
+per-structure table, which is where the residual 7.8% now lives.
 
 1. **Live synapse weights (`wmem`, 256 flip-flops, 56.2% SDC).** The ECC
    protects the 72-bit staging word; once the loader has copied the
@@ -1010,9 +1118,14 @@ is quoted:
 - **Sample sizes are small**: one to five injections per bit position, 4
   to 32 per group.
 - **One workload**, one geometry sampled with a second as a check.
-- **The campaign represents 85% of the design's flip-flops.** The serial
-  shift engine, the input synchronisers, the SYNC echo path, the ECC
-  loader state and a handful of single flops are not injected into.
+- **The campaign does not represent every flip-flop in the design.** The
+  serial shift engine, the input synchronisers, the SYNC echo path, the
+  ECC loader state and a handful of single flops are not injected into.
+  *Corrected 2026-08-29:* this bullet said "85%", a figure computed
+  against the 255-injection target list. The represented population has
+  since grown twice — 996 flip-flops, then 1,076, then 1,100 — and
+  `docs/16` section 2 carries the current coverage table and is the only
+  place the percentage should be read from. It is not restated here.
 - **The fault model is single-bit, flip-flop-only, at RTL, with zero
   delay.** No multi-bit upsets, no single-event transients in
   combinational logic — so the SECDED decoder, the TMR voter and the
@@ -1026,11 +1139,18 @@ is quoted:
   no watchdog and no interrupt. A host that never polls `STATUS` and
   never watches the fault pins sees a detected fault and a silent one
   identically: nothing.
-- **Counting a corrupted retained neuron state as SDC is a choice.** A
-  campaign that compared only the spike stream would report `vmem` at
-  29% and `rmem` at 25% instead of 91.7% and 100%. This datasheet takes
-  the stricter view because the state is architecturally visible through
-  `N_ADDR`/`N_DATA` and is the neuron's memory.
+- **Counting a corrupted retained neuron state as SDC is a choice.** This
+  datasheet takes the stricter view because the state is architecturally
+  visible through `N_ADDR`/`N_DATA` and is the neuron's memory.
+  *Corrected 2026-08-29:* the illustration this bullet used — "`vmem` at
+  29% and `rmem` at 25% instead of 91.7% and 100%" — is superseded,
+  because `vmem` and `rmem` now report 0 SDC on either counting rule.
+  The choice still costs something, but far less: on the 335-injection
+  campaign only **3 of the 26 SDC outcomes** corrupted the retained state
+  alone rather than the event stream, and all three are the mis-steered
+  scan index of `lif_scan` **[measured,
+  `state_only_divergence` in `hw/tb/fi_campaign_results.json`]**. A
+  stream-only campaign would report 23 SDC rather than 26.
 
 ---
 

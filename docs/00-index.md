@@ -42,7 +42,7 @@ falsifiable claim rather than a slogan:
   in `sw/golden/` are the specification; RTL is verified against them in
   lockstep, not against a testbench author's expectations. See
   `docs/10-npu-mvp-spec.md` and `docs/11-verification-harness.md`.
-- **Formal proof where the property is provable.** Six blocks carry
+- **Formal proof where the property is provable.** Seven blocks carry
   SymbiYosys property sets. See `docs/09-formal-verification-plan.md`.
 - **Fault tolerance that is measured, not asserted.** TMR, SECDED and
   scrubbing are demonstrated by a seeded upset campaign that reports an
@@ -55,18 +55,18 @@ falsifiable claim rather than a slogan:
 
 | What | Where | Evidence |
 |---|---|---|
-| RTL: AER FIFO, LIF core, NPU register bank, SECDED encoder and decoder, TMR voter, scrub controller, pilot top level, Tiny Tapeout wrapper | `hw/rtl/` (10 files, 3,800 lines) | `wc -l hw/rtl/*.v` |
+| RTL: AER FIFO, LIF core, NPU register bank, SECDED encoder and decoder, TMR voter, scrub controller, pilot top level, Tiny Tapeout wrapper | `hw/rtl/` (**9 `.v` files, 5,366 lines**, plus the generated `npu_regs.vh` header for 10 files and 5,491 lines in total; re-counted 2026-08-29, was "10 files, 3,800 lines" on 2026-08-26) | `wc -l hw/rtl/*.v` |
 | Bit-exact golden models: LIF core, network, SECDED, register-map generator | `sw/golden/` | `docs/10-npu-mvp-spec.md` |
-| Python suite: **185 tests collected**. At commit `fe89f0d`, before this index's link check added 32 of them, the suite ran 152 passed, 1 skipped in 87 s | `sw/tests/` | `.venv/bin/python -m pytest` at the repository root |
-| cocotb suites: **129 test functions across 8 modules**, seven of them reachable as `make -C hw/tb TB=<block>` | `hw/tb/` | `grep -c '@cocotb.test' hw/tb/test_*.py` |
-| Formal: **37 SymbiYosys tasks across 6 property sets** (`aer_fifo`, `lif_ctrl`, `npu_regbank`, `scrub`, `secded`, `tmr_voter`) | `formal/` | the `[tasks]` sections of `formal/*.sby`; `make -C formal everything` runs them all |
+| Python suite: **196 tests collected**, re-counted 2026-08-29 (was 185 at commit `fe89f0d`, where the suite ran 152 passed, 1 skipped in 87 s before this index's link check added 32 of them). Collection is not execution: the pass/skip split has not been re-run here | `sw/tests/` | `.venv/bin/python -m pytest --collect-only -q` at the repository root |
+| cocotb suites: **145 test functions across 8 modules**, re-counted 2026-08-29 (was 129); seven of them reachable as `make -C hw/tb TB=<block>` | `hw/tb/` | `grep -c '@cocotb.test' hw/tb/test_*.py` |
+| Formal: **45 SymbiYosys tasks across 7 property sets** (`aer_fifo` 4, `lif_ctrl` 8, `lif_mem` 8, `npu_regbank` 5, `scrub` 9, `secded` 3, `tmr_voter` 8), re-measured 2026-08-29 | `formal/` | the `[tasks]` sections of `formal/*.sby`; `make -C formal -n everything \| grep -c "sby -f"` counts them, `make -C formal everything` runs them all |
 | Register map, single-sourced from `regmap/regmap.yaml`, with a sync test that fails if spec, generated document and RTL header drift apart | `regmap/`, `docs/regmap-npu.md` | `sw/tests/test_regmap.py` |
 | IHP SG13G2 sign-off of a single block (`aer_fifo`) | `hw/openlane/aer_fifo/runs/trial-03-signoff/` | `final/metrics.json`: 0 Magic DRC, 0 KLayout DRC, 0 LVS errors, 0 antenna nets and pins, 0 XOR differences, 0 power-grid violations |
-| IHP SG13G2 sign-off of the integrated 4x2 pilot at 52.4 % utilization | `tt/runs/tt-harden/` | `final/metrics.json`: 0 Magic DRC, 0 LVS errors, 0 antenna nets and pins, 0 unmapped instances, 0 max-slew and 0 max-cap violations on all three corners |
+| IHP SG13G2 sign-off of the integrated 4x2 pilot at 52.4 % utilization. **The 52.4 % is the `tt-harden` run of 2026-08-25 and is three hardening waves stale; the current utilization is in `docs/22-reharden-wave5.md` and is not restated here because a further run was in progress on 2026-08-29** | `tt/runs/tt-harden/` | `final/metrics.json`: 0 Magic DRC, 0 LVS errors, 0 antenna nets and pins, 0 unmapped instances, 0 max-slew and 0 max-cap violations on all three corners |
 | SKY130A harden of the same RTL, as a portability control | `hw/openlane/pilot_sky130/runs/sky-02-signoff/` | `final/metrics.json`: 0 Magic DRC, 0 KLayout DRC, 0 LVS errors, 0 antenna nets and pins, 0 XOR differences. Max-slew violations are *not* zero on this PDK; `docs/18-cross-pdk-portability.md` records why |
 | A Tiny Tapeout submission tree for TTIHP26b, generated rather than hand-maintained | `tt/`, `scripts/gen_tt_submission.py` | `sw/tests/test_tt_submission.py` |
 | A measured fault-injection outcome distribution for `pilot_top` | `hw/tb/fi_campaign_results.json` | `docs/16-fault-injection-campaign.md` |
-| 25 markdown source files: 23 under `docs/` including this one, plus `README.md` and `ROADMAP.md` | `docs/`, `README.md`, `ROADMAP.md` | `_site/manifest.json` after `python3 scripts/build_docs.py` |
+| 27 markdown source files: 25 under `docs/` including this one, plus `README.md` and `ROADMAP.md`, re-counted 2026-08-29 | `docs/`, `README.md`, `ROADMAP.md` | `ls docs/*.md \| wc -l`; `_site/manifest.json` after `python3 scripts/build_docs.py` |
 
 Two of the run directories above are git-ignored build output. On a
 fresh clone they are absent and the artifact half of
@@ -253,6 +253,7 @@ silicon and no radiation data, and the licence is unsigned.
 | `docs/19-ci-parity-borg.md` | CI parity assessment against `gonsolo/borg`'s six workflows. |
 | `docs/20-reharden-and-corners.md` | Re-harden after the configuration-TMR fix, and why `PNR_CORNERS` cannot close the SKY130 slow corner. Supersedes area and timing figures in `docs/15` and `docs/18`. |
 | `docs/21-pilot-datasheet.md` | Pre-silicon device datasheet for the submitted pilot. |
+| `docs/22-reharden-wave5.md` | Re-harden after the wave-5 AER pointer TMR, and the tile budget it breaks. Supersedes area, utilization and timing figures in `docs/15`, `docs/18`, `docs/20` and `docs/21`; its section 6 is the location-by-location correction list. |
 | `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
 | `README.md` | Project summary and repository layout. |
 | `ROADMAP.md` | Phased plan with gates and external clocks. |
@@ -276,6 +277,23 @@ check is counted. **[fact]** Nothing about the verification
 argument changes; only the arithmetic does. This section is a pointer,
 not a correction — `docs/11` remains the authority on what each suite
 means.
+
+**Re-measured again 2026-08-29 [fact].** The 2026-08-26 formal figure
+above has itself been overtaken, by the `lif_mem` property set and by
+the tasks added with it. `make -C formal -n everything | grep -c
+"sby -f"` now returns **45**, and the `[tasks]` sections of
+`formal/*.sby` are **7** property sets, not six: `aer_fifo` 4,
+`lif_ctrl` 8, `lif_mem` 8, `npu_regbank` 5, `scrub` 9, `secded` 3,
+`tmr_voter` 8. The other two quantities in that line moved as well:
+`grep -c '@cocotb.test' hw/tb/test_*.py` now totals **145** cocotb test
+functions across the same eight modules (was 129), and
+`.venv/bin/python -m pytest --collect-only -q` collects **196** Python
+tests (was 185 at commit `fe89f0d`). Section 2.1's rows carry all three
+new numbers; the 2026-08-26 line above is left as written because it was
+correct on its date. **Collection is not execution** — the pass, skip
+and fail split for the Python suite, and the pass result for the eight
+formal tasks added since 2026-08-26, have not been re-run here and are
+not claimed.
 
 ## 7. Reading this corpus as a site
 

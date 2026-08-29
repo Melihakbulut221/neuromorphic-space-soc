@@ -49,9 +49,10 @@ Three jobs, all consequences of commit `c5a5a6e`:
   decision they support is different.
 - **sky130 4x2 no longer routes.** Placement utilization went from
   66.98 % (`sky-04-tmr`) to **82.96 %**, and TritonRoute diverged —
-  218,483 violations after the 0th optimization iteration, 348,149 after
-  the 1st, still rising. The `docs/18` slow-corner miss could not be
-  re-measured because there is no routed netlist to measure it on.
+  **218,483** violations after the 0th optimization iteration,
+  **348,149** after the 1st, **364,603** after the 2nd, still rising when
+  the run was stopped. The `docs/18` slow-corner miss could not be
+  re-measured, because there is no routed netlist to measure it on.
   Section 5.
 - **Total power is measured again**: **5.119 mW** at 50 MHz on the
   typical corner, against the 4.36 mW `docs/21` carries from the pre-fix
@@ -535,7 +536,8 @@ re-measured at each one.
 | Die / core area | 154,113 / 149,183 um2 | **154,113 / 149,183 um2** |
 | **Placement utilization** | 66.98 % | **82.96 %** |
 | Pointer banks, synthesis netlist | n/a (predates the RTL) | **3 in each of twelve** |
-| Detailed routing | converged, **0 DRC** | **did not converge** |
+| Detailed routing | converged, **0 DRC** | **diverged; 218,483 -> 348,149 -> 364,603 over three iterations** |
+| Routing layers carrying signal | met1-met4 | met1-met4 (`RT_MAX_LAYER: met4`) |
 | Magic DRC / KLayout DRC / XOR / LVS / antenna | 0 / 0 / 0 / 0 / 0 | **not reached** |
 | Worst setup, `max_ss_100C_1v60` | -2.9659 ns | **not measurable** |
 
@@ -548,21 +550,37 @@ re-measured at each one.
 
 TritonRoute's optimization iterations, from the run log:
 
-| Iteration | Violations at end |
-|---|---|
-| 0th | 218,483 |
-| 1st | 348,149 |
-| 2nd | still rising when this was written (358,009 at 60 % complete) |
+| Iteration | Violations at end | Elapsed | Routed wirelength |
+|---|---|---|---|
+| 0th | **218,483** | 30 min 43 s | 843,542 um |
+| 1st | **348,149** | 33 min 17 s | 848,142 um |
+| 2nd | **364,603** | 31 min 50 s | 846,605 um |
+| 3rd | terminated at 10 % complete, 364,603 carried in | — | — |
 
-**[fact, `[INFO DRT-0199]` lines in the run log.]** The count is going
-**up**, not down, across iterations. This is divergence, not slow
-progress, and it is the signature of a design that does not have the
-routing resource it needs rather than one the router has not finished
-with. The run had spent over 100 minutes in
-`44-openroad-detailedrouting` at the time of writing and was still
-executing; it never reached `64-magic-drc`, `65-klayout-drc`,
-`70-netgen-lvs` or `55-openroad-stapostpnr`, so **no sign-off figure and
-no post-route slack exists for this netlist.**
+**[fact, `[INFO DRT-0195]`, `[INFO DRT-0199]` and `[INFO DRT-0267]` lines
+in the run log.]** The count goes **up**, not down, across three complete
+iterations — a 67 % rise from the 0th to the 2nd — while the routed
+wirelength stays flat within 0.5 %. That is divergence, not slow
+progress: the router is re-routing the same total length into the same
+congested resource and finding more conflicts each time, which is the
+signature of a design that does not have the routing resource it needs
+rather than one the router has not finished with.
+
+The run was **terminated after 1 h 46 min in
+`44-openroad-detailedrouting`**, once the third consecutive increase made
+the outcome unambiguous. It never reached `55-openroad-stapostpnr`,
+`64-magic-drc`, `65-klayout-drc` or `70-netgen-lvs`, so **no sign-off
+figure and no post-route slack exists for this netlist.** Had it been
+allowed to exhaust its iterations, `Checker.TrDRC` would have aborted the
+flow on a non-zero DRC count; terminating early changes the log, not the
+conclusion **[estimate on the counterfactual; the trajectory is fact]**.
+
+One structural contributor is worth naming because it is a property of
+the tile rather than of the design. `RT_MAX_LAYER` is `met4` on the
+sky130 Tiny Tapeout tile, and the run confirms only four layers carried
+signal: **met1 308,947 um, met2 275,136 um, met3 187,545 um, met4
+74,975 um, li1 0, met5 0** **[fact]**. Four routing layers over a core
+at 82.96 % cell density is the combination that fails here.
 
 ### 5.2 Why, and what it does and does not say
 
@@ -693,11 +711,13 @@ the current text, the replacement, and the source in a `wave5-ihp`,
 
 ## 7. What is not done
 
-1. **The sky130 4x2 route.** `sky-08-ptrtmr` was still executing in
-   `44-openroad-detailedrouting` when this was written, with a rising
-   violation count. It should be allowed to terminate and its final
-   state recorded, but the placement utilization of 82.96 % is already
-   the answer and a converged route at that density is not expected.
+1. **The sky130 4x2 route was not run to the tool's own give-up point.**
+   `sky-08-ptrtmr` was terminated by hand after three consecutive
+   increases in the violation count (section 5.1). The run directory
+   therefore holds no `final/` and no `Checker.TrDRC` verdict. If a
+   formal "the flow aborted" artefact is wanted for a funder-facing
+   claim, the run needs repeating without the manual stop; the
+   engineering conclusion does not depend on it.
 2. **A sky130 harden at 6x2**, which is the run that would say whether
    the design is buildable on sky130 at all. Section 5.3.
 3. **The tile decision itself.** Section 4.3 lists the options and the

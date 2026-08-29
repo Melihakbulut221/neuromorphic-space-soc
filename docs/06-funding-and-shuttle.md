@@ -94,13 +94,32 @@ pages (all URLs return 200 as of 2026-08-24):
 | LiteX | FPGA/ASIC SoC framework | https://nlnet.nl/project/LiteX/ |
 | NaxRiscv | Out-of-order RISC-V with ASIC synthesis | https://nlnet.nl/project/NaxRiscv/ |
 
-Notable gap: **no space/SpaceWire/satellite-silicon precedent was found
-in the funded-projects list.** The application should therefore not
-lean on a "space fund" framing; frame it as an **open-silicon commons
-building block** (open SNN IP, open fault-tolerance IP, open flow on a
-European open PDK) whose first application domain happens to be small
-satellites. ASIC tapeouts, standard cells, and EDA tools are all
-squarely within precedent.
+~~Notable gap: **no space/SpaceWire/satellite-silicon precedent was
+found in the funded-projects list.**~~ **Withdrawn 2026-08-29 — this
+sentence is wrong and must not be lifted into the application.** A
+second search of the portfolio, recorded in
+`docs/13-nlnet-application.md` section 1.6, found a directly comparable
+funded project: **INA-ASIC**, a space-grade instrumentation amplifier
+ASIC (NGI0 Commons Fund, start 2026-03), taped out on IHP's 130 nm open
+PDK — the same PDK this project hardens on — and explicitly scoped to
+be "robust to high radiation environments, making it applicable to low
+earth orbit / high energy particle applications"
+(https://nlnet.nl/project/INA-ASIC). Space silicon on the same open
+process is therefore *inside* NLnet's precedent, not outside it.
+`docs/13` section 1.6 lists four further precedents in the same
+direction (GLOW-SG13G2, Borg II, PowerCommons, FPGA-Inject) and is the
+authority on this question; the table above is a subset of what is
+funded, not a survey. **[fact, per docs/13 section 1.6, re-checked
+2026-08-29]**
+
+The framing advice that followed the withdrawn sentence still stands,
+but for a different reason and with less force: frame the project as an
+**open-silicon commons building block** (open SNN IP, open
+fault-tolerance IP, open flow on a European open PDK) whose first
+application domain happens to be small satellites, because that is what
+it is — not because a space framing is unprecedented. ASIC tapeouts,
+standard cells, EDA tools and now radiation-tolerant silicon on IHP
+130 nm are all squarely within precedent.
 
 ### A.5 Application format
 
@@ -108,9 +127,20 @@ Based on the historic NLnet form (the Restack form opens 2026-09-03 and
 should be re-checked then **[re-verify at call opening]**):
 
 - Contact info, project name, requested amount (EUR 5,000-50,000).
-- **Abstract, maximum 1,200 characters** — explain the whole project
-  and expected outcomes. Longer outlines can go in attachments
-  (confirmed in applicant reports, e.g.
+- **Abstract, advisory 1,200 characters, hard `maxlength` 1,500**
+  — explain the whole project and expected outcomes. **Corrected
+  2026-08-29:** this line previously read "maximum 1,200 characters",
+  which presented an advisory number as a hard ceiling. The 1,200 is
+  correct and it is the figure to write to, but it is the *placeholder*
+  advisory printed in the field; the form's `maxlength` attribute is
+  1500. `docs/13-nlnet-application.md` section 1.2 read both off the
+  raw form markup and is the authority — it also shows that the same
+  advisory/hard split applies to five other fields, with the two
+  disagreeing by up to a factor of four, and that the advisory is what
+  the application is written to. **[fact, per docs/13 section 1.2]**
+  Longer outlines can go in attachments — but see docs/13 section 1.2
+  on how blunt the attachment guidance is (confirmed in applicant
+  reports, e.g.
   https://ar.al/2024/06/01/small-technology-foundation-funding-application-for-nlnet-foundation-ngi-zero-core-seventh-call/).
 - Prior experience of the applicant.
 - **"Compare your own project with existing or historical efforts"** —
@@ -145,8 +175,23 @@ published results.
 
 **This repository is currently private.** An NLnet application is a
 commitment that every funded artifact — RTL, testbenches, flow scripts,
-documentation, bring-up results — is published under free licenses
-(e.g. Apache-2.0 or CERN-OHL-S for hardware sources, CC-BY for docs).
+documentation, bring-up results — is published under free licenses.
+**Corrected 2026-08-29:** this line originally read "Apache-2.0 or
+CERN-OHL-S for hardware sources, CC-BY for docs", written before the
+licence question was analysed. `docs/14-licensing-decision.md` section 9
+recommends **CERN-OHL-W-2.0 for RTL and hardware sources**, Apache-2.0
+for software and CC-BY-4.0 for documentation, and gives the reason
+CERN-OHL-S is the wrong choice here: conveying a product built from
+CERN-OHL-S source obliges the integrator to release the source for the
+whole product, which is the most likely single thing to stop a
+newspace payload integrator adopting the block. CERN-OHL-W keeps
+improvements flowing back without that demand, and W-covered source may
+later be treated as S, so starting at W forecloses nothing.
+`docs/14` is the authority; nothing in this document should be quoted
+against it. Note that the docs/14 recommendation is a recommendation —
+its section 10 decision table is not yet signed off. **[fact for what
+docs/14 recommends]**
+
 The sibling project's "public at tapeout" posture is **not compatible**
 with an NLnet grant timeline: the repo (or a curated public mirror of
 the funded scope) must be public no later than the MoU stage, and being
@@ -173,7 +218,25 @@ after first milestones are delivered and published.
 satellites" (project short name to decide; repo name
 `neuromorphic-space-soc` works).
 
-**Abstract draft (1,142 characters, limit 1,200):**
+**Abstract draft (1,142 characters, advisory limit 1,200, hard 1,500).
+Superseded 2026-08-29 — do not submit this text.** The live abstract is
+`docs/13-nlnet-application.md` section 3.4, inside its
+`field:abstract` markers; that is the text the application uses and the
+only one kept to character count. The draft below is retained as the
+2026-08-24 starting point, and it carries one defect that must not be
+copied out of it:
+
+- **"clean-room" is not authorised.** The draft describes the engine as
+  a "clean-room event-driven spiking neural network engine". Whether the
+  engine is clean-room is undecided: `docs/02-npu-architecture.md` open
+  question 2 asks whether to reuse Solderpad-licensed tinyODIN/ODIN
+  Verilog directly, use it only as a golden reference, or stay fully
+  clean-room, and it is still open — `docs/13` tracks the resolution as
+  **[D-14]**, due 2026-09-02. The word is therefore a claim this project
+  cannot currently make. The docs/13 section 3.4 abstract omits it
+  deliberately and says so. Until D-14 closes, the engine is
+  "event-driven", not "clean-room". **[fact — the open question is open
+  in docs/02]**
 
 > Small satellites increasingly need on-board AI inference, but the
 > only radiation-tolerant neuromorphic SoC announced to date
@@ -578,8 +641,16 @@ disbursements and be out-of-pocket (A.7).
    2026-09-21; re-confirm deadline, price, and max-tile policy in the
    dashboard — developer.
 5. **Resolve the licensing/publication decision**: make the repo (or a
-   public mirror of the NLnet-funded scope) public with Apache-2.0 /
-   CERN-OHL-S / CC-BY licensing before the NLnet submission — developer.
+   public mirror of the NLnet-funded scope) public before the NLnet
+   submission — developer. **Corrected 2026-08-29:** this item
+   originally named "Apache-2.0 / CERN-OHL-S / CC-BY". The licence
+   analysis has since been done and
+   `docs/14-licensing-decision.md` section 9 recommends
+   **CERN-OHL-W-2.0** for RTL and hardware sources, Apache-2.0 for
+   software and CC-BY-4.0 for documentation; see A.6 above for why S is
+   the wrong reciprocity strength for this block. The decision itself
+   is still open — docs/14 section 10 is a recommendation awaiting
+   sign-off, and that sign-off is what this action item is for.
 6. **Write the Restack application when the call opens 2026-09-03**
    (skeleton in A.8); attach the architecture outline and budget;
    submit at least a week before 2026-11-03 — developer, with

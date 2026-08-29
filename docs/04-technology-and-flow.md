@@ -213,8 +213,24 @@ Reasoning:
 
 1. **The radiation story is the product.** This is a fault-tolerant SoC
    for space. On SG13G2 the datasheet-level claim is "130 nm family with
-   published ESCC-track TID/SEL data, no SEL to 65 MeV·cm²/mg" plus this
-   project's architectural hardening. On SKY130 the claim reduces to
+   published ESCC-track TID and SEL characterization" plus this project's
+   architectural hardening.
+
+   **Corrected 2026-08-29: the number does not belong in the claim
+   sentence.** An earlier revision recommended saying "no SEL to
+   65 MeV·cm²/mg" as part of it. The figure is real, but it measures
+   SG13RH/SG13S standard-cell test vehicles — not this device, and not
+   the open SG13G2 PDK — and a reader of that sentence would reasonably
+   take it as a property of the part being described. `docs/07` finding
+   F-8 corrected exactly this defect once already, in a different
+   sentence, where TID figures at or above 100 krad had been embedded in
+   recommended wording against the binding rule in `docs/05` section 4.
+   Cite the family characterization, attribute it, and keep the numbers
+   in the sourced-facts section where their attribution travels with
+   them. Nothing in this repository measures the single-event latch-up
+   behaviour of anything this project has built.
+
+   On SKY130 the claim reduces to
    "architectural hardening on an uncharacterized bulk process." For
    customers, reviewers, and any future funding conversation, the first
    claim is materially stronger. (Doc 00, observation 5: bulk 130 nm has
