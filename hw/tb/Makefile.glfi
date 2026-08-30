@@ -52,10 +52,17 @@ else
 # ---------------------------------------------------------------------
 # 1. The netlist, named and pinned (Makefile.gl section 1)
 # ---------------------------------------------------------------------
-GL_TAG ?= shape-6x2
+# signoff-6x2 is the sign-off of record and the only harden containing
+# the current hw/rtl; Makefile.gl section 1 carries the reasoning and
+# the warning about "the latest run". GL_RUN is exported because
+# test_gl_fi.py now DERIVES the RTL commit this netlist came from out of
+# the run's own resolved.json rather than carrying a literal, which is
+# the docs/32 section 1.4 correction to the constant docs/26 shipped.
+GL_TAG ?= signoff-6x2
 GL_RUN ?= $(REPO)/hw/openlane/pilot_ihp/runs/$(GL_TAG)
 GL_NETLIST ?= $(GL_RUN)/final/nl/tt_um_melihakbulut_nssoc.nl.v
 export GL_NETLIST
+export GL_RUN
 
 ifeq ($(wildcard $(GL_NETLIST)),)
 $(error no netlist at $(GL_NETLIST); set GL_RUN to a completed harden)
@@ -136,16 +143,20 @@ provenance:
 	@echo "pdk         : $(GL_PDK) at $(GL_PDK_ROOT)"
 	@echo "cell models : $(GL_CELLS)"
 	@echo "models blob : $$(git -C $(REPO) hash-object $(GL_CELLS))"
+	@echo "rtl snapshot: $$(python3 -c "import json; \
+print(json.load(open('$(GL_RUN)/resolved.json'))['VERILOG_FILES'][0])" \
+| xargs dirname)"
+	@echo "              the commit whose hw/rtl tree matches it is DERIVED \
+at run time and written to the log as netlist_rtl; GLFI_NETLIST_RTL \
+overrides it"
 	@echo "rtl baseline: the campaign of record is read out of a COMMIT, \
 not the working tree -- see test_gl_fi.py, 'the RTL campaign of record'"
-	@echo "  ref       : $${GLFI_RTL_REF:-$$(git -C $(REPO) log -1 \
---format=%H -- hw/tb/fi_campaign_results.json)}"
-	@echo "  campaign  : $$(git -C $(REPO) rev-parse \
-$${GLFI_RTL_REF:-$$(git -C $(REPO) log -1 --format=%H -- \
-hw/tb/fi_campaign_results.json)}:hw/tb/test_fi_campaign.py)"
-	@echo "  log       : $$(git -C $(REPO) rev-parse \
-$${GLFI_RTL_REF:-$$(git -C $(REPO) log -1 --format=%H -- \
-hw/tb/fi_campaign_results.json)}:hw/tb/fi_campaign_results.json)"
+	@echo "  rule      : the NEWEST campaign whose hw/rtl tree equals the \
+snapshot above, which may be older than the newest campaign"
+	@echo "  newest    : $$(git -C $(REPO) log -1 --format=%h -- \
+hw/tb/fi_campaign_results.json) -- an UPPER BOUND, not the pin; the pin \
+is resolved at run time and written to the log as rtl_ref"
+	@echo "  override  : GLFI_RTL_REF=$${GLFI_RTL_REF:-<unset>}"
 	@echo "  worktree  : $$(git -C $(REPO) hash-object \
 $(HERE)/test_fi_campaign.py) / $$(git -C $(REPO) hash-object \
 $(HERE)/fi_campaign_results.json) (NOT used unless GLFI_RTL_REF=WORKTREE)"

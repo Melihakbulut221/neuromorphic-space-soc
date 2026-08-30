@@ -67,17 +67,39 @@ else
 # ---------------------------------------------------------------------
 # 1. The netlist, named and pinned
 # ---------------------------------------------------------------------
-# shape-6x2 is the submission harden: docs/23 moves the submission from
-# 4x2 to 6x2 and section 1.3 names this directory as the run that
-# decided it. Override GL_RUN to point at any other sign-off; nothing
-# below assumes 6x2.
-GL_TAG ?= shape-6x2
+# signoff-6x2 is the sign-off of record and the only harden that
+# contains the current hw/rtl: 1,296 flip-flops, clean on every deck.
+# It supersedes shape-6x2, which docs/23, docs/24 and docs/26 name and
+# which this file defaulted to until docs/32, and tr-margin, the
+# configuration docs/28 section 6.2 adopted. Both older tags still run:
+# `GL_TAG=shape-6x2` reproduces the docs/24 and docs/26 numbers exactly.
+#
+# THE DEFAULT IS A NAMED DIRECTORY AND IS MOVED BY HAND ON EVERY
+# RE-HARDEN. That is the point of it, not an oversight: `ls -td | head -1`
+# would pick tr-delay0 here, a rejected timing experiment (docs/28
+# section 5.3, -4.36 ns on the slow corner), and report a PASS against a
+# netlist nobody is taping out. It is also the thing that went stale --
+# docs/32 section 1.4 -- so the provenance target below prints the
+# netlist's blob and the RTL snapshot the harden read, and a quoted
+# result names the design it describes.
+GL_TAG ?= signoff-6x2
 GL_RUN ?= $(REPO)/hw/openlane/pilot_ihp/runs/$(GL_TAG)
 GL_NETLIST ?= $(GL_RUN)/final/nl/tt_um_melihakbulut_nssoc.nl.v
 export GL_NETLIST
+export GL_RUN
 
 ifeq ($(wildcard $(GL_NETLIST)),)
 $(error no netlist at $(GL_NETLIST); set GL_RUN to a completed harden)
+endif
+
+# A synthesis-only probe and a hierarchical harden are not substitutes
+# for a sign-off netlist, and the difference is invisible in a directory
+# name. test_pilot_gl.py's partition assumes one flattened module.
+GL_HIER := $(shell python3 -c "import json; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['SYNTH_HIERARCHY_MODE'])")
+ifneq ($(GL_HIER),deferred_flatten)
+$(error $(GL_TAG) was hardened with SYNTH_HIERARCHY_MODE=$(GL_HIER), not \
+deferred_flatten)
 endif
 
 # ---------------------------------------------------------------------

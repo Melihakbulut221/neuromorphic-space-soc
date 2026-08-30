@@ -198,7 +198,55 @@ def _blob(path):
 # newest first, and take the first one whose hw/rtl tree is IDENTICAL to
 # the netlist's pinned RTL. When the RTL moves on, this pin does not
 # move with it, which is correct and is stated rather than hidden.
-NETLIST_RTL = os.environ.get("GLFI_NETLIST_RTL", "e1361fe")
+#
+# WHICH commit the netlist came from is itself DERIVED and no longer
+# written down here. The first version of this file carried the literal
+# `e1361fe`, and that constant went stale the moment the design was
+# re-hardened: pointing the suite at a newer run would have compared a
+# new netlist against the old netlist's RTL campaign and reported the
+# difference as a level effect. docs/32 section 1 is that correction.
+#
+# The derivation reads the run's own resolved.json, which names the
+# pinned RTL snapshot hw/openlane/pin_rtl.py made for that harden by
+# absolute path, hashes every file in it, and finds the commit whose
+# hw/rtl tree has exactly those blobs. That is the same evidence
+# docs/24 section 1.2 checked by hand, computed instead of quoted.
+def _netlist_rtl_commit():
+    env = os.environ.get("GLFI_NETLIST_RTL")
+    if env:
+        return env
+    run = os.environ.get("GL_RUN")
+    if not run:
+        raise RuntimeError(
+            "GL_RUN is not set, so the RTL this netlist was synthesized "
+            "from cannot be derived; run through Makefile.glfi, or set "
+            "GLFI_NETLIST_RTL to the commit the harden was pinned against")
+    resolved = json.loads((Path(run) / "resolved.json").read_text())
+    srcs = [Path(v) for v in resolved.get("VERILOG_FILES", [])]
+    if not srcs:
+        raise RuntimeError(f"{run}/resolved.json names no VERILOG_FILES")
+    snap = srcs[0].parent
+    if not snap.is_dir():
+        raise RuntimeError(
+            f"the RTL snapshot this harden read ({snap}) is gone, so the "
+            "commit it came from cannot be derived; set GLFI_NETLIST_RTL "
+            "to that commit explicitly")
+    want = {p.name: _blob(p) for p in sorted(snap.iterdir())
+            if p.suffix in (".v", ".vh")}
+    for c in _git("log", "--format=%H", "--", "hw/rtl").split():
+        tree = {}
+        for line in _git("ls-tree", f"{c}:hw/rtl").splitlines():
+            meta, name = line.split("\t")
+            tree[name] = meta.split()[2]
+        if tree == want:
+            return c
+    raise RuntimeError(
+        f"the RTL snapshot at {snap} matches no commit's hw/rtl tree; the "
+        "harden was run against an uncommitted working tree and there is "
+        "no baseline that describes the same design")
+
+
+NETLIST_RTL = _netlist_rtl_commit()
 
 
 def _rtl_baseline():
@@ -381,6 +429,44 @@ UNREACHABLE = {
         "absorbed into the logic it gates",
 }
 
+# ---------------------------------------------------------------------
+# the dual-rail valid flags, and why only half of them keep the bank name
+# ---------------------------------------------------------------------
+# Wave 6 replaced four one-bit valid flags with eight rail flip-flops
+# (hw/rtl/pilot_top.v section 8.2 and its two copies). The RTL campaign
+# names both rails of a flag `<instance>.bits` and injects them one at a
+# time; four of the eight resolve through bank_nets() and four do not,
+# and the reason is the polarity transform rather than anything random.
+#
+# Each rail is `reg bits; assign q = bits ^ POL`. In a POL=0 rail that
+# assign is the identity, so yosys merges the storage with the wire the
+# rail drives and the FLIP-FLOP KEEPS THE CONSUMER'S NAME -- there is no
+# `u_ohv_a.` prefix anywhere in the netlist, only `u_pilot.oh_valid_a`.
+# In a POL=1 rail the flop stores the complement and `q` is an inverter
+# output, so the storage keeps an instance-internal name and
+# `u_ohv_b.bits` resolves through bank_nets() with no help.
+#
+# Every right-hand name below is the `.q()` connection of that rail
+# instance in the RTL, and every one is checked against the parsed
+# flip-flop set before it is injected. A name that is not in that set is
+# reported unreachable rather than guessed, which is the same rule that
+# keeps this suite off the voted and checked wires.
+#
+#   pilot_top.v   pilot_flag_rail u_ohv_a (.q(oh_valid_a))
+#   lif_core.v    lif_flag_rail   u_op_a  (.q(op_a))
+#   aer_fifo.v    aer_flag_rail   u_rdv_a (.q(rdv_a)), twice
+RAIL_Q = {
+    "u_ohv_a.bits": "u_pilot.oh_valid_a",
+    "u_lif.u_op_a.bits": "u_pilot.u_lif.op_a",
+    "u_evq_in.u_rdv_a.bits": "u_pilot.u_evq_in.rdv_a",
+    "u_evq_out.u_rdv_a.bits": "u_pilot.u_evq_out.rdv_a",
+}
+
+# The instance prefixes of the eight rails, for the sweep in test_051 and
+# for the assertion that the CHECKED wire is never a target. Kept in the
+# same shape as the RTL campaign's own `_RAIL_INSTANCES`.
+RAIL_INSTANCES = ("u_ohv_", "u_rdv_", "u_op_")
+
 _IDX = re.compile(r"^(.*?)\[(\d+)\]$")
 
 # Flip-flops resolved at run time by a controlled experiment rather than
@@ -467,8 +553,17 @@ def map_target_x(path, bit, all_bits=None):
                     "u_evq_in.mem", "u_evq_out.mem"):
             return f"u_pilot.{base}[{i}][{bit}]", None, True
 
-    # replica banks: u_cfg_{a,b,c}.bits, u_evq_*.u_{w,r}ptr_{a,b,c}.bits
+    # replica banks: u_cfg_{a,b,c}.bits, u_evq_*.u_{w,r}ptr_{a,b,c}.bits,
+    # and the eight valid-flag rails, four of which lost their instance
+    # prefix to the identity `assign q = bits ^ 0` (see RAIL_Q).
     if path.endswith(".bits"):
+        q = RAIL_Q.get(path)
+        if q is not None:
+            if q in FLOP_NETS:
+                return q, None, True
+            return None, (f"{path}: the rail's storage should be the net "
+                          f"{q} it drives, and that is not a flip-flop "
+                          f"output in this netlist"), True
         return bank_target(path, bit, all_bits)
 
     fn = NET_MAP.get(path)
@@ -586,18 +681,46 @@ async def bring_up(p, words, ecc_inj=None, scrub_en=False):
     assert not busy(p.dut), "the bring-up left the pilot busy"
 
 
+# Where each of the RTL campaign's counters is read from. DERIVED from
+# fi.COUNTERS rather than copied, because copying it went stale: the
+# campaign grew `cnt_evq_par` with the queue entry parity, and a fixed
+# list here meant the classifier -- which iterates fi.COUNTERS -- raised
+# KeyError inside every injection. That surfaced as ten failed tests and
+# "the gate-level campaign injected nothing", which is a loud failure and
+# still the wrong message.
+#
+# Four counters live in the generated register map; the two the campaign
+# added after it live as module constants in the campaign itself. A
+# counter that matches neither is not guessed at -- the assertion below
+# names it and says what to add.
+_COUNTER_ADDR_ALIAS = {"cnt_ovf": "CNT_EVQ_OVF", "cnt_oor": "CNT_AXON_OOR"}
+
+
+def counter_addrs():
+    out = {}
+    for name in fi.COUNTERS:
+        key = _COUNTER_ADDR_ALIAS.get(name, name.upper())
+        if key in ADDR:
+            out[name] = ADDR[key]
+        elif hasattr(fi, f"ADDR_{name.upper()}"):
+            out[name] = getattr(fi, f"ADDR_{name.upper()}")
+        else:
+            raise RuntimeError(
+                f"the RTL campaign counts {name} and this suite cannot "
+                f"find its address: it is neither ADDR['{key}'] in the "
+                f"generated register map nor ADDR_{name.upper()} in the "
+                f"campaign module. Add it, or the classifier will read a "
+                f"counter that is not there")
+    return out
+
+
 async def read_observations(p, n_neurons, completed):
     """fi.read_observations, in the same order and for the same reasons."""
     dut = p.dut
-    obs = {
-        "status": await tt.rd(p, ADDR["STATUS"]),
-        "cnt_sec": await tt.rd(p, ADDR["CNT_SEC"]),
-        "cnt_ded": await tt.rd(p, ADDR["CNT_DED"]),
-        "cnt_ovf": await tt.rd(p, ADDR["CNT_EVQ_OVF"]),
-        "cnt_oor": await tt.rd(p, ADDR["CNT_AXON_OOR"]),
-        "cnt_tmr": await tt.rd(p, fi.ADDR_CNT_TMR),
-        "pins": status_pins(dut),
-    }
+    obs = {"status": await tt.rd(p, ADDR["STATUS"])}
+    for name, addr in counter_addrs().items():
+        obs[name] = await tt.rd(p, addr)
+    obs["pins"] = status_pins(dut)
     if not completed:
         await tt.wr(p, ADDR["CTRL"], fi.CTRL_SOFT_RST)
         await wait_idle(p, 200)
@@ -726,6 +849,110 @@ async def run_stimulus(p, inj_burst=None, net=None, delay=0, script=None,
 
 
 # ---------------------------------------------------------------------
+# observation terms that are wires in the RTL and nothing in the netlist
+# ---------------------------------------------------------------------
+# The directed watchdog cases place their injection with
+# `("until", "fetch_expire", 1, 90)`. `fetch_expire` is a WIRE in the RTL
+# and there is no net of that name in the netlist at all -- synthesis
+# folded the term into the logic it feeds. The first gate-level run
+# against this netlist therefore reported both report cases NOT
+# CONSTRUCTED, which would have quietly withdrawn the two records
+# docs/26 section 6's disagreement is about at exactly the moment they
+# were being re-asked.
+#
+# An `until` is an OBSERVATION used to place an injection and never to
+# classify one, so it does not have to land on a flip-flop -- that rule
+# is about what may be FORCED. The term is therefore recomputed here
+# from the registers it is a function of, all of which are flip-flop
+# outputs in this netlist, with the RTL line quoted beside it. Nothing
+# is approximated: every operand of the RTL expression appears below.
+#
+# blk_rst_n is the one operand not read. It is the block reset, high
+# throughout a directed case -- the script runs inside burst 0's busy
+# window, after bring-up and before any soft reset -- and reading it
+# would mean naming a net that synthesis also folded away.
+RAIL_BANKS = (
+    # flag,           rail A bank path,          rail B bank path
+    ("oh_valid",      "u_ohv_a.bits",            "u_ohv_b.bits"),
+    ("lif_out_valid", "u_lif.u_op_a.bits",       "u_lif.u_op_b.bits"),
+    ("fi_rd_valid",   "u_evq_in.u_rdv_a.bits",   "u_evq_in.u_rdv_b.bits"),
+    ("fo_rd_valid",   "u_evq_out.u_rdv_a.bits",  "u_evq_out.u_rdv_b.bits"),
+)
+
+RAILS = {}       # flag name -> (rail A net, rail B net), filled at setup
+
+
+def resolve_rails():
+    """Both rails of every dual-rail valid flag, by their storage nets."""
+    out = {}
+    for flag, a, b in RAIL_BANKS:
+        na = map_target_x(a, 0, [0])[0]
+        nb = map_target_x(b, 0, [0])[0]
+        if na in FLOP_NETS and nb in FLOP_NETS:
+            out[flag] = (na, nb)
+    return out
+
+
+def _u(name):
+    """What a netlist net holds now: 0, 1, or None if it is not defined."""
+    h = NETS.get(name)
+    return None if h is None else bit_of(h)
+
+
+def _word(prefix, width):
+    bits = [_u(f"{prefix}[{b}]") for b in range(width)]
+    if None in bits:
+        return None
+    return sum(b << i for i, b in enumerate(bits))
+
+
+def flag_of(name):
+    """A dual-rail flag's CHECKED value, read off the wire the RTL reads.
+
+    Not reconstructed from the two rails. The first version of this did
+    reconstruct it, as `a && !b`, on the RTL's statement that rail B
+    stores the complement (`assign q = bits ^ POL`, POL = 1) -- and
+    test_00 section G measured that it does not: yosys folds the two
+    inversions away, so both rails store the true value and rail B
+    reaches its consumer through a plain buffer. Reconstructing the flag
+    from an RTL polarity the netlist does not have would have inverted
+    every derived observation in the directed cases.
+
+    `fi_rd_valid` and `fo_rd_valid` survive as named wires in the
+    netlist, and they are the exact operands `fetch_expire` and
+    `oh_expire` name, so they are read directly. They are wires and not
+    flip-flop outputs, which is checked in test_00: reading one is an
+    observation, and it must never become an injection target.
+    """
+    return _u(f"u_pilot.{name}")
+
+
+def _fetch_expire():
+    # pilot_top.v: wire fetch_expire = blk_rst_n && (dstate == D_FETCH)
+    #              && !fi_rd_valid && (fetch_wait == FETCH_WAIT_MAX);
+    d = _word("u_pilot.dstate", 2)
+    w = _word("u_pilot.fetch_wait", 6)
+    v = flag_of("fi_rd_valid")
+    if d is None or w is None or v is None:
+        return None
+    return int(d == fi.D_FETCH and not v and w == fi.WAIT_MAX)
+
+
+def _oh_expire():
+    # pilot_top.v: wire oh_expire = blk_rst_n && oh_req && !fo_rd_valid
+    #              && (oh_wait == OH_WAIT_MAX);
+    r = _u("u_pilot.oh_req")
+    w = _word("u_pilot.oh_wait", 6)
+    v = flag_of("fo_rd_valid")
+    if r is None or w is None or v is None:
+        return None
+    return int(bool(r) and not v and w == fi.WAIT_MAX)
+
+
+DERIVED_OBS = {"fetch_expire": _fetch_expire, "oh_expire": _oh_expire}
+
+
+# ---------------------------------------------------------------------
 # directed scripts (the gate-level twin of fi.run_script)
 # ---------------------------------------------------------------------
 async def run_script(p, steps, log):
@@ -775,18 +1002,41 @@ async def run_script(p, steps, log):
             log.append(f"force {step[1]} = {step[2]} ({n} bit(s) flipped)")
             if n is None:
                 log.append("NOT CONSTRUCTED")
+        elif kind == "xor?":
+            # A deposit into a DECLARED retirement. The RTL campaign uses
+            # it so the same script measures the repair of pilot_top.v
+            # section 8.1 instead of assuming it: on a design that still
+            # has the pulse register the report is erased, and on one
+            # that does not the step finds nothing and says so. A netlist
+            # with no such flip-flop is that second case, and it is NOT a
+            # failed construction -- treating it as one would withdraw
+            # the record rather than report it.
+            name, why = map_target(step[1], step[2])
+            if name is None or name not in FLOP_NETS:
+                log.append(f"NO SUCH STATE {step[1]}")
+                continue
+            v = await upset(NETS[name])
+            log.append(f"upset {step[1]} bit {step[2]} -> {v}")
+            if v is None:
+                log.append("NOT CONSTRUCTED")
         elif kind == "until":
             _, path, want, budget = step
-            nets, why = register_nets(path, 0)
-            if nets is None:
-                log.append(f"until {path} == {want}: {why}")
-                log.append("NOT CONSTRUCTED")
-                continue
+            obs = DERIVED_OBS.get(path)
+            if obs is None:
+                nets, why = register_nets(path, 0)
+                if nets is None:
+                    log.append(f"until {path} == {want}: {why}")
+                    log.append("NOT CONSTRUCTED")
+                    continue
+
+                def obs(_nets=nets):
+                    bits = [bit_of(n) for n in _nets]
+                    if None in bits:
+                        return None
+                    return sum(b << i for i, b in enumerate(bits))
             hit = False
             for _ in range(budget + 1):
-                bits = [bit_of(n) for n in nets]
-                if None not in bits and \
-                        sum(b << i for i, b in enumerate(bits)) == want:
+                if obs() == want:
                     hit = True
                     break
                 await RisingEdge(dut.clk)
@@ -952,10 +1202,17 @@ async def gl_setup(dut):
         NOTES["scope_children"] = len(NETS)
         NOTES["flop_output_nets"] = len(FLOP_NETS)
         NOTES["scope_scan_seconds"] = round(time.time() - t0, 1)
+        RAILS.update(resolve_rails())
+        NOTES["rails"] = {k: list(v) for k, v in RAILS.items()}
+        NOTES["netlist_rtl"] = NETLIST_RTL
         dut._log.info(
             f"netlist scope: {len(NETS)} named children in "
             f"{NOTES['scope_scan_seconds']} s; {len(FLOP_NETS)} of them "
             f"are driven by a flip-flop Q pin")
+        dut._log.info(
+            f"dual-rail valid flags resolved: {len(RAILS)} of "
+            f"{len(RAIL_BANKS)} -- " + ", ".join(
+                f"{k}=({a}, {b})" for k, (a, b) in sorted(RAILS.items())))
 
     n_neurons = await tt.rd(p, ADDR["CFG_NEUR"])
     n_axons = await tt.rd(p, ADDR["CFG_AXON"])
@@ -1232,6 +1489,92 @@ async def test_00_method(dut):
         "the deposit did not survive the reset; the stuck-at argument " \
         "for rejecting deposits rests on this measurement"
 
+    # -- G. what the rails' polarity transform actually is here --------
+    # Wave 6 replaced four one-bit valid flags with eight rail
+    # flip-flops. The RTL builds each pair with a per-rail polarity:
+    # `bits <= d ^ POL` and `q = bits ^ POL`, POL = 0 in rail A and 1 in
+    # rail B. pilot_top.v's header argues that transform as an
+    # attribute-independent defence -- two flops with the same (D, reset)
+    # signature are one bank after opt_merge, and a polarity difference
+    # gives structural hashing nothing to match.
+    #
+    # Whether it is still there after synthesis is a netlist question,
+    # and this project has been wrong about exactly this kind of question
+    # twice. So it is measured: over a full burst the two rails of a
+    # healthy flag are sampled, and if rail B stores the complement they
+    # DISAGREE at every sample.
+    #
+    # Nothing is asserted about the answer, because both answers are
+    # legal designs: what matters functionally is that there are two
+    # flip-flops and that the consumer compares them. What the answer
+    # changes is how a flag may be READ, and flag_of() reads the checked
+    # wire rather than reconstructing it for exactly this reason.
+    # A netlist older than wave 6 has no rails at all -- shape-6x2, the
+    # netlist docs/24 and docs/26 measure, carries each valid flag as one
+    # flip-flop. That is not a failure of this check; it is a different
+    # design, and `GL_TAG=shape-6x2` must keep reproducing those
+    # documents. So the whole of G is conditional on the rails existing,
+    # and every assertion below is written over the rails that resolved
+    # rather than over a fixed list of names.
+    if not RAILS:
+        dut._log.info(
+            f"G. this netlist has none of the {len(RAIL_BANKS)} dual-rail "
+            f"valid flags: it predates the wave-6 rails, and each flag is "
+            f"a single flip-flop here")
+        NOTES["rail_polarity"] = None
+    else:
+        await bring_up(p, words)
+        pol = {k: {"samples": 0, "disagree": 0, "undefined": 0}
+               for k in RAILS}
+        pusher = cocotb.start_soon(push(fi.BURSTS[0]))
+        for _ in range(240):
+            await RisingEdge(dut.clk)
+            await Timer(3, unit="ns")
+            for k, (na, nb) in RAILS.items():
+                a, b = _u(na), _u(nb)
+                pol[k]["samples"] += 1
+                if a is None or b is None:
+                    pol[k]["undefined"] += 1
+                elif a != b:
+                    pol[k]["disagree"] += 1
+        await pusher
+        await wait_idle(p)
+        await drain(p)
+        inverted = {k: v["disagree"] == v["samples"] for k, v in pol.items()}
+        dut._log.info(f"G. rail storage over 240 cycles: {pol}")
+        dut._log.info(f"G. rail B stores the complement: {inverted}")
+        NOTES["rail_polarity"] = {"samples": pol,
+                                  "b_rail_inverted": inverted}
+
+        # Two distinct flip-flops per flag is the part that IS asserted:
+        # it is what a dual-rail flag is, and docs/16 section 4 is the
+        # record of a replicated bank arriving in a netlist as one
+        # physical register.
+        for k, (na, nb) in RAILS.items():
+            assert na != nb and na in FLOP_NETS and nb in FLOP_NETS, \
+                f"{k} is not two distinct flip-flops in this netlist: " \
+                f"{na}, {nb}"
+
+        # The checked wire a consumer reads must never be an injection
+        # target. It is not storage, and forcing it would model a
+        # stuck-at on the checked node -- the pointer-TMR mistake in its
+        # newest spelling. Only asked of flags that ARE railed here.
+        for k in RAILS:
+            assert f"u_pilot.{k}" not in FLOP_NETS, \
+                f"u_pilot.{k} is a flip-flop output in this netlist, and " \
+                f"its two rails are also flip-flops; the checked wire " \
+                f"must not be storage"
+
+    # And the two observation terms the directed cases place on must be
+    # readable, or those cases would silently stop constructing.
+    for term, fn in DERIVED_OBS.items():
+        assert fn() is not None, \
+            f"the observation term {term} cannot be evaluated on this " \
+            f"netlist; the directed watchdog cases would report " \
+            f"NOT CONSTRUCTED and withdraw their records instead of " \
+            f"measuring them"
+    NOTES["derived_obs"] = {k: fn() for k, fn in DERIVED_OBS.items()}
+
     # -- F. storage that survived synthesis without a usable name ------
     ax_moved, ax_cands = await identify_flop(p, ADDR["CFG_AXON"], 3,
                                              n_axons & ~0x8, n_axons)
@@ -1475,6 +1818,122 @@ async def test_05_cfg_tmr_sweep(dut):
 
 
 # ---------------------------------------------------------------------
+# test 051: every rail of every dual-rail valid flag
+# ---------------------------------------------------------------------
+@cocotb.test(timeout_time=3600, timeout_unit="sec")
+async def test_051_rail_sweep(dut):
+    """All eight rail flip-flops, including the two nobody has injected.
+
+    Wave 6 replaced four one-bit valid flags with eight rail flip-flops.
+    The RTL campaign injects six of them -- `oh_valid`, EVQ_OUT's
+    `rd_valid` and `out_pend` -- and leaves EVQ_IN's `rd_valid` rails
+    out of its target list, so two flip-flops of new redundancy have
+    never been injected at either level. This sweeps all eight.
+
+    Two fixed phases per rail rather than drawn ones: this group has no
+    RTL twin at these phases, so a draw would consume seeded numbers and
+    move every group after it for no gain. (0, 0) and (0, 17) are the two
+    phases the campaign itself drew for `oh_valid`, so the six rails that
+    do have an RTL twin are injected at a phase that twin also used.
+
+    The claim under test is the one the rails make and no more: two rails
+    DETECT and do not correct. A rail upset may legitimately come back
+    DETECTED or MASKED; what it must never be is SDC, because a
+    disagreement the design does not notice is the whole failure mode.
+    """
+    if not wanted("rail_sweep"):
+        return
+    p, geo = await gl_setup(dut)
+
+    found = sorted(n for n in FLOP_NETS
+                   if any(i in n for i in RAIL_INSTANCES)
+                   or n in RAIL_Q.values())
+    resolved = sorted(n for pair in RAILS.values() for n in pair)
+    NOTES["rail_sweep"] = {"flops_in_netlist": found, "resolved": resolved,
+                           "unaccounted": sorted(set(found) - set(resolved))}
+    dut._log.info(f"rail flip-flops in this netlist: {len(found)}; "
+                  f"resolved to a flag: {len(resolved)}")
+    if not found and not resolved:
+        # A netlist older than wave 6. Reported, not swept, and above all
+        # not reported as a rail result on a design that has no rails.
+        dut._log.info(
+            "no dual-rail valid flags in this netlist: it predates the "
+            "wave-6 rails, so there is nothing here to sweep and no "
+            "number about them is reported")
+        return
+    assert not set(found) - set(resolved), \
+        f"rail storage in the netlist that RAIL_BANKS does not name: " \
+        f"{sorted(set(found) - set(resolved))}; the table has gone stale " \
+        f"and a rail would be swept without being compared"
+    assert len(resolved) == 8, \
+        f"expected eight rail flip-flops, found {len(resolved)}: {resolved}"
+
+    for flag, (na, nb) in sorted(RAILS.items()):
+        for rail, net_name in (("a", na), ("b", nb)):
+            for b, d in ((0, 0), (0, 17)):
+                await injection(p, geo, "rail_sweep", f"{flag}.{rail}", 0,
+                                b, d, net_name=net_name,
+                                extra_fields={"flag": flag, "rail": rail})
+    dut._log.info(f"after the rail sweep: {len(RESULTS)} injections")
+
+
+# ---------------------------------------------------------------------
+# test 052: the redundancy that is in the RTL and not in this netlist
+# ---------------------------------------------------------------------
+@cocotb.test(timeout_time=3600, timeout_unit="sec")
+async def test_052_new_redundancy(dut):
+    """The queue entry-parity banks and the dispatcher check bank.
+
+    Both are `(* keep *) reg [W-1:0] bits` inside a named module, so if
+    the netlist has them they resolve through bank_target() with no new
+    mapping rule and every flip-flop of them is swept here. If it does
+    not, that is REPORTED with the prefix that was searched for -- not
+    skipped quietly, and above all not reported as a robustness result.
+
+    A gate-level campaign that silently omits a structure the RTL has is
+    the exact failure this project has already paid for twice: docs/16
+    section 4's merged configuration TMR and docs/22's pointer TMR were
+    both cases where the netlist did not contain what the RTL did, and
+    both were found by asking the netlist rather than by trusting the
+    layer above it. The answer here happens to be that the netlist is
+    older than the RTL rather than that synthesis dropped something, and
+    the two are told apart by the derived RTL commit in the log.
+    """
+    if not wanted("new_redundancy"):
+        return
+    p, geo = await gl_setup(dut)
+
+    banks = {
+        "evq_in_parity": "u_pilot.u_evq_in.u_par.",
+        "evq_out_parity": "u_pilot.u_evq_out.u_par.",
+        "dispatcher_check": "u_pilot.u_disp_chk.",
+    }
+    present, absent = {}, {}
+    for name, prefix in banks.items():
+        nets = sorted(n for n in FLOP_NETS if n.startswith(prefix))
+        (present if nets else absent)[name] = nets or prefix
+
+    NOTES["new_redundancy"] = {
+        "netlist_rtl": NETLIST_RTL,
+        "present": {k: len(v) for k, v in present.items()},
+        "absent": absent,
+    }
+    for name, prefix in absent.items():
+        dut._log.info(
+            f"{name}: NO STORAGE IN THIS NETLIST. No flip-flop output "
+            f"begins with {prefix}. This netlist was synthesized from "
+            f"{NETLIST_RTL}, which predates the RTL that adds it, so the "
+            f"structure cannot be exercised here and no number about it "
+            f"is reported.")
+    for name, nets in present.items():
+        dut._log.info(f"{name}: {len(nets)} flip-flops, sweeping all")
+        for net_name in nets:
+            await injection(p, geo, f"newred_{name}", net_name, None, 0, 0,
+                            net_name=net_name)
+    dut._log.info(f"after the new-redundancy sweep: {len(RESULTS)}")
+
+
+# ---------------------------------------------------------------------
 # test 055: the one disagreement, taken apart before it is reported
 # ---------------------------------------------------------------------
 @cocotb.test(timeout_time=3600, timeout_unit="sec")
@@ -1599,12 +2058,20 @@ async def test_06_summary(dut):
     NOTES["groups_agreeing"] = agree
     NOTES["groups_differing"] = differ
 
-    stem = "gl_fi_results" + (f"_{RUN_TAG}" if RUN_TAG else
-                              ("_partial" if GROUPS_FILTER else ""))
+    # The log is named after the harden it describes. It was not, and a
+    # run against the wave-6 netlist would have overwritten the
+    # shape-6x2 record docs/26 reports -- destroying the only file the
+    # two campaigns can be compared through. shape-6x2 keeps the
+    # unsuffixed name so docs/26 section 9 still reproduces verbatim.
+    gl_tag = Path(os.environ.get("GL_RUN", "shape-6x2")).name
+    stem = "gl_fi_results" + ("" if gl_tag == "shape-6x2" else f"_{gl_tag}")
+    stem += (f"_{RUN_TAG}" if RUN_TAG else
+             ("_partial" if GROUPS_FILTER else ""))
     out = HERE / f"{stem}.json"
     out.write_text(json.dumps({
         "netlist": os.environ.get("GL_NETLIST"),
         "netlist_blob": _blob(os.environ.get("GL_NETLIST")),
+        "netlist_rtl": NETLIST_RTL,
         "cell_models": os.environ.get("GL_CELLS"),
         "rtl_ref": RTL_REF,
         "rtl_campaign_blob": RTL_CAMPAIGN_BLOB,
@@ -1638,3 +2105,9 @@ async def test_06_summary(dut):
             f"an upset in one configuration replica flip-flop reached the " \
             f"output: the three banks are not independent storage in this " \
             f"netlist. {sweep}"
+    rails = groups.get("rail_sweep", {})
+    if sum(rails.values()):
+        assert rails["SDC"] == 0, \
+            f"an upset in one rail of a dual-rail valid flag reached the " \
+            f"output unreported: two rails are supposed to DETECT what " \
+            f"they cannot correct. {rails}"
