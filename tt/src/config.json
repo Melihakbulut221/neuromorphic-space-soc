@@ -73,5 +73,11 @@
   "MAGIC_WRITE_LEF_PINONLY": 1,
 
   "//": "Added by scripts/gen_tt_submission.py:",
-  "SYNTH_HIERARCHY_MODE": "deferred_flatten"
+  "SYNTH_HIERARCHY_MODE": "deferred_flatten",
+  "TIME_DERATING_CONSTRAINT": 5.0,
+  "SETUP_VIOLATION_CORNERS": ["*"],
+  "PNR_CORNERS": ["nom_typ_1p20V_25C", "nom_slow_1p08V_125C"],
+  "RUN_POST_GRT_RESIZER_TIMING": 1,
+  "RUN_POST_GRT_DESIGN_REPAIR": 1,
+  "GRT_RESIZER_SETUP_SLACK_MARGIN": 0.5
 }

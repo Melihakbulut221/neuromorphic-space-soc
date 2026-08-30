@@ -232,6 +232,41 @@ PINOUT_UIO = [
 # sw/tests/test_synthesis_guards.py is the check that keeps this true.
 CONFIG_OVERRIDES: "dict[str, object]" = {
     "SYNTH_HIERARCHY_MODE": "deferred_flatten",
+    # ------------------------------------------------------------------
+    # The six keys below are what makes this design meet timing, and
+    # until 2026-08-31 not one of them was in the submission path. That
+    # was a shipping defect rather than a missing optimisation, and
+    # docs/31 measured it rather than inferring it: hardening the
+    # submission configuration on this RTL misses the slow corner by
+    # -1.8321 ns derated, on 18 violating endpoints -- and the flow
+    # reports that run CLEAN, because without SETUP_VIOLATION_CORNERS the
+    # setup checker examines only the typical corner, which passes at
+    # +6.8753. The adopted configuration is worth 3.0588 ns on the same
+    # sources and the shuttle would have taken none of it.
+    #
+    # What each key is worth individually is in docs/28; the sign-off
+    # that proves the combination is docs/31.
+    # ------------------------------------------------------------------
+    # A float deliberately: the PDKs ship this as the integer 5 and
+    # LibreLane divides it with Tcl integer division, so an integer here
+    # applies no derate at all while the log still prints "5%".
+    "TIME_DERATING_CONSTRAINT": 5.0,
+    # Without this the setup checker resolves its corners from
+    # TIMING_VIOLATION_CORNERS, which both PDKs ship as ["*typ*"], so the
+    # slow corner is gated by nothing. HOLD_VIOLATION_CORNERS already
+    # ships as ["*"], so only setup was ever exposed.
+    "SETUP_VIOLATION_CORNERS": ["*"],
+    # Make the slow corner visible to place-and-route rather than only to
+    # the final timing analysis, so repair happens where the violations
+    # actually are.
+    "PNR_CORNERS": ["nom_typ_1p20V_25C", "nom_slow_1p08V_125C"],
+    # The repair that buys the margin: post-global-route, where the
+    # estimate is close enough to act on. The only setup repair the
+    # default flow runs is post-CTS, where the slow corner reads 4.28 ns
+    # optimistic and so honestly finds nothing to fix.
+    "RUN_POST_GRT_RESIZER_TIMING": 1,
+    "RUN_POST_GRT_DESIGN_REPAIR": 1,
+    "GRT_RESIZER_SETUP_SLACK_MARGIN": 0.5,
 }
 
 # =====================================================================

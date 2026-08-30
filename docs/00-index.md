@@ -262,6 +262,7 @@ silicon and no radiation data, and the licence is unsigned.
 | `docs/28-timing-recovery.md` | Where the slow-corner margin went and how it was recovered — and two flow defects found on the way: the OCV derate was silently zero on both PDKs, and the setup checker only ever examined the typical corner. Read this before quoting any timing figure produced before it. |
 | `docs/29-queue-storage-protection.md` | One even-parity bit per queue entry, closing `evq_mem` — the last unprotected structure in the event path. Records why SECDED was deferred on codec area rather than on timing, and what parity still does not catch. |
 | `docs/30-dispatcher-protection.md` | The dispatcher's five silent corruptions, and why they had to be detected rather than corrected: the replication bound proved for one bit generalises, and at two bits there are only six balanced coordinate functions, four of which the two rails already take. Two flip-flops for five records. |
+| `docs/31-signoff-6x2.md` | Complete geometric and timing sign-off of the 6x2 pilot — and the finding that the submission path did not carry the settings that make it close, measured by hardening that path and watching it miss while every checker reported clean. |
 | `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
 | `README.md` | Project summary and repository layout. |
 | `ROADMAP.md` | Phased plan with gates and external clocks. |
