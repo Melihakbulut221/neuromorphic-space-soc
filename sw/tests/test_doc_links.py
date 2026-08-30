@@ -153,11 +153,22 @@ def test_sibling_citations_are_exactly_the_known_ones():
             if not _resolves(ref) and _is_sibling_citation(line)
         }
     )
-    assert excused == [
-        ("docs/16-fault-injection-campaign.md", "docs/25"),
-        ("docs/16-fault-injection-campaign.md", "docs/27"),
-        ("docs/17-wave2-review-record.md", "docs/27"),
-    ], excused
+    # The list is empty on purpose, and the reason is worth keeping.
+    #
+    # It used to hold three entries: bare `docs/25` and `docs/27` in
+    # docs/16, and `docs/27` in docs/17, all citing the sibling
+    # programme. That was safe only while this repository had no
+    # documents at those numbers. On 2026-08-30 `docs/25-sky130-6x2.md`
+    # landed, and the bare form in docs/16 silently began resolving to
+    # it -- a citation of another project's work pointing at ours, in
+    # the generated site, with nothing to say so. This test caught it.
+    #
+    # The fix was to write sibling citations in a path form the
+    # generator cannot match (`radhard-edge-ai/docs/27`), which is now
+    # the convention. Keeping this list empty means the next bare
+    # sibling reference fails here rather than waiting for a number
+    # collision to make it wrong.
+    assert excused == [], excused
 
 
 def test_named_references_use_the_real_filename():

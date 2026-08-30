@@ -886,8 +886,11 @@ Additional gaps inside the closed rows:
   the method already: a 512-line cocotb harness, 200 single-fault
   injections classified MASKED / CORRECTED / SDC / DETECTED / HANG, a
   fixed campaign seed, ~7 s of wall time
-  (`/home/hasanmelih/Documents/radhard-edge-ai`, its `docs/27` and
-  `hw/tb/test_fi_campaign.py`). The recorded harness lessons transfer
+  (`/home/hasanmelih/Documents/radhard-edge-ai`, its
+  `radhard-edge-ai/docs/27` and its `hw/tb/test_fi_campaign.py`; sibling
+  documents are cited in that path form because this repository now has
+  documents at the same numbers, and the bare `docs/NN` form resolves to
+  the wrong one). The recorded harness lessons transfer
   directly: sample `busy` post-NBA rather than on the edge, pre-set
   outputs to a sentinel so a misrouted result cannot alias a correct
   one, drive `force`/`release` from `cocotb.handle`, and give the
@@ -1125,7 +1128,7 @@ that neither deadline forces".
 | **P1-d** | Regenerate `tt/` and re-run `sw/tests/test_tt_submission.py` immediately before the push, and after every `hw/rtl` edit that lands before it | The drift guard is only a guard if it is run; `hw/rtl` was edited three times during this record's measurement window alone | under 1 h per event |
 | **P1-e** | Serialize the formal gate: a lock file or a per-invocation working directory in `formal/Makefile` | Section 6.5; the gate currently produces `ERROR rc=16` that reads like a proof failure, on a machine where several workstreams run, and it did so twice in one afternoon | 2-4 h |
 | **P1-f** | Correct `docs/11` section 7.4 check 4's expected warning output (three lines for `lif_ctrl`, not zero) | Section 6.4 item 5; a wrong expected output on a vacuity check is worse than no check, because it teaches the reader to ignore the output | under 1 h |
-| **P2-a** | Fault-injection campaign on `pilot_top`, modelled on the sibling programme's `docs/27` | `docs/09` target #5 requires the FI campaign and the formal any-state result to agree; only one exists. It is also the strongest single piece of evidence the NLnet application can carry, because it produces a measured SDC rate rather than a promise | 12-20 h |
+| **P2-a** | Fault-injection campaign on `pilot_top`, modelled on the sibling programme's `radhard-edge-ai/docs/27` | `docs/09` target #5 requires the FI campaign and the formal any-state result to agree; only one exists. It is also the strongest single piece of evidence the NLnet application can carry, because it produces a measured SDC rate rather than a promise | 12-20 h |
 | **P2-b** | Produce the three NLnet attachments (D-9) | `docs/13` schedules them for 2026-10-20 and names engineering as the owner | 8-16 h |
 | **P2-c** | Make the mutation evidence durable: commit the mutant definitions (a patch set or a generator, not seven copies of the RTL) and a script that runs the campaign and writes a tracked summary | Section 6.2; today the primary evidence for section 3.4 does not survive a clone | 4-8 h |
 | **P3-a** | A formal job for the pilot integration, starting with the two bindings nothing currently checks: register bank to TMR voter, and the show-ahead adapter to `aer_fifo`'s registered read port | Section 6.1; integration is where every wave-2 defect was found | 16-32 h |

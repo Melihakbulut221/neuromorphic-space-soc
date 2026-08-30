@@ -1,0 +1,228 @@
+# Gate-level cocotb run against the hardened submission netlist.
+#
+#   cd hw/tb && make -f Makefile.gl              # run the suite
+#   cd hw/tb && make -f Makefile.gl provenance   # print what would be read
+#
+# What this is. Every other suite in this directory elaborates
+# hw/rtl/*.v. This one elaborates the flattened, placed-and-routed
+# netlist that the shuttle will actually receive, against the IHP
+# sg13g2 standard-cell Verilog models, and runs the same
+# test_pilot_top.py stimulus through the same Tiny Tapeout pins. It is
+# the only check in this repository on the step between the RTL and the
+# GDS -- the step that has already dropped configuration TMR once
+# (docs/17) and that docs/22 could only measure by counting flip-flop
+# cells in a netlist by hand.
+#
+# ---------------------------------------------------------------------
+# The trap this file is built around: never "the latest run".
+#
+# The sibling project radhard-edge-ai resolves its netlist with
+# `ls -td .../runs/*/ | head -1`. That is wrong in a directory that
+# holds a dozen experiments: hw/openlane/pilot_ihp/runs/ here contains
+# synthesis-only probes (ihp-synth-flatten), DRC-only reruns
+# (ihp-klayoutdrc), and two full sign-offs at different tile shapes.
+# The newest is not the submission, and a gate-level PASS against a
+# netlist nobody is taping out is worse than no result, because it
+# reads like one. GL_RUN is therefore a named directory with no
+# wildcard in it, and `provenance` prints the netlist's git blob so a
+# reported result can be checked against the file it came from.
+#
+# The PDK is not assumed either. The cell models are resolved out of
+# the run's own resolved.json, so the models under the simulator are
+# the version that hardened this netlist and cannot silently become
+# whichever ciel version ~/.ciel currently symlinks.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+REPO := $(abspath $(HERE)/../..)
+
+# Rootless tool discovery, identical to hw/tb/Makefile.pilot: iverilog
+# comes from the pinned oss-cad-suite through tools.mk, cocotb from the
+# project venv. make < 4.4 does not pass an exported PATH to
+# $(shell ...), which the cocotb makefiles rely on, so re-invoke.
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+# tools.mk names the pinned oss-cad-suite checkout. It is included for
+# $(IVERILOG) and for the provenance printout only -- and the default
+# goal has to be reasserted afterwards, because tools.mk's first target
+# is `toolcheck` and an included file's first rule becomes the default
+# goal of the including makefile. Without the line below `make -f
+# Makefile.gl` runs toolcheck and reports success having simulated
+# nothing.
+include $(REPO)/tools.mk
+.DEFAULT_GOAL := sim
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+# ---------------------------------------------------------------------
+# 1. The netlist, named and pinned
+# ---------------------------------------------------------------------
+# shape-6x2 is the submission harden: docs/23 moves the submission from
+# 4x2 to 6x2 and section 1.3 names this directory as the run that
+# decided it. Override GL_RUN to point at any other sign-off; nothing
+# below assumes 6x2.
+GL_TAG ?= shape-6x2
+GL_RUN ?= $(REPO)/hw/openlane/pilot_ihp/runs/$(GL_TAG)
+GL_NETLIST ?= $(GL_RUN)/final/nl/tt_um_melihakbulut_nssoc.nl.v
+export GL_NETLIST
+
+ifeq ($(wildcard $(GL_NETLIST)),)
+$(error no netlist at $(GL_NETLIST); set GL_RUN to a completed harden)
+endif
+
+# ---------------------------------------------------------------------
+# 2. The cell models, resolved from the run rather than assumed
+# ---------------------------------------------------------------------
+GL_PDK_ROOT ?= $(shell python3 -c "import json,sys; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['PDK_ROOT'])")
+GL_PDK ?= $(shell python3 -c "import json,sys; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['PDK'])")
+GL_SCL ?= $(shell python3 -c "import json,sys; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['STD_CELL_LIBRARY'])")
+GL_CELLS ?= $(GL_PDK_ROOT)/$(GL_PDK)/libs.ref/$(GL_SCL)/verilog/$(GL_SCL).v
+export GL_CELLS
+
+ifeq ($(wildcard $(GL_CELLS)),)
+$(error no cell models at $(GL_CELLS); the run's resolved.json points \
+	PDK_ROOT at $(GL_PDK_ROOT) -- is that PDK version still installed?)
+endif
+
+# ---------------------------------------------------------------------
+# 3. Elaboration
+# ---------------------------------------------------------------------
+# -gspecify is REQUIRED, not an optimisation. sg13g2_dfrbpq_1 drives its
+# flip-flop UDP from `delayed_CLK` and `delayed_D`, which exist only as
+# the delayed-signal outputs of the $setuphold calls inside its specify
+# block. With Icarus's default -gno-specify those nets have no driver,
+# every flop in the design clocks on z, and the whole netlist sits at x
+# forever -- a failure that looks like a design bug and is not one.
+# Icarus does not implement timing checks; it warns and makes the
+# delayed signals plain copies of the originals, which is exactly the
+# behaviour wanted here.
+#
+# All module path delays in these models are literal 0 and there are no
+# UNIT_DELAY or FUNCTIONAL hooks (unlike sky130), so this is a
+# zero-delay functional gate-level run: the netlist's logic and its
+# flip-flop mapping are checked, its timing is not. Timing is signed off
+# by STA on three corners in the same run directory (docs/23 section 3);
+# re-checking it here with SDF would duplicate that, and Icarus does not
+# support the timing checks that would make an SDF run mean more than
+# STA already does.
+VERILOG_SOURCES := $(GL_CELLS) $(GL_NETLIST)
+TOPLEVEL := tt_um_melihakbulut_nssoc
+
+COCOTB_TEST_MODULES := test_pilot_gl
+
+COMPILE_ARGS += -gspecify
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# ---------------------------------------------------------------------
+# 3b. Which Icarus, and why it is neither the one on PATH nor the
+#     one tools.mk pins
+# ---------------------------------------------------------------------
+# Two independent constraints, both found the hard way.
+#
+# (a) Icarus 12.0 -- the version on PATH, and therefore the version
+#     every other suite in hw/tb uses -- CANNOT simulate this netlist,
+#     and fails silently rather than loudly:
+#
+#       12.0: "Timing checks are not supported and delayed signal
+#              `delayed_CLK` will not be driven."
+#       13.0: "Timing checks are not supported. Delayed reference and
+#              data signals become copies of the original reference and
+#              data signals."
+#
+#     sg13g2_dfrbpq_1 clocks its flip-flop UDP from `delayed_CLK`, which
+#     exists only as an output of the $setuphold calls in its specify
+#     block. Under 12.0 that net has no driver, so every flop in the
+#     design is clocked by z, nothing ever updates, and the netlist sits
+#     at its reset value for the whole run. The first attempt here
+#     reported 21 of 21 tests failing with every register reading
+#     0x00000000 -- which reads exactly like a dead design and is not
+#     one. Only the compile warnings say otherwise, and cocotb prints
+#     those once, thousands of lines before the failures. Hence the hard
+#     version guard below: this must be an error, never a FAIL.
+#
+# (b) The oss-cad-suite build tools.mk pins (14.0-devel) compiles the
+#     netlist correctly but cannot host cocotb on this machine. Its
+#     bin/vvp is a wrapper that exports PYTHONHOME into the
+#     oss-cad-suite tree and re-execs through the suite's own
+#     ld-linux with --inhibit-rpath, so cocotb's embedded interpreter
+#     resolves against the suite's Python 3.11 instead of the project
+#     venv's 3.12 and dies with "failed to get the Python codec of the
+#     filesystem encoding" / "No module named 'pygpi'". Bypassing the
+#     wrapper (libexec/vvp with LD_LIBRARY_PATH) segfaults instead:
+#     the suite ships its own libc. This is a packaging conflict
+#     between oss-cad-suite and a venv-installed cocotb, not something
+#     this repository can fix.
+#
+# So the gate-level run uses a plain Icarus 13.0 install. tools.mk still
+# governs yosys and sby; it does not govern this, and section 5 of
+# docs/24 records that as a deviation rather than hiding it.
+#
+# Override freely; the guard, not the path, is what protects the result:
+#   make -f Makefile.gl GL_IVERILOG=/path/to/iverilog
+GL_IVERILOG ?= $(firstword $(wildcard \
+	$(HOME)/.local/opt/iverilog13/usr/bin/iverilog) \
+	$(shell command -v iverilog 2>/dev/null))
+ifeq ($(wildcard $(GL_IVERILOG)),)
+$(error no iverilog found; set GL_IVERILOG)
+endif
+
+GL_IVERILOG_MAJOR := $(shell $(GL_IVERILOG) -V 2>/dev/null | \
+	sed -n '1s/.*version \([0-9]*\).*/\1/p')
+ifeq ($(shell test $(GL_IVERILOG_MAJOR) -ge 13 2>/dev/null && echo ok),)
+$(error $(GL_IVERILOG) is Icarus $(GL_IVERILOG_MAJOR); this run needs >= 13. \
+Icarus 12 leaves sg13g2_dfrbpq_1's delayed_CLK undriven, so every flop in \
+the netlist is clocked by z and the entire suite fails with every register \
+reading zero. See Makefile.gl section 3b.)
+endif
+
+ICARUS_BIN_DIR := $(patsubst %/,%,$(dir $(GL_IVERILOG)))
+
+# The build directory and the results file carry the run tag, so a
+# gate-level result can never be confused with an RTL one and two runs
+# against different hardens cannot overwrite each other.
+SIM_BUILD           ?= $(HERE)/sim_build_gl_$(GL_TAG)
+COCOTB_RESULTS_FILE ?= $(HERE)/results_gl_$(GL_TAG).xml
+export COCOTB_RESULTS_FILE
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# ---------------------------------------------------------------------
+# 4. Provenance
+# ---------------------------------------------------------------------
+# Prints exactly what a run would read, with the netlist's git blob, so
+# a quoted result names the bytes it came from. docs/18 set that
+# precedent for hardens; a gate-level result needs it more, because the
+# netlist is not a tracked file.
+.PHONY: provenance
+provenance:
+	@echo "run tag     : $(GL_TAG)"
+	@echo "run dir     : $(GL_RUN)"
+	@echo "netlist     : $(GL_NETLIST)"
+	@echo "netlist blob: $$(git -C $(REPO) hash-object $(GL_NETLIST))"
+	@echo "netlist size: $$(wc -c < $(GL_NETLIST)) bytes, \
+$$(grep -c '^module' $(GL_NETLIST)) module(s)"
+	@echo "pdk         : $(GL_PDK) at $(GL_PDK_ROOT)"
+	@echo "cell models : $(GL_CELLS)"
+	@echo "models blob : $$(git -C $(REPO) hash-object $(GL_CELLS))"
+	@echo "iverilog    : $(GL_IVERILOG)"
+	@echo "              $$($(GL_IVERILOG) -V 2>/dev/null | head -1)"
+	@echo "iverilog on PATH (NOT usable for GL, section 3b): \
+$$(command -v iverilog 2>/dev/null)"
+	@echo "              $$(iverilog -V 2>/dev/null | head -1)"
+	@echo "sim build   : $(SIM_BUILD)"
+	@echo "results     : $(COCOTB_RESULTS_FILE)"
+
+endif
