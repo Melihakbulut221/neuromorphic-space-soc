@@ -417,23 +417,42 @@ def _assert_pointer_banks(census, flow, exact=True):
 # test_show_ahead_valid_is_two_rails_without_keep_hierarchy_in_ecp5 and
 # test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy both fail
 # and nothing else in this file does.
+# Extended 2026-08-30 to the other two flags of the same class, on the
+# same construction and with the same mutation check: the queues'
+# registered read-valid (hw/rtl/aer_fifo.v, u_rdv_a / u_rdv_b, one pair
+# per queue INSTANCE and therefore four rails in the pilot) and the
+# neuron core's output holding flag (hw/rtl/lif_core.v, u_op_a /
+# u_op_b). Each of the three files carries its own six-line rail module
+# rather than sharing one: aer_fifo.v must elaborate alone for
+# formal/aer_fifo.sby and hw/tb/Makefile, and lif_core.v cannot
+# instantiate a module declared in its own parent. The duplication is
+# deliberate and each module's header says so.
 OH_RAILS = ("u_ohv_a", "u_ohv_b")
+RV_RAILS = tuple(f"{q}.u_rdv_{r}"
+                 for q in ("u_evq_in", "u_evq_out") for r in ("a", "b"))
+OP_RAILS = ("u_lif.u_op_a", "u_lif.u_op_b")
 
 
-def _assert_two_rails(census, flow, exact=True):
-    found = {r: census.in_instance(f"{r}.") for r in OH_RAILS}
+def _assert_rails(census, flow, rails, what, exact=True):
+    found = {r: census.in_instance(f"{r}.") for r in rails}
     ok = (all(v == 1 for v in found.values()) if exact
           else all(v >= 1 for v in found.values()))
     assert ok, (
-        f"the show-ahead valid flag's two rails collapsed in the {flow} "
-        f"netlist: expected 1 flip-flop per rail, found {found}. Two "
-        f"one-bit flip-flops written from the same enable and the same "
-        f"datum are one flip-flop after opt_dff + opt_merge, and a "
-        f"mismatch detector reading one flip-flop twice never fires -- "
-        f"in the netlist OR in RTL simulation, which is why only this "
-        f"census can see it. What separates them is the POL polarity of "
-        f"pilot_flag_rail (hw/rtl/pilot_top.v header section 8.2). "
-        f"Total flip-flops in this netlist: {census.total}.")
+        f"{what} collapsed in the {flow} netlist: expected 1 flip-flop "
+        f"per rail, found {found}. Two one-bit flip-flops written from "
+        f"the same enable and the same datum are one flip-flop after "
+        f"opt_dff + opt_merge, and a mismatch detector reading one "
+        f"flip-flop twice never fires -- in the netlist OR in RTL "
+        f"simulation, which is why only this census can see it. What "
+        f"separates them is the POL polarity of the rail module. Total "
+        f"flip-flops in this netlist: {census.total}.")
+
+
+def _assert_two_rails(census, flow, exact=True):
+    _assert_rails(census, flow, OH_RAILS,
+                  "the show-ahead valid flag's two rails "
+                  "(pilot_flag_rail, hw/rtl/pilot_top.v section 8.2)",
+                  exact)
 
 
 @needs_yosys
@@ -458,6 +477,48 @@ def test_show_ahead_valid_is_two_rails_without_keep_hierarchy_in_ecp5(
     is exactly one lost flip-flop there."""
     _assert_two_rails(ecp5_forced,
                       "synth_ecp5, keep_hierarchy stripped", exact=False)
+
+
+@needs_yosys
+def test_read_valid_is_two_rails_per_queue_in_the_asic_flow(asic):
+    """Both queue instances, four rails. aer_fifo is instantiated twice,
+    so a merge that hashed EVQ_IN's rail A into EVQ_OUT's would be a
+    cross-instance collapse the per-instance path still catches."""
+    _assert_rails(asic, "ASIC (yosys/LibreLane-shaped)", RV_RAILS,
+                  "an aer_fifo read-valid rail pair")
+
+
+@needs_yosys
+def test_read_valid_is_two_rails_per_queue_in_the_ecp5_flow(ecp5):
+    _assert_rails(ecp5, "synth_ecp5", RV_RAILS,
+                  "an aer_fifo read-valid rail pair")
+
+
+@needs_yosys
+def test_read_valid_rails_survive_a_flow_that_ignores_keep_hierarchy(
+        ecp5_forced):
+    _assert_rails(ecp5_forced, "synth_ecp5, keep_hierarchy stripped",
+                  RV_RAILS, "an aer_fifo read-valid rail pair", exact=False)
+
+
+@needs_yosys
+def test_out_pend_is_two_rails_in_the_asic_flow(asic):
+    _assert_rails(asic, "ASIC (yosys/LibreLane-shaped)", OP_RAILS,
+                  "the lif_core output-holding flag's two rails")
+
+
+@needs_yosys
+def test_out_pend_is_two_rails_in_the_ecp5_flow(ecp5):
+    _assert_rails(ecp5, "synth_ecp5", OP_RAILS,
+                  "the lif_core output-holding flag's two rails")
+
+
+@needs_yosys
+def test_out_pend_rails_survive_a_flow_that_ignores_keep_hierarchy(
+        ecp5_forced):
+    _assert_rails(ecp5_forced, "synth_ecp5, keep_hierarchy stripped",
+                  OP_RAILS, "the lif_core output-holding flag's two rails",
+                  exact=False)
 
 
 @needs_yosys

@@ -24,13 +24,13 @@ plainly, and it should be read before section 6 is quoted anywhere.
 | Device under test | `hw/rtl/pilot_top.v`, 8 x 8 neurons/axons, EVQ depth 4 |
 | Oracle | `sw/golden/lif_core.py` (`LIFCore`, `LIFConfig`) |
 | Seed | `0x16F12026` |
-| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29; 365 from 2026-08-30; 359 after the section 5.9 fix retired two targets; 361 after the section 5.10 retarget split one into two (section 2) |
-| Simulated time | 22.23 ms at 255 injections; 28.77 ms at 335; 31.31 ms at 365; 30.81 ms at 359; 30.97 ms at 361 |
-| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it; 892 s for 335 injections on a loaded machine; 567 s for 365 on a quiet one — and 1769 s for an identical 365-injection run alongside three other simulator jobs; 614 s for 359 and 706 s for 361 (Icarus, single-threaded; section 8) |
+| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29; 365 from 2026-08-30; 359 after the section 5.9 fix retired two targets; 361 after the section 5.10 retarget; 366 after the section 5.11 retargets (section 2) |
+| Simulated time | 22.23 ms at 255 injections; 28.77 ms at 335; 31.31 ms at 365; 30.81 ms at 359; 30.97 ms at 361; 31.39 ms at 366 |
+| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it; 892 s for 335 injections on a loaded machine; 567 s for 365 on a quiet one — and 1769 s for an identical 365-injection run alongside three other simulator jobs; 614 s for 359, 706 s for 361 and 568 s for 366 (Icarus, single-threaded; section 8) |
 
-### Seven runs, kept side by side
+### Eight runs, kept side by side
 
-This document reports the campaign **seven times**, and the runs are
+This document reports the campaign **eight times**, and the runs are
 kept side by side rather than one overwriting the other. That is the
 whole value of the document: it shows what each change to the design did
 to the measured upset response, which a single current number cannot.
@@ -79,11 +79,17 @@ to the measured upset response, which a single current number cannot.
   retargeted onto the rails' storage. It is 361 injections; section
   5.10 has the measurement and the argument for two rails rather than
   three replicas.
+- The **wave-6 second-half** run of 2026-08-30, the current one. The
+  other two valid flags of the same class -- `u_evq_out.rd_valid` in
+  `hw/rtl/aer_fifo.v` and `lif_core.out_pend` -- carry the same two
+  rails, and their injectors are retargeted the same way. It is 366
+  injections; section 5.11 has the measurement, the four aer_fifo
+  proofs and the 32 lockstep tests that came with it.
 
 Every number in this document is labelled with which run it comes from.
 Where a section is not labelled the runs agree.
 
-`hw/tb/fi_campaign_results.json` holds the **361-injection wave-6**
+`hw/tb/fi_campaign_results.json` holds the **366-injection wave-6**
 log, because that is the design that exists. Exactly five of the 255
 records differ between the pre-fix and post-fix runs and section 5.1
 lists all five; exactly 43 differ between the post-fix and
@@ -117,9 +123,16 @@ three structures that were hardened and in no others** — `lif_wmem` 9,
 `lif_vmem` 22, `lif_rmem` 12. Not one record moved in the other
 direction, and no record outside those three groups changed at all.
 
-**Headline, wave-6 first half [fact].** 361 injections, 2026-08-30, and
-it is the current log: **94 MASKED (26.0%), 193 CORRECTED (53.5%), 51
-DETECTED (14.1%), 23 SDC (6.4%), 0 HANG**. The show-ahead valid flag's
+**Headline, wave-6 second half [fact].** 366 injections, 2026-08-30,
+and it is the current log: **94 MASKED (25.7%), 193 CORRECTED (52.7%),
+61 DETECTED (16.7%), 18 SDC (4.9%), 0 HANG**. The design's three
+one-bit valid flags are dual-rail, the whole class is out of silent
+corruption, and the residual is 18 records led outright by the AER
+queue storage (section 5.11).
+
+**Headline, wave-6 first half [fact].** 361 injections, 2026-08-30:
+**94 MASKED (26.0%), 193 CORRECTED (53.5%), 51 DETECTED (14.1%), 23
+SDC (6.4%), 0 HANG**. The show-ahead valid flag's
 two SDC records become four DETECTED ones at **+1 flip-flop**, and 357
 of the 359 records of the run below are unchanged in every field
 (section 5.10).
@@ -537,6 +550,8 @@ the design the map speaks about, not how exhaustively.
 | **Total represented, after the section 5.9 fix** | | **1112** | **359** |
 | `oh_valid`'s second rail [¶¶¶] | `evq_hold` | +1 | +2 |
 | **Total represented, after the section 5.10 hardening** | | **1113** | **361** |
+| `rd_valid` and `out_pend` second rails [¶¶¶] | `evq_hold`, `lif_scan` | +2 | +5 |
+| **Total represented, after the section 5.11 hardening** | | **1115** | **366** |
 
 [†] 165 in the RTL, and 55 in the netlist until 2026-08-26 — the three
 replicas were merged into one register bank by synthesis. Corrected in
@@ -576,7 +591,10 @@ drawn and no surviving record moved; they are skipped, not injected.
 so the `evq_hold` row's 35 flip-flops become 36 and the injector moved
 off the checked wire and onto the rails' storage — the same retarget
 target-list item 9 made for the pointers, at the same two drawn phases,
-so `oh_valid`'s own 2 records become 4 and nothing else moves.
+so `oh_valid`'s own 2 records become 4 and nothing else moves. Section
+5.11 does the same for `u_evq_out.rd_valid` (`evq_hold`, +1 FF here and
+another inside EVQ_IN that no group represents) and for
+`u_lif.out_pend` (`lif_scan`, +1 FF), for +5 records between them.
 
 [‡] Added to the target list on 2026-08-27, with the memory hardening
 that created them. They are the 80 flip-flops the protection itself
@@ -639,6 +657,7 @@ five times during the work this document reports:
 | 1,281 | after the show-ahead bounded wait of section 5.7 adds `oh_wait` and `oh_timeout` |
 | 1,279 | after section 5.9 retires `fetch_timeout` and `oh_timeout` — the only entry in this table that goes down |
 | 1,280 | after section 5.10 gives `oh_valid` its second rail |
+| 1,283 | after section 5.11 gives `rd_valid` (both queue instances) and `out_pend` theirs |
 
 The last two are measured with the same census, on 2026-08-29:
 **1,281 declared, 1,275 mapped, 6 lost to optimisation** at HEAD, and
@@ -2411,8 +2430,10 @@ dropped event is a smaller fault than one fabricated out of stale
 do either — and `sticky_errcfg` latches, so the ERR pin reports it with
 no serial frame. **Detected, not corrected.** The held event is still
 lost and the run is still wrong; what changes is that it is wrong
-loudly. The disagreement heals on the next queue read, when both rails
-are written from one expression again.
+loudly. The disagreement heals on the next clock edge: the rails carry
+no enable and their next value is written from the CHECKED flag, which
+reads 0 while they disagree, so the safe reading becomes the stored one
+and the fault cannot persist into a second upset.
 
 **Cost [fact], same census, both flows:** 1,273 → **1,274** mapped
 (ASIC sg13g2 and ECP5 agree), 1,279 → 1,280 declared, lost-to-
@@ -2485,6 +2506,181 @@ else in the file notices, and nothing in the cocotb campaign could.
 records respectively. Neither file was in scope for this change. On the
 measurement above, `out_pend` is the best remaining ratio in the design
 at 3 records per flip-flop and should lead whatever wave takes them.
+
+**Both taken, later the same day. Section 5.11.**
+
+### 5.11 Wave 6, second half: the other two valid flags
+
+`u_evq_out.rd_valid` (`hw/rtl/aer_fifo.v`) and `lif_core.out_pend`
+(`hw/rtl/lif_core.v`) are the other two members of the class section 5.7
+named — 2 of 2 and 3 of 3 silent corruptions, five of the residual
+twenty-three between three flip-flops. Both now carry the two-rail
+construction of section 5.10, and the argument for two rather than
+three is the same one-bit pigeonhole: it does not depend on which file
+the flag lives in.
+
+**Three copies of a six-line module, deliberately.** `pilot_flag_rail`,
+`aer_flag_rail` and `lif_flag_rail` are the same module three times.
+`aer_fifo.v` has to elaborate ALONE — `formal/aer_fifo.sby` lists
+exactly that file and its property file, and `hw/tb/Makefile` builds the
+queue standalone from the same one file — and `lif_core.v` cannot
+instantiate a module declared in `pilot_top.v`, which is its own parent.
+A shared fourth RTL file would break the first and every flow's file
+list with it. This is the same decision the pointer TMR made when it
+inlined its majority rather than instantiating `hw/rtl/tmr_voter.v`, and
+each module header says so.
+
+**Cost [fact], same census, both flows:** 1,274 → **1,277** mapped
+(ASIC sg13g2 and ECP5 agree exactly), 1,280 → 1,283 declared,
+lost-to-optimisation unchanged at 6. **+3, not +2:** `rd_valid` is
+hardened inside `aer_fifo`, which is instantiated twice, so EVQ_IN gets
+the same rail pair as EVQ_OUT. That second pair is not free and is not
+wasted — EVQ_IN's `rd_valid` is one of the flip-flops section 7.3 lists
+as unrepresented, with exactly the failure mode the campaign measured on
+its twin — but it is a flip-flop this measurement cannot claim credit
+for, and the honest ratio is 5 records for 3 flip-flops rather than for
+2.
+
+**Campaign [fact].** 366 injections, 568 s, 31.39 ms. Diffed by key
+against the 361 of section 5.10: **356 common records, and not one of
+them changed anything at all.** The five records of the two flags are
+retargeted onto the rails and become ten:
+
+| | before | after |
+|---|---|---|
+| `u_evq_out.rd_valid` bit 0, 2 phases | **2 SDC**, `0x06`, output wrong | **4 DETECTED**, `0x16`, output **golden** |
+| `u_lif.out_pend` bit 0, 3 phases | **3 SDC**, `0x06`, output wrong | **6 DETECTED**, `0x16`, output **golden** |
+
+| | MASKED | CORRECTED | DETECTED | SDC | HANG | n |
+|---|---:|---:|---:|---:|---:|---:|
+| after section 5.10 | 94 | 193 | 51 | 23 | 0 | 361 |
+| after this change | 94 | 193 | **61** | **18** | 0 | **366** |
+| `evq_hold` | 7 / 0 / 5 / 4 | | 7 / 0 / **9** / **2** (n=16→18) |
+| `lif_scan` | 15 / 0 / 0 / 6 | | 15 / 0 / **6** / **3** (n=21→24) |
+
+**All ten came back with the GOLDEN output, and that is more than was
+claimed for them [fact].** Two rails detect and do not correct, so the
+prediction was DETECTED-with-a-wrong-answer: the held spike or the read
+answer still lost, but announced. What the measurement shows is that at
+these phases the safe reading of a disagreement is also the *correct*
+one. Both flags were LOW when the deposit landed, and the upset that
+matters at a low valid flag is the one that RAISES it — the direction
+that fabricates a spike out of stale `out_event`, or a read answer out
+of stale `rd_data`. Holding the flag low masks exactly that direction
+while reporting it. The clear direction, an upset that drops a held
+word, is the one the rails can only report; it is not in these ten
+records because these ten phases did not land on a full flag. **So the
+honest claim is narrower than the number looks: 5 SDC records became 10
+announced ones, and at these phases the answer stayed right as well.**
+
+**The residual is 18 across five structures** — `evq_mem` 7,
+`dispatch` 5, `lif_scan` 3, `evq_hold` 2, `regbank_cfg` 1 — from 26
+when section 6.2 was written. `evq_mem` leads it outright now, the
+whole valid-flag class is closed, and what is left in `lif_scan` and
+`evq_hold` is the indices and the data words, which is where section
+5.7's general finding said the *lower* per-bit rate was.
+
+**One rail is not like the other two, and the campaign did not find it
+[fact].** The three copies of the rail module do not have the same
+port: `aer_flag_rail` and `pilot_flag_rail` take a next VALUE and are
+rewritten every cycle, and `lif_flag_rail` takes an ENABLE. The rule
+behind that, learned the expensive way and now stated in all three
+headers:
+
+> a rail's next value may be a plain expression only if every term in
+> it is X-free. Where it is not, the hold must be a flip-flop ENABLE,
+> because `if (en)` with `en` unknown holds the flop while
+> `d = a || b` with `a` unknown latches the unknown forever.
+
+`out_pend`'s fill condition reads the neuron state file through `spike`
+and `r_cur`, and `vmem` / `rmem` are deliberately not on the reset net
+— they are defined by the first `STATE_CLR`. Before it, the fill
+condition is X. The sequential block the rails replaced was X-tolerant
+by accident of `if ((r_cur == 4'd0) && spike)` simply not firing on an
+unknown; written as a next-value expression, one X cycle poisons both
+rails permanently, `BUSY` sticks high and the output queue never
+drains. **Measured: that form passes the 32 lockstep tests, the 15
+`aer_fifo` tests, the three `lif_ctrl` `prove` tasks and the whole
+366-injection campaign, and fails exactly one test in the repository —
+`test_axon_out_of_range_is_dropped_and_counted` in
+`hw/tb/test_pilot_top.py`.** A fault-injection campaign cannot see an X
+that a golden-model comparison never reaches; the block-level suite
+could, and did.
+
+What the enable form gives up, stated rather than glossed: `out_pend`'s
+rails do NOT self-heal, so a disagreement persists until the next emit
+or accept and, on a core that then goes idle, `STATUS.ERR_CFG` cannot
+be cleared until the core emits again or `CTRL.SOFT_RST` is used. That
+is the same shape as the parked-core live term the pilot already
+documents. The self-healing alternative, `en = out_emit || wr_accept ||
+op_mm`, is both X-safe and self-healing and was measured and rejected:
+it puts the rails' own disagreement inside their enable, and
+`formal/lif_ctrl.sby`'s `bmc` task then reached step 20 in 33 minutes
+against 3 minutes for the next-value form and 16 minutes for the whole
+40-step run on the pre-rail design [fact, same machine, same engine]. A
+four-fold slowdown of a proof gate is too much to pay for healing a
+fault the host has already been told about.
+
+**The two leaves' own verification, which is part of this change and
+not a follow-up [fact].**
+
+- `formal/aer_fifo.sby`: `prove`, `prove_d4`, `bmc` and `cover` all
+  pass, at 18 s, 1 s, 4 min 50 s and 18 min 28 s -- inside the
+  pre-rail figures that file records (41 s / 1 s / 5 min 48 s /
+  29 min 19 s), on a quieter machine. P5 (`rd_valid == $past(rd_ok)`) is the property the rails could
+  have broken, and the thing that keeps it inductive is that the rails
+  carry no enable: both are rewritten from `rd_ok` every cycle, so a
+  disagreement is unreachable one step after ANY start state and the
+  k-induction never has to carry "the rails agree" as an invariant. No
+  property file was touched.
+- `hw/tb/test_aer_fifo.py`: 15 of 15 pass, unmodified.
+- `formal/lif_ctrl.sby` and `formal/lif_mem.sby`: all sixteen tasks
+  pass (`lif_ctrl` 8, `lif_mem` 8). `lif_ctrl`'s `bmc` is the
+  expensive one at **24 min** against a **16 min** pre-rail baseline
+  measured on the same machine with the same engine, both while other
+  jobs were running; the three `prove` tasks are 45 s, 47 s and
+  4 min 12 s. H6
+  (`out_valid` is never retracted without `out_ready`) is the property
+  at risk, and it survives a start state in which the rails disagree
+  for a reason worth writing down: `out_valid` then reads 0 throughout,
+  so the antecedent is never armed and the obligation is vacuous. No
+  invariant was needed in a file this change does not own.
+- `hw/tb/test_lif_core_rtl.py`: **32 of 32 lockstep tests pass
+  unmodified**, against the frozen `sw/golden/lif_core.py`. The change
+  is invisible in the fault-free case, which was the constraint.
+
+**Mutation-checked, once per flag [fact].** Same-polarity rails,
+functionally identical RTL that no simulation can distinguish:
+
+| mutant | ECP5 attribute-free census | ASIC total | tests failed |
+|---|---|---|---|
+| `aer_flag_rail` `u_rdv_b` POL 0 | `u_evq_in.u_rdv_b` 0, `u_evq_out.u_rdv_b` 0 | 1,277 → 1,275 | `test_read_valid_rails_survive_a_flow_that_ignores_keep_hierarchy` + the zero-loss test |
+| `lif_flag_rail` `u_op_b` POL 0 | `u_lif.u_op_a` 0 | 1,277 → 1,276 | `test_out_pend_rails_survive_a_flow_that_ignores_keep_hierarchy` + the zero-loss test |
+
+Exactly two failures each and nothing else in the file notices, which
+is the same signature the `oh_valid` mutant produced.
+
+**Also stale as a result of this change [fact].** The same
+`hw/openlane/pilot_ihp/runs/shape-6x2/` netlist that section 5.9 lists
+now predates `hw/rtl/aer_fifo.v` as well, so
+`test_pointer_tmr_survives_the_real_hardening_flow` in
+`sw/tests/test_synthesis_guards.py` SKIPS rather than runs. That is the
+provenance rule working as designed -- a run produced before a
+structure cannot be asked about it -- and it is one more item for the
+re-harden that section 5.9 already scheduled. Everything the recipe
+tests assert about the rails is measured on the recipes themselves and
+is unaffected.
+
+**One toolchain trap found on the way, and it is not about this change
+[fact].** `hw/rtl/lif_core.v`'s header said the proofs are run with
+`make -f lif_ctrl.mk lif_all`. Invoked that way the fragment is not
+included by `formal/Makefile`, so it never sees `tools.mk` and falls
+back to `command -v sby`, which on the development machine resolves to a
+*sibling project's* oss-cad-suite — the exact incident `tools.mk` exists
+to prevent, still reachable through a documented command. The header now
+says `cd formal && make lif_all` and says why. The fragment's own
+fallback is untouched: it is in `formal/`, which this change does not
+own.
 
 ---
 
@@ -3014,7 +3210,13 @@ The post-fix run of section 5.9 is **359 injections, 614 s, 30.81 ms**
 1.6% on the 31.31 ms above, which is the six retired injections and
 nothing else. The wave-6 run of section 5.10 is **361 injections,
 706 s, 30.97 ms** [fact], the two extra injections being the second
-rail of `oh_valid`.
+rail of `oh_valid`. The wave-6 second-half run of section 5.11 is
+**366 injections, 568 s, 31.39 ms** [fact] -- the same 366 records,
+field for field, as an earlier revision of that change which took
+795 s on a machine also running four SymbiYosys jobs. Same measurement,
+same log, 1.4x the wall time; section 8's rule about quoting the
+simulated time and never the wall time applies to this pair as
+directly as to the 1769 s one above.
 
 **Re-running the mutation check of section 5.9.** The mutant is a copy
 of `hw/rtl` with the two pulse registers put back; the campaign is

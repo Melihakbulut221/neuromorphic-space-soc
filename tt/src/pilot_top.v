@@ -546,8 +546,19 @@
 // The held event is still lost -- the run is still wrong -- but it is
 // wrong LOUDLY, which is the whole difference between the SDC class
 // and the DETECTED class in docs/16, and it is the same difference
-// section 8.1 above is about. The disagreement heals on the next queue
-// read, when both rails are written from one expression again.
+// section 8.1 above is about. The disagreement heals on the next clock
+// edge: the rails take a next VALUE rather than an enable, and that
+// value is written from the CHECKED flag, which reads 0 while they
+// disagree, so the safe reading becomes the stored one and a second
+// upset cannot land on top of the first.
+//
+// One caveat that belongs here rather than in the rail module, because
+// it is about the CALLER: a next-value rail is only correct when every
+// term of that next value is X-free. hw/rtl/lif_core.v's copy of this
+// rail takes an enable instead, for exactly that reason, and its
+// header carries the measurement. oh_valid's next value is built from
+// fo_rd_valid, oh_valid and oh_pop, all defined out of reset, so the
+// next-value form is safe here.
 //
 // Cost: +1 flip-flop, one XOR of two rails, and one term in the fault
 // process. The other two flags of the same class are in files this
@@ -1258,7 +1269,7 @@ module pilot_top #(
     // -----------------------------------------------------------------
     // Input event queue (EVQ_IN)
     // -----------------------------------------------------------------
-    wire        fi_full, fi_empty, fi_rd_valid;
+    wire        fi_full, fi_empty, fi_rd_valid, fi_rv_mm;
     wire [15:0] fi_rd_data;
     wire [$clog2(EVQ_IN_DEPTH):0] fi_level;
     wire [CNT_W-1:0] fi_drop;
@@ -1291,13 +1302,14 @@ module pilot_top #(
         .level    (fi_level),
         .drop_clr (fclr_ovf),
         .drop_cnt (fi_drop),
-        .ptr_mismatch (fi_ptr_mm)
+        .ptr_mismatch (fi_ptr_mm),
+        .rv_mismatch  (fi_rv_mm)
     );
 
     // -----------------------------------------------------------------
     // Output event queue (EVQ_OUT) and its one-deep holding register
     // -----------------------------------------------------------------
-    wire        fo_full, fo_empty, fo_rd_valid;
+    wire        fo_full, fo_empty, fo_rd_valid, fo_rv_mm;
     wire [15:0] fo_rd_data;
     wire [$clog2(EVQ_OUT_DEPTH):0] fo_level;
     wire [CNT_W-1:0] fo_drop;
@@ -1349,7 +1361,8 @@ module pilot_top #(
         .level    (fo_level),
         .drop_clr (fclr_ovf),
         .drop_cnt (fo_drop),
-        .ptr_mismatch (fo_ptr_mm)
+        .ptr_mismatch (fo_ptr_mm),
+        .rv_mismatch  (fo_rv_mm)
     );
 
     // Pointer-TMR telemetry from the two queues. hw/rtl/aer_fifo.v votes
@@ -1395,10 +1408,10 @@ module pilot_top #(
     // valid flag can do either -- and the disagreement is reported
     // through sticky_errcfg in the fault process. It is not corrected:
     // two rails detect, they do not vote. It clears itself on the next
-    // fill, when both rails are written from oh_valid_d again.
+    // clock edge, because oh_valid_d below reads this checked value.
     wire oh_valid_a, oh_valid_b;
     wire oh_valid_mm = (oh_valid_a != oh_valid_b);
-    wire oh_valid    = oh_valid_a && !oh_valid_mm;
+    wire oh_valid    = oh_valid_a && oh_valid_b;
 
     // The one-entry show-ahead adapter of section 8, and what both
     // output observers see. A pop by either one frees it; if both pop in
@@ -1410,19 +1423,27 @@ module pilot_top #(
     // The flag's next state, hoisted out of the sequential block below
     // so that both rails are written from ONE expression. It is the
     // same priority that block used to carry -- a fill beats a pop, and
-    // the entry is held otherwise -- written as an enable and a datum
-    // because that is what a rail port takes.
+    // the entry is held otherwise -- with the hold written as a MUX
+    // rather than as a flip-flop enable, so both rails are rewritten
+    // every cycle.
+    //
+    // The mux is load bearing. oh_valid_d reads the CHECKED oh_valid,
+    // which is low while the rails disagree, so a disagreement rewrites
+    // both rails to the safe value on the next edge from any state: the
+    // fault cannot persist into a second upset and oh_valid_mm cannot
+    // stick high with no traffic to clear it. hw/rtl/lif_core.v records
+    // what the enable form cost that module's bounded proof; the shape
+    // here is the same for the same reason, and all three rail modules
+    // in this repository take a next value rather than an enable.
     wire oh_valid_set = fo_rd_valid;
-    wire oh_valid_clr = !fo_rd_valid && oh_pop;
-    wire oh_valid_en  = oh_valid_set || oh_valid_clr;
-    wire oh_valid_d   = oh_valid_set;
+    wire oh_valid_d   = oh_valid_set || (oh_valid && !oh_pop);
 
     pilot_flag_rail #(.POL(1'b0)) u_ohv_a (
         .clk (clk), .rst_n (blk_rst_n),
-        .en  (oh_valid_en), .d (oh_valid_d), .q (oh_valid_a));
+        .d (oh_valid_d), .q (oh_valid_a));
     pilot_flag_rail #(.POL(1'b1)) u_ohv_b (
         .clk (clk), .rst_n (blk_rst_n),
-        .en  (oh_valid_en), .d (oh_valid_d), .q (oh_valid_b));
+        .d (oh_valid_d), .q (oh_valid_b));
 
     always @(posedge clk or negedge blk_rst_n) begin
         if (!blk_rst_n) begin
@@ -1698,6 +1719,7 @@ module pilot_top #(
     // whose stated purpose is to measure the upset environment, the
     // counters are the product (docs/16 section 4.1).
     wire lif_wmem_sec, lif_wmem_ded, lif_state_sec, lif_state_ded;
+    wire lif_pend_mm;
 
     // The core's corrections join the same CNT_SEC/CNT_DED counters as
     // the weight-load and scrub codec. Those registers are defined
@@ -1762,7 +1784,8 @@ module pilot_top #(
         .wmem_sec       (lif_wmem_sec),
         .wmem_ded       (lif_wmem_ded),
         .state_sec      (lif_state_sec),
-        .state_ded      (lif_state_ded)
+        .state_ded      (lif_state_ded),
+        .pend_mismatch  (lif_pend_mm)
     );
 
     // -----------------------------------------------------------------
@@ -1970,6 +1993,16 @@ module pilot_top #(
             // CNT_TMR, which is an episode counter for corrections that
             // the voter MASKED, and nothing was masked here.
             if (oh_valid_mm) sticky_errcfg <= 1'b1;
+            // The same for the other two dual-rail flags of that class:
+            // the queues' registered read-valid (hw/rtl/aer_fifo.v, one
+            // report per instance) and the neuron core's output holding
+            // flag (hw/rtl/lif_core.v). All three are DETECTED and not
+            // corrected, all three drop rather than fabricate, and all
+            // three land here rather than in CNT_TMR for the reason
+            // above: nothing was masked. A per-cause counter is the same
+            // open item as CNT_TIMEOUT (docs/16 section 5.8).
+            if (fi_rv_mm || fo_rv_mm) sticky_errcfg <= 1'b1;
+            if (lif_pend_mm)          sticky_errcfg <= 1'b1;
 
             // ---- FAULT_CLR (npu_regbank C2 re-export) ----------------
             // A clear coincident with its own event restarts the
@@ -2126,21 +2159,27 @@ endmodule
 // choosing the safe interpretation of a disagreement and for reporting
 // it. hw/rtl/pilot_top.v drops the held event and latches
 // sticky_errcfg.
+//
+// No enable port. The caller drives the hold into d, so both rails are
+// rewritten every cycle and a disagreement is exactly one cycle wide
+// from any state at all -- which is what lets the consumer's safe
+// reading become the stored one, and what keeps the rails out of the
+// inductive invariants of the proofs over the other two copies of this
+// module (hw/rtl/aer_fifo.v, hw/rtl/lif_core.v).
 (* keep_hierarchy *)
 module pilot_flag_rail #(
     parameter POL = 1'b0              // per-rail storage polarity
 ) (
     input  wire clk,
     input  wire rst_n,
-    input  wire en,                   // write enable, already qualified
-    input  wire d,                    // write data, true polarity
+    input  wire d,                    // next value, true polarity
     output wire q                     // stored value, true polarity
 );
     (* keep *) reg bits;
 
     always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)   bits <= 1'b0 ^ POL;
-        else if (en)  bits <= d ^ POL;
+        if (!rst_n) bits <= 1'b0 ^ POL;
+        else        bits <= d ^ POL;
     end
 
     assign q = bits ^ POL;

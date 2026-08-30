@@ -8,17 +8,14 @@
 
 # Rootless tool discovery, same house convention as formal/Makefile:
 # prefer sby on PATH, then the known oss-cad-suite checkouts.
-ifeq ($(origin SBY), undefined)
-SBY := $(shell command -v sby 2>/dev/null)
-ifeq ($(SBY),)
-SBY := $(firstword $(wildcard \
-	$(HOME)/oss-cad-suite/bin/sby \
-	$(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/sby \
-	$(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/sby))
-endif
-ifeq ($(SBY),)
-$(error sby not found: install oss-cad-suite or put sby on PATH)
-endif
+ifeq ($(origin SBY),undefined)
+# Standalone invocation (`make -f <this>.mk ...`) used to rediscover sby
+# with a PATH probe and a glob over several oss-cad-suite checkouts. On
+# this machine that silently selected a sibling project's toolchain --
+# the exact incident tools.mk was written to end, still reachable
+# through a documented command. The pin is the single source now; see
+# tools.mk, and `make -f tools.mk toolcheck` for what it resolves to.
+include $(dir $(lastword $(MAKEFILE_LIST)))../tools.mk
 endif
 
 REGBANK_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))

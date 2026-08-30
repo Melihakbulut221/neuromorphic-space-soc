@@ -11,7 +11,12 @@
 // SAFE-state behavior below is the part the golden model cannot express,
 // and it is covered separately by the directed handshake tests in the
 // same suite and by the proofs in formal/lif_ctrl_props.v
-// (make -f lif_ctrl.mk lif_all in formal).
+// (cd formal && make lif_all -- through formal/Makefile, NOT
+// `make -f lif_ctrl.mk`, which this line used to say: the fragment
+// falls back to `command -v sby` when it is not included by that
+// makefile, and on the development machine that resolves to a sibling
+// project's toolchain. Measured 2026-08-30, and it is the same
+// incident tools.mk was written for).
 //
 // Pilot scope (docs/02 section 3, Candidate A storage class, reached by
 // fallback trigger F1): the synapse array is a flip-flop file (default
@@ -178,6 +183,39 @@
 // storage is not on the reset net either, for the same reason and with
 // the same consequence -- it is defined by the first STATE_CLR and the
 // first weight load, exactly like the data it covers.
+//
+// =====================================================================
+// OUTPUT FLAG RAILS (added 2026-08-30, docs/16 section 5.11)
+// =====================================================================
+//
+// out_pend -- the one-bit "the output holding register is occupied"
+// flag -- was 3 of 3 silent corruptions in the fault-injection
+// campaign, the worst per-bit rate left in the design after the memory
+// hardening below. It is the third member of the class docs/16 section
+// 5.7 named: in this design the dangerous small state is the VALID
+// FLAGS, not the indices. An upset that sets it emits out_event again,
+// which is a spike the network never produced; an upset that clears it
+// drops a spike the network did produce, and stalls nothing because
+// can_go frees immediately. Neither is visible to any consumer: the
+// event word carries a TYPE and a 10-bit id and nothing that could
+// distinguish a fabricated spike from a real one.
+//
+// It is two rails, not three replicas, and the reason is a proof:
+// hw/rtl/pilot_top.v header section 8.2 carries it in full. One bit has
+// exactly two storage functions, x and ~x, so polarity holds two
+// replicas apart provably and a third has nothing left to take.
+// lif_flag_rail at the end of this file is the rail; op_a / op_b are
+// the two instances; a disagreement holds out_pend LOW (drop rather
+// than fabricate), reports on pend_mismatch, and forces its own rewrite
+// so the fault cannot persist. DETECTED, not corrected: the spike is
+// still lost, but the host is told.
+//
+// Invisible in the fault-free case, which is the constraint that
+// mattered here: hw/tb/test_lif_core_rtl.py's 32 lockstep tests against
+// the frozen golden model sw/golden/lif_core.py pass unmodified, and so
+// do the eight formal/lif_ctrl.sby tasks, including the H6 output
+// handshake (out_valid never retracted without out_ready) which the
+// rails could have broken had a disagreement been allowed to persist.
 //
 // =====================================================================
 // MEMORY HARDENING (added after the docs/16 fault-injection campaign)
@@ -447,6 +485,14 @@ module lif_core #(
     output wire        state_sec,       // neuron state word: corrected
     output wire        state_ded,       // neuron state word: uncorrectable
 
+    // out_pend rail observability (header section OUTPUT FLAG RAILS).
+    // The two rails of the output-holding flag disagreed this cycle, so
+    // an upset was DETECTED and out_valid is being held low rather than
+    // trusted. Combinational level, exactly one cycle wide because a
+    // disagreement forces its own rewrite; the instantiating block
+    // latches it, exactly as it does the ECC telemetry above.
+    output wire        pend_mismatch,
+
     // synapse weight load port (FF array, one weight per cycle, idle only)
     input  wire              w_wr_en,
     input  wire [AXON_W-1:0] w_wr_axon,
@@ -503,7 +549,6 @@ module lif_core #(
     reg              err_cfg_r;  // STATUS.ERR_CFG, set on entry to S_SAFE
     reg [NEUR_W-1:0] jj;         // neuron scan index (E8 ascending order)
     reg [AXON_W-1:0] ev_axon_r;  // latched axon id of the event in flight
-    reg              out_pend;   // output holding register occupied
 
     // -----------------------------------------------------------------
     // Coded memory files (header section MEMORY HARDENING)
@@ -700,6 +745,19 @@ module lif_core #(
     // 10-bit addition context without truncation.
     wire [9:0] spike_id = cfg_tile_off + jj;
 
+    // -----------------------------------------------------------------
+    // out_pend, dual-rail (header section OUTPUT FLAG RAILS)
+    // -----------------------------------------------------------------
+    // Both rail ports read true, so the rails AGREE when they are equal.
+    // On a disagreement out_pend reads 0: the held spike is dropped
+    // rather than emitted from a flag that can no longer be vouched
+    // for, and pend_mismatch reports it. DETECTED, not corrected.
+    wire op_a, op_b;
+    wire op_mm = (op_a != op_b);
+    wire out_pend = op_a && op_b;
+
+    assign pend_mismatch = op_mm;
+
     wire last_j    = (jj == N_NEURONS - 1);
     wire wr_accept = out_pend && out_ready;   // FIFO takes the held spike
     wire can_go    = !out_pend || out_ready;  // scan may process a neuron
@@ -725,6 +783,72 @@ module lif_core #(
     // announced -- which is correct: nothing read it.
     wire w_rd_used  = (state == S_EV) && can_go && (r_cur == 4'd0);
     wire st_rd_used = ((state == S_EV) && can_go) || (state == S_TICK);
+
+    // (E5) the emit condition, hoisted out of the S_EV arm below so that
+    // the two rails and the out_event register are written from ONE
+    // expression. It is exactly the arm's own guard: S_EV, not stalled,
+    // the neuron out of refractory, and over threshold.
+    wire out_emit = w_rd_used && spike;
+
+    // The rails' write port, and it is an ENABLE and a datum rather
+    // than the plain next-value port the other two copies of this rail
+    // take (hw/rtl/aer_fifo.v, hw/rtl/pilot_top.v). The rule, which is
+    // worth stating because it was learned the expensive way:
+    //
+    //   a rail's next value may be a plain expression only if every
+    //   term in it is X-free. Where it is not, the hold must be a
+    //   flip-flop ENABLE, because `if (en)` with en unknown holds the
+    //   flop while `d = a || b` with a unknown latches X forever.
+    //
+    // This flag is the case that is not X-free. out_emit reads the
+    // neuron state file through spike and r_cur, and vmem / rmem are
+    // deliberately NOT on the reset net (see the header): they are
+    // defined by the first STATE_CLR, so before it out_emit is X. The
+    // sequential block this replaced was X-tolerant by accident of
+    // `if ((r_cur == 4'd0) && spike)` simply not firing on an unknown.
+    // Written as `op_d = out_emit || (out_pend && !wr_accept)` -- the
+    // form the other two rails use, and logically identical -- one X
+    // cycle poisons both rails permanently, BUSY sticks high and the
+    // output queue never drains. Measured: that form fails
+    // test_axon_out_of_range_is_dropped_and_counted in
+    // hw/tb/test_pilot_top.py and passes every other test in the
+    // repository, including the whole fault-injection campaign [fact,
+    // 2026-08-30].
+    //
+    // A fill (out_emit) beats a drain (wr_accept), which is the
+    // priority the sequential block expressed by assigning out_pend
+    // twice in one edge.
+    //
+    // What this shape gives up, stated rather than glossed: the rails
+    // do NOT self-heal. A disagreement persists until the next emit or
+    // accept rewrites both, so on a core that then goes idle
+    // pend_mismatch stays high and STATUS.ERR_CFG cannot be cleared
+    // until the core emits again or CTRL.SOFT_RST is used -- the same
+    // recovery, and the same shape of behaviour, as the parked-core
+    // live term the pilot already documents. The alternative,
+    // `en = out_emit || wr_accept || op_mm`, does self-heal and is
+    // X-safe, and it was measured and rejected: it puts the rails' own
+    // disagreement inside their enable, and formal/lif_ctrl.sby's bmc
+    // task then reached step 20 in 33 minutes against 3 minutes for the
+    // mux form and 16 minutes for the whole 40-step run on the pre-rail
+    // design [fact, same machine, same engine]. A four-fold slowdown of
+    // a proof gate is too much to pay for healing a fault the host has
+    // already been told about.
+    //
+    // The k-induction does not need the healing either, which is the
+    // measurement that made this choice safe rather than merely cheap:
+    // formal/lif_ctrl.sby's three prove tasks pass with the form below
+    // (67 s at 4 x 4). H6 -- out_valid is never retracted without
+    // out_ready -- survives a start state in which the rails disagree
+    // because out_valid then reads 0 throughout and the antecedent is
+    // never armed.
+    wire op_en = out_emit || wr_accept;
+    wire op_d  = out_emit;
+
+    lif_flag_rail #(.POL(1'b0)) u_op_a (
+        .clk (clk), .rst_n (rst_n), .en (op_en), .d (op_d), .q (op_a));
+    lif_flag_rail #(.POL(1'b1)) u_op_b (
+        .clk (clk), .rst_n (rst_n), .en (op_en), .d (op_d), .q (op_b));
     assign wmem_sec  = w_rd_sec    && w_rd_used;
     assign wmem_ded  = w_rd_ded    && w_rd_used;
     assign state_sec = st_scan_sec && st_rd_used;
@@ -797,7 +921,6 @@ module lif_core #(
             err_cfg_r <= 1'b0;
             jj        <= {NEUR_W{1'b0}};
             ev_axon_r <= {AXON_W{1'b0}};
-            out_pend  <= 1'b0;
             out_event <= 16'd0;
         end else begin
             // Weight load port. Independent of the FSM and idle-only by
@@ -823,11 +946,13 @@ module lif_core #(
             end
 
             // The held spike leaves for the FIFO on this edge. A spike
-            // emitted by the scan below re-asserts out_pend and overwrites
-            // out_event in the same edge; the FIFO samples the old word,
-            // so the two never collide.
-            if (wr_accept)
-                out_pend <= 1'b0;
+            // emitted by the scan below re-asserts the flag and
+            // overwrites out_event in the same edge; the FIFO samples
+            // the old word, so the two never collide. The flag itself
+            // is no longer written here -- it is two rails, driven from
+            // op_en / op_d above, and out_emit beating wr_accept there
+            // is the same priority this block expressed by assigning
+            // out_pend twice.
 
             case (state)
                 S_IDLE: begin
@@ -846,10 +971,8 @@ module lif_core #(
                         // (E7) R > 0 gates E1..E5; (E4) checked after the
                         // update; (E5) emits. The state write itself is
                         // in the st_we block above.
-                        if ((r_cur == 4'd0) && spike) begin
-                            out_pend  <= 1'b1;               // (E5) emit
+                        if (out_emit)                        // (E5) emit
                             out_event <= {2'b00, 4'b0000, spike_id};
-                        end
                         jj <= jj + 1'b1;
                         if (last_j) begin
                             jj    <= {NEUR_W{1'b0}};
@@ -923,6 +1046,57 @@ module lif_core #(
 `endif
 `endif
 
+endmodule
+
+// =====================================================================
+// lif_flag_rail: one physical rail of the dual-rail out_pend flag
+// =====================================================================
+//
+// The third copy in this repository of a six-line module --
+// hw/rtl/pilot_top.v has pilot_flag_rail and hw/rtl/aer_fifo.v has
+// aer_flag_rail -- and the duplication is the deliberate price of two
+// leaves that elaborate on their own. aer_fifo.v must, because
+// formal/aer_fifo.sby lists exactly that file and its properties; this
+// module cannot instantiate pilot_flag_rail in any case, since
+// pilot_top.v is its own parent. The alternative, a fourth RTL file
+// every flow has to be told about, buys nothing that six lines of
+// duplication cost.
+//
+// Both defences of pilot_cfg_bank, and neither trusted alone:
+// keep_hierarchy stops `flatten` and opt_merge, and POL gives the two
+// rails different stored functions so that structural hashing has
+// nothing to match once the attribute is gone. At one bit polarity is
+// not merely sufficient for two rails, it is complete: x and ~x are
+// the only two storage functions there are, which is also why this is
+// two rails and not three (hw/rtl/pilot_top.v header section 8.2).
+//
+// The port presents `bits ^ POL`, so both rails read true and the
+// consumer compares them for EQUALITY. A debugger reading u_op_b.bits
+// sees the complement of out_pend, by design.
+//
+// This copy takes an ENABLE, and the other two do not. The rule and the
+// measurement behind it are at the instantiation above: a rail whose
+// next value can be X while the neuron state file is uninitialised
+// needs `if (en)` to hold, because an OR of an unknown latches the
+// unknown and never lets it go.
+(* keep_hierarchy *)
+module lif_flag_rail #(
+    parameter POL = 1'b0              // per-rail storage polarity
+) (
+    input  wire clk,
+    input  wire rst_n,
+    input  wire en,                   // write enable, already qualified
+    input  wire d,                    // write data, true polarity
+    output wire q                     // stored value, true polarity
+);
+    (* keep *) reg bits;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)  bits <= 1'b0 ^ POL;
+        else if (en) bits <= d ^ POL;
+    end
+
+    assign q = bits ^ POL;
 endmodule
 
 // =====================================================================

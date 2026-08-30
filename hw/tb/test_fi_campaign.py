@@ -446,6 +446,17 @@ def resolve(dut, path):
 RETIRED_TARGETS = ("fetch_timeout", "oh_timeout")
 
 
+# The dual-rail valid flags of hw/rtl/pilot_top.v section 8.2 and its two
+# copies, by the instance names of their rails. A target that matches is
+# a rail's own storage; the checked wire the consumer reads is not a
+# target and must never become one (test_05 asserts both).
+_RAIL_INSTANCES = ("u_ohv_", "u_rdv_", "u_op_")
+
+
+def _is_rail(target):
+    return any(n in str(target) for n in _RAIL_INSTANCES)
+
+
 def state_present(dut, path):
     """True when `path` still names something a deposit can land in."""
     try:
@@ -986,9 +997,18 @@ def target_list(n_neurons, n_axons, q_depth):
     #    programme found dominate SDC rate rather than fault magnitude.
     #    Whether that carries over to a LIF scan is a question this
     #    campaign is here to answer, not to assume.
+    #
+    #    `out_pend` is TWO RAILS since 2026-08-30 (hw/rtl/lif_core.v
+    #    header section OUTPUT FLAG RAILS), so the injector is
+    #    retargeted onto the rails' storage for the same reason item 9
+    #    retargeted the pointers: a deposit into the CHECKED wire
+    #    measures a node nothing claims to protect. The two rails share
+    #    each drawn phase and are injected one at a time, so no phase
+    #    moves and only this target's own records do, 3 to 6.
     t += [("lif_scan", "u_lif.jj", list(range(nb)), 2, True),
           ("lif_scan", "u_lif.ev_axon_r", list(range(ab)), 2, True),
-          ("lif_scan", "u_lif.out_pend", [0], 3, True),
+          ("lif_scan", ("u_lif.u_op_a.bits", "u_lif.u_op_b.bits"),
+           [0], 3, True),
           ("lif_scan", "u_lif.out_event", [0, 2, 14], 2, True)]
 
     # 6. configuration TMR replicas (pilot_top.v section 4), one bit per
@@ -1109,7 +1129,9 @@ def target_list(n_neurons, n_axons, q_depth):
     t += [("evq_hold", ("u_ohv_a.bits", "u_ohv_b.bits"), [0], 2, True),
           ("evq_hold", "oh_req", [0], 2, True),
           ("evq_hold", "oh_data", [0, 2, 14], 2, True),
-          ("evq_hold", "u_evq_out.rd_valid", [0], 2, True),
+          ("evq_hold",
+           ("u_evq_out.u_rdv_a.bits", "u_evq_out.u_rdv_b.bits"),
+           [0], 2, True),
           ("evq_hold", "u_evq_out.rd_data", [0, 14], 1, False)]
 
     # 12. event dispatcher. dstate gets five phases rather than two
@@ -1870,22 +1892,26 @@ async def test_05_summary(dut):
     #       is still wrong -- the promise is that it is never wrong
     #       SILENTLY, which is the SDC-to-DETECTED move docs/16 section
     #       6.2 costed this hardening at.
+    # All three dual-rail flags at once: oh_valid (u_ohv_*), the two
+    # queues' rd_valid (u_rdv_*) and lif_core's out_pend (u_op_*).
     rail_paths = sorted({r["target"] for r in RESULTS
-                         if r["group"] == "evq_hold"
-                         and "ohv" in str(r["target"])})
-    assert len(rail_paths) == 2 and all(p.endswith(".bits")
+                         if _is_rail(r["target"])})
+    assert len(rail_paths) == 6 and all(p.endswith(".bits")
                                         for p in rail_paths), \
-        f"every show-ahead valid-flag target must be a rail's storage " \
-        f"register (pilot_flag_rail.bits), not the checked wire " \
-        f"oh_valid: {rail_paths}"
+        f"every valid-flag target must be a rail's storage register " \
+        f"(*_flag_rail.bits), not the checked wire the consumer reads. " \
+        f"Six are expected -- two rails each for oh_valid, EVQ_OUT's " \
+        f"rd_valid and out_pend -- and these were found: {rail_paths}"
     rail = {c: 0 for c in CLASSES}
     for r in RESULTS:
-        if r["group"] == "evq_hold" and "ohv" in str(r["target"]):
+        if _is_rail(r["target"]):
             rail[r["class"]] += 1
     assert rail["DETECTED"] == sum(rail.values()), \
-        f"an upset in one rail of the show-ahead valid flag must always " \
-        f"be DETECTED -- the rails disagree, the adapter presents " \
-        f"nothing and sticky_errcfg latches -- got {rail}"
+        f"an upset in one rail of a dual-rail valid flag must always be " \
+        f"DETECTED -- the rails disagree, the consumer reads the flag " \
+        f"low rather than trusting it, and sticky_errcfg latches. Two " \
+        f"rails detect and do not correct, so the run may still be " \
+        f"wrong; what it may never be is silent -- got {rail}"
     # The two bounded-wait counters (target_list item 14 and test_04).
     # Presence here, outcome in test_04. What must not happen silently
     # is the groups disappearing, which is how the nets came to be

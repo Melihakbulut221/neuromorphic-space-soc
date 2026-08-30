@@ -22,6 +22,11 @@
 //     TMR" below). ptr_mismatch reports a corrected replica disagreement
 //     for one cycle; it is a level output, and the instantiating block
 //     qualifies and counts it.
+//   - rd_valid is dual-rail (section "the rd_valid rails" below). It is
+//     DETECTED and not corrected: on a rail disagreement rd_valid reads
+//     low, so the read answer is missed rather than fabricated, and
+//     rv_mismatch reports it for the instantiating block to latch. In
+//     the fault-free case nothing about the contract above changes.
 //
 // The registered output is a decision, not an accident, and it is the
 // one thing here that a consumer has to design around. hw/rtl/npu_regbank.v
@@ -66,7 +71,7 @@ module aer_fifo #(
     // read side (event pipeline)
     input  wire              rd_en,
     output reg  [WIDTH-1:0]  rd_data,
-    output reg               rd_valid,
+    output wire              rd_valid,
     output wire              empty,
     // occupancy and overflow observability
     output wire [AW:0]       level,
@@ -76,7 +81,13 @@ module aer_fifo #(
     // this cycle, so an upset was corrected. Combinational level, one
     // flag for both pointers; the instantiating block edge-detects and
     // counts it (hw/rtl/pilot_top.v feeds CNT_TMR and STATUS/TMR_SEEN).
-    output wire              ptr_mismatch
+    output wire              ptr_mismatch,
+    // rd_valid rail observability: the two rails of the read-valid flag
+    // disagreed this cycle, so an upset was DETECTED and rd_valid is
+    // being held low rather than trusted (section "the rd_valid rails").
+    // Combinational level, exactly one cycle wide because the rails are
+    // rewritten every cycle; the instantiating block reports it.
+    output wire              rv_mismatch
 );
 
     // Elaboration guard: a DEPTH outside the contract (power of two, >= 2)
@@ -297,17 +308,55 @@ module aer_fifo #(
     aer_ptr_bank #(.W(PW), .POL(PTR_POL_C), .MIX(1))
         u_rptr_c (.clk(clk), .rst_n(rst_n), .d(rd_ptr_nxt), .q(rd_ptr_c));
 
+    // =================================================================
+    // the rd_valid rails
+    // =================================================================
+    // rd_valid is a one-bit valid flag, and docs/16 section 5.7 named
+    // that class as the design's most dangerous small state: 2 of 2
+    // injections into this flip-flop produced silent corruption, more
+    // than the pointers it sits next to. An upset that raises it makes
+    // the consumer capture whatever rd_data happens to hold as a real
+    // event; an upset that clears it makes the consumer miss the answer
+    // to a read it requested, which is the deadlock hw/rtl/pilot_top.v
+    // sections 5.1 and 5.7 bound with their timeouts.
+    //
+    // It is two rails and not three replicas, and that is a proof
+    // rather than a budget -- hw/rtl/pilot_top.v header section 8.2
+    // carries it in full. Over one bit there are exactly two storage
+    // functions, x and ~x, so two replicas can be held apart by
+    // polarity alone and provably, and a third has nothing left to
+    // take. The MIX transform that gives the pointer replicas their
+    // third function needs at least four bits and does not exist here.
+    //
+    // Two rails DETECT and do not correct. On a disagreement rd_valid
+    // is held LOW -- missing a read answer is a bounded, reported wait
+    // in both consumers, while a fabricated one is an event out of
+    // nothing -- and rv_mismatch says so. The rails carry no enable, so
+    // both are rewritten from rd_ok every cycle: a disagreement is
+    // exactly one cycle wide from any state, which is also what keeps
+    // it out of the inductive invariant of the four proofs.
+    // rdv_, not rv_: rv_a / rv_b / rv_c above are the read POINTER's
+    // three voter inputs and this is the read VALID flag's two rails.
+    wire rdv_a, rdv_b;
+    wire rdv_mm = (rdv_a != rdv_b);
+
+    assign rd_valid    = rdv_a && rdv_b;
+    assign rv_mismatch = rdv_mm;
+
+    aer_flag_rail #(.POL(1'b0))
+        u_rdv_a (.clk(clk), .rst_n(rst_n), .d(rd_ok), .q(rdv_a));
+    aer_flag_rail #(.POL(1'b1))
+        u_rdv_b (.clk(clk), .rst_n(rst_n), .d(rd_ok), .q(rdv_b));
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             rd_data  <= {WIDTH{1'b0}};
-            rd_valid <= 1'b0;
             drop_cnt <= {DROP_W{1'b0}};
         end else begin
             if (wr_ok)
                 mem[wr_ptr[AW-1:0]] <= wr_data;
             if (rd_ok)
                 rd_data <= mem[rd_ptr[AW-1:0]];
-            rd_valid <= rd_ok;
             if (drop_clr)
                 drop_cnt <= wr_drop ? {{(DROP_W - 1){1'b0}}, 1'b1}
                                     : {DROP_W{1'b0}};
@@ -320,6 +369,60 @@ module aer_fifo #(
 `include "aer_fifo_props.v"
 `endif
 
+endmodule
+
+// =====================================================================
+// aer_flag_rail: one physical rail of the dual-rail rd_valid flag
+// =====================================================================
+//
+// aer_ptr_bank cut down to one bit and to two replicas, and a THIRD
+// copy in this repository of a six-line module: hw/rtl/pilot_top.v has
+// pilot_flag_rail and hw/rtl/lif_core.v has lif_flag_rail. That is
+// deliberate and it is the same decision the pointer TMR made when it
+// inlined its majority rather than instantiating hw/rtl/tmr_voter.v:
+// this file must elaborate ALONE, because formal/aer_fifo.sby lists
+// exactly aer_fifo.v and its property file, and hw/tb/Makefile builds
+// the queue standalone from the same one file. A shared rail module in
+// a fourth file would break both, and a queue that cannot be proven on
+// its own is a worse trade than six duplicated lines.
+//
+// Both defences of pilot_cfg_bank, and neither trusted alone:
+//
+//   keep_hierarchy   `flatten` skips this module and `opt_merge` does
+//                    not merge instances of user-defined modules unless
+//                    invoked with -share_all.
+//   POL              the per-rail storage transform, and the one that
+//                    depends on no attribute. One rail stores the flag,
+//                    the other its complement; the two flip-flops have
+//                    different (D, reset) signatures and structural
+//                    hashing has nothing to match. At one bit this is
+//                    not merely sufficient for two rails, it is
+//                    complete: there is no third function to want.
+//
+// The port presents `bits ^ POL`, so both rails read true and a
+// consumer compares them for EQUALITY. A debugger reading u_rdv_b.bits
+// sees the complement of rd_valid, by design.
+//
+// No enable port, unlike the other two copies: rd_valid is written
+// every cycle, so this rail is too, and a disagreement heals on the
+// next edge from any state whatever.
+(* keep_hierarchy *)
+module aer_flag_rail #(
+    parameter POL = 1'b0              // per-rail storage polarity
+) (
+    input  wire clk,
+    input  wire rst_n,
+    input  wire d,                    // write data, true polarity
+    output wire q                     // stored value, true polarity
+);
+    (* keep *) reg bits;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) bits <= 1'b0 ^ POL;
+        else        bits <= d ^ POL;
+    end
+
+    assign q = bits ^ POL;
 endmodule
 
 // =====================================================================
