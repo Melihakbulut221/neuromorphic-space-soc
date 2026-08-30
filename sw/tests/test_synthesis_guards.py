@@ -599,6 +599,11 @@ def test_entry_parity_survives_a_flow_that_ignores_keep_hierarchy(
 # invisible to simulation in BOTH directions, since two rails that
 # store the same function never disagree in RTL either.
 #
+# These three tests strip keep_hierarchy and leave `(* keep *)` on the
+# storage, so what they measure is POL plus one hint. Section 1e below
+# deletes the text of both attributes and measures POL alone, and
+# docs/33-rail-transform.md records what POL does and does not reach.
+#
 # Mutation-checked 2026-08-30 [fact]: with `.POL(1'b1)` on u_ohv_b
 # changed to `.POL(1'b0)` -- functionally identical RTL, no simulation
 # can tell -- the ECP5 attribute-free census reads u_ohv_a 0 and
@@ -616,6 +621,10 @@ def test_entry_parity_survives_a_flow_that_ignores_keep_hierarchy(
 # formal/aer_fifo.sby and hw/tb/Makefile, and lif_core.v cannot
 # instantiate a module declared in its own parent. The duplication is
 # deliberate and each module's header says so.
+#
+# The 1274 -> 1273 pair above is from the tree as it stood that day and
+# is not reproducible now; the design is at 1296 and section 1e carries
+# the current measurement.
 OH_RAILS = ("u_ohv_a", "u_ohv_b")
 RV_RAILS = tuple(f"{q}.u_rdv_{r}"
                  for q in ("u_evq_in", "u_evq_out") for r in ("a", "b"))
@@ -708,6 +717,258 @@ def test_out_pend_rails_survive_a_flow_that_ignores_keep_hierarchy(
     _assert_rails(ecp5_forced, "synth_ecp5, keep_hierarchy stripped",
                   OP_RAILS, "the lif_core output-holding flag's two rails",
                   exact=False)
+
+
+# =====================================================================
+# 1e. the storage transform with no attribute in the sources at all
+# =====================================================================
+# Everything above this line asks the attribute-free question with
+# `attrmap -modattr -remove keep_hierarchy`, which deletes the module
+# attribute and leaves `(* keep *)` on the storage. That is one of the
+# two hints, so those tests measure POL plus `keep`, not POL. The three
+# rail headers claim POL alone, on its own, with no attribute honoured
+# by anybody -- and a claim the suite cannot fail is a claim nothing is
+# holding.
+#
+# These tests delete BOTH attributes from the text of the sources before
+# yosys reads them, so no pass can honour what is not there, and then
+# ask the question two ways:
+#
+#   design-wide   the whole design's flip-flop population must be
+#                 unchanged from the attributed build. A merged rail is
+#                 exactly one lost flip-flop, a merged bank is 55 or 3.
+#   rail-local    each rail module alone, in a two-instance harness, must
+#                 map to two flip-flops. This is asked separately because
+#                 with keep_hierarchy absent from the SOURCE the instance
+#                 path is gone from the cell names as well, so
+#                 Census.in_instance has nothing to count and the
+#                 design-wide total is the only design-wide evidence
+#                 available.
+#
+# Measured 2026-08-31 [fact]: 1296 flip-flops with the attributes and
+# 1296 without, in both recipes, and two flip-flops per harness.
+#
+# Mutation-checked 2026-08-31, twice, because the two tests answer to
+# different mutations and each would pass the other's [fact]:
+#
+#   .POL(1'b1) -> .POL(1'b0) on the u_ohv_b INSTANTIATION, functionally
+#   identical RTL that no simulation in this repository can tell from
+#   the original: both design-wide totals go to 1295 and
+#   test_no_flip_flop_is_lost_when_every_attribute_is_deleted fails. The
+#   harnesses pass, and correctly so -- they parameterise the module
+#   themselves, so they are asking about pilot_flag_rail and not about
+#   how pilot_top happens to have wired it.
+#
+#   `bits <= d ^ POL` / `q = bits ^ POL` reduced to `bits <= d` /
+#   `q = bits` inside pilot_flag_rail, which is the transform deleted at
+#   the source: the pilot harness maps to one flip-flop and
+#   test_a_rail_pair_is_two_flip_flops_with_no_attribute_at_all fails.
+#
+# What these tests do NOT show, and the reason docs/33-rail-transform.md
+# exists: POL is erased between synthesis and silicon. The stored reset
+# value is `1'b0 ^ POL`, sg13g2 gives dfflibmap no asynchronous flip-flop
+# that resets to 1 (it prints `unmapped dff cell: $_DFF_PN1_`), so
+# dfflibmap builds the POL=1 rail by inverting D and Q around
+# sg13g2_dfrbpq and abc folds those inverters against the rail's own
+# `d ^ POL` and `bits ^ POL`. In the sign-off netlist both rails are a
+# plain reset-to-0 flip-flop storing the flag true, with buffers and no
+# inverter -- which is safe, because dfflibmap runs after the last merge
+# pass this flow performs, and which is why
+# test_the_shipped_netlist_holds_one_flip_flop_per_rail below counts the
+# artifact rather than trusting the model.
+_RAIL_HARNESS = {
+    "pilot_top.v": ("pilot_flag_rail", """
+module rail_harness(input clk, input rst_n, input en, input d,
+                    output safe, output mm);
+    wire a, b;
+    pilot_flag_rail #(.POL(1'b0)) u_a (.clk(clk), .rst_n(rst_n),
+                                       .d(d), .q(a));
+    pilot_flag_rail #(.POL(1'b1)) u_b (.clk(clk), .rst_n(rst_n),
+                                       .d(d), .q(b));
+    assign safe = a && b;
+    assign mm   = (a != b);
+endmodule
+"""),
+    "aer_fifo.v": ("aer_flag_rail", """
+module rail_harness(input clk, input rst_n, input en, input d,
+                    output safe, output mm);
+    wire a, b;
+    aer_flag_rail #(.POL(1'b0)) u_a (.clk(clk), .rst_n(rst_n),
+                                     .d(d), .q(a));
+    aer_flag_rail #(.POL(1'b1)) u_b (.clk(clk), .rst_n(rst_n),
+                                     .d(d), .q(b));
+    assign safe = a && b;
+    assign mm   = (a != b);
+endmodule
+"""),
+    "lif_core.v": ("lif_flag_rail", """
+module rail_harness(input clk, input rst_n, input en, input d,
+                    output safe, output mm);
+    wire a, b;
+    lif_flag_rail #(.POL(1'b0)) u_a (.clk(clk), .rst_n(rst_n),
+                                     .en(en), .d(d), .q(a));
+    lif_flag_rail #(.POL(1'b1)) u_b (.clk(clk), .rst_n(rst_n),
+                                     .en(en), .d(d), .q(b));
+    assign safe = a && b;
+    assign mm   = (a != b);
+endmodule
+"""),
+}
+
+_ATTRS = ("(* keep_hierarchy *)", "(* keep *)")
+
+
+def _sources_without_any_attribute(workdir):
+    """A copy of hw/rtl with the text of both attributes deleted.
+
+    Deleting the text rather than running `attrmap` is the point: an
+    attribute that never entered the design cannot be honoured by a pass
+    that runs before the strip, and cannot be re-derived by one that runs
+    after it.
+    """
+    out = Path(workdir) / "rtl_noattr"
+    if out.is_dir():
+        return out
+    out.mkdir()
+    for path in sorted(RTL.glob("*.v")) + sorted(RTL.glob("*.vh")):
+        text = path.read_text()
+        for attr in _ATTRS:
+            text = text.replace(attr + "\n", "").replace(attr + " ", "")
+            text = text.replace(attr, "")
+        (out / path.name).write_text(text)
+    return out
+
+
+@pytest.fixture(scope="module")
+def asic_noattr(workdir):
+    stripped = _sources_without_any_attribute(workdir)
+    files = " ".join(str(stripped / n) for n in SOURCES)
+    lib = _sg13g2_liberty()
+    script = (f"read_verilog -I {stripped} {files}; hierarchy -top {TOP};"
+              f" synth -top {TOP} -flatten;")
+    if lib is not None:
+        script += f" dfflibmap -liberty {lib}; abc -liberty {lib};"
+    script += " flatten; opt_clean;"
+    return _census(script, workdir)
+
+
+@pytest.fixture(scope="module")
+def ecp5_noattr(workdir):
+    stripped = _sources_without_any_attribute(workdir)
+    files = " ".join(str(stripped / n) for n in SOURCES)
+    return _census(
+        f"read_verilog -I {stripped} {files}; hierarchy -top {TOP};"
+        f" synth_ecp5 -top {TOP}; flatten; opt_clean;", workdir)
+
+
+def _harness_flop_count(workdir, source, liberty):
+    stripped = _sources_without_any_attribute(workdir)
+    harness = Path(workdir) / f"harness_{source}"
+    harness.write_text(_RAIL_HARNESS[source][1])
+    script = (f"read_verilog -I {stripped} {stripped / source} {harness};"
+              " hierarchy -top rail_harness;"
+              " synth -top rail_harness -flatten;")
+    if liberty is not None:
+        script += f" dfflibmap -liberty {liberty}; abc -liberty {liberty};"
+    script += " opt_clean;"
+    return _census(script, workdir).total
+
+
+@needs_yosys
+@pytest.mark.parametrize("source", sorted(_RAIL_HARNESS))
+def test_a_rail_pair_is_two_flip_flops_with_no_attribute_at_all(
+        workdir, source):
+    """The claim the three rail headers make, asked of the rail module by
+    itself: two instances differing only in POL, no `keep`, no
+    keep_hierarchy, mapped to the sign-off library.
+
+    One flip-flop here means the pair is a single storage bit that agrees
+    with itself, which is invisible to every simulation in this
+    repository -- RTL and gate level alike -- because a mismatch
+    detector reading one flip-flop twice never fires in either.
+    """
+    module = _RAIL_HARNESS[source][0]
+    total = _harness_flop_count(workdir, source, _sg13g2_liberty())
+    assert total == 2, (
+        f"{module} ({source}) collapsed: a harness holding two instances "
+        f"that differ only in POL mapped to {total} flip-flop(s), not 2. "
+        f"With both attributes deleted from the source the per-rail "
+        f"storage polarity is the only thing separating the two, and "
+        f"this is the test that says whether it does.")
+
+
+@needs_yosys
+def test_no_flip_flop_is_lost_when_every_attribute_is_deleted(
+        asic, ecp5, asic_noattr, ecp5_noattr):
+    """The same question design-wide, and the one that covers the banks
+    as well as the rails.
+
+    Not a bound with slack in it: the attributed and unattributed builds
+    must agree exactly. Every replicated structure in this design carries
+    a per-replica storage transform precisely so that this number does
+    not move, and a budget here would be a place for one collapse to
+    hide.
+    """
+    assert asic_noattr.total == asic.total, (
+        f"the ASIC recipe keeps {asic.total} flip-flops with the "
+        f"attributes and {asic_noattr.total} with both `keep` and "
+        f"keep_hierarchy deleted from the sources. The difference is "
+        f"storage that only an attribute was holding, which is exactly "
+        f"what the POL/MIX transforms exist to make unnecessary.")
+    assert ecp5_noattr.total == ecp5.total, (
+        f"synth_ecp5 keeps {ecp5.total} flip-flops with the attributes "
+        f"and {ecp5_noattr.total} with both deleted.")
+
+
+# ---------------------------------------------------------------------
+# the shipped netlist, not a model of it
+# ---------------------------------------------------------------------
+# Everything else in this file synthesises hw/rtl with a recipe SHAPED
+# like the flow. This one reads the artifact the flow produced. The
+# distinction earned its place with the rails: the yosys model shows the
+# two rails as $_DFF_PN0_ and $_DFF_PN1_, which is true of the model and
+# false of the netlist, where dfflibmap has already turned both into the
+# same sg13g2_dfrbpq. Whatever the model says, the count in the shipped
+# file is the count that goes to the shuttle.
+SIGNOFF_NETLIST = (ROOT / "hw" / "openlane" / "pilot_ihp" / "runs" /
+                   "signoff-6x2" / "final" / "nl" /
+                   "tt_um_melihakbulut_nssoc.nl.v")
+
+NETLIST_RAILS = (
+    "u_pilot.u_ohv_a", "u_pilot.u_ohv_b",
+    "u_pilot.u_evq_in.u_rdv_a", "u_pilot.u_evq_in.u_rdv_b",
+    "u_pilot.u_evq_out.u_rdv_a", "u_pilot.u_evq_out.u_rdv_b",
+    "u_pilot.u_lif.u_op_a", "u_pilot.u_lif.u_op_b",
+)
+
+_NETLIST_CELL = re.compile(r"^\s*(sg13g2_\w+)\s+(\\?\S+)\s*\(", re.M)
+
+
+@pytest.mark.skipif(not SIGNOFF_NETLIST.is_file(),
+                    reason="sign-off netlist not present in this checkout")
+def test_the_shipped_netlist_holds_one_flip_flop_per_rail():
+    """Eight rails, one flip-flop each, counted in
+    hw/openlane/pilot_ihp/runs/signoff-6x2/final/nl/.
+
+    Deliberately not asserting anything about the other cells in each
+    instance. Today the POL=1 rails carry buffers where the RTL asked for
+    inverters, because dfflibmap has no reset-to-1 flip-flop in this
+    library and folds the polarity away (docs/33-rail-transform.md); a
+    future PDK with a set flop would leave the inverters standing, and
+    that would be an improvement rather than a failure. What must not
+    change is the number of storage bits.
+    """
+    cells = _NETLIST_CELL.findall(SIGNOFF_NETLIST.read_text())
+    found = {}
+    for rail in NETLIST_RAILS:
+        found[rail] = sum(
+            1 for kind, name in cells
+            if name.lstrip("\\").startswith(rail + ".") and _is_flop(kind))
+    assert all(v == 1 for v in found.values()), (
+        f"a dual-rail flag collapsed in the SHIPPED netlist: expected 1 "
+        f"flip-flop per rail instance, found {found}. This is the "
+        f"artifact the shuttle receives, so it outranks every recipe in "
+        f"this file.")
 
 
 @needs_yosys

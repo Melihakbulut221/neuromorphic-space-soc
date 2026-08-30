@@ -678,15 +678,40 @@ endmodule
 //                    invoked with -share_all.
 //   POL              the per-rail storage transform, and the one that
 //                    depends on no attribute. One rail stores the flag,
-//                    the other its complement; the two flip-flops have
-//                    different (D, reset) signatures and structural
-//                    hashing has nothing to match. At one bit this is
-//                    not merely sufficient for two rails, it is
-//                    complete: there is no third function to want.
+//                    the other its complement, so for as long as the
+//                    design is RTLIL the two are a $_DFF_PN0_ and a
+//                    $_DFF_PN1_ -- different D net, different reset
+//                    value -- and structural hashing has nothing to
+//                    match. At one bit this is not merely sufficient
+//                    for two rails, it is complete: there is no third
+//                    function to want.
+//
+// POL is measured rather than argued. With EVERY `keep` and
+// `keep_hierarchy` deleted from hw/rtl, both the ASIC and the ECP5
+// recipes keep all 1296 flip-flops; mutating one rail's `.POL(1'b1)` to
+// `.POL(1'b0)` -- functionally identical RTL -- takes both to 1295.
+// Measured 2026-08-31 [fact]; sw/tests/test_synthesis_guards.py
+// section 1e.
+//
+// POL does not reach silicon, and the header of pilot_flag_rail in
+// hw/rtl/pilot_top.v carries the full account. In short: the stored
+// reset value is `1'b0 ^ POL`, sg13g2 offers dfflibmap no asynchronous
+// flip-flop that resets to 1, so dfflibmap builds one by inverting D
+// and Q around sg13g2_dfrbpq and those inverters fold against this
+// module's own `d ^ POL` and `bits ^ POL`. Measured in
+// hw/openlane/pilot_ihp/runs/signoff-6x2/final/nl/ [fact], per queue
+// instance: u_rdv_a is 1 x sg13g2_dfrbpq_1 and u_rdv_b is
+// 1 x sg13g2_dfrbpq_1 with 2 x sg13g2_buf_1, no inverter in either and
+// both storing rd_valid in true polarity. It is safe -- dfflibmap runs
+// after the last merge pass this flow performs -- but it means the
+// shipped netlist holds no structural difference between the rails and
+// the two flip-flops in it are not the evidence that POL worked. The
+// attribute-stripped synthesis above is. docs/33-rail-transform.md.
 //
 // The port presents `bits ^ POL`, so both rails read true and a
 // consumer compares them for EQUALITY. A debugger reading u_rdv_b.bits
-// sees the complement of rd_valid, by design.
+// in an RTL simulation sees the complement of rd_valid, by design; in
+// the mapped netlist there is nothing left to see.
 //
 // No enable port, unlike the other two copies: rd_valid is written
 // every cycle, so this rail is too, and a disagreement heals on the

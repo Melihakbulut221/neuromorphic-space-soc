@@ -2617,18 +2617,75 @@ endmodule
 //                    which is why POL exists.
 //   POL              the per-rail storage transform. One rail stores
 //                    the flag and the other stores its complement, so
-//                    the two flip-flops present different (D, EN,
-//                    reset) signatures and structural hashing has
-//                    nothing to match with the hierarchy gone. At 55
-//                    bits this same layer was measured to hold the
-//                    configuration domain's replicas A and B apart
+//                    for as long as the design is RTLIL the two rails
+//                    are a $_DFF_PN0_ and a $_DFF_PN1_ -- different D
+//                    net, different reset value -- and structural
+//                    hashing has nothing to match with the hierarchy
+//                    gone. Plain Verilog-2005; depends on no attribute.
+//                    At 55 bits this same layer was measured to hold
+//                    the configuration domain's replicas A and B apart
 //                    under a forced flatten while the third, which had
 //                    no third function available, collapsed. At one bit
 //                    there is no third function to want.
 //
+// What POL is measured to buy, and it is measured rather than argued.
+// With EVERY `keep` and `keep_hierarchy` deleted from hw/rtl -- not
+// just stripped by attrmap after elaboration -- both the ASIC and the
+// ECP5 recipes keep all 1296 flip-flops, no rail and no bank merged.
+// Mutating `.POL(1'b1)` on u_ohv_b to `.POL(1'b0)`, which no simulation
+// can tell from the original, takes both to 1295: the pair collapses to
+// one flip-flop that agrees with itself. Measured 2026-08-31 [fact];
+// sw/tests/test_synthesis_guards.py section 1e is that experiment kept
+// running.
+//
+// What POL does NOT buy, and what the shipped netlist actually holds.
+// POL does not reach silicon. The stored reset value is `1'b0 ^ POL`,
+// so the POL=1 rail is a flip-flop that resets to 1, and the only
+// asynchronous flip-flop dfflibmap will take from sg13g2 is
+// sg13g2_dfrbpq, which resets to 0. (The library's one set-capable
+// cell, sg13g2_sdfbbp_1, is a scan flop carrying SET_B, RESET_B, SCD
+// and SCE; dfflibmap does not use it and prints `unmapped dff cell:
+// $_DFF_PN1_`.) It therefore builds the reset-to-1 flop by inverting D
+// and Q around a reset-to-0 one, those two inverters land next to this
+// module's own `d ^ POL` and `bits ^ POL`, and abc folds each pair to a
+// buffer. Measured in the sign-off netlist
+// hw/openlane/pilot_ihp/runs/signoff-6x2/final/nl/ [fact]:
+//
+//   u_ohv_a   1 x sg13g2_dfrbpq_1
+//   u_ohv_b   1 x sg13g2_dfrbpq_1, 2 x sg13g2_buf_1
+//
+// no inverter in either and both storing the flag in true polarity. The
+// other two copies of this module land the same way -- u_rdv_a/b in
+// each queue instance, u_op_a/b in lif_core, the last pair carrying the
+// enable mux2 as well.
+//
+// That erasure is safe here and it is not a third defence. dfflibmap
+// runs after the last pass that could merge anything: LibreLane's
+// deferred_flatten performs no optimisation after mapping, which is why
+// the measurement above comes out at 1296 either way. But it does mean
+// the SHIPPED netlist carries no structural difference between the two
+// rails, so a flow that ran a merge pass after technology mapping would
+// find two identical dfrbpq cells and only `keep`, keep_hierarchy and
+// the netlist census would be standing there. Do not read the two
+// flip-flops in the netlist as evidence that POL worked; the
+// attribute-stripped synthesis is that evidence, and the netlist census
+// in sw/tests/test_synthesis_guards.py is what would catch the day it
+// stops being true.
+//
+// No portable RTL avoids this at one bit. A rail storing the complement
+// of a flag whose safe value is 0 must reset to 1, there being no other
+// storage function over one variable to choose (section 8.2), so the
+// reset-to-1 flop and dfflibmap's inversion of it are both forced.
+// Moving the read-side XOR out to the consumer does not help: the
+// inverters dfflibmap adds sit on the same two combinational cones and
+// fold against the consumer's just as they fold against this module's.
+// docs/33-rail-transform.md records the full measurement.
+//
 // The port presents `bits ^ POL`, so both rails read in true polarity
 // and a reader compares them for EQUALITY. A debugger reading
-// u_ohv_b.bits sees the complement of the flag, by design.
+// u_ohv_b.bits in an RTL simulation sees the complement of the flag, by
+// design; in the mapped netlist there is nothing left to see, per the
+// paragraph above.
 //
 // Two rails DETECT and do not correct: the consumer is responsible for
 // choosing the safe interpretation of a disagreement and for reporting
