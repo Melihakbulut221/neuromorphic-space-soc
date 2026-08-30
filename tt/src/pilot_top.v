@@ -228,9 +228,15 @@
 //                          bit 6. Section 5.1 is why this register
 //                          exists, why it is pilot-only, and why it is
 //                          NOT aer_fifo's own drop counter.
+//   0x0B0 CNT_EVQ_PAR  RO  saturating count of queue entries DISCARDED
+//                          because the stored word failed its entry
+//                          parity check, both queue instances in one
+//                          count. Cleared by FAULT_CLR bit 7. Section
+//                          5.2 is why it exists and why it is one
+//                          counter and not two.
 //
-// FAULT_CLR bits 5 and 6 are the fourth and sixth pilot-only objects in
-// this section and they are allocated the same way as the registers
+// FAULT_CLR bits 5, 6 and 7 are pilot-only objects of this section and
+// they are allocated the same way as the registers
 // above: from space the architecture register map leaves unassigned.
 // regmap/regmap.yaml is the
 // single source of truth for FAULT_CLR and it allocates exactly five
@@ -242,8 +248,8 @@
 // them. CNT_TMR is not in the map, so its clear cannot be either; b5 is
 // the first free bit and is inert in the architecture block, so one
 // FAULT_CLR write of 0x3F clears everything in either implementation.
-// CNT_EVQ_OUT_OVF takes b6 on the same argument, so the portable
-// clear-everything write is now 0x7F.
+// CNT_EVQ_OUT_OVF takes b6 on the same argument and CNT_EVQ_PAR takes
+// b7, so the portable clear-everything write is now 0xFF.
 //
 // ---------------------------------------------------------------------
 // 5.1 Why EVQ_OUT gets its own counter, and why it is not fo_drop
@@ -340,6 +346,85 @@
 // STATUS.OVF_SEEN stays set, leaving the telemetry self-inconsistent.
 // The counter and its sticky share a reset domain here, so a recovery
 // cannot make them disagree.
+//
+// ---------------------------------------------------------------------
+// 5.2 CNT_EVQ_PAR: one counter for two queues, and why
+// ---------------------------------------------------------------------
+//
+// hw/rtl/aer_fifo.v stores one even-parity bit per queue entry and
+// checks it on the read. A failed check DISCARDS the entry: the read
+// pointer still advances, rd_valid is held low, and `par_err` says that
+// is what happened. Until now this module connected par_err to nothing,
+// so the discard reached the host only through the consumer's bounded
+// wait -- fetch_expire for EVQ_IN, oh_expire for EVQ_OUT -- which
+// latches STATUS.ERR_CFG and says "a configuration fault happened here"
+// for what is in fact an integrity discard. docs/29 section 8 item 5
+// named that and explicitly left it to this file.
+//
+// That is the same defect commit 2d59ec2 fixed for the lif_core memory
+// ECC, in the same shape: a mechanism did its work, and the evidence
+// went to no register and no pin. For a part whose stated purpose is
+// measuring the upset environment, an unreported correction -- or here,
+// an unreported detected loss -- is indistinguishable from no upset.
+//
+// ONE counter for both instances, not one each, and the precedent is
+// the pointer telemetry twelve lines below rather than section 5.1:
+//
+//   CNT_TMR already merges fi_ptr_mm and fo_ptr_mm into a single
+//   episode count, because a corrected pointer upset is the same event
+//   with the same consequence whichever queue it happened in, and the
+//   operator's question is about the environment rather than about the
+//   instance. A parity discard is that shape exactly: one stored event
+//   lost, announced through a bounded wait, in a 16-bit word of the
+//   same width in both queues.
+//
+//   Section 5.1 split EVQ_OUT off from CNT_EVQ_OVF for the opposite
+//   reason, and the difference is real: `wr_en && full` MEANS something
+//   different in the two instances -- refused software writes in one,
+//   ordinary lossless backpressure cycles in the other -- so one
+//   register could not have carried both without publishing a number
+//   that is not an event-loss count. par_err carries no such asymmetry.
+//   Both instances produce it from `rd_ok && head_bad`, and in both it
+//   is one event that existed and no longer does.
+//
+//   The instance distinction is not free: a second CNT_W counter, a
+//   second register offset, a second FAULT_CLR bit, and a second entry
+//   in every document and test that lists the map. That is 8 more
+//   flip-flops to answer a question no operator action depends on --
+//   the recovery for either is the same, and a host that wants the
+//   instance can already read EVQ_STAT and STATUS. Two counters would
+//   also break the symmetry with CNT_TMR, which is the register a host
+//   reads next to this one.
+//
+// Counted on the rising edge of `fi_par_err || fo_par_err`, so a
+// discard that persists across cycles counts once and simultaneous
+// discards in the two queues count once -- the same episode convention
+// CNT_TMR uses and stated in the same words, because a host that reads
+// them side by side must not have to remember two conventions.
+//
+// The edge register sits in the fault-counter process on rst_n rather
+// than on blk_rst_n, so CTRL.SOFT_RST -- the recovery for exactly this
+// class of fault -- cannot erase the record that it happened. Same
+// arrangement, same reason, as CNT_TMR and CNT_EVQ_OUT_OVF.
+//
+// It does NOT latch a sticky of its own, and that is deliberate rather
+// than an omission. Every discard already reaches STATUS.ERR_CFG
+// through the bounded wait that the suppressed rd_valid triggers --
+// measured, docs/29 section 5: all seven discards moved status 0x06 ->
+// 0x16 -- so a second sticky would report the same event twice, and
+// there is no free STATUS bit to spend on it. What was missing was
+// never the alarm; it was the distinction between "the queue lost an
+// event to a configuration fault" and "the queue discarded a corrupted
+// entry", and a counter is exactly that distinction.
+//
+// Pilot-only, on section 5.1's three arguments unchanged. The fault
+// block of regmap/regmap.yaml is contiguous from 0x70 to 0x88, so a
+// promoted counter lands at 0x8C and the checked convention "one clear
+// bit per fault-block register in offset order" (sw/tests/test_regmap.py)
+// hands it FAULT_CLR bit 5 -- the bit the pilot already spends on
+// CNT_TMR -- renumbering CNT_TMR and CNT_EVQ_OUT_OVF and breaking the
+// portable clear write that regmap.yaml's own FAULT_CLR description
+// promises. Deviation D5 covers it and docs/15's D5 row is the record.
 //
 // =====================================================================
 // 6. Geometry
@@ -747,6 +832,183 @@
 //            neither is near critical at CLOCK_PERIOD 20 on sg13g2.
 //   docs/20 section 11.6 carries the full tables.
 //
+// =====================================================================
+// 10. The dispatcher check field: two bits, and what they cover
+// =====================================================================
+//
+// The fault-injection campaign's residual after the queue-storage
+// hardening is 11 silent corruptions across four structures, and
+// `dispatch` leads at 5 of 18. All five are in this module and all five
+// are DATA corruption rather than deadlock, which is what makes this
+// wave different in kind from the two the dispatcher has already had --
+// docs/16 section 5.1's D_FETCH deadlock, closed with a bounded wait,
+// and section 8.1's erasable report pulse, closed by deleting the
+// state. Read out of hw/tb/fi_campaign_results.json [fact]:
+//
+//   dstate bit 0, D_ISSUE -> 2'b10, the illegal code. The default arm
+//                 already recovers to D_IDLE, so nothing hangs -- and
+//                 the event being issued is dropped on the way, with no
+//                 counter, no sticky and no pin. One event lost, run
+//                 silently wrong.
+//   dstate bit 1, D_FETCH -> D_ISSUE. The worst of the five: 2'b01 and
+//                 2'b11 are both LEGAL codes, so nothing anywhere can
+//                 tell them apart, and the FSM issues whatever evw
+//                 happens to hold. Measured: a spurious event 7 in
+//                 place of the real event 2.
+//   evw bit 0     the ID field. A spike is delivered to the wrong axon
+//                 and the run diverges from the golden model in both
+//                 the event stream and the retained neuron state.
+//   evw bits 14, 15  the TYPE field. A SPIKE becomes a TICK or a
+//                 reserved code; the event is silently dropped or
+//                 silently reinterpreted.
+//
+// So the failure is not "the dispatcher stops", it is "the dispatcher
+// acts on a word or a state it should not trust", and no bounded wait
+// can see that: a wait fires on an answer that does not arrive, and
+// here every answer arrives, on time, wrong.
+//
+// ---------------------------------------------------------------------
+// 10.1 The one-bit pigeonhole, checked at two bits rather than assumed
+// ---------------------------------------------------------------------
+//
+// Section 8.2 proves that three replicas cannot be held apart over ONE
+// bit: there are exactly two storage functions, x and ~x, and a third
+// replica is bit-for-bit identical to one of the other two. dstate is
+// two bits, so the bar has to be re-derived rather than carried over.
+// It does not clear it, and the derivation is short.
+//
+// A replica of a two-bit value is two flip-flops, each storing some
+// boolean function of the pair, and the replica is only a replica if
+// the two functions together determine the value -- that is, if the
+// map is a bijection on the four states. Every coordinate function of
+// a bijection on two bits is BALANCED (two ones out of four), and there
+// are exactly six balanced functions of two variables:
+//
+//     d0, ~d0, d1, ~d1, d0^d1, ~(d0^d1)
+//
+// Replica A takes d1 and d0. Replica B, on the polarity transform,
+// takes ~d1 and ~d0. Four of the six are now spent, and the two that
+// remain -- d0^d1 and its complement -- are complements OF EACH OTHER,
+// so a replica built from both stores one bit of information twice and
+// determines nothing. There is no third replica. The MIX layer of
+// section 9, which rescued the 55-bit configuration domain, is the same
+// construction one step up and it does not help here either: over W
+// bits the affine transforms give 2*(2^W - 1) coordinate functions, six
+// at W = 2, which is the same six.
+//
+// The bar therefore moves from "one bit" to "fewer than three bits",
+// and the general statement is the one section 8.2 should have made:
+// triple modular redundancy needs at least six distinct balanced
+// storage functions, and a W-bit value has only 2*(2^W - 1) affine ones
+// -- 2 at W = 1, 6 at W = 2, 14 at W = 3. Three bits is the first width
+// at which a third replica has functions left to take.
+//
+// ---------------------------------------------------------------------
+// 10.2 What was chosen: two check bits, +2 flip-flops
+// ---------------------------------------------------------------------
+//
+// Correction is therefore unavailable for dstate at any price this
+// design would pay, and detection is what is left. u_disp_chk is one
+// pilot_chk_bank instance holding two bits:
+//
+//   dstate_par = ^dstate. Storing the parity of a 2-bit state next to
+//                it makes {dstate, dstate_par} a 3-bit code whose three
+//                legal words -- 000 for D_IDLE, 011 for D_FETCH, 110
+//                for D_ISSUE -- are pairwise at Hamming distance 2. So
+//                EVERY single-bit upset in dstate or in its check bit
+//                lands on an illegal word and is detected, including
+//                the D_FETCH -> D_ISSUE flip that the two-bit encoding
+//                cannot see at all. This is exactly the encoding
+//                hw/rtl/lif_core.v gives its own FSM, which the
+//                campaign credits with 12 of 12 DETECTED, reached here
+//                by adding a check bit rather than by re-encoding --
+//                the same cost, +1 flip-flop, and it keeps dstate's
+//                three literals and every case arm as they were.
+//   evw_par    = ^{evw[15:14], evw[9:0]}, the parity of the twelve bits
+//                the dispatcher ACTS on. evw[13:10] is deliberately
+//                outside the check: nothing reads those bits (they are
+//                in the _unused sink at the bottom of this module), an
+//                upset in them is MASKED today, and covering them would
+//                convert a harmless upset into a reported fault. A
+//                check field must not manufacture alarms for state that
+//                does not matter.
+//
+// The evw check is qualified with `dstate == D_ISSUE` for the same
+// reason: outside D_ISSUE the word is about to be overwritten by the
+// next capture, an upset in it costs nothing, and the campaign records
+// several such injections as MASKED. Checking it unconditionally would
+// turn every one of those into a false alarm. The check is applied at
+// the one moment the word is used.
+//
+// One trap in this construction, recorded because the first version of
+// it walked straight into it. The two check bits CANNOT both be written
+// the same way. dstate is rewritten every edge, so its check bit takes
+// a plain next value and a disagreement is one cycle wide -- the
+// dual-rail construction of section 8.2, and the combinational term
+// reports it on the very edge that heals it. evw is not: it holds its
+// word for the whole of D_ISSUE, and a next-value check bit would be
+// recomputed from the held word on every edge, so an upset landing IN
+// the held word would be recomputed into the check bit one edge later
+// and the two would agree on the corrupted event from the second cycle
+// onward. The check would then only ever catch an upset in the single
+// cycle it arrived, which is a small fraction of the exposure and is
+// precisely what the campaign's 3 evw records are outside of. So evw's
+// check bit takes an ENABLE, written only when the word is written, and
+// stays the parity of the word that was actually captured.
+//
+// On a failed check, `disp_chk_bad`:
+//
+//   - the combinational issue is suppressed, so lif_ev_valid,
+//     lif_tick_valid and ev_dropped_oor all read low in the same cycle.
+//     This matters: a dstate check failure means dstate may READ
+//     D_ISSUE while being untrustworthy, and lif_ev_valid is
+//     combinational from dstate, so a next-cycle-only recovery would
+//     issue the bad event before recovering from it.
+//   - the FSM TAKES THE D_IDLE ARM rather than being assigned D_IDLE.
+//     That distinction is worth two of the campaign's records and it is
+//     the same one docs/16 section 5.8 records for the bounded wait:
+//     D_IDLE's arm captures a read answer that arrived in this cycle and
+//     re-arms the fetch, while an assignment throws that answer away and
+//     turns a reported recovery into a reported recovery WITH a lost
+//     event. Measured, the first version of this change assigned the
+//     state and two upsets that the design used to absorb harmlessly
+//     came back as announced event losses; taking the arm returns both
+//     to "announced, nothing lost". The untrusted event is dropped
+//     either way -- it is the one whose word or state failed -- and the
+//     queue has already dequeued it.
+//   - sticky_errcfg latches, on the same clock edge, from the same
+//     wire. Section 8.1's rule applies here without amendment: the term
+//     is combinational and there is no cycle in which the report exists
+//     as separate storage for a second upset to erase or fabricate.
+//
+// This DETECTS and does not correct, exactly as the dual-rail flags and
+// the queue entry parity do, and the claim is the same narrow one: the
+// five events are still lost. What changes is that the pilot says so.
+//
+// The restructure that pays for it: the dispatcher's next state is now
+// computed in a combinational block and registered in a separate one,
+// because the check bits have to be written from the same next values
+// as the registers they cover, on the same edge, or they would drift by
+// a cycle and check nothing. The case arms are unchanged line for line.
+//
+// Cost: +2 flip-flops, one 3-input XOR and one 13-input XOR reduction
+// on paths that end at dstate and at lif_core's valid inputs. docs/30
+// carries the measured timing.
+//
+// The merge trap, in its fourth form. These are not replicas, so
+// opt_merge has nothing to hash them against -- the hazard is the one
+// hw/rtl/lif_core.v's check fields carry and section 3b of
+// sw/tests/test_synthesis_guards.py already names: a check bit is a
+// pure FUNCTION of the register it covers in every reachable state, so
+// a tool able to reason across sequential state could delete the
+// storage, rebuild the bit from the parity tree and leave a checker
+// that reports every state legal. Nothing in yosys does that today.
+// pilot_chk_bank is a keep_hierarchy module with a (* keep *) register
+// for the same reason aer_par_bank is: under deferred_flatten abc
+// renumbers every cell before the flatten, so an instance path is the
+// only naming that reaches the shipped netlist and can be counted
+// there.
+//
 // Plain Verilog-2005, Icarus-clean.
 `default_nettype none
 
@@ -917,6 +1179,7 @@ module pilot_top #(
     localparam [6:0] SA_TMR_INJ       = 12'h0A4 >> 2;
     localparam [6:0] SA_CNT_TMR       = 12'h0A8 >> 2;
     localparam [6:0] SA_CNT_EVQ_OUT_OVF = 12'h0AC >> 2;
+    localparam [6:0] SA_CNT_EVQ_PAR   = 12'h0B0 >> 2;
 
     // -----------------------------------------------------------------
     // Input synchronizers. Every asynchronous pin gets two flops before
@@ -1092,7 +1355,9 @@ module pilot_top #(
     // fault counters. cnt_evqo is the pilot-only EVQ_OUT event-loss
     // counter of section 5.1; it is a register here and not u_evq_out's
     // own drop_cnt on purpose, and that section is the whole argument.
-    reg [CNT_W-1:0] cnt_sec, cnt_ded, cnt_oor, cnt_tmr, cnt_evqo;
+    // cnt_evqp is the pilot-only entry-parity discard counter of section
+    // 5.2, shared by both queue instances.
+    reg [CNT_W-1:0] cnt_sec, cnt_ded, cnt_oor, cnt_tmr, cnt_evqo, cnt_evqp;
     reg [WORD_W-1:0] fault_addr;
 
     // FAULT_CLR decode. regmap/regmap.yaml is the single source of truth
@@ -1128,6 +1393,14 @@ module pilot_top #(
     // output-queue measurement.
     localparam integer PILOT_BIT_FAULT_CLR_CNT_EVQ_OUT_OVF = 6;
     wire fclr_evqo = fclr_wr && reg_wdata[PILOT_BIT_FAULT_CLR_CNT_EVQ_OUT_OVF];
+
+    // Third pilot-only clear, section 5.2, allocated by the same rule:
+    // the next free bit above the ones already taken. Bit 2 is not
+    // reused here either -- CNT_EVQ_OVF counts refused writes into
+    // EVQ_IN and this counts discarded reads out of either queue, and a
+    // host clearing one must not zero the other.
+    localparam integer PILOT_BIT_FAULT_CLR_CNT_EVQ_PAR = 7;
+    wire fclr_evqp = fclr_wr && reg_wdata[PILOT_BIT_FAULT_CLR_CNT_EVQ_PAR];
 
     localparam [CNT_W-1:0] CNT_MAX = {CNT_W{1'b1}};
 
@@ -1273,7 +1546,7 @@ module pilot_top #(
     wire [15:0] fi_rd_data;
     wire [$clog2(EVQ_IN_DEPTH):0] fi_level;
     wire [CNT_W-1:0] fi_drop;
-    wire        fi_ptr_mm;
+    wire        fi_ptr_mm, fi_par_err;
     reg         fi_rd_en;
 
     // Two producers: the serial EVQ_IN register and the AER_IN pin
@@ -1303,7 +1576,8 @@ module pilot_top #(
         .drop_clr (fclr_ovf),
         .drop_cnt (fi_drop),
         .ptr_mismatch (fi_ptr_mm),
-        .rv_mismatch  (fi_rv_mm)
+        .rv_mismatch  (fi_rv_mm),
+        .par_err      (fi_par_err)
     );
 
     // -----------------------------------------------------------------
@@ -1313,7 +1587,7 @@ module pilot_top #(
     wire [15:0] fo_rd_data;
     wire [$clog2(EVQ_OUT_DEPTH):0] fo_level;
     wire [CNT_W-1:0] fo_drop;
-    wire        fo_ptr_mm;
+    wire        fo_ptr_mm, fo_par_err;
     reg         fo_rd_en;
     reg         oh_req;
     reg [15:0]  oh_data;
@@ -1362,7 +1636,8 @@ module pilot_top #(
         .drop_clr (fclr_ovf),
         .drop_cnt (fo_drop),
         .ptr_mismatch (fo_ptr_mm),
-        .rv_mismatch  (fo_rv_mm)
+        .rv_mismatch  (fo_rv_mm),
+        .par_err      (fo_par_err)
     );
 
     // Pointer-TMR telemetry from the two queues. hw/rtl/aer_fifo.v votes
@@ -1388,6 +1663,19 @@ module pilot_top #(
     // Every TMR correction in the pilot, from the configuration domain
     // or from a queue pointer, in one event.
     wire tmr_event = mismatch_edge || evq_ptr_edge;
+
+    // Entry-parity telemetry from the two queues (header section 5.2).
+    // aer_fifo raises par_err when an accepted read found the stored
+    // word inconsistent with its parity bit and threw the entry away.
+    // The event already reaches the host as STATUS.ERR_CFG through the
+    // consumer's bounded wait; what this adds is the distinction
+    // between a configuration fault and an integrity discard, which is
+    // the number a part flown to measure an upset environment has to
+    // return. One counter for both instances, on the CNT_TMR precedent
+    // rather than section 5.1's -- the argument is in section 5.2.
+    wire evq_par_err = fi_par_err || fo_par_err;
+    reg  evq_par_q;
+    wire evq_par_event = evq_par_err && !evq_par_q;
 
     // The EVQ_OUT event loss, and the only one there is: a SYNC echo
     // refused by a full queue. sync_push is a one-shot, so a refused
@@ -1587,6 +1875,82 @@ module pilot_top #(
     reg [1:0]  dstate;
     reg [15:0] evw;
 
+    // Next values, computed combinationally and registered below. The
+    // split exists so the check bits of header section 10.2 can be
+    // written from the same next values, on the same edge, as the
+    // registers they cover; a check field written a cycle later would
+    // spend that cycle disagreeing with a state that is perfectly good.
+    reg [1:0]  dstate_n;
+    reg [15:0] evw_n;
+    reg        fi_rd_en_n, sync_push_n;
+    reg [15:0] sync_word_n;
+    reg [FETCH_WAIT_W-1:0] fetch_wait_n;
+    reg        evw_load;      // this edge captures a new event word
+
+    // The dispatcher check field (header section 10). Two bits in one
+    // pilot_chk_bank instance: the parity of dstate, which turns the
+    // 2-bit state into a Hamming-distance-2 code and is the only
+    // protection a 2-bit register can have (section 10.1 proves that a
+    // third replica does not exist over two bits), and the parity of
+    // the twelve bits of evw the dispatcher acts on.
+    wire dstate_par, evw_par;
+
+    // The twelve bits of the event word that are read. evw[13:10] is
+    // out of the check on purpose: nothing reads it, so covering it
+    // would turn an upset that costs nothing into a reported fault.
+    wire [11:0] evw_cov   = {evw[15:14],   evw[9:0]};
+    wire [11:0] evw_cov_n = {evw_n[15:14], evw_n[9:0]};
+
+    // The two bits are written on different terms, and the difference is
+    // the whole correctness of the evw half.
+    //
+    //   dstate_par takes a plain NEXT VALUE. dstate is rewritten from
+    //   dstate_n on every edge whatever happens, so `^dstate_n` is the
+    //   parity of the value actually being stored, and an upset in
+    //   either is a one-cycle disagreement that the combinational check
+    //   below reports on that same edge before the rewrite heals it.
+    //   That is the dual-rail flags' construction and it is safe here
+    //   for the same reason: every term of dstate_n is X-free.
+    //
+    //   evw_par takes an ENABLE, and must. evw HOLDS its value across
+    //   the whole of D_ISSUE, so a next-value check bit would be
+    //   recomputed from the held word every cycle -- and an upset that
+    //   landed IN that held word would be recomputed into the check bit
+    //   one edge later, healing the check into agreement with the
+    //   corrupted event and detecting nothing from the second cycle on.
+    //   Written only when the word is, the check bit stays the parity of
+    //   the word that was captured, which is the only thing worth
+    //   comparing against. hw/rtl/lif_core.v's rail takes an enable for
+    //   a different reason (X-freedom) and this is the second reason a
+    //   check bit ever needs one.
+    pilot_chk_bank #(.W(2)) u_disp_chk (
+        .clk   (clk),
+        .rst_n (blk_rst_n),
+        .d     ({evw_load ? ^evw_cov_n : evw_par, ^dstate_n}),
+        .q     ({evw_par,                         dstate_par})
+    );
+
+    // The two check terms, combinational and not registered pulses, on
+    // header section 8.1's rule: the wire that recovers is the wire
+    // that reports, so there is no cycle in which the report is
+    // separate state. blk_rst_n is a term for the same reason it is one
+    // in fetch_expire -- the fault process that consumes this sits on
+    // rst_n and keeps running through a block reset.
+    //
+    // {dstate, dstate_par} is 000 / 011 / 110 and nothing else, so an
+    // odd parity over the three bits is exactly "a single-bit upset
+    // landed here".
+    wire dstate_chk_bad = blk_rst_n && (^{dstate, dstate_par});
+
+    // The event word is checked at the one moment it is acted on.
+    // Outside D_ISSUE it is about to be overwritten by the next
+    // capture, and the campaign records upsets there as MASKED; a check
+    // that fired on them would be manufacturing alarms.
+    wire evw_chk_bad = blk_rst_n && (dstate == D_ISSUE)
+                       && (^{evw_cov, evw_par});
+
+    wire disp_chk_bad = dstate_chk_bad || evw_chk_bad;
+
     // The expiry term, combinational rather than a registered pulse
     // (header section 8.1), and the exact counterpart of oh_expire. It
     // is both the condition that abandons the wait below and the
@@ -1613,89 +1977,128 @@ module pilot_top #(
     // S_IDLE only) and can never be taken twice.
     wire state_clr_go = state_clr_req && !lif_busy && !ld_busy && !disp_busy;
 
+    always @(*) begin
+        dstate_n     = dstate;
+        evw_n        = evw;
+        fi_rd_en_n   = 1'b0;
+        sync_push_n  = 1'b0;
+        sync_word_n  = sync_word;
+        fetch_wait_n = fetch_wait;
+        evw_load     = 1'b0;
+        // A failed check means the state, or the word, is not
+        // trustworthy. The recovery is to take the D_IDLE arm -- not to
+        // assign D_IDLE -- and the difference is measured rather than
+        // stylistic (header section 10.2). D_IDLE's arm captures a read
+        // answer that arrived and re-arms the fetch; assigning the state
+        // instead throws that answer away, which is docs/16 section
+        // 5.8's fire_spurious defect exactly, and test_04 already holds
+        // the same property for the bounded wait: a spurious recovery
+        // must cost the report and nothing else. The untrusted event is
+        // dropped either way, and sticky_errcfg latches from this same
+        // wire on this same edge.
+        case (disp_chk_bad ? D_IDLE : dstate)
+            // A read answered while the FSM is in D_IDLE cannot
+            // happen in a fault-free run -- fi_rd_en is asserted only
+            // by the arm below, which moves to D_FETCH on the same
+            // edge -- but it is reachable after an upset, and after
+            // the bounded wait above gives up one cycle before a
+            // slow grant arrives. Without the first arm that word is
+            // read out of the queue and dropped, which turns a
+            // reported recovery into a reported recovery WITH a lost
+            // event (measured: docs/16 section 5.8, the
+            // fire_spurious case). Capturing it costs no state --
+            // evw and dstate already exist -- and is what the
+            // show-ahead adapter has always done, whose capture is
+            // `if (fo_rd_valid)` and is not gated on oh_req.
+            D_IDLE: begin
+                if (fi_rd_valid) begin
+                    evw_n    = fi_rd_data;
+                    evw_load = 1'b1;
+                    dstate_n = D_ISSUE;
+                end else if (core_en && !fi_empty && !ld_busy
+                             && !state_clr_req && !fi_rd_en) begin
+                    fi_rd_en_n = 1'b1;
+                    dstate_n   = D_FETCH;
+                end
+            end
+            // D_FETCH waits for the read it requested in D_IDLE. An
+            // upset that lands the FSM here without a read outstanding
+            // would otherwise wait forever with STATUS.BUSY high and
+            // nothing flagged -- the one failure class this chip exists
+            // to rule out. The bounded wait converts that silent hang
+            // into a latched configuration fault the host can see.
+            // Measured by the fault-injection campaign (docs/16
+            // section 5.1): reachable from a direct dstate flip and
+            // from an EVQ_IN write-pointer flip.
+            D_FETCH: begin
+                if (fi_rd_valid) begin
+                    evw_n        = fi_rd_data;
+                    evw_load     = 1'b1;
+                    dstate_n     = D_ISSUE;
+                    fetch_wait_n = {FETCH_WAIT_W{1'b0}};
+                end else if (fetch_expire) begin
+                    dstate_n     = D_IDLE;
+                    fetch_wait_n = {FETCH_WAIT_W{1'b0}};
+                end else begin
+                    fetch_wait_n = fetch_wait + 1'b1;
+                end
+            end
+            D_ISSUE: begin
+                case (ev_type)
+                    2'b00: if (ev_oor || lif_ev_ready) dstate_n = D_IDLE;
+                    2'b01: if (lif_tick_ready)         dstate_n = D_IDLE;
+                    2'b10: if (!lif_busy && !fo_full && !sync_push) begin
+                               sync_push_n = 1'b1;
+                               sync_word_n = evw;
+                               dstate_n    = D_IDLE;
+                           end
+                    default: dstate_n = D_IDLE;   // reserved TYPE
+                endcase
+            end
+            default: dstate_n = D_IDLE;
+        endcase
+    end
+
     always @(posedge clk or negedge blk_rst_n) begin
         if (!blk_rst_n) begin
-            dstate <= D_IDLE;
-            evw <= 16'd0;
-            fi_rd_en <= 1'b0;
-            sync_push <= 1'b0;
-            sync_word <= 16'd0;
+            dstate     <= D_IDLE;
+            evw        <= 16'd0;
+            fi_rd_en   <= 1'b0;
+            sync_push  <= 1'b0;
+            sync_word  <= 16'd0;
             fetch_wait <= {FETCH_WAIT_W{1'b0}};
+            // u_disp_chk resets itself, to 2'b00 -- which is exactly the
+            // parity of D_IDLE and of the all-zero event word, so the
+            // check field is consistent out of reset with no assignment
+            // here and no first-cycle false alarm.
         end else begin
-            fi_rd_en  <= 1'b0;
-            sync_push <= 1'b0;
-            case (dstate)
-                // A read answered while the FSM is in D_IDLE cannot
-                // happen in a fault-free run -- fi_rd_en is asserted only
-                // by the arm below, which moves to D_FETCH on the same
-                // edge -- but it is reachable after an upset, and after
-                // the bounded wait above gives up one cycle before a
-                // slow grant arrives. Without the first arm that word is
-                // read out of the queue and dropped, which turns a
-                // reported recovery into a reported recovery WITH a lost
-                // event (measured: docs/16 section 5.8, the
-                // fire_spurious case). Capturing it costs no state --
-                // evw and dstate already exist -- and is what the
-                // show-ahead adapter has always done, whose capture is
-                // `if (fo_rd_valid)` and is not gated on oh_req.
-                D_IDLE: begin
-                    if (fi_rd_valid) begin
-                        evw    <= fi_rd_data;
-                        dstate <= D_ISSUE;
-                    end else if (core_en && !fi_empty && !ld_busy
-                                 && !state_clr_req && !fi_rd_en) begin
-                        fi_rd_en <= 1'b1;
-                        dstate   <= D_FETCH;
-                    end
-                end
-                // D_FETCH waits for the read it requested in D_IDLE. An
-                // upset that lands the FSM here without a read outstanding
-                // would otherwise wait forever with STATUS.BUSY high and
-                // nothing flagged -- the one failure class this chip exists
-                // to rule out. The bounded wait converts that silent hang
-                // into a latched configuration fault the host can see.
-                // Measured by the fault-injection campaign (docs/16
-                // section 5.1): reachable from a direct dstate flip and
-                // from an EVQ_IN write-pointer flip.
-                D_FETCH: begin
-                    if (fi_rd_valid) begin
-                        evw          <= fi_rd_data;
-                        dstate       <= D_ISSUE;
-                        fetch_wait   <= {FETCH_WAIT_W{1'b0}};
-                    end else if (fetch_expire) begin
-                        dstate        <= D_IDLE;
-                        fetch_wait    <= {FETCH_WAIT_W{1'b0}};
-                    end else begin
-                        fetch_wait <= fetch_wait + 1'b1;
-                    end
-                end
-                D_ISSUE: begin
-                    case (ev_type)
-                        2'b00: if (ev_oor || lif_ev_ready) dstate <= D_IDLE;
-                        2'b01: if (lif_tick_ready)         dstate <= D_IDLE;
-                        2'b10: if (!lif_busy && !fo_full && !sync_push) begin
-                                   sync_push <= 1'b1;
-                                   sync_word <= evw;
-                                   dstate    <= D_IDLE;
-                               end
-                        default: dstate <= D_IDLE;   // reserved TYPE
-                    endcase
-                end
-                default: dstate <= D_IDLE;
-            endcase
+            dstate     <= dstate_n;
+            evw        <= evw_n;
+            fi_rd_en   <= fi_rd_en_n;
+            sync_push  <= sync_push_n;
+            sync_word  <= sync_word_n;
+            fetch_wait <= fetch_wait_n;
         end
     end
 
+    // The issue decision is combinational from dstate and evw, so a
+    // failed check has to suppress it in the SAME cycle: recovering only
+    // on the next edge would let the untrusted event reach lif_core
+    // first, which is the whole failure being closed (header 10.2).
     always @(*) begin
         lif_ev_valid   = 1'b0;
         lif_tick_valid = 1'b0;
-        if (dstate == D_ISSUE) begin
+        if (dstate == D_ISSUE && !disp_chk_bad) begin
             if (ev_type == 2'b00 && !ev_oor) lif_ev_valid   = 1'b1;
             if (ev_type == 2'b01)            lif_tick_valid = 1'b1;
         end
     end
 
-    wire ev_dropped_oor = (dstate == D_ISSUE) && (ev_type == 2'b00) && ev_oor;
+    // Same gate, same reason: an event dropped because its word failed
+    // its check is not an out-of-range axon and must not be counted as
+    // one. It is counted by STATUS.ERR_CFG, in the fault process.
+    wire ev_dropped_oor = (dstate == D_ISSUE) && !disp_chk_bad
+                          && (ev_type == 2'b00) && ev_oor;
 
     // -----------------------------------------------------------------
     // LIF core
@@ -1820,9 +2223,11 @@ module pilot_top #(
             cnt_oor       <= {CNT_W{1'b0}};
             cnt_tmr       <= {CNT_W{1'b0}};
             cnt_evqo      <= {CNT_W{1'b0}};
+            cnt_evqp      <= {CNT_W{1'b0}};
             fault_addr    <= {WORD_W{1'b0}};
             mismatch_q    <= 1'b0;
             evq_mm_q      <= 1'b0;
+            evq_par_q     <= 1'b0;
             ecc_commit    <= 1'b0;
             ld_pend       <= 1'b0;
             ld_zero       <= 1'b0;
@@ -1841,6 +2246,7 @@ module pilot_top #(
             ecc_commit    <= wr_ok && s_w_data_hi;
             mismatch_q    <= cfg_mismatch;
             evq_mm_q      <= evq_ptr_mismatch;
+            evq_par_q     <= evq_par_err;
 
             // ---- writes ----------------------------------------------
             if (wr_locked)
@@ -1965,6 +2371,13 @@ module pilot_top #(
             if ((fi_wr_en && fi_full) || evqo_drop)
                 sticky_ovf <= 1'b1;
             if (evqo_drop && cnt_evqo != CNT_MAX) cnt_evqo <= cnt_evqo + 1'b1;
+            // The entry-parity discard, both queues in one episode count
+            // (section 5.2). No sticky: the discard suppresses rd_valid
+            // and the consumer's bounded wait latches sticky_errcfg
+            // below, so the alarm already exists and this is the
+            // distinction the alarm cannot carry.
+            if (evq_par_event && cnt_evqp != CNT_MAX)
+                cnt_evqp <= cnt_evqp + 1'b1;
             if (sync_push) sticky_sync <= 1'b1;
             if (!cfg_valid && ctrl_en) sticky_errcfg <= 1'b1;
             // A parked neuron core is latched into the sticky bit as
@@ -1985,6 +2398,15 @@ module pilot_top #(
             // oh_req with no read behind it wedges the output path
             // outright, and its recovery must not be silent either.
             if (oh_expire) sticky_errcfg <= 1'b1;
+            // The dispatcher check field (header section 10). A state or
+            // an event word that failed its parity is DETECTED and not
+            // corrected -- over two bits a third replica provably does
+            // not exist (section 10.1) -- so the event is dropped and
+            // the drop is announced. It is not counted in CNT_TMR:
+            // nothing was masked. Reading the combinational term rather
+            // than a pulse register is section 8.1's rule, and it is
+            // what makes this report unerasable.
+            if (disp_chk_bad) sticky_errcfg <= 1'b1;
             // The show-ahead valid flag's two rails disagreeing (header
             // section 8.2). This is a DETECTED and not a corrected
             // upset: the held event is dropped rather than presented,
@@ -2031,6 +2453,8 @@ module pilot_top #(
             // two counters must not clear a record the other one made.
             if (fclr_evqo)
                 cnt_evqo <= {{(CNT_W-1){1'b0}}, evqo_drop};
+            if (fclr_evqp)
+                cnt_evqp <= {{(CNT_W-1){1'b0}}, evq_par_event};
         end
     end
 
@@ -2093,6 +2517,7 @@ module pilot_top #(
             SA_CNT_TMR:       rdata_r = {{(32 - CNT_W){1'b0}}, cnt_tmr};
             SA_CNT_EVQ_OUT_OVF:
                               rdata_r = {{(32 - CNT_W){1'b0}}, cnt_evqo};
+            SA_CNT_EVQ_PAR:   rdata_r = {{(32 - CNT_W){1'b0}}, cnt_evqp};
             default:          rdata_r = 32'd0;   // unmapped, incl. WO
         endcase
     end
@@ -2116,6 +2541,56 @@ module pilot_top #(
     wire _unused = &{1'b0, dec_syndrome, enc_code, fo_drop,
                      tmr_inj[7:6], evw[13:10], 1'b0};
 
+endmodule
+
+// =====================================================================
+// pilot_chk_bank: storage for a check field, held apart from its encoder
+// =====================================================================
+//
+// A plain register bank with one job that a `reg [W-1:0]` in pilot_top
+// could not do: exist under an instance path in the shipped netlist.
+// Under SYNTH_HIERARCHY_MODE = deferred_flatten, abc renumbers every
+// cell to `_NNNN_` before the flatten, so a net name is evidence in
+// this repository's MODEL of synthesis and nothing at all in the
+// artifact that becomes silicon. hw/rtl/aer_fifo.v's aer_par_bank is
+// the same module for the same reason and its header carries the
+// argument in full; sw/tests/test_synthesis_guards.py section 4 is what
+// reads the result.
+//
+// The hazard here is NOT opt_merge. A check bit has no twin to be
+// hashed against -- that is the pointer replicas' and the valid flags'
+// problem, and it is why those modules carry a POL or MIX storage
+// transform and this one does not. The hazard is the one every check
+// field carries: the stored bit is a pure FUNCTION of the register it
+// covers in every reachable state, so a tool able to reason across
+// sequential state could delete the storage, rebuild the bit from the
+// parity tree, and leave a checker that reports every state legal --
+// protection that passes every simulation in this repository and
+// detects nothing in silicon. Nothing in yosys does that today. The
+// keep_hierarchy attribute, the (* keep *) on the register and the
+// netlist guard are three independent answers to the same question,
+// and none of them is trusted alone.
+//
+// Reset to zero, and the caller is responsible for choosing an encoding
+// in which zero is the check of the reset state, so that nothing has to
+// be assigned here and there is no first-cycle false alarm.
+(* keep_hierarchy *)
+module pilot_chk_bank #(
+    parameter integer W = 1
+) (
+    input  wire         clk,
+    input  wire         rst_n,
+    input  wire [W-1:0] d,
+    output wire [W-1:0] q
+);
+    (* keep *) reg [W-1:0] bits;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) bits <= {W{1'b0}};
+        else        bits <= d;
+    end
+
+    assign q = bits;
 endmodule
 
 // =====================================================================

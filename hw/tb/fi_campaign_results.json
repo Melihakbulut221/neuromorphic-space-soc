@@ -57,13 +57,13 @@
    28
   ]
  },
- "wall_seconds": 1755.1,
- "total": 374,
+ "wall_seconds": 443.1,
+ "total": 378,
  "histogram": {
-  "MASKED": 100,
+  "MASKED": 97,
   "CORRECTED": 193,
-  "DETECTED": 70,
-  "SDC": 11,
+  "DETECTED": 82,
+  "SDC": 6,
   "HANG": 0
  },
  "groups": {
@@ -166,10 +166,10 @@
    "HANG": 0
   },
   "dispatch": {
-   "MASKED": 9,
+   "MASKED": 4,
    "CORRECTED": 0,
-   "DETECTED": 4,
-   "SDC": 5,
+   "DETECTED": 14,
+   "SDC": 0,
    "HANG": 0
   },
   "lif_wchk": {
@@ -209,6 +209,13 @@
   },
   "evq_par": {
    "MASKED": 6,
+   "CORRECTED": 0,
+   "DETECTED": 2,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "disp_chk": {
+   "MASKED": 2,
    "CORRECTED": 0,
    "DETECTED": 2,
    "SDC": 0,
@@ -346,7 +353,7 @@
    "n": 32,
    "sdc_stream": 0,
    "sdc_state_only": 0,
-   "tel_differs": 0,
+   "tel_differs": 7,
    "latent": 0
   },
   "evq_hold": {
@@ -358,7 +365,7 @@
   },
   "dispatch": {
    "n": 18,
-   "sdc_stream": 5,
+   "sdc_stream": 0,
    "sdc_state_only": 0,
    "tel_differs": 0,
    "latent": 0
@@ -400,6 +407,13 @@
   },
   "evq_par": {
    "n": 8,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 2,
+   "latent": 0
+  },
+  "disp_chk": {
+   "n": 4,
    "sdc_stream": 0,
    "sdc_state_only": 0,
    "tel_differs": 0,
@@ -448,10 +462,10 @@
    "latent": 0
   }
  },
- "detected_with_wrong_output": 35,
- "state_only_divergence": 3,
+ "detected_with_wrong_output": 40,
+ "state_only_divergence": 4,
  "latent_register_corruption": 15,
- "telemetry_mismatch": 185,
+ "telemetry_mismatch": 194,
  "injections": [
   {
    "group": "lif_fsm",
@@ -470,7 +484,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -540,7 +555,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -615,7 +631,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -690,7 +707,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -760,7 +778,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -835,7 +854,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -910,7 +930,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -980,7 +1001,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -1055,7 +1077,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -1130,7 +1153,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -1200,7 +1224,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -1275,7 +1300,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -1350,7 +1376,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1427,7 +1454,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1504,7 +1532,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1581,7 +1610,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1658,7 +1688,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1735,7 +1766,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1812,7 +1844,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1889,7 +1922,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -1966,7 +2000,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2043,7 +2078,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2120,7 +2156,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2197,7 +2234,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2274,7 +2312,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2351,7 +2390,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2428,7 +2468,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2505,7 +2546,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2582,7 +2624,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2659,7 +2702,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2736,7 +2780,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2813,7 +2858,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2890,7 +2936,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -2967,7 +3014,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3044,7 +3092,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3121,7 +3170,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3198,7 +3248,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3275,7 +3326,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3352,7 +3404,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3429,7 +3482,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3506,7 +3560,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3583,7 +3638,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3660,7 +3716,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3737,7 +3794,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3814,7 +3872,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3891,7 +3950,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -3968,7 +4028,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4045,7 +4106,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4122,7 +4184,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4199,7 +4262,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4276,7 +4340,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4353,7 +4418,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4430,7 +4496,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4507,7 +4574,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4584,7 +4652,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4661,7 +4730,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4738,7 +4808,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4815,7 +4886,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4892,7 +4964,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -4969,7 +5042,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5046,7 +5120,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5123,7 +5198,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5200,7 +5276,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5277,7 +5354,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5354,7 +5432,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5431,7 +5510,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5508,7 +5588,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5585,7 +5666,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5662,7 +5744,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5739,7 +5822,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5816,7 +5900,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5893,7 +5978,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -5970,7 +6056,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6047,7 +6134,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6124,7 +6212,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6201,7 +6290,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6278,7 +6368,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6355,7 +6446,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6432,7 +6524,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6509,7 +6602,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -6586,7 +6680,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -6663,7 +6758,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -6740,7 +6836,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -6817,7 +6914,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -6894,7 +6992,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -6971,7 +7070,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -7048,7 +7148,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7125,7 +7226,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7202,7 +7304,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7279,7 +7382,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7356,7 +7460,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7433,7 +7538,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7510,7 +7616,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7587,7 +7694,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7664,7 +7772,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7741,7 +7850,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7818,7 +7928,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7895,7 +8006,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -7972,7 +8084,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8049,7 +8162,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8126,7 +8240,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8203,7 +8318,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8280,7 +8396,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8357,7 +8474,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8434,7 +8552,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8511,7 +8630,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8588,7 +8708,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -8665,7 +8786,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 3,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -8744,7 +8866,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -8824,7 +8947,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 3,
     "cnt_oor": 1,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -8898,7 +9022,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 2,
     "cnt_oor": 1,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -8977,7 +9102,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 3,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -9056,7 +9182,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9136,7 +9263,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9217,7 +9345,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9298,7 +9427,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9375,7 +9505,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9456,7 +9587,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9537,7 +9669,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9618,7 +9751,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9699,7 +9833,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9780,7 +9915,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9861,7 +9997,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -9942,7 +10079,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10019,7 +10157,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10096,7 +10235,8 @@
     "cnt_ded": 1,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10173,7 +10313,8 @@
     "cnt_ded": 128,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10250,7 +10391,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 1,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10327,7 +10469,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 128,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10404,7 +10547,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10481,7 +10625,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 128
+    "cnt_tmr": 128,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10558,7 +10703,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10635,7 +10781,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10712,7 +10859,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 1,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10789,7 +10937,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 128,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -10866,7 +11015,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -10943,7 +11093,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11020,7 +11171,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -11097,7 +11249,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11174,7 +11327,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11251,7 +11405,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11328,7 +11483,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11405,7 +11561,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11482,7 +11639,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11559,7 +11717,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11636,7 +11795,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11713,7 +11873,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11790,7 +11951,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11867,7 +12029,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -11944,7 +12107,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12021,7 +12185,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12098,7 +12263,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12175,7 +12341,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12252,7 +12419,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12329,7 +12497,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12406,7 +12575,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12483,7 +12653,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12560,7 +12731,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12637,7 +12809,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12714,7 +12887,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12791,7 +12965,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12868,7 +13043,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -12945,7 +13121,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13022,7 +13199,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13099,7 +13277,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13176,7 +13355,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13253,7 +13433,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13330,7 +13511,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13407,7 +13589,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13484,7 +13667,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13561,7 +13745,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13638,7 +13823,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13715,7 +13901,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13792,7 +13979,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13869,7 +14057,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -13946,7 +14135,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14023,7 +14213,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14100,7 +14291,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14177,7 +14369,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14254,7 +14447,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14331,7 +14525,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14408,7 +14603,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14485,7 +14681,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14562,7 +14759,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14639,7 +14837,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14716,7 +14915,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14793,7 +14993,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14870,7 +15071,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -14947,7 +15149,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15024,7 +15227,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15101,7 +15305,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15178,7 +15383,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15255,7 +15461,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15332,7 +15539,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15409,7 +15617,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15486,7 +15695,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15563,7 +15773,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15640,7 +15851,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15717,7 +15929,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15794,7 +16007,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15871,7 +16085,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -15948,7 +16163,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16025,7 +16241,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16102,7 +16319,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16179,7 +16397,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16256,7 +16475,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16333,7 +16553,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16410,7 +16631,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16487,7 +16709,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16564,7 +16787,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16641,7 +16865,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16718,7 +16943,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16795,7 +17021,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -16872,7 +17099,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -16929,7 +17157,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -16948,7 +17176,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17025,7 +17254,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17102,7 +17332,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -17159,7 +17390,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -17178,7 +17409,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17255,7 +17487,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17332,7 +17565,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17409,7 +17643,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17486,7 +17721,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17563,7 +17799,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17640,7 +17877,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17717,7 +17955,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17794,7 +18033,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17871,7 +18111,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -17948,7 +18189,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18025,7 +18267,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18102,7 +18345,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18179,7 +18423,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18256,7 +18501,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18333,7 +18579,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18410,7 +18657,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18487,7 +18735,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -18544,7 +18793,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -18563,7 +18812,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -18620,7 +18870,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -18639,7 +18889,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18716,7 +18967,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18793,7 +19045,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -18850,7 +19103,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -18869,7 +19122,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -18946,7 +19200,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -19003,7 +19258,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -19022,7 +19277,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -19079,7 +19335,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_mem",
@@ -19098,7 +19354,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -19175,7 +19432,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -19252,7 +19510,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -19329,7 +19588,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -19406,7 +19666,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -19483,7 +19744,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -19559,7 +19821,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -19635,7 +19898,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -19712,7 +19976,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -19789,7 +20054,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -19866,7 +20132,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -19943,7 +20210,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -20020,7 +20288,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -20097,7 +20366,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -20174,7 +20444,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -20251,7 +20522,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -20328,7 +20600,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -20405,7 +20678,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -20482,7 +20756,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -20559,7 +20834,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -20636,7 +20912,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -20702,21 +20979,22 @@
    "bit": 0,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "DETECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
-   "status": 6,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -20779,21 +21057,22 @@
    "bit": 0,
    "burst": 1,
    "delay": 7,
-   "class": "SDC",
+   "class": "DETECTED",
    "completed": true,
    "out_ok": false,
    "spikes_ok": false,
    "state_ok": false,
-   "status": 6,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -20866,7 +21145,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -20943,7 +21223,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -21020,7 +21301,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -21086,21 +21368,22 @@
    "bit": 1,
    "burst": 0,
    "delay": 0,
-   "class": "MASKED",
+   "class": "DETECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
-   "status": 6,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21174,7 +21457,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -21241,21 +21525,22 @@
    "bit": 1,
    "burst": 1,
    "delay": 14,
-   "class": "MASKED",
+   "class": "DETECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
-   "status": 6,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21318,21 +21603,22 @@
    "bit": 1,
    "burst": 2,
    "delay": 0,
-   "class": "SDC",
+   "class": "DETECTED",
    "completed": true,
-   "out_ok": false,
-   "spikes_ok": false,
-   "state_ok": false,
-   "status": 6,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21343,7 +21629,7 @@
     5,
     6,
     4,
-    7
+    2
    ],
    "exp_events": [
     1,
@@ -21355,19 +21641,11 @@
    ],
    "state": [
     [
-     -45,
+     -32,
      0
     ],
     [
-     -2,
-     0
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -26,
+     -27,
      0
     ],
     [
@@ -21375,7 +21653,7 @@
      1
     ],
     [
-     -2,
+     -10,
      0
     ],
     [
@@ -21383,8 +21661,16 @@
      0
     ],
     [
-     -3,
-     1
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
     ]
    ],
    "telemetry_ok": true
@@ -21395,21 +21681,22 @@
    "bit": 1,
    "burst": 1,
    "delay": 11,
-   "class": "MASKED",
+   "class": "DETECTED",
    "completed": true,
    "out_ok": true,
    "spikes_ok": true,
    "state_ok": true,
-   "status": 6,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21483,7 +21770,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -21549,21 +21837,22 @@
    "bit": 0,
    "burst": 1,
    "delay": 8,
-   "class": "SDC",
-   "completed": true,
+   "class": "DETECTED",
+   "completed": false,
    "out_ok": false,
    "spikes_ok": false,
    "state_ok": false,
-   "status": 6,
+   "status": 23,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21572,10 +21861,7 @@
     1,
     2,
     5,
-    6,
-    7,
-    2,
-    3
+    6
    ],
    "exp_events": [
     1,
@@ -21587,11 +21873,7 @@
    ],
    "state": [
     [
-     -7,
-     0
-    ],
-    [
-     -27,
+     -15,
      0
     ],
     [
@@ -21601,21 +21883,25 @@
     [
      -3,
      1
-    ],
-    [
-     -12,
-     0
     ],
     [
      -5,
      0
     ],
     [
-     9,
+     -8,
      0
     ],
     [
-     -2,
+     -3,
+     1
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -1,
      0
     ]
    ],
@@ -21638,7 +21924,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -21704,21 +21991,22 @@
    "bit": 2,
    "burst": 2,
    "delay": 17,
-   "class": "MASKED",
-   "completed": true,
-   "out_ok": true,
+   "class": "DETECTED",
+   "completed": false,
+   "out_ok": false,
    "spikes_ok": true,
-   "state_ok": true,
-   "status": 6,
+   "state_ok": false,
+   "status": 23,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21741,11 +22029,19 @@
    ],
    "state": [
     [
-     -32,
+     -36,
      0
     ],
     [
-     -27,
+     -30,
+     0
+    ],
+    [
+     -4,
+     2
+    ],
+    [
+     -11,
      0
     ],
     [
@@ -21753,23 +22049,15 @@
      1
     ],
     [
-     -10,
+     -6,
      0
     ],
     [
-     -2,
+     10,
      0
     ],
     [
-     -5,
-     0
-    ],
-    [
-     9,
-     0
-    ],
-    [
-     -13,
+     -14,
      0
     ]
    ],
@@ -21792,7 +22080,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -21858,21 +22147,22 @@
    "bit": 14,
    "burst": 2,
    "delay": 7,
-   "class": "SDC",
+   "class": "DETECTED",
    "completed": true,
    "out_ok": false,
    "spikes_ok": false,
    "state_ok": false,
-   "status": 6,
+   "status": 22,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -21894,19 +22184,7 @@
    ],
    "state": [
     [
-     -19,
-     0
-    ],
-    [
-     0,
-     0
-    ],
-    [
-     0,
-     0
-    ],
-    [
-     -15,
+     -21,
      0
     ],
     [
@@ -21914,15 +22192,27 @@
      0
     ],
     [
-     0,
+     -1,
      0
     ],
     [
-     0,
+     -17,
      0
     ],
     [
-     12,
+     -2,
+     0
+    ],
+    [
+     -1,
+     0
+    ],
+    [
+     -1,
+     0
+    ],
+    [
+     13,
      0
     ]
    ],
@@ -21945,7 +22235,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22011,21 +22302,22 @@
    "bit": 15,
    "burst": 0,
    "delay": 14,
-   "class": "SDC",
-   "completed": true,
+   "class": "DETECTED",
+   "completed": false,
    "out_ok": false,
    "spikes_ok": false,
    "state_ok": false,
-   "status": 6,
+   "status": 23,
    "counters": {
     "cnt_sec": 0,
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
-    "err": 0,
+    "err": 1,
     "sec_seen": 0,
     "ded_seen": 0,
     "tmr_seen": 0
@@ -22046,35 +22338,35 @@
    ],
    "state": [
     [
-     -35,
+     -40,
      0
     ],
     [
-     -2,
+     -4,
+     2
+    ],
+    [
+     -4,
+     2
+    ],
+    [
+     -24,
      0
     ],
     [
-     -2,
+     -32,
      0
     ],
     [
-     -12,
-     0
+     -4,
+     2
     ],
     [
-     -12,
-     0
+     -4,
+     2
     ],
     [
-     -2,
-     0
-    ],
-    [
-     -2,
-     0
-    ],
-    [
-     -15,
+     -28,
      0
     ]
    ],
@@ -22097,7 +22389,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22174,7 +22467,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22251,7 +22545,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22328,7 +22623,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22405,7 +22701,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22482,7 +22779,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22559,7 +22857,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22636,7 +22935,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22713,7 +23013,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22790,7 +23091,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22867,7 +23169,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -22944,7 +23247,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23021,7 +23325,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23098,7 +23403,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23175,7 +23481,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23252,7 +23559,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23329,7 +23637,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23406,7 +23715,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23483,7 +23793,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23560,7 +23871,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23637,7 +23949,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23714,7 +24027,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23791,7 +24105,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23868,7 +24183,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -23945,7 +24261,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24022,7 +24339,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24099,7 +24417,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24176,7 +24495,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24253,7 +24573,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24330,7 +24651,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24407,7 +24729,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24484,7 +24807,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24561,7 +24885,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24638,7 +24963,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24715,7 +25041,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24792,7 +25119,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24869,7 +25197,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -24946,7 +25275,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25023,7 +25353,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25100,7 +25431,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25177,7 +25509,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25254,7 +25587,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25331,7 +25665,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25408,7 +25743,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25485,7 +25821,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25562,7 +25899,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25639,7 +25977,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25716,7 +26055,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25793,7 +26133,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -25870,7 +26211,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -25927,7 +26269,7 @@
      0
     ]
    ],
-   "telemetry_ok": true
+   "telemetry_ok": false
   },
   {
    "group": "evq_par",
@@ -25946,7 +26288,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26023,7 +26366,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 1
    },
    "pins": {
     "err": 1,
@@ -26035,6 +26379,318 @@
     1,
     2,
     5,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": false
+  },
+  {
+   "group": "disp_chk",
+   "target": "u_disp_chk.bits",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "disp_chk",
+   "target": "u_disp_chk.bits",
+   "bit": 0,
+   "burst": 1,
+   "delay": 3,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "disp_chk",
+   "target": "u_disp_chk.bits",
+   "bit": 1,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "disp_chk",
+   "target": "u_disp_chk.bits",
+   "bit": 1,
+   "burst": 1,
+   "delay": 11,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
     4,
     2
    ],
@@ -26099,7 +26755,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26178,7 +26835,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26257,7 +26915,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26336,7 +26995,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26415,7 +27075,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26494,7 +27155,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26573,7 +27235,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26652,7 +27315,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26731,7 +27395,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26810,7 +27475,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26889,7 +27555,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -26968,7 +27635,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27047,7 +27715,8 @@
     "cnt_ded": 1,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27128,7 +27797,8 @@
     "cnt_ded": 1,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27208,7 +27878,8 @@
     "cnt_ded": 1,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27289,7 +27960,8 @@
     "cnt_ded": 1,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27370,7 +28042,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27448,7 +28121,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27526,7 +28200,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27604,7 +28279,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27682,7 +28358,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27760,7 +28437,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27838,7 +28516,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27916,7 +28595,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -27993,7 +28673,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -28070,7 +28751,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -28147,7 +28829,8 @@
     "cnt_ded": 1,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -28224,7 +28907,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -28301,7 +28985,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 1
+    "cnt_tmr": 1,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -28378,7 +29063,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -28439,6 +29125,7 @@
    "script": [
     "until dstate == 0: hit",
     "xor dstate bit 0 -> 1",
+    "xor u_disp_chk.bits bit 0 -> 1",
     "wait 20",
     "force fetch_wait = 0 (2 bit(s) flipped)"
    ],
@@ -28466,7 +29153,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -28527,6 +29215,7 @@
    "script": [
     "until dstate == 0: hit",
     "xor dstate bit 0 -> 1",
+    "xor u_disp_chk.bits bit 0 -> 1",
     "wait 10",
     "force fetch_wait = 63 (4 bit(s) flipped)"
    ],
@@ -28554,7 +29243,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -28640,7 +29330,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -28701,6 +29392,7 @@
    "script": [
     "until dstate == 0: hit",
     "xor dstate bit 0 -> 1",
+    "xor u_disp_chk.bits bit 0 -> 1",
     "until fetch_expire == 1: hit",
     "wait 1"
    ],
@@ -28728,7 +29420,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -28789,6 +29482,7 @@
    "script": [
     "until dstate == 0: hit",
     "xor dstate bit 0 -> 1",
+    "xor u_disp_chk.bits bit 0 -> 1",
     "until fetch_expire == 1: hit",
     "wait 1",
     "NO SUCH STATE fetch_timeout"
@@ -28817,7 +29511,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,
@@ -28903,7 +29598,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -28990,7 +29686,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -29077,7 +29774,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -29163,7 +29861,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -29250,7 +29949,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 1,
@@ -29338,7 +30038,8 @@
     "cnt_ded": 0,
     "cnt_ovf": 0,
     "cnt_oor": 0,
-    "cnt_tmr": 0
+    "cnt_tmr": 0,
+    "cnt_evq_par": 0
    },
    "pins": {
     "err": 0,

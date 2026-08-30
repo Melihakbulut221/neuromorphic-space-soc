@@ -118,6 +118,40 @@ PTR_REPLICAS = tuple(f"{q}.{b}" for q in PTR_QUEUES for b in PTR_BANKS)
 PAR_W = 4
 PAR_BANKS = tuple(f"{q}.u_par" for q in PTR_QUEUES)
 
+# The dispatcher check field, one pilot_chk_bank instance in pilot_top
+# holding two bits (hw/rtl/pilot_top.v header section 10):
+#
+#   bit 0  the parity of dstate. dstate is two bits, so it cannot be
+#          triplicated -- section 10.1 proves that a bijective third
+#          replica of a 2-bit value does not exist, because a bijection's
+#          coordinate functions are balanced and there are only six
+#          balanced functions of two variables, four of which A and B
+#          take. Storing the parity beside the state makes
+#          {dstate, dstate_par} a Hamming-distance-2 code instead, which
+#          detects every single-bit upset including the D_FETCH ->
+#          D_ISSUE flip that the 2-bit encoding cannot see at all.
+#   bit 1  the parity of the twelve bits of evw the dispatcher acts on.
+#
+# Same hazard as PAR_BANKS above and as lif_core's wchk/smem, in its
+# fourth form: a check bit is a pure function of the register it covers
+# in every reachable state, so a sequential-equivalence optimisation
+# could delete the storage and rebuild it from the parity tree, leaving a
+# checker that reports every state legal. This name is what says it is
+# still physically there.
+DISP_CHK_W = 2
+DISP_CHK_BANK = "u_disp_chk"
+# The same two bits named the other way. pilot_chk_bank's `q` is a plain
+# alias of its storage, so once keep_hierarchy is stripped yosys resolves
+# each flip-flop's Q to the PARENT's net rather than to `u_disp_chk.bits`
+# and the instance path stops existing -- measured on synth_ecp5, 0 under
+# the instance and 1 each under these two names, with the design's total
+# flip-flop count unchanged. aer_par_bank keeps its path in the same run
+# because its storage is wider than any one output alias. That is a
+# naming artifact and not a missing register, so the attribute-free case
+# is asked by net name, exactly as test_lif_memory_survives_the_ecp5_flow
+# switches to instance paths for the mirror-image reason.
+DISP_CHK_NETS = ("u_pilot.dstate_par", "u_pilot.evw_par")
+
 # The dual-rail valid flags. One bit each, so unlike the banks above
 # these carry exactly two rails and not three: over a single bit there
 # are only two storage functions, a third replica is bit-for-bit
@@ -445,6 +479,67 @@ def _assert_par_banks(census, flow, exact=True):
         f"simulation in this repository and detects nothing in silicon. "
         f"See the entry-parity section of hw/rtl/aer_fifo.v. Total "
         f"flip-flops in this netlist: {census.total}.")
+
+
+def _assert_disp_chk(census, flow, exact=True):
+    found = census.in_instance(f"{DISP_CHK_BANK}.")
+    ok = found == DISP_CHK_W if exact else found >= DISP_CHK_W
+    assert ok, (
+        f"the dispatcher check field is short of flip-flops in the "
+        f"{flow} netlist: expected {DISP_CHK_W}, found {found}. Bit 0 is "
+        f"the parity of dstate and bit 1 the parity of the event word, "
+        f"and each is a pure function of the register it covers in every "
+        f"reachable state -- so a sequential-equivalence optimisation "
+        f"could delete the storage, rebuild the bit from the parity tree "
+        f"and leave a checker that reports every state legal, which "
+        f"passes every simulation in this repository and detects nothing "
+        f"in silicon. The fault-injection campaign measured 5 silent "
+        f"corruptions in this structure before the field existed. See "
+        f"hw/rtl/pilot_top.v header section 10. Total flip-flops in this "
+        f"netlist: {census.total}.")
+
+
+@needs_yosys
+def test_dispatcher_check_field_is_stored_in_the_asic_flow(asic):
+    _assert_disp_chk(asic, "ASIC (yosys/LibreLane-shaped)")
+
+
+@needs_yosys
+def test_dispatcher_check_field_is_stored_in_the_ecp5_flow(ecp5):
+    _assert_disp_chk(ecp5, "synth_ecp5")
+
+
+@needs_yosys
+def test_dispatcher_check_field_survives_a_flow_that_ignores_keep_hierarchy(
+        ecp5_forced):
+    """The attribute-free case, and the one place in this file where the
+    instance path does not survive to be counted.
+
+    As with the entry parity there is no storage transform behind the
+    attribute and nothing for one to do -- a check bit has no twin to be
+    held apart from. What keeps it in place is that no pass in this yosys
+    performs the sequential reasoning that could fold it, and this test
+    is what says so tomorrow.
+
+    Asked by NET NAME rather than by instance, for the reason recorded at
+    DISP_CHK_NETS: pilot_chk_bank's output is a plain alias of its
+    storage, so with the attribute gone each flip-flop resolves to the
+    parent's `dstate_par` / `evw_par` rather than to `u_disp_chk.bits`.
+    Counting the instance here would fail on a naming artifact and say
+    nothing about storage -- which is exactly the trap
+    test_lif_memory_survives_the_ecp5_flow avoids in the other direction.
+    The claim is unchanged: two flip-flops, physically present, with
+    keep_hierarchy stripped.
+    """
+    found = {n: ecp5_forced.under(n) for n in DISP_CHK_NETS}
+    assert all(v >= 1 for v in found.values()), (
+        f"the dispatcher check field lost storage in the synth_ecp5 "
+        f"netlist once keep_hierarchy was stripped: expected at least "
+        f"one flip-flop per check bit, found {found}. Nothing but the "
+        f"absence of a sequential-equivalence pass holds these in place "
+        f"-- each is a pure function of the register it covers. See "
+        f"hw/rtl/pilot_top.v header section 10. Total flip-flops in this "
+        f"netlist: {ecp5_forced.total}.")
 
 
 @needs_yosys
@@ -781,6 +876,8 @@ HARDENED_REGISTERS = {
     "u_pilot.cnt_ded": 8,
     "u_pilot.cnt_oor": 8,
     "u_pilot.cnt_tmr": 8,
+    "u_pilot.cnt_evqo": 8,
+    "u_pilot.cnt_evqp": 8,
     "u_pilot.fi_drop": 8,
     # clock-domain-crossing synchronizers: two flops each, and a merge
     # that collapsed a pair to one flop would reintroduce metastability
@@ -1231,6 +1328,58 @@ def test_entry_parity_survives_the_real_hardening_flow():
             f"reports every stored word clean -- see the entry-parity "
             f"section of hw/rtl/aer_fifo.v. Total flip-flops in this "
             f"netlist: {len(flops)}.")
+
+
+def test_dispatcher_check_field_survives_the_real_hardening_flow():
+    """The dispatcher check field, in the netlist LibreLane produced.
+
+    This is why the two bits are a pilot_chk_bank instance and not a
+    `reg [1:0]` in pilot_top: under deferred_flatten abc has renumbered
+    every cell to `_NNNN_` before the flatten, so an instance path is the
+    only naming that reaches the shipped netlist. A plain reg would be
+    checkable in this file's MODEL of synthesis and nowhere in the
+    artifact that becomes silicon, which is the distinction the whole of
+    section 4 exists to make.
+
+    Same provenance rule as the pointer, parity and rail guards, in the
+    form _witness_runs settled on after a control run built from a tree
+    without aer_par_bank was accepted as a witness and reported a missing
+    check field as a collapse: skip on what the run was BUILT FROM, never
+    on the absence of the storage, because a netlist-shaped skip
+    condition skips on precisely the symptom.
+
+    pilot_chk_bank lives in hw/rtl/pilot_top.v, so that is the file whose
+    declaration a run has to have been handed.
+    """
+    netlists = _hardening_netlists()
+    if not netlists:
+        pytest.skip(
+            "no deferred_flatten LibreLane run with a final netlist; "
+            "produce one with hw/openlane/pilot_ihp/run_ihp.sh or the "
+            "sky130 equivalent")
+
+    fresh = _witness_runs("pilot_chk_bank", RTL / "pilot_top.v")
+    if not fresh:
+        pytest.skip(
+            "no LibreLane run on disk was built from RTL declaring "
+            "pilot_chk_bank, where the dispatcher check field lives; "
+            "re-harden to close this check")
+
+    for run, nl in fresh:
+        flops = [name for ctype, name in _NETLIST_CELL.findall(nl.read_text())
+                 if _is_flop(ctype)]
+        found = sum(1 for n in flops if f"{DISP_CHK_BANK}." in n)
+        assert found == DISP_CHK_W, (
+            f"the dispatcher check field is short in "
+            f"{nl.relative_to(ROOT)}: expected {DISP_CHK_W} flip-flops "
+            f"under {DISP_CHK_BANK}, found {found}. This is the shipped "
+            f"netlist of run {run.name}, so it is the structure that "
+            f"would have been fabricated. Without these two bits dstate "
+            f"is a 2-bit register with no Hamming distance and evw is "
+            f"unchecked, which is the state the campaign measured 5 "
+            f"silent corruptions in -- see hw/rtl/pilot_top.v header "
+            f"section 10. Total flip-flops in this netlist: "
+            f"{len(flops)}.")
 
 
 def test_valid_flag_rails_survive_the_real_hardening_flow():

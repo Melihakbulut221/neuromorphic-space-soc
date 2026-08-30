@@ -80,6 +80,7 @@ ADDR_ECC_INJ_POS = 0x0A0
 ADDR_TMR_INJ = 0x0A4
 ADDR_CNT_TMR = 0x0A8
 ADDR_CNT_EVQ_OUT_OVF = 0x0AC
+ADDR_CNT_EVQ_PAR = 0x0B0
 
 # STATUS / CTRL / ECC_INJ field masks, named so the tests read as intent
 ST_BUSY, ST_IN_EMPTY, ST_OUT_EMPTY = 1 << 0, 1 << 1, 1 << 2
@@ -99,6 +100,7 @@ FCLR_AXON_OOR = 1 << FIELDS["FAULT_CLR"]["CNT_AXON_OOR"]
 FCLR_FAULT_ADDR = 1 << FIELDS["FAULT_CLR"]["FAULT_ADDR"]
 FCLR_CNT_TMR = 1 << 5
 FCLR_CNT_EVQ_OUT_OVF = 1 << 6
+FCLR_CNT_EVQ_PAR = 1 << 7
 
 TYPE_SPIKE, TYPE_TICK, TYPE_SYNC = 0 << 14, 1 << 14, 2 << 14
 
@@ -1300,10 +1302,25 @@ async def test_dispatcher_stranded_in_fetch_recovers_and_is_flagged(dut):
     await RisingEdge(dut.clk)
     await Timer(3, unit="ns")
     dut.u_pilot.dstate.value = 0b01                 # D_FETCH
+    # ...and its check bit with it. Since 2026-08-30 dstate carries a
+    # parity bit and {dstate, dstate_par} is a Hamming-distance-2 code
+    # (pilot_top.v header section 10), so dstate alone is an illegal word
+    # and the check field recovers it in ONE cycle -- which is the
+    # hardening working, and which would leave this test measuring the
+    # check field rather than the bounded wait it was written for. The
+    # pair is set consistently so the wait is genuinely entered and
+    # genuinely has to expire. Two flops, so this is not a single-event
+    # upset any more; it is the construction of a state the design can
+    # still reach on the route the check field cannot see, which is a
+    # read that was legitimately requested and never answered.
+    dut.u_pilot.u_disp_chk.bits.value = 0b01        # dstate_par = ^D_FETCH
     await Timer(1, unit="ns")
     assert uo(dut, BUSY) == 1, \
         "the deposit did not take: BUSY is driven by dstate != D_IDLE, " \
         "so a stranded dispatcher must show BUSY immediately"
+    assert int(dut.u_pilot.disp_chk_bad.value) == 0, \
+        "the planted state must be a LEGAL check word, or the check " \
+        "field recovers it and this test stops exercising the wait"
 
     # ---- 1. BUSY clears on its own, inside a bound -------------------
     for waited in range(1, FETCH_TIMEOUT_POLL + 1):
@@ -1804,3 +1821,252 @@ async def test_evq_out_ovf_counter_saturates_and_clears(dut):
         "FAULT_CLR must not clear STATUS.OVF_SEEN"
     await wr(p, ADDR["STATUS_CLR"], ST_OVF_SEEN)
     assert not (await rd(p, ADDR["STATUS"])) & ST_OVF_SEEN
+
+
+# =====================================================================
+# entry-parity discards are telemetry, not just a bounded wait
+# =====================================================================
+@cocotb.test()
+async def test_queue_parity_discard_is_counted_and_flagged(dut):
+    """A corrupted queue entry is DISCARDED, and CNT_EVQ_PAR says so.
+
+    hw/rtl/aer_fifo.v stores an even-parity bit per entry and throws the
+    entry away when it does not check, holding rd_valid low. Until
+    2026-08-30 pilot_top connected `par_err` to nothing, so the only
+    thing the host saw was the dispatcher's bounded wait expiring and
+    STATUS.ERR_CFG latching -- the same report a configuration fault
+    gives, for an event lost to an integrity check. That is the defect
+    commit 2d59ec2 fixed for the lif_core memory ECC in the same shape,
+    and pilot_top.v header section 5.2 is the argument.
+
+    This test reaches into the hierarchy for the same reason the FSM and
+    TMR demonstrators do: no pin corrupts a stored queue word. Everything
+    it then OBSERVES is host visible -- a counter, a status bit and a
+    pin.
+
+    One counter for both queue instances, on the CNT_TMR precedent, so
+    the check below is about the counter moving and about which
+    FAULT_CLR bit owns it, not about which queue it was.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    weights = make_weights(n_axons, n_neurons)
+    await bring_up(p, weights, n_neurons)
+
+    assert await rd(p, ADDR_CNT_EVQ_PAR) == 0, "nothing has been discarded"
+
+    # Hold the dispatcher off the queue so a word can be parked in it
+    # and corrupted before anything reads it. CTRL.EN low stops the
+    # D_IDLE arm from ever arming a fetch.
+    await wr(p, ADDR["CTRL"], 0)
+    await wr(p, ADDR["EVQ_IN"], TYPE_SPIKE | 0)
+    for _ in range(4):
+        await RisingEdge(dut.clk)
+
+    # Corrupt the stored check bit of the slot that word went into. An
+    # upset in the entry itself would do equally well -- the codeword is
+    # the word and its parity bit together -- and the check field is the
+    # smaller, more deterministic target.
+    par = dut.u_pilot.u_evq_in.u_par.bits
+    slot = int(dut.u_pilot.u_evq_in.rd_idx.value)
+    await Timer(1, unit="ns")
+    par.value = int(par.value) ^ (1 << slot)
+    await Timer(1, unit="ns")
+
+    # Let the dispatcher fetch it. The read is accepted, the pointer
+    # advances, the entry is thrown away and rd_valid never rises, so the
+    # bounded wait of section 8 expires and the FSM recovers on its own.
+    await wr(p, ADDR["CTRL"], CTRL_EN)
+    for _ in range(FETCH_TIMEOUT_POLL):
+        await RisingEdge(dut.clk)
+        await Timer(1, unit="ns")
+        if uo(dut, BUSY) == 0 and int(dut.u_pilot.cnt_evqp.value):
+            break
+    await realign(dut)
+
+    assert await rd(p, ADDR_CNT_EVQ_PAR) == 1, (
+        "a queue entry failed its parity check and was discarded, and "
+        "CNT_EVQ_PAR did not move: the loss reaches the host only as "
+        "STATUS.ERR_CFG, which is indistinguishable from a configuration "
+        "fault. aer_fifo's par_err is the wire; pilot_top.v section 5.2 "
+        "is why it is one counter for both queues.")
+    assert (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "the consumer's bounded wait must still report the lost event"
+    assert uo(dut, ERR) == 1, "and it must still reach the ERR pin"
+    # Not a correction, so not CNT_TMR. Nothing was masked: the event is
+    # gone and the counter says how it went.
+    assert await rd(p, ADDR_CNT_TMR) == 0, \
+        "a discard is a DETECTED loss, not a masked correction"
+
+    # The clear bit is the pilot-only b7 and nothing else.
+    await wr(p, ADDR["FAULT_CLR"], FCLR_EVQ_OVF | FCLR_CNT_TMR
+             | FCLR_CNT_EVQ_OUT_OVF)
+    assert await rd(p, ADDR_CNT_EVQ_PAR) == 1, \
+        "FAULT_CLR bits 2, 5 and 6 must not clear the parity-discard count"
+    await wr(p, ADDR["FAULT_CLR"], FCLR_CNT_EVQ_PAR)
+    assert await rd(p, ADDR_CNT_EVQ_PAR) == 0, \
+        "FAULT_CLR b7 owns CNT_EVQ_PAR (pilot_top.v section 5.2)"
+
+
+# =====================================================================
+# the dispatcher check field
+# =====================================================================
+@cocotb.test()
+async def test_dispatcher_state_upset_is_detected_not_acted_on(dut):
+    """A single-bit upset in `dstate` is announced, and costs no event.
+
+    D_FETCH is 2'b01 and D_ISSUE is 2'b11, so one flip turns a waiting
+    dispatcher into an issuing one and every downstream consumer sees a
+    legal state issuing whatever `evw` happens to hold. The
+    fault-injection campaign measured that as a spurious event 7 in place
+    of a real event 2, with STATUS reading 0x06 and every counter zero.
+    A 2-bit register cannot be voted -- pilot_top.v header section 10.1
+    proves a third replica does not exist over two bits -- so it carries
+    a parity bit instead and {dstate, dstate_par} is a
+    Hamming-distance-2 code.
+
+    Reaches into the hierarchy to deposit, like the FSM and TMR
+    demonstrators, and observes only what a bench can see.
+
+    Two things are asserted, and the second is the one the first draft of
+    the RTL got wrong: the upset must be REPORTED, and the recovery must
+    not itself throw away a queue answer that arrived in the same cycle.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    weights = make_weights(n_axons, n_neurons)
+    await bring_up(p, weights, n_neurons)
+
+    await RisingEdge(dut.clk)
+    await Timer(3, unit="ns")
+    before = int(dut.u_pilot.dstate.value)
+    dut.u_pilot.dstate.value = before ^ 0b10
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.disp_chk_bad.value) == 1, (
+        f"a single-bit flip of dstate ({before:#04b} -> "
+        f"{before ^ 0b10:#04b}) must be an illegal check word; if it is "
+        f"not, the parity bit is not covering the state")
+
+    for _ in range(4):
+        await RisingEdge(dut.clk)
+    await realign(dut)
+
+    assert (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "an untrusted dispatcher state must reach STATUS.ERR_CFG"
+    assert uo(dut, ERR) == 1, "and the ERR pin, with no serial frame"
+    await wr(p, ADDR["STATUS_CLR"], ST_ERR_CFG)
+
+    # And the part still works, which is what says the recovery is a
+    # recovery rather than a wedge.
+    core = LIFCore(n_neurons, n_axons, weights, CFG)
+    expected = core.run_frames(FRAMES)
+    got = await run_frames(p, FRAMES)
+    assert any(step for step in expected)
+    assert got == expected, \
+        f"the dispatcher must dispatch again after a detected upset: " \
+        f"rtl {got}, golden {expected}"
+
+
+@cocotb.test()
+async def test_event_word_upset_is_detected_rather_than_issued(dut):
+    """An upset in the held event word is dropped, not delivered.
+
+    `evw` holds the fetched event for the whole of D_ISSUE, and a flip in
+    its ID or TYPE field sends a spike to the wrong axon, turns a SPIKE
+    into a TICK, or drops it -- three of the campaign's five silent
+    corruptions in this structure. The twelve bits the dispatcher reads
+    carry a parity bit, checked in D_ISSUE and only there, so an upset in
+    the four bits nothing reads stays harmless (pilot_top.v section 10.2).
+
+    The check bit takes an ENABLE rather than a next value, and this test
+    is what holds that: it deposits into `evw` and then waits several
+    cycles before looking. A next-value check bit would be recomputed
+    from the corrupted word on the very next edge and would agree with it
+    from then on, so this test would pass for one cycle and fail for
+    every later one.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    weights = make_weights(n_axons, n_neurons)
+    await bring_up(p, weights, n_neurons)
+
+    # Park a legal event word and its check bit by hand, with the FSM
+    # held out of D_ISSUE, then flip one covered bit and let the FSM
+    # reach D_ISSUE. Depositing directly is what the campaign does; the
+    # point here is the CHECK, not the route into the register.
+    await RisingEdge(dut.clk)
+    await Timer(3, unit="ns")
+    dut.u_pilot.evw.value = TYPE_SPIKE | 1
+    dut.u_pilot.u_disp_chk.bits.value = (
+        (bin(TYPE_SPIKE | 1).count("1") & 1) << 1)
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.evw_chk_bad.value) == 0, \
+        "the planted word must check out before it is corrupted"
+
+    # Now the upset, and several cycles of doing nothing before looking.
+    dut.u_pilot.evw.value = TYPE_SPIKE | 1 | (1 << 2)
+    for _ in range(6):
+        await RisingEdge(dut.clk)
+    await Timer(1, unit="ns")
+    dut.u_pilot.dstate.value = 0b11                    # D_ISSUE
+    dut.u_pilot.u_disp_chk.bits.value = (
+        int(dut.u_pilot.u_disp_chk.bits.value) & 0b10)  # dstate_par = 0
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.evw_chk_bad.value) == 1, (
+        "a covered bit of the held event word was flipped six cycles "
+        "ago and the check still passes: the check bit has been "
+        "recomputed from the corrupted word, which is what an enable "
+        "instead of a next value exists to prevent")
+    assert int(dut.u_pilot.lif_ev_valid.value) == 0, \
+        "an event that failed its check must not be issued to lif_core " \
+        "in the cycle the check fails -- the issue is combinational, so " \
+        "a next-cycle-only recovery would deliver it first"
+
+    for _ in range(4):
+        await RisingEdge(dut.clk)
+    await realign(dut)
+    assert (await rd(p, ADDR["STATUS"])) & ST_ERR_CFG, \
+        "a dropped event must be announced, not silently discarded"
+    assert uo(dut, ERR) == 1
+    await wr(p, ADDR["STATUS_CLR"], ST_ERR_CFG)
+
+    core = LIFCore(n_neurons, n_axons, weights, CFG)
+    expected = core.run_frames(FRAMES)
+    got = await run_frames(p, FRAMES)
+    assert got == expected, \
+        f"the dispatcher must dispatch again: rtl {got}, golden {expected}"
+
+
+@cocotb.test()
+async def test_unread_event_word_bits_are_outside_the_check(dut):
+    """evw[13:10] is deliberately not covered, and this holds the line.
+
+    Nothing reads those four bits -- they are in pilot_top's `_unused`
+    sink -- so an upset in them costs nothing, and the campaign records
+    such injections as MASKED. Covering them would convert a harmless
+    upset into a reported fault, which is a check field manufacturing
+    alarms. That is a design decision and not an accident, so it gets a
+    test: widening the parity to all sixteen bits fails here.
+    """
+    p = await reset(dut)
+    n_neurons, n_axons = await geometry(p)
+    weights = make_weights(n_axons, n_neurons)
+    await bring_up(p, weights, n_neurons)
+
+    await RisingEdge(dut.clk)
+    await Timer(3, unit="ns")
+    dut.u_pilot.evw.value = TYPE_SPIKE | 1
+    dut.u_pilot.u_disp_chk.bits.value = (
+        (bin(TYPE_SPIKE | 1).count("1") & 1) << 1)
+    dut.u_pilot.dstate.value = 0b11                    # D_ISSUE, par 0
+    await Timer(1, unit="ns")
+    assert int(dut.u_pilot.evw_chk_bad.value) == 0
+
+    for bit in (10, 11, 12, 13):
+        dut.u_pilot.evw.value = (TYPE_SPIKE | 1) ^ (1 << bit)
+        await Timer(1, unit="ns")
+        assert int(dut.u_pilot.evw_chk_bad.value) == 0, (
+            f"evw[{bit}] is not read by anything, so an upset in it must "
+            f"stay MASKED rather than raise a fault. Widening the parity "
+            f"to all sixteen bits is what breaks this.")
+    dut.u_pilot.evw.value = TYPE_SPIKE | 1

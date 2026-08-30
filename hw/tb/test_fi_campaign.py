@@ -197,7 +197,7 @@ EXT_RNG = random.Random(CAMPAIGN_SEED ^ 0xECC_0001)
 # puts the design back where it was with nothing to say so. docs/16
 # section 7.3 named that as the next campaign's first item; this is it.
 EXT_GROUPS = ("lif_wchk", "lif_wchk_unread", "lif_smem",
-              "wdog_fetch", "wdog_oh", "evq_par")
+              "wdog_fetch", "wdog_oh", "evq_par", "disp_chk")
 
 CLK_NS = 10          # 100 MHz simulation clock, as every other suite
 HALF = 20            # serial half period: SER_SCK = clk/4, the fast limit
@@ -206,6 +206,7 @@ HALF = 20            # serial half period: SER_SCK = clk/4, the fast limit
 ADDR_ECC_INJ_POS = 0x0A0
 ADDR_TMR_INJ = 0x0A4
 ADDR_CNT_TMR = 0x0A8
+ADDR_CNT_EVQ_PAR = 0x0B0
 
 ST_ERR_CFG, ST_DED_SEEN, ST_OVF_SEEN = 1 << 4, 1 << 5, 1 << 6
 CTRL_EN, CTRL_STATE_CLR, CTRL_SOFT_RST, CTRL_SCRUB_EN = 1, 2, 4, 8
@@ -224,7 +225,15 @@ TYPE_SPIKE = 0 << 14
 # this workload can legitimately produce.
 FIFO_SENTINEL = 0xF0F0
 
-COUNTERS = ("cnt_sec", "cnt_ded", "cnt_ovf", "cnt_oor", "cnt_tmr")
+# cnt_evq_par joined this tuple 2026-08-30, when hw/rtl/pilot_top.v
+# connected aer_fifo's par_err (header section 5.2). Every record's
+# telemetry_ok is measured against the whole tuple, so a queue entry
+# discarded for a failed parity check now shows up as a telemetry
+# difference in the groups that cause one -- which is the design
+# counting the event it was given, and is exactly what this campaign
+# had no way to see while the port was unconnected.
+COUNTERS = ("cnt_sec", "cnt_ded", "cnt_ovf", "cnt_oor", "cnt_tmr",
+            "cnt_evq_par")
 PINS = ("err", "sec_seen", "ded_seen", "tmr_seen")
 
 # ---------------------------------------------------------------------
@@ -802,6 +811,7 @@ async def read_observations(dut, n_neurons, completed):
         "cnt_ovf": await rd(dut, ADDR["CNT_EVQ_OVF"]),
         "cnt_oor": await rd(dut, ADDR["CNT_AXON_OOR"]),
         "cnt_tmr": await rd(dut, ADDR_CNT_TMR),
+        "cnt_evq_par": await rd(dut, ADDR_CNT_EVQ_PAR),
         "pins": {n: pin(dut, n) for n in PINS},
     }
     if not completed:
@@ -818,8 +828,15 @@ async def read_observations(dut, n_neurons, completed):
 
 
 def classify(completed, obs, out_ok):
+    # cnt_evq_par is a DETECTED term and not a CORRECTED one: a failed
+    # entry-parity check discards the entry, so the event is lost and
+    # nothing was masked. It joins cnt_ded / cnt_ovf / cnt_oor, the other
+    # counters whose nonzero value means "a fault happened and the part
+    # noticed", rather than cnt_sec / cnt_tmr, which mean "a fault
+    # happened and the part repaired it".
     detected = bool(obs["status"] & (ST_ERR_CFG | ST_DED_SEEN | ST_OVF_SEEN)
-                    or obs["cnt_ded"] or obs["cnt_ovf"] or obs["cnt_oor"])
+                    or obs["cnt_ded"] or obs["cnt_ovf"] or obs["cnt_oor"]
+                    or obs["cnt_evq_par"])
     corrected = bool(obs["cnt_sec"] or obs["cnt_tmr"])
     if not completed and not detected:
         return "HANG"
@@ -1245,6 +1262,39 @@ def target_list(n_neurons, n_axons, q_depth):
     t += [("evq_par", f"{q}.u_par.bits", spread(q_depth, 2), 2, False)
           for q in ("u_evq_in", "u_evq_out")]
 
+    # 16. THE DISPATCHER CHECK FIELD (hw/rtl/pilot_top.v header section
+    #     10), added with the protection it belongs to and for the third
+    #     time on item 13's argument: a check field is storage, the
+    #     hardening pays for it in flip-flops, and if an upset in one of
+    #     those bits could corrupt an inference the protection would be
+    #     importing the risk it removes.
+    #
+    #     Two bits in one pilot_chk_bank instance, so the bit index is
+    #     the bit's job:
+    #
+    #       bit 0  dstate_par. {dstate, dstate_par} is a Hamming-distance
+    #              2 code, so an upset here is an upset in the codeword
+    #              and is detected exactly like an upset in dstate. The
+    #              expected outcome is a REPORTED FALSE RECOVERY: the
+    #              dispatcher returns to D_IDLE and latches
+    #              STATUS.ERR_CFG, and because the bit takes a plain next
+    #              value it is rewritten correct on that same edge, so
+    #              the disagreement is one cycle wide.
+    #       bit 1  evw_par. Checked only in D_ISSUE, and it takes an
+    #              ENABLE rather than a next value -- the whole
+    #              correctness of the evw half, see the header. An upset
+    #              here between two captures makes a good event fail its
+    #              check and be dropped with the drop announced, which is
+    #              the same outcome as the case the field exists to catch
+    #              and is why adding unprotected state here is acceptable.
+    #
+    #     The target is the bank's storage register and not the checked
+    #     wire, which is the distinction items 9 and 11 were rewritten
+    #     for. It draws from EXT_RNG and is appended last, so every phase
+    #     drawn by the twelve groups of the campaign of record and by
+    #     items 13, 14 and 15 is untouched.
+    t += [("disp_chk", "u_disp_chk.bits", [0, 1], 2, True)]
+
     return t
 
 
@@ -1584,37 +1634,62 @@ def watchdog_cases():
     asserts which one it got. report_kept carries the same `wait 1` so
     that it stays byte-identical to report_erased but for the deposit.
     """
+    # Planting the D_FETCH deadlock, and why it takes two deposits since
+    # 2026-08-30.
+    #
+    # It used to take one: `xor dstate bit 0` from D_IDLE lands the FSM
+    # in D_FETCH with no read outstanding, which is docs/16 section 5.1's
+    # fault exactly. The dispatcher check field (hw/rtl/pilot_top.v
+    # header section 10) closes that route. {dstate, dstate_par} is a
+    # Hamming-distance-2 code, so a single flip of dstate is an illegal
+    # word, `disp_chk_bad` fires COMBINATIONALLY in that same cycle, and
+    # the FSM is back in D_IDLE on the next edge with STATUS.ERR_CFG
+    # latched. Measured here first, as a test failure: every one of these
+    # scripts logged "until fetch_expire == 1: MISSED", because the
+    # 63-cycle wait never started.
+    #
+    # That is the hardening working, and it is worth stating what it does
+    # and does not mean. The bounded wait is NOT redundant. It still
+    # covers the route the check field cannot see -- a read that was
+    # legitimately requested and never answered, which is where an
+    # EVQ_IN pointer upset or a parity discard leaves the FSM, with
+    # dstate and its check bit in perfect agreement. What has changed is
+    # that the single-bit route into a SILENT 63-cycle hang is gone: it
+    # is now a one-cycle recovery with a report.
+    #
+    # So the deadlock is planted with two deposits in the same cycle,
+    # dstate and its check bit together, keeping the pair legal at
+    # D_FETCH. That is two bits and therefore not a single-event upset,
+    # and it is not pretending to be one -- these cases already use
+    # `force` on the wait counters. Their question is whether the net
+    # still works when it matters, not how often it matters.
+    plant_fetch = [("until", "dstate", D_IDLE, 60),
+                   ("xor", "dstate", 0),
+                   ("xor", "u_disp_chk.bits", 0)]
+
     return [
         # ---- the dispatcher's D_FETCH bound -------------------------
         ("wdog_fetch_dir", "clear_midwait",
          "counter zeroed 20 cycles into a real bounded wait",
-         [("until", "dstate", D_IDLE, 60),
-          ("xor", "dstate", 0),
-          ("wait", 20),
-          ("force", "fetch_wait", 0)]),
+         plant_fetch + [("wait", 20),
+                        ("force", "fetch_wait", 0)]),
         ("wdog_fetch_dir", "fire_early",
          "counter driven to its bound 10 cycles into a real wait",
-         [("until", "dstate", D_IDLE, 60),
-          ("xor", "dstate", 0),
-          ("wait", 10),
-          ("force", "fetch_wait", WAIT_MAX)]),
+         plant_fetch + [("wait", 10),
+                        ("force", "fetch_wait", WAIT_MAX)]),
         ("wdog_fetch_dir", "fire_spurious",
          "counter driven to its bound during a LEGITIMATE D_FETCH",
          [("until", "dstate", D_FETCH, 60),
           ("force", "fetch_wait", WAIT_MAX)]),
         ("wdog_fetch_dir", "report_kept",
          "control: the same deadlock, the net left alone",
-         [("until", "dstate", D_IDLE, 60),
-          ("xor", "dstate", 0),
-          ("until", "fetch_expire", 1, 90),
-          ("wait", 1)]),
+         plant_fetch + [("until", "fetch_expire", 1, 90),
+                        ("wait", 1)]),
         ("wdog_fetch_dir", "report_erased",
          "real deadlock, and the timeout pulse erased in its one cycle",
-         [("until", "dstate", D_IDLE, 60),
-          ("xor", "dstate", 0),
-          ("until", "fetch_expire", 1, 90),
-          ("wait", 1),
-          ("xor?", "fetch_timeout", 0)]),
+         plant_fetch + [("until", "fetch_expire", 1, 90),
+                        ("wait", 1),
+                        ("xor?", "fetch_timeout", 0)]),
         ("wdog_fetch_dir", "report_fabricated",
          "no fault; the timeout pulse set for one cycle",
          [("wait", 5), ("xor?", "fetch_timeout", 0)]),
@@ -1975,6 +2050,76 @@ async def test_05_summary(dut):
         f"a single-bit upset in a queue entry or in its check bit must " \
         f"never be a silent corruption: the check discards the entry and " \
         f"the consumer's bounded wait reports it. Got {qmem}"
+    #   (c) and the discard is now VISIBLE AS TELEMETRY, not only as a
+    #       bounded wait expiring. hw/rtl/pilot_top.v section 5.2
+    #       connected aer_fifo's par_err to CNT_EVQ_PAR; before that the
+    #       operator saw STATUS.ERR_CFG and could not tell an integrity
+    #       discard from a configuration fault. This is the criterion
+    #       that fails if that wire is ever cut again, and it is written
+    #       as an if-and-only-if in both directions:
+    #
+    #         every DETECTED record in these two groups must have
+    #         counted at least one discard, and no record anywhere else
+    #         in the campaign may count one, because no other group
+    #         corrupts a stored queue word or its check bit.
+    par_det = [r for r in RESULTS
+               if r["group"] in ("evq_mem", "evq_par")
+               and r["class"] == "DETECTED"]
+    assert par_det and all(r["counters"]["cnt_evq_par"] > 0
+                           for r in par_det), \
+        f"a queue entry was discarded for a failed parity check and " \
+        f"CNT_EVQ_PAR did not move: the discard reached the host only " \
+        f"as STATUS.ERR_CFG, which is indistinguishable from a " \
+        f"configuration fault. hw/rtl/pilot_top.v section 5.2 is the " \
+        f"wire. Records: " \
+        f"{[(r['target'], r['bit'], r['counters']['cnt_evq_par']) for r in par_det]}"
+    stray = sorted({r["group"] for r in RESULTS
+                    if r["counters"]["cnt_evq_par"]
+                    and r["group"] not in ("evq_mem", "evq_par")})
+    assert not stray, \
+        f"CNT_EVQ_PAR counted a discard in {stray}, where no injection " \
+        f"touches a stored queue word or its check bit. Either the " \
+        f"counter is counting something that is not an entry-parity " \
+        f"discard, or a target moved."
+    # The dispatcher check field (hw/rtl/pilot_top.v header section 10),
+    # on the same two-part footing as every hardening above it.
+    #
+    #   (a) the target is the check bank's own storage register, not the
+    #       checked wire, which is the mis-targeting that cost the
+    #       pointer group a day of wrong numbers (target_list item 9);
+    #       and
+    #   (b) an upset in the CHECK BITS may never be a silent corruption
+    #       either. This is the question item 16 exists to ask: the
+    #       hardening adds two unprotected flip-flops, and if one of them
+    #       could corrupt an inference quietly the protection would be
+    #       importing the risk it removes.
+    dchk_paths = sorted({r["target"] for r in RESULTS
+                         if r["group"] == "disp_chk"})
+    assert dchk_paths == ["u_disp_chk.bits"], \
+        f"the disp_chk group must target the check bank's storage " \
+        f"register (pilot_chk_bank.bits) and not the checked wire: " \
+        f"{dchk_paths}"
+    dchk = groups.get("disp_chk", {})
+    assert dchk and dchk["SDC"] == 0, \
+        f"an upset in the dispatcher check field produced a silent " \
+        f"corruption: the field exists to make a corrupted state or " \
+        f"event word loud, so an upset IN it must be loud too or it is " \
+        f"net new risk. Got {dchk}"
+    # And the structure the check field protects. `dispatch` carried 5 of
+    # the 11 residual silent corruptions before this hardening -- 2 in
+    # dstate, which a 2-bit encoding cannot check at all, and 3 in the
+    # event word. Both registers are now inside a check code, so a single
+    # upset in either must be announced rather than acted on. Written as
+    # "no SDC" and not "all DETECTED" for the reason the queue criterion
+    # is: an upset the workload never reaches is legitimately MASKED.
+    disp = groups.get("dispatch", {})
+    assert disp and disp["SDC"] == 0, \
+        f"a single-bit upset in the dispatcher's state or event word " \
+        f"produced a silent corruption. dstate is covered by its parity " \
+        f"bit (the pair is a Hamming-distance-2 code) and evw[15:14] " \
+        f"and evw[9:0] by theirs, so every single upset in either must " \
+        f"be detected and the event dropped rather than issued. See " \
+        f"hw/rtl/pilot_top.v header section 10. Got {disp}"
     # The two bounded-wait counters (target_list item 14 and test_04).
     # Presence here, outcome in test_04. What must not happen silently
     # is the groups disappearing, which is how the nets came to be
