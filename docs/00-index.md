@@ -258,6 +258,7 @@ silicon and no radiation data, and the licence is unsigned.
 | `docs/24-gate-level-simulation.md` | Gate-level simulation of the hardened netlist — the ROADMAP P1 bar item, and the direct check on the RTL-versus-netlist gap that has produced three separate defects in this project. Records which tests can run at gate level and which cannot. |
 | `docs/25-sky130-6x2.md` | SKY130A at twelve tiles. Routes where 4x2 diverged, every manufacturability deck at zero on both PDKs, and the slow corner still missed — with a decomposition of the miss that supersedes the diagnosis in `docs/18`. |
 | `docs/26-gate-level-fault-injection.md` | Fault injection on the hardened netlist rather than the RTL, with the validation that the method models a transient upset and not a stuck-at. 355 of 357 comparable injections agree with the RTL campaign; the two that do not are named and analysed. |
+| `docs/27-reharden-wave6.md` | Re-harden after the timeout retirement and the three valid-flag rails. The netlist census guards pass by name rather than skipping, so the redundancy is confirmed present in the shipped netlist; records that the slow-corner margin has fallen to +0.32 ns. |
 | `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
 | `README.md` | Project summary and repository layout. |
 | `ROADMAP.md` | Phased plan with gates and external clocks. |
