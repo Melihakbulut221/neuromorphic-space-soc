@@ -42,6 +42,11 @@ Three jobs, all consequences of commit `c5a5a6e`:
   zero. Slow corner **+1.1554 ns**, which is **0.524 ns better** than
   `ihp-mix` despite a larger netlist — the third time in this project
   that a bigger hardened netlist has closed better.
+  *Corrected 2026-08-30: the slack is un-derated (`docs/28` §4.4b).
+  `wave5-ihp` still closes all three corners with the 5 % OCV derate
+  applied, at **+0.1896 ns** slow; the `ihp-mix` baseline it is
+  compared against does **not**, at -0.3607 ns. Section 2.3's
+  correction note has the derivation. The 0.524 ns step is unchanged.*
 - **The design no longer fits the 70 % planning criterion, and this is
   the finding that matters.** Utilization is **71.19 %**. At the
   criterion the design needs **264,241 um2** of placement rows against
@@ -302,6 +307,40 @@ Read as frequency: +1.1554 ns at a 20 ns period is an 18.845 ns critical
 path and a post-route slow-corner Fmax of about **53.1 MHz**, against
 the 50 MHz `tt/info.yaml` declares — up from `ihp-mix`'s 51.6 MHz
 **[estimate, arithmetic on a measured slack]**.
+
+> **Corrected 2026-08-30 — both frequencies are un-derated, and one of
+> the two runs compared here does not reach 50 MHz once the derate is
+> honest.**
+>
+> `docs/28` section 4.4(b) establishes that this flow has never applied
+> the 5 % on-chip-variation derate its configuration asks for:
+> `TIME_DERATING_CONSTRAINT` is the integer `5` and LibreLane's
+> `base.sdc` computes the factor as `expr 5 / 100`, Tcl integer
+> division, which is `0`. Every slack in this document is correct as
+> reported and carries no OCV margin at all.
+>
+> Re-derived on each run's own shipped netlist, parasitics, constraints
+> and liberty — the method of `docs/28` section 11, which reproduces
+> each run's own metric to 17 significant digits before the derate
+> lines are added **[fact]**:
+>
+> | Run | Slow setup, as signed off | **Slow setup, derated** | Fmax as signed off | **Fmax derated** |
+> |---|---|---|---|---|
+> | `ihp-mix` | +0.6315 | **-0.3607** | 51.6 MHz | **49.1 MHz** |
+> | **`wave5-ihp`** | +1.1554 | **+0.1896** | 53.1 MHz | **50.5 MHz** |
+>
+> **[fact for the slacks, standalone OpenSTA at
+> `nom_slow_1p08V_125C`; estimate for the frequencies, on the linearity
+> `docs/28` section 5.6 measures.]**
+>
+> **What moved.** `wave5-ihp` still clears 50 MHz derated, by 0.5 MHz
+> instead of 3.1. **`ihp-mix` does not clear it** — at -0.3607 ns it
+> misses the slow corner outright, so "up from `ihp-mix`'s 51.6 MHz" is
+> a comparison against a run that did not make the target. The
+> +0.524 ns improvement this section claims over `ihp-mix` is
+> unaffected: it is a difference between two slacks measured the same
+> way. What is affected is the baseline's standing, not the size of the
+> step.
 
 ### 2.4 The KLayout deck, now closed on IHP
 
@@ -919,6 +958,25 @@ that netlist size does not predict slack in either direction
 **[estimate on the mechanism; the slacks are fact]**. Slow-corner Fmax is
 **52.4 MHz**, still above the declared 50 MHz **[estimate]**.
 
+> **Corrected 2026-08-30: "still above the declared 50 MHz" is false
+> for `wave5-ihp-b`.** The 52.4 MHz is un-derated, because the flow
+> never applied the 5 % OCV derate it reported applying (`docs/28`
+> §4.4b). Re-derived on this run's own shipped artifacts, the slow
+> corner is **-0.0675 ns** rather than +0.9121, which is **49.8 MHz** —
+> **below** the declared 50 MHz, and a setup miss rather than a close
+> **[fact for the slack, standalone OpenSTA on
+> `tt/runs/wave5-ihp-b/final/{nl,spef,sdc}`; estimate for the
+> frequency]**. Hold is unaffected in kind: +0.1180 ns at the fast
+> corner becomes **+0.0846 ns** and still closes.
+>
+> **What moved.** This section's own finding — that the increment gave
+> back 0.243 ns, the first in the series to do so — is unchanged and is
+> a comparison between two slacks measured the same way. What changes
+> is where the resulting number sits relative to the target: the
+> 0.243 ns given back is what took this netlist from clearing 50 MHz
+> derated to missing it. That is a sharper version of this section's
+> own caution, not a contradiction of it.
+
 ### 9.4 The tile verdict at `0448282`
 
 | Quantity | `wave5-ihp` (`c5a5a6e`) | **`wave5-ihp-b` (`0448282`)** |
@@ -963,9 +1021,12 @@ whose replacement value should come from `wave5-ihp-b` instead:
 | Placed instances | 23,584 | **23,685** |
 | Utilization | 71.1867 % | **71.4890 %** |
 | Worst slow-corner setup slack | +1.1554 ns | **+0.9121 ns** |
+| *…the same, 5 % OCV derate applied (**added 2026-08-30**)* | *+0.1896 ns* | ***-0.0675 ns — does not close*** |
 | Typ / fast setup slack | +8.0521 / +12.1355 ns | **+7.8999 / +11.9855 ns** |
 | Worst hold, fast corner | +0.1093 ns | **+0.1180 ns** |
+| *…the same, derated (**added 2026-08-30**)* | *not measured* | ***+0.0846 ns — closes*** |
 | Slow-corner Fmax | 53.1 MHz | **52.4 MHz** |
+| *…the same, derated (**added 2026-08-30**)* | *50.5 MHz* | ***49.8 MHz — below the declared 50*** |
 | Total power, typical | 5.119 mW | **5.191 mW** |
 | Core needed at 70 % | 264,241 um2 | **265,364 um2** |
 | Spare against the criterion | -1.70 % | **-2.13 %** |

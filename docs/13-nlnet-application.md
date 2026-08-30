@@ -460,7 +460,7 @@ I design fault-tolerant digital silicon with open tools, solo, and I ship it.
 
 Silicon: tt-um-lif-crossbar, an 8x8 leaky-integrate-and-fire neuron crossbar on a 2x2 Tiny Tapeout tile in SkyWater 130 nm, taken through the open RTL-to-GDS flow. It is the direct ancestor of the core proposed here; the neuron update datapath and the crossbar accumulation logic carry over.
 
-Where this project stands today, all of it checkable. Eight RTL blocks with a bit-exact Python golden model as their executable specification. 45 SymbiYosys proof tasks across seven property sets, including SECDED correctness exhaustive over the full input space, a TMR masking theorem under a symbolic single-replica fault, and unbounded k-induction on the event-queue safety properties. 144 cocotb tests and 195 Python tests, one of which fails if the register map, the generated Verilog header, the documentation and the model bindings drift apart. A 287-injection fault campaign whose log is published with the design. A clean IHP SG13G2 sign-off of the 4x2 pilot: zero DRC, zero LVS, zero timing violations across three corners at 69.68% utilisation. The same RTL hardens on SkyWater SKY130A and fits and routes on a Lattice ECP5.
+Where this project stands today, all of it checkable. Eight RTL blocks with a bit-exact Python golden model as their executable specification. 45 SymbiYosys proof tasks across seven property sets, including SECDED correctness exhaustive over the full input space, a TMR masking theorem under a symbolic single-replica fault, and unbounded k-induction on the event-queue safety properties. 144 cocotb tests and 195 Python tests, one of which fails if the register map, the generated Verilog header, the documentation and the model bindings drift apart. A 287-injection fault campaign whose log is published with the design. A clean IHP SG13G2 sign-off of the submitted 6x2 pilot: zero DRC, zero LVS, all three corners met with a 5% OCV derate the flow itself omits. The same RTL hardens on SkyWater SKY130A and fits and routes on a Lattice ECP5.
 
 Flow: LibreLane/OpenROAD, Yosys, Icarus/cocotb, SymbiYosys, nextpnr and KLayout, run rootless without containers or root privileges on my own machine. The toolchain checkout is pinned in the repository, because an unpinned one silently ran a formal gate with another project's tools and a result that cannot name the tool that produced it is evidence of nothing.
 
@@ -471,6 +471,49 @@ Review discipline: the research phase was put through an independent design revi
 Adjacent work: a 130 nm-class INT8 accelerator for telemetry anomaly detection, and prior physical-design work including MBIST, boundary scan and multi-corner static timing.
 ```
 <!-- field:experience:end -->
+
+> **Corrected 2026-08-30 — the sign-off sentence in the experience
+> field is rewritten, because the run it named does not close the slow
+> corner once the derate is honest.**
+>
+> **Superseded text**, kept as it stood: "A clean IHP SG13G2 sign-off of
+> the 4x2 pilot: zero DRC, zero LVS, zero timing violations across three
+> corners at 69.68% utilisation."
+>
+> **Why it moved.** `docs/28` section 4.4(b) establishes that this flow
+> has never applied the 5 % on-chip-variation derate its configuration
+> asks for: `TIME_DERATING_CONSTRAINT` is the integer `5` and
+> LibreLane's `base.sdc` computes the factor as `expr 5 / 100`, Tcl
+> integer division, which is `0`. The sentence cited run `ihp-mix`,
+> whose slow-corner setup slack is **+0.6315 ns as the flow reports it
+> and -0.3607 ns with the 5 % derate applied** — a setup miss, not a
+> clean corner **[fact, standalone OpenSTA on that run's own
+> `final/{nl,spef,sdc}`, the method of `docs/28` section 11]**. The
+> claim was true of what the flow printed and would not have survived a
+> reviewer applying the derate the configuration asks for. That is
+> exactly the class of claim stage 2 checks, so it is not left standing.
+>
+> **Replacement, and what backs it.** The submitted 6x2 run
+> `shape-6x2` is met on all three corners **with the 5 % derate applied
+> by hand**, setup and hold both:
+>
+> | Corner | Setup, derated | Hold, derated |
+> |---|---|---|
+> | `nom_slow_1p08V_125C` | **+0.2913** | +0.5546 |
+> | `nom_typ_1p20V_25C` | +7.5402 | +0.2617 |
+> | `nom_fast_1p32V_m40C` | +11.7477 | **+0.0898** |
+>
+> **[fact, same method and same run artifacts.]** Zero DRC and zero LVS
+> are unchanged and are read from that run's own counters (`docs/21`
+> section 7.2). The utilisation clause was dropped rather than
+> re-based: 47.29 % at 6x2 is a comfortable number and reads as
+> padding, where 69.68 % at 4x2 was doing work in the original sentence.
+>
+> **What moved:** the run cited (`ihp-mix` -> `shape-6x2`), the shape
+> (4x2 -> the submitted 6x2), and the strength of the timing claim,
+> which now names the derate instead of relying on a flow that reports
+> applying one and does not. **Field length: 2452 -> 2461 characters,
+> still inside the 2500 advisory** (section 9.1).
 
 **[D-7]** — before pasting: (a) the tt-um-lif-crossbar accuracy figure
 has been **removed** from this draft rather than repeated, because it
@@ -788,6 +831,7 @@ ordered by date.
 | **D-19** | **Confirm the requested amount changed from EUR 27,500 to EUR 29,500** and that the rebuilt task set of section 4.1 is the scope the developer intends to be bound to | developer | 2026-09-30 | **new** |
 | **D-20** | **Accept or reject the method-led framing of section 2.1.** It changes the project name recommendation, the abstract and the milestone order. The alternative is the 25 August chip-led framing, which is recoverable from git history but does not survive section 1.4(a) unmodified | developer | 2026-09-30 | **new** |
 | **D-21** | **Re-run `make -C formal everything` and confirm 45/45 PASS** before pasting the experience field. The AER pointer redundancy landed after the last full green run and two `aer_fifo` tasks were mid-flight when this revision was written (section 9.2). If any task does not close, say so in the challenges field rather than deleting the sentence | engineering | 2026-10-27 | **new, in progress** |
+| **D-22** | **Re-check the experience field's timing sentence against whichever run is current at submission.** It now reads "all three corners met with a 5% OCV derate the flow itself omits" and is backed by `shape-6x2` re-derived by hand (correction note after the experience field). Two things could invalidate it: the derate defect being fixed upstream, in which case the flow signs off derated and the clause "the flow itself omits" becomes wrong; or the submission moving to `docs/28`'s adopted configuration, whose geometric decks were unread when this was written (`docs/28` section 10 item 7). **Do not quote a derated corner as met from any run whose slow corner has not been re-derived** | engineering | 2026-10-27 | **new** |
 
 ---
 
@@ -801,7 +845,7 @@ ordered by date.
 | 2026-09-30 | D-5, D-8, D-12, D-19, D-20 closed | developer |
 | 2026-10-15 | D-6, D-7, D-15 closed | developer |
 | 2026-10-20 | Attachments drafted (D-9) | engineering |
-| 2026-10-27 | Full package review: positioning pass (D-17), arithmetic re-check, character counts re-run, formal gate re-run (D-21), D-1..D-4, D-16, D-18 closed | developer |
+| 2026-10-27 | Full package review: positioning pass (D-17), arithmetic re-check, character counts re-run, formal gate re-run (D-21), timing-sentence re-check (D-22), D-1..D-4, D-16, D-18 closed | developer |
 | **2026-10-29** | **Submit.** Five days before the deadline, not on it | developer |
 | 2026-11-03 12:00 CEST | Hard deadline **[fact]** | — |
 | 2027-02 to 2027-04 | Expected decision window (3-5 months from the deadline **[fact]**) | — |
@@ -827,6 +871,7 @@ Measured on 2026-08-29 with the command below. **[fact]**
 |---|---:|---:|---:|---:|---:|
 | abstract | 1194 | 1200 | 1500 | 6 | 306 |
 | experience | 2452 | 2500 | 10000 | 48 | 7548 |
+| *experience, **corrected 2026-08-30*** | ***2461*** | *2500* | *10000* | ***39*** | *7539* |
 | use | 2499 | 2500 | 10000 | 1 | 7501 |
 | comparison | 3996 | 4000 | 10000 | 4 | 6004 |
 | challenges | 4999 | 5000 | 12500 | 1 | 7501 |
@@ -863,6 +908,7 @@ Run on 2026-08-29 at git HEAD `c5a5a6e`. **[fact]**
 | "362 netlist references to one replica, none to the other two" | `sw/tests/test_synthesis_guards.py` file header, citing `tt/runs/tt-harden/06-yosys-synthesis/` | 362 references to `cfg_a[`, zero to `cfg_b[` or `cfg_c[` |
 | "84 of 84" ECC holds, "79 injections cross from MASKED to CORRECTED" | docs/16 section 4.1, cross-checked against the log | log confirms MASKED 79 and CORRECTED 121; 158−79 = 79 and 121−42 = 79 |
 | "zero DRC, zero LVS, zero timing violations across three corners at 69.68% utilisation" | docs/15 section table for run `ihp-mix`, sourced from that run's `final/metrics.json` and `55-openroad-stapostpnr/summary.rpt` | 1,235 mapped flip-flops, 181,043 um² placed, 69.6756% utilisation, +0.6315 ns worst-corner setup slack, Magic DRC 0, Netgen LVS 0 |
+| **Superseded 2026-08-30, and the sentence was rewritten** — see the correction note after the experience field. Row above is kept as the provenance that was checked on 2026-08-29 and was correct for what the flow reported. | re-run the sign-off corner standalone on `ihp-mix`'s own `final/{nl,spef,sdc}` with `set_timing_derate -early 0.95 -late 1.05` (`docs/28` section 11) | **+0.6315 ns reproduces the run's own metric to 17 digits with the derate lines removed, and becomes -0.3607 ns with them in.** `ihp-mix` does **not** meet the slow corner with the derate its own configuration asks for. New claim cites `shape-6x2`: **+0.2913 / +7.5402 / +11.7477 ns setup and +0.5546 / +0.2617 / +0.0898 ns hold, all three corners derated** |
 | "eight RTL blocks" | `ls hw/rtl/*.v` minus the Tiny Tapeout wrapper | aer_fifo, lif_core, npu_regbank, pilot_top, scrub, secded_dec, secded_enc, tmr_voter |
 | "nineteen confirmed findings" | docs/07 section 1 | "Nineteen findings survived verification: 5 high, 8 medium, 6 low." The 25 August draft said twenty |
 | "one of them in my own funding material" | docs/07 F-4, F-9, F-10 | F-4 is in docs/06 (the funding document); F-9 and F-10 are in docs/04. The 25 August draft implied all three |

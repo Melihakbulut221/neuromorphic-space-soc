@@ -64,6 +64,21 @@ from. Two consequences have to be carried through the whole file:
   69.52 % and +0.4035 ns. Sign-off stayed clean at both steps: Magic DRC
   0, Netgen LVS 0, antenna 0 nets / 0 pins, detailed-route DRC 0.
 
+  *Corrected 2026-08-30 — the timing half of "sign-off stayed clean at
+  both steps".* Both slacks are un-derated: this flow has never applied
+  the 5 % OCV derate its configuration asks for, on either PDK
+  (`docs/28` §4.4b). Re-derived on each run's own shipped artifacts,
+  **`ihp-mix` is -0.3607 ns and `ihp-memecc` is -0.5999 ns at the slow
+  corner** — **neither closes it** **[fact, standalone OpenSTA on
+  `final/{nl,spef,sdc}`, the method of `docs/28` §11]**. The geometric
+  half of the sentence — Magic DRC, LVS, antenna, route DRC — is
+  unaffected and stays clean. What moved is that the IHP column of this
+  document's central comparison was, at these two runs, a column that
+  missed its own slow corner; section 3.3's correction note carries the
+  full table. The document's thesis is untouched: sky130 misses by
+  4.19 ns derated and IHP by 0.36, so the PDK gap this file measures is
+  still an order of magnitude.
+
   **So every sky130 figure in this document — area, utilization, slack,
   diode count, wirelength, max-fanout — is a
   pre-memory-hardening measurement, and is now two RTL revisions behind
@@ -683,6 +698,14 @@ for `tmr-reharden` and is not withdrawn. Three corrections:
   arithmetic on a measured slack]** — replacing this section's
   53.1 MHz (`wave5-ihp`) and the 51.6 MHz below, and belonging in the
   IHP column only.
+  *Corrected 2026-08-30: both are un-derated (`docs/28` §4.4b).
+  Derated, 4x2 is **-0.0675 ns -> 49.8 MHz** and does **not** make the
+  50 MHz target, and 6x2 is **+0.2913 ns -> 50.7 MHz** and does. The
+  sky130 figures in this bullet move the same way and further: the
+  twelve-tile misses become **-6.8359 ns at 3x4** and **-8.7163 ns at
+  6x2**, and `sky-04-tmr`'s -2.9659 becomes **-4.1908**. The bullet's
+  instruction — do not subtract a current IHP slack from a
+  `sky-04-tmr` slack — is unchanged.*
 
 **Read as frequency [estimate — a single-point extrapolation from one
 run, and a weak one on the sky130 side: 3.3b shows the flow optimized
@@ -714,6 +737,52 @@ real and useful number for the IHP submission — it clears the 50 MHz
 `tt/info.yaml` declares by about 3 % — but it must **not** be put in the
 table above, because the sky130 column has no matching run and the
 difference would then be reporting design growth as a PDK effect.
+
+> **Corrected 2026-08-30: "it clears the 50 MHz `tt/info.yaml` declares
+> by about 3 %" is false, and both runs named in this paragraph miss
+> the target once the derate is honest.**
+>
+> `docs/28` section 4.4(b) establishes that this flow has never applied
+> the 5 % on-chip-variation derate its configuration asks for.
+> `TIME_DERATING_CONSTRAINT` is the integer `5` in **both** PDKs and
+> LibreLane's `base.sdc` computes the factor as `expr 5 / 100`, Tcl
+> integer division, which is `0`; the factors are 1.0 and 1.0 while the
+> log reports "Setting timing derate to: 5%". Every slack in this
+> document, on both PDKs, is an un-derated number.
+>
+> Re-derived on each run's own shipped netlist, parasitics, constraints
+> and liberty — the method of `docs/28` section 11, which reproduces
+> each run's own metric to 17 significant digits before the derate
+> lines are added **[fact]**:
+>
+> | Run | Slow setup, as signed off | **Slow setup, derated** | Slow Fmax as signed off | **Slow Fmax derated** |
+> |---|---|---|---|---|
+> | `ihp-mix` | +0.6315 | **-0.3607** | 51.6 MHz | **49.1 MHz** |
+> | `ihp-memecc` | +0.4035 | **-0.6000** | 51.0 MHz | **48.5 MHz** |
+> | `tmr-reharden` (the table's IHP column) | +6.4359 | **+5.7331** | 73.7 MHz | **70.1 MHz** |
+> | `sky-04-tmr` (the table's sky130 column, `max_ss`) | -2.9659 | **-4.1908** | 43.5 MHz | **41.3 MHz** |
+>
+> **[fact for the slacks, standalone OpenSTA on each run's
+> `final/{nl,spef,sdc}`; estimate for the frequencies, on the linearity
+> `docs/28` section 5.6 measures.]**
+>
+> **What moved.**
+>
+> - **Neither `ihp-mix` nor `ihp-memecc` clears 50 MHz derated.** Both
+>   miss the slow corner outright, by 0.36 ns and 0.60 ns. "A real and
+>   useful number for the IHP submission" is withdrawn: it was a number
+>   that depended on a Tcl integer division. `docs/13` carried this
+>   same `ihp-mix` sign-off into its funding application and has been
+>   corrected accordingly.
+> - **The paragraph's actual instruction is unaffected and is now
+>   better founded.** Keeping this figure out of the cross-PDK table
+>   was right for the reason given, and is right for a second reason:
+>   the figure was not a target-clearing one.
+> - **The table itself, and the 41 % conclusion, are unchanged.** Both
+>   columns are un-derated and both move by a similar proportion, so
+>   the sky130-versus-IHP ratio and the "not met at `ss_100C_1v60`"
+>   verdict stand exactly as written. The sky130 miss is 1.22 ns larger
+>   derated, which reinforces it.
 
 The critical path is unchanged in kind: it still runs through the SECDED
 XOR trees on the weight-load path, not the neuron scan.
@@ -1180,6 +1249,14 @@ LVS all **0**, and 0 antenna-violating nets, exactly as here **[fact,
   +0.40 ns), so `clock_hz: 50000000` is now correct by about 1.6 MHz
   rather than by 24; sky130 has not been re-hardened against that RTL and
   the gap between the two PDKs is therefore no longer measured.**
+  *Corrected 2026-08-30: `clock_hz: 50000000` was **not** correct on
+  either of those runs. Both slacks are un-derated (`docs/28` §4.4b);
+  derated, `ihp-mix` is **-0.3607 ns** and `ihp-memecc` **-0.6000 ns**,
+  so both miss 50 MHz — by 0.9 MHz and 1.5 MHz — rather than clearing it
+  by 1.6 (section 3.3's correction note). The bullet's own thesis, that
+  "the design runs at 50 MHz" is a statement about a PDK and a run
+  rather than about the design, is unaffected and is illustrated better
+  by the corrected numbers than by the original ones.*
 - **The sky130 frequency is still not established, and the reason is now
   known.** The run this document originally said had to be made — the
   slow corner inside `PNR_CORNERS` — **has been made**, on both PDKs, and
@@ -1259,6 +1336,15 @@ Antenna, LVS and DRC cannot make for you.
 >   `docs/23` sections 3.1 and 5]**. The IHP half of the comparison is
 >   now **+1.2347 ns** at 6x2 rather than the +0.63 ns quoted above, so
 >   `clock_hz: 50000000` is correct by about 3.3 MHz rather than 1.6.
+>   *Corrected 2026-08-30: both figures are un-derated (`docs/28`
+>   §4.4b). Derated, the 6x2 run is **+0.2913 ns** and
+>   `clock_hz: 50000000` is correct by about **0.7 MHz**, not 3.3; the
+>   +0.63 ns run it is compared against was **-0.3607 ns** and did not
+>   make the target at all. The declared clock is still met on the
+>   submitted shape, with a quarter of the margin this sentence claims.
+>   The sky130 half is unchanged in direction and larger in magnitude:
+>   -7.3054 ns at 6x2 becomes **-8.7163 ns** derated, so "timing does
+>   not port is confirmed and is worse" is confirmed again.*
 >   Section 3.3b's parasitic-model diagnosis was **not** re-tested at
 >   twelve tiles and remains the open item it was **[planned — no date
 >   and no artifact, `docs/23` section 10 item 6]**.

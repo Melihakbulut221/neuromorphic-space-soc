@@ -529,6 +529,22 @@ Three consequences, and only the first two matter for the decision.
    > and `docs/23` section 3.1]**. The reading above — that a larger
    > netlist can close better — survives both rounds.
 
+   > **Corrected 2026-08-30: "Timing closes" holds for only one of the
+   > four runs named in this item.** Every slack here is un-derated,
+   > because the flow never applied the 5 % OCV derate it reported
+   > applying (`docs/28` §4.4b). Re-derived on each run's own shipped
+   > artifacts **[fact]**: `ihp-memecc` **-0.5999**, `ihp-mix`
+   > **-0.3607**, `wave5-ihp-b` at 4x2 **-0.0675**, and the submitted
+   > 6x2 `shape-6x2` **+0.2913**. **Only the 6x2 submission shape
+   > closes the slow corner, and only it reaches 50 MHz** — at
+   > **50.7 MHz**, against 49.1, 48.5 and 49.8 MHz for the other three
+   > **[estimate for the frequencies]**. The item's actual finding is
+   > untouched: the 0.228 ns `MIX` gain and the 6x2 improvement are
+   > differences between slacks measured the same way, so "a larger
+   > netlist can close better" survives a third round. What does not
+   > survive is reading any of the first three runs as having met the
+   > declared clock.
+
 3. **The hardening itself is intact.** The configuration TMR survived
    synthesis: **55 flip-flops under each of `u_cfg_a`, `u_cfg_b` and
    `u_cfg_c`** in the final netlist, and
@@ -930,6 +946,7 @@ now **measured** rather than estimated:
 | 3x2 | 6 | **96.2 %** **[estimate]** | far above anything this project has achieved |
 | 4x2 | 8 | **71.49 %** **[fact]** | closes to a GDS, but **2.13 % over** the 70 % criterion — a run that worked, not a budget that holds |
 | **6x2** | **12** | **47.29 %** **[fact]** | **measured: closes, 0 DRC on every deck, 0 timing violations, +32.44 % of the core spare — the submission shape** |
+| *the timing clause of the three hardened rows, **corrected 2026-08-30*** | | | *"0 timing violations" is un-derated in every row: the flow never applied the 5 % OCV derate it reported applying (`docs/28` §4.4b). Derated, **6x2 still closes at +0.2913 ns**, 3x4 closes at +0.0919 ns with its fast-corner hold violation growing to -57.71 ps, and **4x2 does not close at all, at -0.0675 ns**. The utilization verdicts, which are what this table is for, are unaffected* |
 | 3x4 | 12 | **41.92 %** **[fact]** | closes, +40.12 % spare, but two route passes and one hold violation |
 | 8x2 | 16 | **35.3 %** **[estimate]** | not priced here |
 
@@ -1276,6 +1293,64 @@ are 0 at each of the three, and `design__violations` is 0 **[fact, same
 run's `final/metrics.json`]** — so this is not a failure and should not
 be reported as one. It is also not margin. The design has about 3 % of
 its period in hand at the slowest corner.
+
+> **Corrected 2026-08-30 — "This closes" is withdrawn for this run.
+> `ihp-mix` does not close the slow corner once the derate is honest.**
+>
+> `docs/28` section 4.4(b) establishes that this flow has never applied
+> the 5 % on-chip-variation derate its configuration asks for.
+> `TIME_DERATING_CONSTRAINT` is the integer `5` in both PDKs and
+> LibreLane's `base.sdc` computes the factor as
+> `expr 1+[expr $::env(TIME_DERATING_CONSTRAINT) / 100]`, Tcl integer
+> division, which evaluates to `1`. The derate factors are 1.0 and 1.0
+> — no derating at all — while every STA and every resizer step in
+> every run in this repository logs "Setting timing derate to: 5%"
+> **[fact]**.
+>
+> Re-derived by re-running this run's own sign-off corners standalone
+> on its own netlist, parasitics, constraints and liberty — the method
+> of `docs/28` section 11, which reproduces the run's own metric to 17
+> significant digits before the derate lines are added **[fact,
+> standalone OpenSTA on
+> `hw/openlane/pilot_ihp/runs/ihp-mix/final/{nl,spef,sdc}`]**:
+>
+> | Corner | Setup, as the table above reports | **Setup, 5 % derate applied** | Hold, as reported | **Hold, derated** |
+> |---|---|---|---|---|
+> | `nom_slow_1p08V_125C` | +0.6315 | **-0.3607** | +0.6278 | +0.5830 |
+> | `nom_typ_1p20V_25C` | +7.7094 | +7.0828 | +0.3041 | +0.2677 |
+> | `nom_fast_1p32V_m40C` | +11.9259 | +11.5171 | +0.1180 | **+0.0945** |
+>
+> **What this changes.**
+>
+> - **The slow corner is a setup miss of -0.3607 ns, not a close of
+>   +0.6315 ns**, and the slow-corner Fmax is **49.1 MHz — below the
+>   50 MHz `tt/info.yaml` declares**, not 51.6 MHz above it **[estimate
+>   for the frequency, on the linearity `docs/28` section 5.6
+>   measures]**. This paragraph's own instinct — "it is also not
+>   margin" — was right and understated: there was no margin, there was
+>   a deficit.
+> - **Hold closes on all three corners under either definition.** Setup
+>   is the only thing that flips.
+> - **The zero violation counters are correct as read and mean less
+>   than they appear.** They are per-corner STA metrics from a sign-off
+>   with no OCV margin in it. Separately,
+>   `Checker.SetupViolations` resolves its corners as
+>   `SETUP_VIOLATION_CORNERS or TIMING_VIOLATION_CORNERS`, the PDK
+>   ships `["*typ*"]` and `SETUP_VIOLATION_CORNERS` was unset in this
+>   run — so **the slow corner was gated by no checker**, and
+>   `design__violations: 0` would have read 0 even had the corner gone
+>   negative (`docs/28` section 4.4a).
+> - **What is not affected:** every geometric result for this run —
+>   DRC, LVS, antenna, utilization — and every comparison in this
+>   document between two slacks measured the same way, including the
+>   0.228 ns `MIX` gain and the 6.03 ns memory-hardening cost below.
+>   Those are differences, and the derate moves both sides of each
+>   alike.
+>
+> **No run reported in this document closes the slow corner derated.**
+> The submitted 6x2 shape does, at **+0.2913 ns and 50.7 MHz**; that is
+> `shape-6x2`, and it belongs to `docs/23` section 3.1 and to
+> section 4.6's note below rather than here.
 
 **The memory hardening cost 6.03 ns of margin; `MIX` gave 0.23 ns of it
 back.** `tmr-reharden` closed the slow corner at +6.436 ns, `ihp-memecc`
@@ -2084,7 +2159,7 @@ Run locally, all green unless stated:
 | Submission cocotb suite | `cd tt/test && make -B` | 5/5 pass **[fact]** |
 | Drift guard | `pytest sw/tests/test_tt_submission.py` | **16/16 pass**, re-counted from `--collect-only` **[fact]**; an earlier revision of this row said 15/15, which was one behind the file. This guard is red whenever `hw/rtl` has been edited and `scripts/gen_tt_submission.py` has not been re-run — a state the tree passes through routinely mid-wave. Re-run the generator, never edit under `tt/` (docs/11 section 8.1) |
 | Lint + synthesis in the sg13g2 flow | `librelane ... -T Yosys.Synthesis` | 0 lint errors, 98 warnings, **147,648.69 um2, 1,235 flops** in run 5 **[fact, `hw/openlane/pilot_ihp/runs/ihp-mix/06-yosys-synthesis`]**, which is 0.92 % more than run 4's 146,310 um2 at the same flip-flop count (section 4 head); the synthesis-only probes `memecc-synthcheck` and `memecc-synthcheck3` returned the same figure to the last digit beforehand **[fact]** |
-| Full `Classic` flow at 4x2 | `CONFIG=<pinned>/config.json librelane ...` | closes to GDS: **69.68 %** utilization, 0 route DRC, 0 Magic DRC, 0 Netgen LVS errors, 0 antenna violations, 0 timing violations on 3 corners (section 5.3) **[fact, run 5, RTL pinned to `e4c850b3`]** |
+| Full `Classic` flow at 4x2 | `CONFIG=<pinned>/config.json librelane ...` | closes to GDS: **69.68 %** utilization, 0 route DRC, 0 Magic DRC, 0 Netgen LVS errors, 0 antenna violations, 0 timing violations on 3 corners (section 5.3) **[fact, run 5, RTL pinned to `e4c850b3`]**. *Corrected 2026-08-30: the geometric half of this cell stands; the timing half does not. "0 timing violations on 3 corners" is a sign-off with no OCV margin in it — the flow never applied the 5 % derate it reported applying (`docs/28` §4.4b) — and with the derate applied `ihp-mix` **misses the slow corner at -0.3607 ns**. Section 5.3's correction note has the per-corner table* |
 | Flip-flop and TMR-bank guards | `pytest sw/tests/test_synthesis_guards.py` | **13/13 pass** on the current RTL, including the mutation that strips `keep_hierarchy` **[fact, 2026-08-27]** |
 | Gate-level smoke on the post-route netlist | `cd tt/test && make -B GATES=yes` | 5/5 pass on the **superseded** `tt-harden` netlist only; **not re-run** against runs 3, 4 or 5 (section 5.4) |
 

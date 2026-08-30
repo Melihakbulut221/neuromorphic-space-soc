@@ -129,6 +129,13 @@ moved the shape. Every other row of this table is unaffected: the
 geometry, the protection schemes and the host interface are the same
 design at a larger tile count.
 
+*Note added 2026-08-30.* The **Clock target** row is a [target] and
+stays one; it is not a claim that the design closes at 50 MHz. What the
+post-route sign-off does and does not establish about that target moved
+on this date — see section 7.1's correction note, which withdraws the
+4x2 closure claim and re-derives the submitted 6x2 shape at
+**+0.2913 ns and 50.7 MHz** with the 5 % OCV derate applied.
+
 The 8 x 8 geometry is an elaboration parameter, not an architectural
 limit. `hw/rtl/pilot_top.v` accepts N_NEURONS and N_AXONS as powers of
 two in [4, 16]; the architecture the pilot instantiates a slice of is
@@ -1295,6 +1302,60 @@ every step since; `docs/22` section 2.3 records the resulting caution,
 that on this design netlist size does not predict slack in either
 direction.
 
+> **Corrected 2026-08-30 — the 4x2 "closes" claim above is withdrawn,
+> the 6x2 one survives, and every slack in this section is an
+> un-derated number.**
+>
+> `docs/28` section 4.4(b) establishes that this flow has never applied
+> the 5 % on-chip-variation derate its configuration asks for.
+> `TIME_DERATING_CONSTRAINT` is the integer `5` in both PDKs and
+> LibreLane's `base.sdc` computes the factor as `expr 5 / 100`, which is
+> Tcl integer division and yields `0`; the derate factors are 1.0 and
+> 1.0 while every log line reports "Setting timing derate to: 5%". Every
+> setup and hold slack quoted anywhere above is therefore correct as
+> reported and carries **no OCV margin at all**.
+>
+> Both runs this section names were re-derived by re-running the
+> sign-off corner standalone on their own shipped netlist, parasitics,
+> constraints and liberty — the method of `docs/28` section 11, which
+> reproduces each run's own metric to 17 significant digits before the
+> derate lines are added **[fact]**:
+>
+> | Run | Shape | Setup, as the flow signs off | **Setup, 5 % derate applied** | Hold, fast, as signed off | **Hold, fast, derated** |
+> |---|---|---|---|---|---|
+> | `wave5-ihp-b` | 4x2 | +0.9121 | **-0.0675** | +0.1180 | **+0.0846** |
+> | `shape-6x2` | **6x2, submitted** | +1.2347 | **+0.2913** | +0.1089 | **+0.0898** |
+>
+> **[fact, standalone OpenSTA on `final/{nl,spef,sdc}` of each run at
+> `nom_slow_1p08V_125C` and `nom_fast_1p32V_m40C`.]**
+>
+> **What this changes, in order of how much it matters.**
+>
+> - **"All three IHP PVT corners still close at 20 ns … at 4x2" is false
+>   under the honest definition.** At 4x2 the slow corner is
+>   **-0.0675 ns** with the derate applied — a miss, not a close. The
+>   sentence is true only of a sign-off that applies no derate. 4x2 is
+>   not the submitted shape (section 7.2), so this corrects the record
+>   rather than the submission.
+> - **The 6x2 statement stands.** The submitted shape closes the slow
+>   corner at **+0.2913 ns** derated, 1.46 % of the cycle. It is a close,
+>   and it is thin.
+> - **Hold closes on every corner under either definition**, at 4x2 and
+>   at 6x2. The derate costs hold about 0.02-0.03 ns and does not take it
+>   negative.
+> - **Slow-corner Fmax is 50.7 MHz at 6x2, not 53.3 MHz**, and
+>   **49.8 MHz at 4x2**, against the 50 MHz declared **[estimate,
+>   arithmetic on a measured slack, on the linearity `docs/28`
+>   section 5.6 measures]**. The 53.3 MHz figure above is the
+>   un-derated one and is kept as what was reported.
+>
+> **The declared 50 MHz is still met on the submitted shape, and the
+> margin is 0.7 MHz rather than 3.3 MHz.** `docs/28` section 6.2 adopts
+> a configuration that takes it to **+0.7510 ns and 51.95 MHz** derated
+> on this RTL and shape, for four flow keys and +0.102 % of area; that
+> configuration is not yet through its geometric decks (`docs/28`
+> section 10 item 7), so this document does not adopt its numbers.
+
 **Verification status, run for this document [measured]:**
 
 - `sw/tests/`: 152 passed, 1 skipped — including the eight synthesis
@@ -1350,6 +1411,7 @@ those checks were all zero.
 > | Placed standard-cell area | 158,268 um2 | **185,755 um2** | **185,840 um2** |
 > | Utilization | 60.9 % | **71.4890 %** | **47.2887 %** |
 > | Worst slow-corner setup slack | +6.4359 ns | **+0.9121 ns** | **+1.2347 ns** |
+> | *…the same, with the 5 % OCV derate actually applied* | *+5.7331 ns* | ***-0.0675 ns*** | ***+0.2913 ns*** |
 > | Total power at 50 MHz, typical | not yet re-measured | **5.191 mW** | **5.130 mW** |
 >
 > **[measured, `docs/22` sections 9.3 and 9.5 and `docs/23` sections 2.1,
@@ -1412,6 +1474,16 @@ offered:
 - **Timing at silicon**: achieved Fmax, setup and hold at the real
   process corners, and the temperature range over which they hold.
   [TBD]
+- **On-chip-variation margin in the sign-off.** [TBD] *Added
+  2026-08-30.* Every setup and hold figure in section 7.1 is quoted
+  from a flow that reports applying a 5 % OCV derate and applies none
+  — `TIME_DERATING_CONSTRAINT` is an integer and `base.sdc` divides it
+  by 100 in Tcl integer arithmetic **[fact, `docs/28` section 4.4b]**.
+  Section 7.1's correction note re-derives both runs with the derate
+  applied by hand, which is evidence but is **not a flow gate**: no run
+  in this repository has yet signed off through the flow with OCV
+  derating, and no figure here should be read as carrying a derated
+  sign-off until one does (`docs/28` section 10 item 1).
 - **I/O electrical characteristics**: levels, drive strength, input
   thresholds, capacitance. These belong to the Tiny Tapeout carrier's
   pad ring, not to this design. [TBD]

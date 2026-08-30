@@ -356,7 +356,48 @@ withdrawn; the corner figures for the current RTL are:
 `docs/22` section 6.3 gives the intermediate `c5a5a6e` figures
 +1.1554 / +8.0521 / +12.1355.]** Read as frequency, the slow-corner
 Fmax is **52.4 MHz** at 4x2 and **53.3 MHz** at 6x2, not the 73.7 MHz
-above **[estimate, arithmetic on a measured slack]**. The mechanism
+above **[estimate, arithmetic on a measured slack]**.
+
+> **Corrected 2026-08-30 — every slack and every frequency in this
+> section is un-derated, and the 4x2 figure does not clear 50 MHz.**
+>
+> `docs/28` section 4.4(b) establishes that this flow has never applied
+> the 5 % on-chip-variation derate its configuration asks for.
+> `TIME_DERATING_CONSTRAINT` is the integer `5` and LibreLane's
+> `base.sdc` computes the factor as `expr 5 / 100`, Tcl integer
+> division, which is `0`; the factors are 1.0 and 1.0 while the log
+> reports "Setting timing derate to: 5%". This document's own warning at
+> the top — do not quote a figure from it without checking what
+> superseded it — now has a second reason behind it.
+>
+> Re-derived on each run's own shipped netlist, parasitics, constraints
+> and liberty, the method of `docs/28` section 11, which reproduces
+> each run's own metric to 17 significant digits before the derate
+> lines are added **[fact]**:
+>
+> | Run | Slow setup, as signed off | **Slow setup, derated** | Slow Fmax as signed off | **Slow Fmax derated** |
+> |---|---|---|---|---|
+> | `tmr-reharden` (the table above) | +6.4359 | **+5.7331** | 73.7 MHz | **70.1 MHz** |
+> | `wave5-ihp-b`, 4x2 | +0.9121 | **-0.0675** | 52.4 MHz | **49.8 MHz** |
+> | **`shape-6x2`, submitted** | +1.2347 | **+0.2913** | 53.3 MHz | **50.7 MHz** |
+>
+> **[fact for the slacks, standalone OpenSTA on each run's
+> `final/{nl,spef,sdc}` at `nom_slow_1p08V_125C`; estimate for the
+> frequencies, on the linearity `docs/28` section 5.6 measures.]**
+> `ihp-pnrcorners` is byte-identical to `tmr-reharden` and re-derives to
+> the same two figures to 17 significant digits, which is an incidental
+> second confirmation of section 5.6's determinism claim **[fact]**.
+>
+> **What moved.** **4x2 does not close the slow corner derated** and so
+> does not reach 50 MHz; 6x2 does, by 0.7 MHz. `tmr-reharden` closes
+> comfortably under either definition, so the "1.12 ns faster despite
+> being 16.3 % larger" finding above, and the mechanism paragraph
+> below, are untouched — both are comparisons between slacks measured
+> the same way, and the derate moves both sides alike. The rule this
+> section states, that netlist size does not predict slack in either
+> direction, is unaffected.
+
+The mechanism
 paragraph below survives all of it, and has since been generalised: the
 pointer TMR also closed *better* than the run it replaced. `docs/22`
 section 2.3 states the rule — **on this design, netlist size does not
@@ -1018,6 +1059,25 @@ line numbers: `docs/15` blob `c85d64ec`, `docs/18` blob `ae771090`, both
 as of 2026-08-26 07:36. `docs/15` §4.2's `deferred_flatten` paragraph
 was **already corrected by that other session** and is not listed below;
 see 8.3 for the one thing that correction gets wrong.
+
+*Amended 2026-08-30 — one caveat over every slack and Fmax row below.*
+None of the "New value" or "Correction" figures in sections 8.1 and 8.2
+that quote a setup slack, a hold slack or a frequency carries any
+on-chip-variation margin. `docs/28` section 4.4(b) establishes that this
+flow has never applied the 5 % derate its configuration asks for, on
+either PDK: `TIME_DERATING_CONSTRAINT` is the integer `5` and
+LibreLane's `base.sdc` computes the factor as `expr 5 / 100`, Tcl
+integer division, which is `0`. The rows are correct as replacements for
+what they replace — both sides were measured the same way — and they
+remain the right corrections to apply. What they must not be read as is
+derated sign-off. The two that carry a frequency re-derive as follows
+**[fact for the slacks, standalone OpenSTA on each run's shipped
+artifacts; estimate for the frequencies]**: §8.1's "73.7 MHz, 13.56 ns
+path" (`tmr-reharden`, +6.4359 ns) becomes **70.1 MHz at +5.7331 ns**,
+still far clear of 50 MHz; §8.2's "22.966 ns -> 43.5 MHz"
+(`sky-04-tmr`, -2.9659 ns) becomes **41.3 MHz at -4.1908 ns**, and its
+caveat that this is not a capability number stands more strongly again.
+Section 2.2's correction note carries the full IHP table.
 
 ### 8.1 `docs/15-pilot-tile-plan.md`
 

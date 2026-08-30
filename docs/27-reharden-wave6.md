@@ -383,12 +383,63 @@ area or cell-count row above.
 Slow-corner Fmax from the slow-corner WNS: **53.29 MHz -> 50.82 MHz**
 **[estimate, arithmetic: `1000 / (20 - WNS)`]**.
 
+> **Corrected 2026-08-30.** Both figures are un-derated. With the 5 %
+> OCV derate the flow reports and does not apply, the same arithmetic
+> on re-derived slacks gives **50.74 MHz -> 48.38 MHz**: `shape-6x2` at
+> +0.2913 ns and `wave6-6x2` at -0.6681 ns **[fact for the slacks,
+> standalone OpenSTA on each run's shipped artifacts; estimate for the
+> frequencies, on the linearity `docs/28` section 5.6 measures]**.
+> **The wave-6 baseline does not reach 50 MHz derated; the `shape-6x2`
+> baseline it is compared against does, by 0.7 MHz.** The 53.29 and
+> 50.82 figures are kept as what was reported. What moved is that the
+> erosion this section names crosses the 50 MHz target rather than
+> merely approaching it.
+
 Three things should be said, in both directions.
 
 **It still closes, on every corner, on every counter.** Setup
 violations 0, hold violations 0, max-slew 0, max-cap 0, at all three
 PVT corners. `design__violations: 0` and `flow__errors__count: 0`. There
 is no failing check in this run.
+
+> **Corrected 2026-08-30: this paragraph is retracted as a statement
+> about the design, and stands only as a statement about the run's
+> counters.** `docs/28` section 4.4(b) establishes that this flow has
+> never applied the 5 % on-chip-variation derate its configuration asks
+> for — `TIME_DERATING_CONSTRAINT` is the integer `5` and LibreLane's
+> `base.sdc` computes the factor as `expr 5 / 100`, Tcl integer
+> division, which is `0` — while every log line reports "Setting timing
+> derate to: 5%". **With the derate applied, `wave6-6x2`'s slow corner
+> is -0.6681 ns and this run does not close it** **[fact, `docs/28`
+> sections 4.4b and 7]**. Two further findings compound it. The
+> counters quoted above are per-corner STA metrics and are correct as
+> read; but `Checker.SetupViolations` — the thing that would have made
+> `flow__errors__count` non-zero — resolves its corners as
+> `SETUP_VIOLATION_CORNERS or TIMING_VIOLATION_CORNERS`, the PDK ships
+> `["*typ*"]`, and `SETUP_VIOLATION_CORNERS` was unset, so **the slow
+> corner was gated by no checker in this run** (`docs/28` section
+> 4.4a). "There is no failing check in this run" is therefore true and
+> means less than it reads.
+>
+> **What survives:** hold. Re-derived on this run's own shipped
+> artifacts, hold stays positive on every corner with the derate
+> applied — **+0.5747 ns slow and +0.0877 ns fast**, against +0.6163
+> and +0.1137 as signed off **[fact, standalone OpenSTA on
+> `tt/runs/wave6-6x2/final/{nl,spef,sdc}`, the method of `docs/28`
+> section 11, which reproduces this run's own metrics to 17 significant
+> digits before the derate lines are added]**. Setup is the corner that
+> flips; hold does not.
+>
+> **What moved:** the conclusion, not the measurement. Every number in
+> the table above is correct as reported and correctly reproduced; what
+> is wrong is the belief that it carries 5 % of OCV margin. It carries
+> none. `docs/28` section 6.2 recovers the corner — its adopted
+> configuration reaches **+0.7510 ns derated on this same RTL and
+> shape** for four flow keys and +0.102 % of area — but that
+> configuration had not been through its geometric decks when this
+> correction was written (`docs/28` section 10 item 7), so **this
+> document does not have a run of its own that closes the slow corner
+> honestly.**
 
 **The remaining margin is thin.** +0.3229 ns at a 20 ns period is
 **1.61 % of the cycle**. `docs/22` recorded +1.1554 ns at 4x2 and
@@ -615,6 +666,7 @@ supersedes. **No document other than this one is edited.** Sources are
 | §2.2 table, 6x2 row | needed 265,486, spare +127,502, +32.44 % | **needed 265,136, spare +127,852, +32.53 %** | §6 above |
 | §3.1 table, `shape-6x2` column | +1.2347 / +8.1297 / +12.1329 setup; +0.6039 / +0.2907 / +0.1089 hold | **+0.3229 / +7.5628 / +11.8588 setup; +0.6163 / +0.2936 / +0.1137 hold** | §3 above |
 | §3.1, "Slow-corner Fmax … 6x2 **53.3 MHz**" | as written | **50.8 MHz** **[estimate]** | §3.1 above |
+| *the two rows above, **amended 2026-08-30*** | *as written* | ***both columns are un-derated.** With the 5 % OCV derate applied, `shape-6x2` is **+0.2913 / +7.5402 / +11.7477** setup and **+0.5546 / +0.2617 / +0.0898** hold, and `wave6-6x2` is **-0.6681** setup slow and **+0.5747 / +0.0877** hold slow/fast. Slow-corner Fmax derated: **50.74 -> 48.38 MHz**. `docs/23` carries this as a correction rather than a replacement, because the un-derated numbers are what the runs reported* | §3.1 correction above; `docs/28` §4.4b, §7 |
 | §3.2, "6x2 does not raise the question at all" (of a non-zero violation counter) | as written | still true — every counter is zero — but the slow-corner **margin** fell 0.9118 ns to +0.3229 ns, 1.61 % of the cycle | §3.1 above |
 | §3.3 power table, 6x2 column | 4.2402 / 0.8755 / 0.014350 / **5.1301** / IR 0.000616 | **4.2319 / 0.87233 / 0.014355 / 5.1186** / IR **0.000635** | §5 above |
 | §4.2 table, IHP 6x2 column | 63,482 demand, **20.12 %** | **62,798 demand, 19.90 %** | §4.1 above |

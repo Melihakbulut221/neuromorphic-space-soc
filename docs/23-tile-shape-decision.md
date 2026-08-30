@@ -36,6 +36,13 @@ open where it cannot be.
   violation of -6.27 ps** at the fast corner — small, and the flow did
   not stop for it, but it is the first non-zero violation counter in an
   IHP sign-off here. Section 3.
+  *Corrected 2026-08-30: all four slacks in this bullet are un-derated,
+  because the flow never applied the 5 % OCV derate it reported
+  applying (`docs/28` §4.4b). Derated they are 6x2 **+0.2913**, 3x4
+  **+0.0919**, 4x2 **-0.0675** — so **4x2 does not close the slow
+  corner at all** and the 3x4 hold violation grows to -57.71 ps. The
+  ranking, and therefore this bullet's conclusion, is unchanged and
+  better supported. Section 3.1's correction note has the derivation.*
 - **Cross-PDK portability is measurable again.** `docs/22` section 5
   could not re-measure it because sky130 4x2 stopped routing. At twelve
   tiles it routes: sky130 **6x2 and 3x4 both close DRC-clean on every
@@ -288,6 +295,55 @@ should be re-derived rather than reused.
 
 Slow-corner Fmax, from the slow-corner WNS: 4x2 **52.4 MHz**, 3x4
 **52.8 MHz**, 6x2 **53.3 MHz**.
+
+> **Corrected 2026-08-30 — every slack in the table above is an
+> un-derated number, and one of the three shapes stops closing when the
+> derate is applied.**
+>
+> `docs/28` section 4.4(b) establishes that this flow has never applied
+> the 5 % on-chip-variation derate its configuration asks for.
+> `TIME_DERATING_CONSTRAINT` is the integer `5` in both PDKs and
+> LibreLane's `base.sdc` computes the factor as `expr 5 / 100`, Tcl
+> integer division, which is `0`; the factors are 1.0 and 1.0 while the
+> log reports "Setting timing derate to: 5%". The table is correct as
+> reported. What is wrong is the belief that it carries 5 % of OCV
+> margin — it carries none.
+>
+> All three runs were re-derived by re-running the sign-off corners
+> standalone on their own shipped netlist, parasitics, constraints and
+> liberty, the method of `docs/28` section 11, which reproduces each
+> run's own metric to 17 significant digits before the derate lines are
+> added **[fact]**:
+>
+> | | `wave5-ihp-b` (4x2) | `shape-3x4` | **`shape-6x2`** |
+> |---|---|---|---|
+> | **Slow setup, derated** | **-0.0675** | **+0.0919** | **+0.2913** |
+> | Slow hold, derated | +0.5683 | +0.5104 | +0.5546 |
+> | Fast hold, derated | +0.0846 | **-0.0577** | +0.0898 |
+> | Slow-corner Fmax, derated **[estimate]** | **49.8 MHz** | **50.2 MHz** | **50.7 MHz** |
+>
+> **[fact for the slacks, standalone OpenSTA on each run's
+> `final/{nl,spef,sdc}`; estimate for the frequencies, on the linearity
+> `docs/28` section 5.6 measures.]**
+>
+> **What moved, and it is not the decision.**
+>
+> - **4x2 does not close the slow corner derated**, at -0.0675 ns, and
+>   so does not reach 50 MHz. Its "setup violations 0" row is a
+>   statement about a sign-off with no OCV margin in it.
+> - **3x4 and 6x2 both still close the slow corner derated**, 3x4 by
+>   0.46 % of the cycle and 6x2 by 1.46 %. Both still reach 50 MHz; 3x4
+>   by 0.2 MHz.
+> - **3x4's fast-corner hold violation grows by an order of magnitude**,
+>   from -6.27 ps to **-57.71 ps**. Section 3.2 treats it as small; that
+>   remains true in absolute terms, but the derate is the direction it
+>   moves in and the figure below it in section 3.2 is the un-derated
+>   one.
+> - **The ordering is unchanged and the shape decision is reinforced.**
+>   6x2 remains the best slow corner of the three by the same margins,
+>   and it is now the only one of the three that is clean on every
+>   corner *and* has more than half a percent of derated cycle in hand.
+>   A correction that could have overturned the decision strengthens it.
 
 ### 3.2 The 3x4 hold violation
 
@@ -544,6 +600,13 @@ The case, in order of weight:
    three close (section 3.1). The `docs/15` section 4.6 figure of
    +5.314 ns is not a counterexample: it is a 136,107 um2 netlist from
    before the memory ECC and the pointer TMR, not this one.
+   *Corrected 2026-08-30: "though all three close" is withdrawn.* With
+   the 5 % OCV derate the flow reports and does not apply (`docs/28`
+   §4.4b), **only 6x2 and 3x4 close the slow corner — +0.2913 and
+   +0.0919 ns — and 4x2 misses it at -0.0675 ns** (section 3.1's
+   correction note). The clause this criterion actually rests on, that
+   6x2 is the best of the three, is unchanged; what changes is that the
+   gap to 4x2 is now the difference between closing and not.
 5. **6x2 is confirmed purchasable and 3x4 is not** (section 7). This is
    listed last on purpose. It is decisive if the first four were a tie,
    and they are not a tie — **6x2 wins on the measurement alone**, and
