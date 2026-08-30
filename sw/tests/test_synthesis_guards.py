@@ -96,6 +96,27 @@ PTR_BANKS = ("u_wptr_a", "u_wptr_b", "u_wptr_c",
              "u_rptr_a", "u_rptr_b", "u_rptr_c")
 PTR_REPLICAS = tuple(f"{q}.{b}" for q in PTR_QUEUES for b in PTR_BANKS)
 
+# The dual-rail valid flags. One bit each, so unlike the banks above
+# these carry exactly two rails and not three: over a single bit there
+# are only two storage functions, a third replica is bit-for-bit
+# identical to one of the other two, and synthesis merges it. That is a
+# proof rather than a budget, and it is why this list has an a and a b
+# and no c -- see the rail headers in the three files below.
+#
+# u_rdv is inside aer_fifo, which pilot_top instantiates twice, so the
+# read-valid rails appear once per queue and the expected count for
+# those two names is two rather than one.
+RAIL_W = 1
+RAILS = {
+    "u_ohv_a": 1,   # pilot_top, show-ahead adapter valid
+    "u_ohv_b": 1,
+    "u_rdv_a": 2,   # aer_fifo read-valid, one pair per queue instance
+    "u_rdv_b": 2,
+    "u_op_a": 1,    # lif_core out_pend
+    "u_op_b": 1,
+}
+_RAIL_RTL = ("pilot_top.v", "aer_fifo.v", "lif_core.v")
+
 # Flip-flops the design declares, counted after `proc` and before any
 # optimisation pass has run. Asserted rather than hardcoded: the tests
 # below measure it every time and compare against the mapped netlist.
@@ -893,8 +914,17 @@ def test_reset_synchronizer_is_still_two_stages(workdir):
 # checkout and only hw/openlane/pilot_sky130/runs/ answers.
 RUN_TREES = (
     ROOT / "hw" / "openlane" / "pilot_sky130" / "runs",
+    ROOT / "hw" / "openlane" / "pilot_ihp" / "runs",
     ROOT / "tt" / "runs",
 )
+# pilot_ihp was absent from this tuple until 2026-08-30, and that was a
+# real hole rather than a missing line. A re-harden placed there would
+# have produced every sign-off number a document could quote while
+# leaving these guards skipping, because a skip means "no witness on
+# disk" and cannot distinguish that from "nobody looked in the right
+# directory". The wave-6 re-harden was routed into tt/runs to work
+# around it. Any new run tree has to be added here or the guards stop
+# guarding without saying so.
 
 # One cell instantiation in a mapped netlist: a type, an instance name
 # that may be an escaped identifier, then the port list.
@@ -1021,3 +1051,50 @@ def test_pointer_tmr_survives_the_real_hardening_flow():
             f"this is the structure that would have been fabricated. See "
             f"the pointer TMR section of hw/rtl/aer_fifo.v. Total "
             f"flip-flops in this netlist: {len(flops)}.")
+
+
+def test_valid_flag_rails_survive_the_real_hardening_flow():
+    """The eight dual-rail valid flags, in the netlist LibreLane produced.
+
+    Until this test existed the rails were covered only by the yosys-model
+    tests above, and their count in the shipped netlist was checked by
+    hand once, in docs/27 section 7.2. That is the wrong shape of evidence
+    for this defect class. The failure mode is a rail built at the same
+    polarity as its twin: functionally identical RTL, which every
+    simulation in this repository passes and no amount of testing can
+    distinguish. Only counting cells in the real netlist sees it, so the
+    count has to be automatic or it will drift.
+
+    Same provenance rule as the pointer guard: skip on the age of the
+    run, never on the absence of the banks, because a netlist-shaped skip
+    condition would skip on precisely the symptom being looked for.
+    """
+    netlists = _hardening_netlists()
+    if not netlists:
+        pytest.skip(
+            "no deferred_flatten LibreLane run with a final netlist; "
+            "produce one with hw/openlane/pilot_ihp/run_ihp.sh or the "
+            "sky130 equivalent")
+
+    newest_rtl = max((RTL / f).stat().st_mtime for f in _RAIL_RTL)
+    fresh = [(run, nl) for run, nl in netlists
+             if nl.stat().st_mtime >= newest_rtl]
+    if not fresh:
+        pytest.skip(
+            "every LibreLane run on disk predates one of "
+            f"{', '.join(_RAIL_RTL)}, where the rails are declared; "
+            "re-harden to close this check")
+
+    for run, nl in fresh:
+        flops = [name for ctype, name in _NETLIST_CELL.findall(nl.read_text())
+                 if _is_flop(ctype)]
+        found = {r: sum(1 for n in flops if f"{r}." in n) for r in RAILS}
+        assert found == RAILS, (
+            f"a dual-rail valid flag collapsed in {nl.relative_to(ROOT)}: "
+            f"expected {RAILS}, found {found}. This is the shipped "
+            f"netlist of run {run.name}, so it is the structure that "
+            f"would have been fabricated. A missing rail means synthesis "
+            f"proved the two equivalent and merged them, which is what "
+            f"happens if both are built at the same polarity -- see the "
+            f"rail headers in hw/rtl/{', hw/rtl/'.join(_RAIL_RTL)}. "
+            f"Total flip-flops in this netlist: {len(flops)}.")
