@@ -1,0 +1,958 @@
+{
+ "netlist": "/home/hasanmelih/Documents/neuromorphic-space-soc/hw/openlane/pilot_ihp/runs/shape-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v",
+ "netlist_blob": "e8f72bde4c5a02101a226f5d98bde36c1229c084",
+ "cell_models": "/home/hasanmelih/.ciel/ciel/ihp-sg13g2/versions/c4b8b4e5e7a05f375cca3815d51b3a37721fbf5c/ihp-sg13g2/libs.ref/sg13g2_stdcell/verilog/sg13g2_stdcell.v",
+ "rtl_ref": "a13a93f3a0b01b6fdf923069a24c375257765f79",
+ "rtl_campaign_blob": "8e06b9027ef0396ab62bb15286d46308af68e6d9",
+ "rtl_log_blob": "3906c53d1f7e9da31dd050f2498e464ce03e13c5",
+ "rtl_total": 365,
+ "seed": 384901158,
+ "geometry": {
+  "n_neurons": 8,
+  "n_axons": 8
+ },
+ "groups_filter": [
+  "disagreement_probe"
+ ],
+ "wall_seconds": 207.2,
+ "total": 0,
+ "histogram": {
+  "MASKED": 0,
+  "CORRECTED": 0,
+  "DETECTED": 0,
+  "SDC": 0,
+  "HANG": 0,
+  "SKIPPED_X": 0,
+  "NOT_CONSTRUCTED": 0
+ },
+ "groups": {},
+ "rtl_groups": {
+  "lif_fsm": {
+   "MASKED": 0,
+   "CORRECTED": 0,
+   "DETECTED": 12,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_vmem": {
+   "MASKED": 0,
+   "CORRECTED": 24,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_rmem": {
+   "MASKED": 0,
+   "CORRECTED": 12,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_wmem": {
+   "MASKED": 3,
+   "CORRECTED": 13,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_wmem_unread": {
+   "MASKED": 4,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_scan": {
+   "MASKED": 15,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 6,
+   "HANG": 0
+  },
+  "cfg_tmr_a": {
+   "MASKED": 0,
+   "CORRECTED": 5,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "cfg_tmr_b": {
+   "MASKED": 0,
+   "CORRECTED": 5,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "cfg_tmr_c": {
+   "MASKED": 0,
+   "CORRECTED": 5,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "regbank_cfg": {
+   "MASKED": 9,
+   "CORRECTED": 1,
+   "DETECTED": 5,
+   "SDC": 1,
+   "HANG": 0
+  },
+  "regbank_cnt": {
+   "MASKED": 5,
+   "CORRECTED": 4,
+   "DETECTED": 9,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "evq_ptr": {
+   "MASKED": 0,
+   "CORRECTED": 72,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "evq_mem": {
+   "MASKED": 25,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 7,
+   "HANG": 0
+  },
+  "evq_hold": {
+   "MASKED": 7,
+   "CORRECTED": 0,
+   "DETECTED": 1,
+   "SDC": 6,
+   "HANG": 0
+  },
+  "dispatch": {
+   "MASKED": 8,
+   "CORRECTED": 0,
+   "DETECTED": 4,
+   "SDC": 6,
+   "HANG": 0
+  },
+  "lif_wchk": {
+   "MASKED": 0,
+   "CORRECTED": 12,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_wchk_unread": {
+   "MASKED": 2,
+   "CORRECTED": 0,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "lif_smem": {
+   "MASKED": 0,
+   "CORRECTED": 18,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "wdog_fetch": {
+   "MASKED": 6,
+   "CORRECTED": 0,
+   "DETECTED": 3,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "wdog_oh": {
+   "MASKED": 6,
+   "CORRECTED": 0,
+   "DETECTED": 3,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "ecc_port_single": {
+   "MASKED": 0,
+   "CORRECTED": 12,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "ecc_port_double": {
+   "MASKED": 0,
+   "CORRECTED": 0,
+   "DETECTED": 4,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "ecc_ff": {
+   "MASKED": 0,
+   "CORRECTED": 7,
+   "DETECTED": 0,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "telemetry_primed": {
+   "MASKED": 1,
+   "CORRECTED": 3,
+   "DETECTED": 2,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "wdog_fetch_dir": {
+   "MASKED": 0,
+   "CORRECTED": 0,
+   "DETECTED": 5,
+   "SDC": 1,
+   "HANG": 0
+  },
+  "wdog_oh_dir": {
+   "MASKED": 0,
+   "CORRECTED": 0,
+   "DETECTED": 5,
+   "SDC": 1,
+   "HANG": 0
+  }
+ },
+ "notes": {
+  "scope_children": 46155,
+  "flop_output_nets": 1275,
+  "scope_scan_seconds": 0.4,
+  "control_events": [
+   1,
+   2,
+   5,
+   6,
+   4,
+   2
+  ],
+  "upset_persists": {
+   "before": 0,
+   "during": 1,
+   "after_release": 1,
+   "settled": 1,
+   "scratch_readback": 1
+  },
+  "deposit_contrast": {
+   "during": 1,
+   "eight_cycles_later": 1,
+   "held_for_cycles": 177,
+   "still_set_after": 1,
+   "scratch_readback": 1,
+   "after_driver_re_evaluates": 0
+  },
+  "fsm_primitive_contrast": {
+   "deposit": {
+    "before": "0000",
+    "during": "0001",
+    "one_edge_later": "1001",
+    "two_edges_later": "1001"
+   },
+   "force": {
+    "before": "0000",
+    "during": "0001",
+    "one_edge_later": "1001",
+    "two_edges_later": "1001"
+   }
+  },
+  "survives_reset": {
+   "force_release": 0,
+   "deposit": 1
+  },
+  "identified": {
+   "cfg_axon[3]": [
+    "u_pilot._0255_"
+   ],
+   "anonymous_candidates": [
+    "u_pilot._0252_",
+    "u_pilot._0253_",
+    "u_pilot._0254_",
+    "u_pilot._0255_"
+   ]
+  },
+  "fsm_probe": {
+   "class": "DETECTED",
+   "status": 21
+  },
+  "unreachable": [
+   {
+    "group": "cfg_tmr_a",
+    "target": "u_cfg_a.bits",
+    "bit": 32,
+    "reason": "u_pilot.u_cfg_a.bits[32] kept no name through synthesis, and the campaign samples 5 of the bank's 55 flip-flops, so which flop carries this bit cannot be recovered"
+   },
+   {
+    "group": "cfg_tmr_b",
+    "target": "u_cfg_b.bits",
+    "bit": 0,
+    "reason": "u_pilot.u_cfg_b.bits[0] kept no name through synthesis, and the campaign samples 5 of the bank's 55 flip-flops, so which flop carries this bit cannot be recovered"
+   },
+   {
+    "group": "cfg_tmr_b",
+    "target": "u_cfg_b.bits",
+    "bit": 12,
+    "reason": "u_pilot.u_cfg_b.bits[12] kept no name through synthesis, and the campaign samples 5 of the bank's 55 flip-flops, so which flop carries this bit cannot be recovered"
+   },
+   {
+    "group": "cfg_tmr_b",
+    "target": "u_cfg_b.bits",
+    "bit": 16,
+    "reason": "u_pilot.u_cfg_b.bits[16] kept no name through synthesis, and the campaign samples 5 of the bank's 55 flip-flops, so which flop carries this bit cannot be recovered"
+   },
+   {
+    "group": "cfg_tmr_b",
+    "target": "u_cfg_b.bits",
+    "bit": 43,
+    "reason": "u_pilot.u_cfg_b.bits[43] kept no name through synthesis, and the campaign samples 5 of the bank's 55 flip-flops, so which flop carries this bit cannot be recovered"
+   },
+   {
+    "group": "lif_scan",
+    "target": "u_lif.out_event",
+    "bit": 14,
+    "reason": "u_lif.out_event[14] has no flip-flop in this netlist: synthesis proved the bit constant"
+   },
+   {
+    "group": "regbank_cfg",
+    "target": "ctrl_scrub_en",
+    "bit": 0,
+    "reason": "no flip-flop of this name survives; the scrub-enable bit was absorbed into the logic it gates"
+   }
+  ],
+  "disagreement_probe": {
+   "golden": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "any_placement_reproduces_rtl": false,
+   "rows": [
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_kept",
+     "extra_wait": 0,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_kept",
+     "extra_wait": 1,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_kept",
+     "extra_wait": 2,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_kept",
+     "extra_wait": 3,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_kept",
+     "extra_wait": 4,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_kept",
+     "extra_wait": 5,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_erased",
+     "extra_wait": 0,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_erased",
+     "extra_wait": 1,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_erased",
+     "extra_wait": 2,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_erased",
+     "extra_wait": 3,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_erased",
+     "extra_wait": 4,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_fetch_dir",
+     "case": "report_erased",
+     "extra_wait": 5,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_kept",
+     "extra_wait": 0,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_kept",
+     "extra_wait": 1,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_kept",
+     "extra_wait": 2,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_kept",
+     "extra_wait": 3,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_kept",
+     "extra_wait": 4,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_kept",
+     "extra_wait": 5,
+     "gl_class": "DETECTED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "DETECTED",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_erased",
+     "extra_wait": 0,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_erased",
+     "extra_wait": 1,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_erased",
+     "extra_wait": 2,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_erased",
+     "extra_wait": 3,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_erased",
+     "extra_wait": 4,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    },
+    {
+     "group": "wdog_oh_dir",
+     "case": "report_erased",
+     "extra_wait": 5,
+     "gl_class": "MASKED",
+     "gl_events": [
+      1,
+      2,
+      5,
+      6,
+      4,
+      2
+     ],
+     "gl_out_ok": true,
+     "constructed": true,
+     "rtl_class": "SDC",
+     "rtl_events": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      2
+     ],
+     "matches_rtl_stream": false
+    }
+   ]
+  },
+  "groups_agreeing": [],
+  "groups_differing": []
+ },
+ "injections": []
+}

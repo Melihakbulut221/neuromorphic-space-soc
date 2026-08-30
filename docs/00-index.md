@@ -257,6 +257,7 @@ silicon and no radiation data, and the licence is unsigned.
 | `docs/23-tile-shape-decision.md` | Both twelve-tile shapes hardened and compared after `docs/22` put the design over the 4x2 budget. Decides **6x2**, on routing convergence, timing and clock skew rather than on area — both shapes clear the utilization criterion with room to spare. Records that 3x4 is not confirmed purchasable on TTIHP26b. |
 | `docs/24-gate-level-simulation.md` | Gate-level simulation of the hardened netlist — the ROADMAP P1 bar item, and the direct check on the RTL-versus-netlist gap that has produced three separate defects in this project. Records which tests can run at gate level and which cannot. |
 | `docs/25-sky130-6x2.md` | SKY130A at twelve tiles. Routes where 4x2 diverged, every manufacturability deck at zero on both PDKs, and the slow corner still missed — with a decomposition of the miss that supersedes the diagnosis in `docs/18`. |
+| `docs/26-gate-level-fault-injection.md` | Fault injection on the hardened netlist rather than the RTL, with the validation that the method models a transient upset and not a stuck-at. 355 of 357 comparable injections agree with the RTL campaign; the two that do not are named and analysed. |
 | `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
 | `README.md` | Project summary and repository layout. |
 | `ROADMAP.md` | Phased plan with gates and external clocks. |

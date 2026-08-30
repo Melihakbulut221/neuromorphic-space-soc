@@ -95,6 +95,7 @@ COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
 # to a differently named file so it cannot be mistaken for the full one.
 export GLFI_GROUPS
 export GLFI_TAG
+export GLFI_RTL_REF
 
 # ---------------------------------------------------------------------
 # 3b. Which Icarus (Makefile.gl section 3b, and it is not optional)
@@ -135,10 +136,19 @@ provenance:
 	@echo "pdk         : $(GL_PDK) at $(GL_PDK_ROOT)"
 	@echo "cell models : $(GL_CELLS)"
 	@echo "models blob : $$(git -C $(REPO) hash-object $(GL_CELLS))"
-	@echo "rtl campaign: $(HERE)/test_fi_campaign.py"
-	@echo "        blob: $$(git -C $(REPO) hash-object $(HERE)/test_fi_campaign.py)"
-	@echo "rtl log     : $(HERE)/fi_campaign_results.json"
-	@echo "        blob: $$(git -C $(REPO) hash-object $(HERE)/fi_campaign_results.json)"
+	@echo "rtl baseline: the campaign of record is read out of a COMMIT, \
+not the working tree -- see test_gl_fi.py, 'the RTL campaign of record'"
+	@echo "  ref       : $${GLFI_RTL_REF:-$$(git -C $(REPO) log -1 \
+--format=%H -- hw/tb/fi_campaign_results.json)}"
+	@echo "  campaign  : $$(git -C $(REPO) rev-parse \
+$${GLFI_RTL_REF:-$$(git -C $(REPO) log -1 --format=%H -- \
+hw/tb/fi_campaign_results.json)}:hw/tb/test_fi_campaign.py)"
+	@echo "  log       : $$(git -C $(REPO) rev-parse \
+$${GLFI_RTL_REF:-$$(git -C $(REPO) log -1 --format=%H -- \
+hw/tb/fi_campaign_results.json)}:hw/tb/fi_campaign_results.json)"
+	@echo "  worktree  : $$(git -C $(REPO) hash-object \
+$(HERE)/test_fi_campaign.py) / $$(git -C $(REPO) hash-object \
+$(HERE)/fi_campaign_results.json) (NOT used unless GLFI_RTL_REF=WORKTREE)"
 	@echo "iverilog    : $(GL_IVERILOG)"
 	@echo "              $$($(GL_IVERILOG) -V 2>/dev/null | head -1)"
 	@echo "sim build   : $(SIM_BUILD)"

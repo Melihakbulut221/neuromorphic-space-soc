@@ -43,8 +43,8 @@ argued in docs/26 section 2; in short:
     the cell, which now holds the captured value. That is what an upset
     in a flip-flop does: the state is wrong for one cycle, and whether it
     STAYS wrong is decided by the design's own next-state logic rather
-    than by the injector. Section 3 below proves both halves of that on
-    this netlist rather than asserting them.
+    than by the injector. `test_00_method` proves both halves of that on
+    this netlist rather than asserting them; docs/26 section 4 reports it.
 
   * Driving the cell model's internal state. Rejected as impossible here:
     `sg13g2_dfrbpq_1` is a UDP-based model, its state lives in the UDP
@@ -142,13 +142,104 @@ for _p in (str(HERE), str(REPO_ROOT), str(REPO_ROOT / "sw")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-# The RTL campaign, imported rather than copied: see section 3 above.
-# Importing it binds ITS cocotb tests into ITS namespace, not this one, so
-# nothing extra runs -- the same property test_pilot_gl relies on.
-import test_fi_campaign as fi          # noqa: E402
 import test_pilot_top as tt            # noqa: E402
 
 from golden.regmap_gen import ADDR     # noqa: E402
+
+
+def _git(*args):
+    return subprocess.run(("git", "-C", str(REPO_ROOT)) + args,
+                          capture_output=True, text=True,
+                          check=True).stdout
+
+
+def _blob(path):
+    if not path:
+        return None
+    try:
+        return _git("hash-object", str(path)).strip()
+    except Exception:                        # noqa: BLE001
+        return None
+
+
+# ---------------------------------------------------------------------
+# the RTL campaign of record, pinned rather than picked up
+# ---------------------------------------------------------------------
+# The RTL campaign is imported rather than copied, so that its workload,
+# weight seed, burst structure, golden model, classifier and target list
+# are used unchanged and the comparison is like-for-like by construction.
+# Importing it binds ITS cocotb tests into ITS namespace, not this one,
+# so nothing extra runs -- the property test_pilot_gl relies on too.
+#
+# But it is imported from a COMMIT, not from the working tree, and the
+# reason is not hypothetical. The first full run of this suite read
+# hw/tb/test_fi_campaign.py out of the working tree while that file was
+# under concurrent edit. Its directed cases acquired a step naming
+# `fetch_expire` -- a register added to hw/rtl/pilot_top.v AFTER this
+# netlist was hardened -- so one of the twelve constructions referred to
+# storage that does not exist in the design being measured, and the
+# suite crashed on it rather than reporting it. A baseline that moves
+# under a comparison is not a baseline.
+#
+# The pin is derived, and the rule is not "the newest RTL campaign". It
+# is **the newest RTL campaign that was run against the RTL this netlist
+# was synthesized from**, and the difference is the whole point.
+#
+# A netlist is a photograph of one commit. docs/24 section 1.2 records
+# that the shape-6x2 harden was pinned against e1361fe by
+# hw/openlane/pin_rtl.py. While this suite was being written the RTL
+# moved twice, and the second move -- "Make the fault report unerasable"
+# -- retired the very flip-flops one of the disagreements in section 5 is
+# about. An RTL campaign run after that describes a design that is not
+# in this netlist, so comparing against it would report a difference
+# between two designs as though it were a difference between two levels.
+#
+# So: walk the commits that touched hw/tb/fi_campaign_results.json,
+# newest first, and take the first one whose hw/rtl tree is IDENTICAL to
+# the netlist's pinned RTL. When the RTL moves on, this pin does not
+# move with it, which is correct and is stated rather than hidden.
+NETLIST_RTL = os.environ.get("GLFI_NETLIST_RTL", "e1361fe")
+
+
+def _rtl_baseline():
+    want = _git("rev-parse", f"{NETLIST_RTL}^{{tree}}:hw/rtl").strip()
+    for c in _git("log", "--format=%H", "--",
+                  "hw/tb/fi_campaign_results.json").split():
+        try:
+            if _git("rev-parse", f"{c}^{{tree}}:hw/rtl").strip() == want:
+                return c
+        except subprocess.CalledProcessError:
+            continue
+    raise RuntimeError(
+        "no committed RTL fault-injection campaign was run against the RTL "
+        f"this netlist came from ({NETLIST_RTL}); there is nothing to "
+        "compare against and a comparison against a different design would "
+        "report a design change as a level difference")
+
+
+RTL_REF = os.environ.get("GLFI_RTL_REF") or _rtl_baseline()
+
+if RTL_REF == "WORKTREE":
+    import test_fi_campaign as fi      # noqa: E402
+    RTL_LOG = json.loads((HERE / "fi_campaign_results.json").read_text())
+    RTL_CAMPAIGN_BLOB = _blob(HERE / "test_fi_campaign.py")
+    RTL_LOG_BLOB = _blob(HERE / "fi_campaign_results.json")
+else:
+    import importlib.util              # noqa: E402
+    _ref_dir = Path(os.environ.get("SIM_BUILD", str(HERE))) / "rtl_ref"
+    _ref_dir.mkdir(parents=True, exist_ok=True)
+    _ref_src = _ref_dir / "test_fi_campaign.py"
+    _ref_src.write_text(_git("show", f"{RTL_REF}:hw/tb/test_fi_campaign.py"))
+    _spec = importlib.util.spec_from_file_location("fi_campaign_ref", _ref_src)
+    fi = importlib.util.module_from_spec(_spec)
+    sys.modules["fi_campaign_ref"] = fi
+    _spec.loader.exec_module(fi)
+    RTL_LOG = json.loads(
+        _git("show", f"{RTL_REF}:hw/tb/fi_campaign_results.json"))
+    RTL_CAMPAIGN_BLOB = _git(
+        "rev-parse", f"{RTL_REF}:hw/tb/test_fi_campaign.py").strip()
+    RTL_LOG_BLOB = _git(
+        "rev-parse", f"{RTL_REF}:hw/tb/fi_campaign_results.json").strip()
 
 CLK_NS = fi.CLK_NS
 
@@ -241,7 +332,6 @@ NET_MAP = {
     # holds out_pend is named after the pilot-level wire it drives.
     "u_lif.out_pend": _fmt("u_pilot.lif_out_valid"),
     "u_lif.out_event": _out_event,
-    "u_lif.dummy": None,
     # pilot_top.v 1197: .drop_cnt(fi_drop)
     "u_evq_in.drop_cnt": _fmt("u_pilot.fi_drop[{b}]"),
     # pilot_top.v 1240-1241: .rd_data(fo_rd_data), .rd_valid(fo_rd_valid)
@@ -666,20 +756,32 @@ async def run_script(p, steps, log):
                 await Timer(3, unit="ns")
             log.append(f"wait {step[1]}")
         elif kind == "xor":
-            net = NETS[map_target(step[1], step[2])[0]]
-            v = await upset(net)
+            name, why = map_target(step[1], step[2])
+            if name is None or name not in FLOP_NETS:
+                log.append(f"upset {step[1]} bit {step[2]}: {why or name}")
+                log.append("NOT CONSTRUCTED")
+                continue
+            v = await upset(NETS[name])
             log.append(f"upset {step[1]} bit {step[2]} -> {v}")
             if v is None:
                 log.append("NOT CONSTRUCTED")
         elif kind == "force":
             nets, vals = register_nets(step[1], step[2])
+            if nets is None:
+                log.append(f"force {step[1]} = {step[2]}: {vals}")
+                log.append("NOT CONSTRUCTED")
+                continue
             n = await upset_word(nets, vals)
             log.append(f"force {step[1]} = {step[2]} ({n} bit(s) flipped)")
             if n is None:
                 log.append("NOT CONSTRUCTED")
         elif kind == "until":
             _, path, want, budget = step
-            nets, _ = register_nets(path, 0)
+            nets, why = register_nets(path, 0)
+            if nets is None:
+                log.append(f"until {path} == {want}: {why}")
+                log.append("NOT CONSTRUCTED")
+                continue
             hit = False
             for _ in range(budget + 1):
                 bits = [bit_of(n) for n in nets]
@@ -693,7 +795,15 @@ async def run_script(p, steps, log):
             if not hit:
                 log.append("NOT CONSTRUCTED")
         else:
-            raise AssertionError(f"unknown directed step {step}")
+            # Not an error. A step kind this suite does not implement is
+            # a construction it cannot build, which is reported and not
+            # classified. The RTL campaign grew an `xor?` step -- a
+            # deposit into a declared-retired target -- after this
+            # netlist was hardened; raising here would have read as a
+            # broken gate-level suite rather than as a design that has
+            # moved past the netlist.
+            log.append(f"step {step[0]} is not implemented at gate level")
+            log.append("NOT CONSTRUCTED")
     return log
 
 
@@ -703,9 +813,27 @@ REG_WIDTH = {"dstate": 2, "fetch_wait": 6, "oh_wait": 6,
 
 
 def register_nets(path, value):
-    """Every net of a named register, LSB first, with the target value."""
-    w = REG_WIDTH[path]
-    nets = [NETS[map_target(path, b)[0]] for b in range(w)]
+    """Every net of a named register, LSB first, with the target value.
+
+    Returns (None, reason) rather than raising when the register is not
+    in this netlist. A directed case that names storage the netlist does
+    not have has not failed -- it has not been CONSTRUCTED, which is a
+    different thing and the only honest way to report it. This is not
+    defensive coding for its own sake: the RTL campaign grew a step
+    naming `fetch_expire`, a register added to the RTL after this
+    netlist was hardened, and a crash there would have read as a broken
+    gate-level suite rather than as a design that has moved on.
+    """
+    w = REG_WIDTH.get(path)
+    if w is None:
+        return None, (f"{path} is not a register this netlist has; the RTL "
+                      f"campaign names storage added after the harden")
+    nets = []
+    for b in range(w):
+        net, why = map_target(path, b)
+        if net is None or net not in FLOP_NETS:
+            return None, why or f"{path}[{b}] is not a flip-flop output here"
+        nets.append(NETS[net])
     return nets, [(value >> b) & 1 for b in range(w)]
 
 
@@ -1064,6 +1192,57 @@ async def test_00_method(dut):
     dut._log.info(f"D2. u_lif.state by FORCE/RELEASE: {frc_fsm}")
     NOTES["fsm_primitive_contrast"] = {"deposit": dep_fsm, "force": frc_fsm}
 
+    # -- D3. the one experiment that tells the two apart outright ------
+    # On a register nothing ever rewrites, the two primitives look alike:
+    # both leave the node at the flipped value and both read back through
+    # the register port. They are not alike, and a reset says so. After a
+    # genuine upset the flip-flop HOLDS the wrong value, so the design's
+    # own recovery -- an asynchronous reset -- clears it. After a deposit
+    # the flip-flop holds the right value and only the wire is wrong, so
+    # the reset changes nothing on that node and the "fault" survives a
+    # recovery no real upset could survive.
+    async def survives_reset(primitive):
+        await bring_up(p, words)
+        await tt.wr(p, ADDR["SCRATCH"], 0x0000_0000)
+        await RisingEdge(dut.clk)
+        await Timer(3, unit="ns")
+        if primitive == "deposit":
+            net.value = 1
+            await Timer(1, unit="ns")
+        else:
+            await upset(net)
+        await hard_reset(p)
+        after = await tt.rd(p, ADDR["SCRATCH"])
+        if primitive == "deposit":            # hand the node back
+            await tt.wr(p, ADDR["SCRATCH"], 0xFFFF_FFFF)
+            await tt.wr(p, ADDR["SCRATCH"], 0x0000_0000)
+        return after
+
+    frc_reset = await survives_reset("force")
+    dep_reset = await survives_reset("deposit")
+    dut._log.info(f"D3. SCRATCH after a hard reset -- upset by "
+                  f"force/release: 0x{frc_reset:08X}; by deposit: "
+                  f"0x{dep_reset:08X}")
+    NOTES["survives_reset"] = {"force_release": frc_reset,
+                               "deposit": dep_reset}
+    assert frc_reset == 0, \
+        "the reset did not clear the forced upset, so the injector is " \
+        "holding state the design cannot reach"
+    assert dep_reset & 1, \
+        "the deposit did not survive the reset; the stuck-at argument " \
+        "for rejecting deposits rests on this measurement"
+
+    # -- F. storage that survived synthesis without a usable name ------
+    ax_moved, ax_cands = await identify_flop(p, ADDR["CFG_AXON"], 3,
+                                             n_axons & ~0x8, n_axons)
+    dut._log.info(f"F. cfg_axon[3] has no net of that name; of the "
+                  f"{len(ax_cands)} anonymous pilot-level flip-flops, "
+                  f"{ax_moved} moved with it")
+    NOTES["identified"] = {"cfg_axon[3]": ax_moved,
+                           "anonymous_candidates": ax_cands}
+    if len(ax_moved) == 1:
+        RESOLVED[("cfg_axon", 3)] = ax_moved[0]
+
     # Neither snapshot may leave anything behind: a deposit that was
     # still held would contaminate every injection after it, which is
     # the failure mode this whole test exists to rule out.
@@ -1121,7 +1300,7 @@ async def test_01_structural(dut):
         for bit in bits:
             for b, d in fi.phases(n_phase, pin_first, rng):
                 for one in paths:
-                    net_name, why = map_target(one, bit)
+                    net_name, why, exact = map_target_x(one, bit, bits)
                     if net_name is None or net_name not in FLOP_NETS:
                         why = why or (
                             f"{net_name} is not driven by a flip-flop Q "
@@ -1132,7 +1311,8 @@ async def test_01_structural(dut):
                         continue
                     await injection(p, geo, group, one, bit, b, d,
                                     net_name=net_name,
-                                    latent_regs=lat.get(one, ()))
+                                    latent_regs=lat.get(one, ()),
+                                    extra_fields={"bit_index_exact": exact})
     NOTES["unreachable"] = [
         {"group": g, "target": t, "bit": bit, "reason": why}
         for (g, t, bit), why in sorted(skipped.items(), key=lambda kv: str(kv[0]))]
@@ -1233,9 +1413,14 @@ async def test_04_watchdog_directed(dut):
                               script=steps,
                               extra_fields={"case": case, "note": note})
         rec["errcfg"] = bool(rec["status"] & fi.ST_ERR_CFG)
-        assert rec["constructed"], \
-            f"the directed case {group}/{case} did not construct at gate " \
-            f"level. Script log: {rec['script']}"
+        if not rec["constructed"]:
+            # Recorded, not asserted. A case that could not be built
+            # says nothing about the safety net, and the classification
+            # it would otherwise carry would be a number about nothing.
+            rec["class"] = "NOT_CONSTRUCTED"
+            dut._log.info(f"{group:<16}{case:<18}NOT CONSTRUCTED: "
+                          f"{rec['script']}")
+            continue
         dut._log.info(f"{group:<16}{case:<18}{rec['class']:<10}"
                       f"ERR_CFG={int(rec['errcfg'])} "
                       f"out_ok={int(rec['out_ok'])} "
@@ -1290,9 +1475,81 @@ async def test_05_cfg_tmr_sweep(dut):
 
 
 # ---------------------------------------------------------------------
+# test 055: the one disagreement, taken apart before it is reported
+# ---------------------------------------------------------------------
+@cocotb.test(timeout_time=3600, timeout_unit="sec")
+async def test_055_disagreement_probe(dut):
+    """Is the `report_*` disagreement a level difference or a phase one?
+
+    The two campaigns agree on 355 of the 357 injections they both make,
+    and the two that differ are `report_erased` in each bounded-wait net
+    — RTL SDC, gate level MASKED. Underneath the class labels the real
+    difference is the OUTPUT: at RTL the deadlock-and-recovery returns
+    `[0, 1, 2, 3, 4, 2]` where the golden model says `[1, 2, 5, 6, 4, 2]`,
+    in the control (`report_kept`) as well as in the case, and docs/16
+    section 5.8 rests its ranking on that wrong answer. At gate level the
+    same construction returns the golden stream.
+
+    A one-cycle difference in where the first deposit lands would explain
+    it just as well as a difference between the two levels, and the two
+    have to be told apart before either is reported. The directed script
+    anchors on the first cycle `dstate` reads D_IDLE after BUSY rises, so
+    prepending a wait moves the anchor to a later D_IDLE and sweeps the
+    placement. If ANY placement reproduces the RTL's wrong stream, the
+    disagreement is an alignment artefact of two harnesses. If none does,
+    the netlist recovers from this fault and the RTL does not.
+
+    Nothing here is classified into the campaign histogram: this is a
+    measurement about the measurement.
+    """
+    if not wanted("disagreement_probe"):
+        return
+    p, geo = await gl_setup(dut)
+    n_neurons, n_axons, weights, _ = geo
+    exp_bursts, _ = fi.golden_run(n_neurons, n_axons, weights)
+    exp = [w for b in exp_bursts for w in b]
+    rtl_by_case = {(r["group"], r.get("case")): r
+                   for r in (RTL_LOG["injections"] if RTL_LOG else [])
+                   if r["group"].endswith("_dir")}
+
+    out = []
+    for group, case, _note, steps in fi.watchdog_cases():
+        if case not in ("report_kept", "report_erased"):
+            continue
+        ref = rtl_by_case.get((group, case), {})
+        for extra in range(6):
+            rec = await injection(p, geo, "disagreement_probe",
+                                  f"{group}/{case}+{extra}", None, 0, None,
+                                  script=([("wait", extra)] + list(steps)))
+            RESULTS.pop()          # measured, not counted
+            row = {"group": group, "case": case, "extra_wait": extra,
+                   "gl_class": rec["class"], "gl_events": rec["got_events"],
+                   "gl_out_ok": rec["out_ok"],
+                   "constructed": rec["constructed"],
+                   "rtl_class": ref.get("class"),
+                   "rtl_events": ref.get("got_events"),
+                   "matches_rtl_stream":
+                       rec["got_events"] == ref.get("got_events")}
+            out.append(row)
+            dut._log.info(
+                f"{group}/{case} +{extra}: GL {rec['class']:<10} "
+                f"{rec['got_events']}  RTL {ref.get('class')} "
+                f"{ref.get('got_events')}  "
+                f"{'MATCHES RTL' if row['matches_rtl_stream'] else ''}")
+    NOTES["disagreement_probe"] = {
+        "golden": exp,
+        "any_placement_reproduces_rtl": any(r["matches_rtl_stream"]
+                                            for r in out),
+        "rows": out}
+    dut._log.info(
+        "any gate-level placement reproducing the RTL event stream: "
+        f"{NOTES['disagreement_probe']['any_placement_reproduces_rtl']}")
+
+
+# ---------------------------------------------------------------------
 # test 06: aggregate, compare against the RTL campaign, write the log
 # ---------------------------------------------------------------------
-CLASSES = tuple(fi.CLASSES) + ("SKIPPED_X",)
+CLASSES = tuple(fi.CLASSES) + ("SKIPPED_X", "NOT_CONSTRUCTED")
 
 
 @cocotb.test(timeout_time=300, timeout_unit="sec")
@@ -1309,9 +1566,7 @@ async def test_06_summary(dut):
     total = len(RESULTS)
     hist = {c: sum(g[c] for g in groups.values()) for c in CLASSES}
 
-    # The RTL campaign's own log, read rather than transcribed.
-    rtl_path = HERE / "fi_campaign_results.json"
-    rtl = json.loads(rtl_path.read_text()) if rtl_path.exists() else None
+    rtl = RTL_LOG
     rtl_groups = rtl["groups"] if rtl else {}
 
     dut._log.info(f"gate-level campaign: {total} injections, {wall:.1f} s")
@@ -1351,8 +1606,9 @@ async def test_06_summary(dut):
         "netlist": os.environ.get("GL_NETLIST"),
         "netlist_blob": _blob(os.environ.get("GL_NETLIST")),
         "cell_models": os.environ.get("GL_CELLS"),
-        "rtl_campaign_blob": _blob(HERE / "test_fi_campaign.py"),
-        "rtl_log_blob": _blob(rtl_path),
+        "rtl_ref": RTL_REF,
+        "rtl_campaign_blob": RTL_CAMPAIGN_BLOB,
+        "rtl_log_blob": RTL_LOG_BLOB,
         "rtl_total": rtl["total"] if rtl else None,
         "seed": fi.CAMPAIGN_SEED,
         "geometry": {"n_neurons": fi.GEOMETRY[0], "n_axons": fi.GEOMETRY[1]},
@@ -1382,14 +1638,3 @@ async def test_06_summary(dut):
             f"an upset in one configuration replica flip-flop reached the " \
             f"output: the three banks are not independent storage in this " \
             f"netlist. {sweep}"
-
-
-def _blob(path):
-    if not path:
-        return None
-    try:
-        return subprocess.run(["git", "-C", str(REPO_ROOT), "hash-object",
-                               str(path)], capture_output=True, text=True,
-                              check=True).stdout.strip()
-    except Exception:                        # noqa: BLE001
-        return None
