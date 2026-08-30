@@ -1252,8 +1252,11 @@ async def test_dispatcher_stranded_in_fetch_recovers_and_is_flagged(dut):
     stuck high, every further event refused, and -- measured against the
     pre-fix RTL, not assumed -- no fault flag, no counter and no fault
     pin. Five of 255 injections reached it, from two independent
-    targets. The fix bounds the wait, returns to D_IDLE and pulses
-    `fetch_timeout`, which latches `sticky_errcfg`.
+    targets. The fix bounds the wait, returns to D_IDLE and latches
+    `sticky_errcfg` from the combinational expiry term `fetch_expire`,
+    on the same edge as the return (pilot_top.v header section 8.1;
+    until 2026-08-30 the report went through a one-cycle pulse register
+    that a single upset could set or clear, docs/16 section 5.8).
 
     The deposit below is exactly the campaign's: `dstate` = D_FETCH
     (2'b01), landing 3 ns after a clock edge, with the input queue empty
@@ -1317,8 +1320,11 @@ async def test_dispatcher_stranded_in_fetch_recovers_and_is_flagged(dut):
             f"with nothing flagged and only CTRL.SOFT_RST recovers it.")
     dut._log.info(f"the dispatcher gave up after {waited} cycles")
 
-    # The sticky flop samples fetch_timeout on the edge after the pulse,
-    # so ERR follows BUSY's fall by one cycle.
+    # sticky_errcfg is latched from the combinational expiry term on the
+    # same edge that returns the FSM to D_IDLE, so ERR is already high
+    # in the cycle BUSY falls. The extra cycle is kept deliberately: it
+    # passes either way, so this test does not pin the report to a
+    # particular cycle and section 8.1's change did not have to edit it.
     await RisingEdge(dut.clk)
     await Timer(1, unit="ns")
 

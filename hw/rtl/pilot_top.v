@@ -426,7 +426,9 @@
 //
 // oh_valid / oh_data / oh_pop below ARE that adapter, and they are the
 // reference implementation of C9 for this repository: oh_valid means a
-// word is presented now, oh_data is that word, both hold until a pop
+// word is presented now (and since 2026-08-30 it is a checked pair of
+// rails rather than a flip-flop -- section 8.2), oh_data is that word,
+// both hold until a pop
 // (a serial EVQ_OUT read or an AER_OUT_ACK edge), and the queue advances
 // behind them. EVQ_STAT.OUT_FILL counts the held word, so the fill level
 // a host reads is the number of events it can still get out. The cost is
@@ -453,11 +455,105 @@
 // It gets the same treatment. A granted read answers in one cycle, so
 // OH_WAIT_MAX = 63 cycles of waiting is far past any legitimate reply;
 // past it the adapter clears oh_req, re-arms on the next cycle and
-// pulses oh_timeout, which latches sticky_errcfg exactly as
-// fetch_timeout does. Nothing is lost by the recovery: oh_req without a
+// latches sticky_errcfg on that same edge, exactly as the dispatcher's
+// bounded wait does. Nothing is lost by the recovery: oh_req without a
 // read outstanding is by construction a state in which the queue has
 // dequeued nothing, so the re-armed read fetches the word that was next
 // all along.
+//
+// ---------------------------------------------------------------------
+// 8.1 Why the two expiry terms are wires and not one-cycle pulses
+// ---------------------------------------------------------------------
+//
+// Until 2026-08-30 each bounded wait reported through a one-bit pulse
+// register -- fetch_timeout and oh_timeout -- set for exactly one cycle
+// when the wait expired, and sampled by the register process on the
+// following edge to latch sticky_errcfg. The wait counters and the
+// pulses were injected into and the result is docs/16 section 5.8:
+//
+//   * the COUNTERS are sound, and structurally so. A monotone increment
+//     compared for equality against its all-ones maximum reaches that
+//     value from every state, and no single flip from zero can reach
+//     it, so an upset in a counter delays or advances the expiry but
+//     cannot abolish it. Twelve of twelve injections masked. They are
+//     left alone; TMR on them would buy nothing.
+//   * the PULSES were the weakness, in both directions. Set by an
+//     upset, a pulse fabricated a configuration error that had not
+//     happened -- six of six random-phase injections, every one of them
+//     a clean run reported as faulty. Cleared by an upset during the
+//     single cycle it was high, it erased the report entirely: the
+//     deadlock happened, the bounded wait recovered it, the run
+//     returned a wrong answer, and STATUS read 0x06 with every counter
+//     zero and the ERR pin low, against a control injected at the same
+//     cycle with byte-identical wrong output that read 0x16.
+//
+// The repair removes the state rather than protecting it. fetch_expire
+// and oh_expire are combinational terms, and the same wire both ends
+// the wait and latches sticky_errcfg, on one edge. There is no cycle in
+// which the report exists as separate storage, so there is nothing for
+// a single upset to set or clear: an upset must now corrupt the
+// counter, which is the part that was measured sound, or sticky_errcfg
+// itself, which every sticky in this module shares and which the
+// campaign covers as its own target. Cost: minus two flip-flops.
+//
+// Duplicate-and-OR on the pulses was the alternative, at plus two
+// flip-flops, and it closes only the erased direction -- an OR of two
+// copies still fabricates when either copy is set. It is the fallback
+// if the combinational form ever becomes unacceptable, and nothing here
+// suggests it is: the terms are three-input ANDs of registers that
+// already drive control logic on the same edge.
+//
+// ---------------------------------------------------------------------
+// 8.2 Why oh_valid is two rails and not three replicas
+// ---------------------------------------------------------------------
+//
+// docs/16 section 6.2 ranked the show-ahead adapter first for wave 6 on
+// benefit per flip-flop, and the concentration is real: of the group's
+// six silent-corruption records, four sit in two one-bit valid flags
+// (oh_valid here, and u_evq_out.rd_valid in hw/rtl/aer_fifo.v), 2 of 2
+// each. A valid flag upset fabricates an event out of stale oh_data or
+// drops the one it was holding, and no consumer downstream can tell
+// either from a real spike.
+//
+// The proposal there was to triplicate them on the aer_ptr_bank
+// pattern. THAT PATTERN DOES NOT REACH ONE BIT, and the reason is a
+// proof rather than a measurement. Section 9 records what the merge
+// hazard costs and what defeats it: three replicas written from the
+// same expression are provably equivalent, opt_dff normalises them and
+// opt_merge hashes them into one, and what holds them apart without
+// depending on any attribute is that each replica stores a DIFFERENT
+// FUNCTION of the value. Over a value of one bit there are exactly two
+// storage functions -- x and ~x. Two replicas can take one each. A
+// third has nothing left to take, and whichever function it picks it
+// is bit-for-bit identical to one of the other two. Section 9's
+// measured result for the 55-bit configuration word is the same
+// statement one step up: POL alone gave two distinct functions there
+// too, replica C collapsed under a forced flatten, and it took the MIX
+// layer -- which needs at least four bits to give every stored bit a
+// weight of two or three -- to give C a function of its own. There is
+// no MIX at one bit.
+//
+// So the options for a single flag are: three replicas held apart by
+// keep_hierarchy ALONE, which this repository has twice decided is not
+// enough (section 9, and docs/20 section 11); or four bits of unrelated
+// state bundled into one W >= 4 bank so that MIX applies, at +8
+// flip-flops for this one flag's two records; or two rails, at +1.
+//
+// Two rails it is, and what they buy is stated exactly: an upset in
+// either rail is DETECTED, not corrected. The rails disagree, the
+// adapter presents nothing rather than presenting a word it can no
+// longer vouch for, sticky_errcfg latches and the ERR pin lights.
+// The held event is still lost -- the run is still wrong -- but it is
+// wrong LOUDLY, which is the whole difference between the SDC class
+// and the DETECTED class in docs/16, and it is the same difference
+// section 8.1 above is about. The disagreement heals on the next queue
+// read, when both rails are written from one expression again.
+//
+// Cost: +1 flip-flop, one XOR of two rails, and one term in the fault
+// process. The other two flags of the same class are in files this
+// change does not own -- u_evq_out.rd_valid in aer_fifo.v and out_pend
+// in lif_core.v -- and the same two-rail construction applies to each
+// at the same price.
 //
 // =====================================================================
 // 9. Configuration TMR: why the replicas are submodules, not three regs
@@ -1207,7 +1303,7 @@ module pilot_top #(
     wire [CNT_W-1:0] fo_drop;
     wire        fo_ptr_mm;
     reg         fo_rd_en;
-    reg         oh_valid, oh_req;
+    reg         oh_req;
     reg [15:0]  oh_data;
 
     // Bound on the oh_req wait (header section 8). Same shape and same
@@ -1217,7 +1313,17 @@ module pilot_top #(
     localparam integer OH_WAIT_W = 6;
     localparam [OH_WAIT_W-1:0] OH_WAIT_MAX = {OH_WAIT_W{1'b1}};
     reg [OH_WAIT_W-1:0] oh_wait;
-    reg                 oh_timeout;
+
+    // The expiry term, combinational rather than a registered pulse
+    // (header section 8.1). oh_expire is the exact condition under which
+    // the wait is abandoned, and it is the same wire that abandons it
+    // below and that latches sticky_errcfg in the register process, so
+    // recovery and report happen on the same clock edge and there is no
+    // cycle in which the report exists as separate corruptible state.
+    // blk_rst_n is part of the term because the register process that
+    // consumes it sits on rst_n and keeps running through a block reset.
+    wire oh_expire = blk_rst_n && oh_req && !fo_rd_valid
+                     && (oh_wait == OH_WAIT_MAX);
 
     wire        lif_out_valid;
     wire [15:0] lif_out_event;
@@ -1278,6 +1384,22 @@ module pilot_top #(
     // still sunk. Section 5.1 carries the measurement and the argument.
     wire evqo_drop = sync_push && fo_full;
 
+    // -----------------------------------------------------------------
+    // oh_valid, dual-rail (header section 8.2)
+    // -----------------------------------------------------------------
+    // Both rail ports present the flag in true polarity, so the rails
+    // AGREE when they are equal and one of them has been upset when
+    // they are not. On a disagreement the adapter presents nothing --
+    // dropping a held event is a smaller fault than fabricating one out
+    // of stale oh_data, and section 5.7's general finding is that a
+    // valid flag can do either -- and the disagreement is reported
+    // through sticky_errcfg in the fault process. It is not corrected:
+    // two rails detect, they do not vote. It clears itself on the next
+    // fill, when both rails are written from oh_valid_d again.
+    wire oh_valid_a, oh_valid_b;
+    wire oh_valid_mm = (oh_valid_a != oh_valid_b);
+    wire oh_valid    = oh_valid_a && !oh_valid_mm;
+
     // The one-entry show-ahead adapter of section 8, and what both
     // output observers see. A pop by either one frees it; if both pop in
     // the same cycle the entry is consumed once, by both.
@@ -1285,24 +1407,35 @@ module pilot_top #(
     wire pin_pop     = aack_rise && oh_valid;
     wire oh_pop      = evq_out_rd || pin_pop;
 
+    // The flag's next state, hoisted out of the sequential block below
+    // so that both rails are written from ONE expression. It is the
+    // same priority that block used to carry -- a fill beats a pop, and
+    // the entry is held otherwise -- written as an enable and a datum
+    // because that is what a rail port takes.
+    wire oh_valid_set = fo_rd_valid;
+    wire oh_valid_clr = !fo_rd_valid && oh_pop;
+    wire oh_valid_en  = oh_valid_set || oh_valid_clr;
+    wire oh_valid_d   = oh_valid_set;
+
+    pilot_flag_rail #(.POL(1'b0)) u_ohv_a (
+        .clk (clk), .rst_n (blk_rst_n),
+        .en  (oh_valid_en), .d (oh_valid_d), .q (oh_valid_a));
+    pilot_flag_rail #(.POL(1'b1)) u_ohv_b (
+        .clk (clk), .rst_n (blk_rst_n),
+        .en  (oh_valid_en), .d (oh_valid_d), .q (oh_valid_b));
+
     always @(posedge clk or negedge blk_rst_n) begin
         if (!blk_rst_n) begin
-            oh_valid   <= 1'b0;
             oh_req     <= 1'b0;
             oh_data    <= 16'd0;
             fo_rd_en   <= 1'b0;
             oh_wait    <= {OH_WAIT_W{1'b0}};
-            oh_timeout <= 1'b0;
         end else begin
             fo_rd_en   <= 1'b0;
-            oh_timeout <= 1'b0;
             if (fo_rd_valid) begin
                 oh_data  <= fo_rd_data;
-                oh_valid <= 1'b1;
                 oh_req   <= 1'b0;
                 oh_wait  <= {OH_WAIT_W{1'b0}};
-            end else if (oh_pop) begin
-                oh_valid <= 1'b0;
             end
             // The bounded wait of header section 8. An oh_req that no
             // read will ever answer is abandoned rather than waited on
@@ -1310,10 +1443,9 @@ module pilot_top #(
             // reads the CURRENT oh_req, which is still set in this
             // cycle, so the re-arm happens on the next one.
             if (oh_req && !fo_rd_valid) begin
-                if (oh_wait == OH_WAIT_MAX) begin
+                if (oh_expire) begin
                     oh_req     <= 1'b0;
                     oh_wait    <= {OH_WAIT_W{1'b0}};
-                    oh_timeout <= 1'b1;
                 end else begin
                     oh_wait <= oh_wait + 1'b1;
                 end
@@ -1430,10 +1562,19 @@ module pilot_top #(
     localparam integer FETCH_WAIT_W   = 6;
     localparam [FETCH_WAIT_W-1:0] FETCH_WAIT_MAX = {FETCH_WAIT_W{1'b1}};
     reg [FETCH_WAIT_W-1:0] fetch_wait;
-    reg                    fetch_timeout;
 
     reg [1:0]  dstate;
     reg [15:0] evw;
+
+    // The expiry term, combinational rather than a registered pulse
+    // (header section 8.1), and the exact counterpart of oh_expire. It
+    // is both the condition that abandons the wait below and the
+    // condition that latches sticky_errcfg in the register process, on
+    // the same edge, so the report cannot be erased or fabricated
+    // separately from the recovery it reports. blk_rst_n is part of the
+    // term because that register process sits on rst_n.
+    wire fetch_expire = blk_rst_n && (dstate == D_FETCH) && !fi_rd_valid
+                        && (fetch_wait == FETCH_WAIT_MAX);
 
     wire [9:0] ev_id   = evw[9:0];
     wire [1:0] ev_type = evw[15:14];
@@ -1459,15 +1600,29 @@ module pilot_top #(
             sync_push <= 1'b0;
             sync_word <= 16'd0;
             fetch_wait <= {FETCH_WAIT_W{1'b0}};
-            fetch_timeout <= 1'b0;
         end else begin
-            fetch_timeout <= 1'b0;
             fi_rd_en  <= 1'b0;
             sync_push <= 1'b0;
             case (dstate)
+                // A read answered while the FSM is in D_IDLE cannot
+                // happen in a fault-free run -- fi_rd_en is asserted only
+                // by the arm below, which moves to D_FETCH on the same
+                // edge -- but it is reachable after an upset, and after
+                // the bounded wait above gives up one cycle before a
+                // slow grant arrives. Without the first arm that word is
+                // read out of the queue and dropped, which turns a
+                // reported recovery into a reported recovery WITH a lost
+                // event (measured: docs/16 section 5.8, the
+                // fire_spurious case). Capturing it costs no state --
+                // evw and dstate already exist -- and is what the
+                // show-ahead adapter has always done, whose capture is
+                // `if (fo_rd_valid)` and is not gated on oh_req.
                 D_IDLE: begin
-                    if (core_en && !fi_empty && !ld_busy && !state_clr_req
-                        && !fi_rd_en) begin
+                    if (fi_rd_valid) begin
+                        evw    <= fi_rd_data;
+                        dstate <= D_ISSUE;
+                    end else if (core_en && !fi_empty && !ld_busy
+                                 && !state_clr_req && !fi_rd_en) begin
                         fi_rd_en <= 1'b1;
                         dstate   <= D_FETCH;
                     end
@@ -1486,10 +1641,9 @@ module pilot_top #(
                         evw          <= fi_rd_data;
                         dstate       <= D_ISSUE;
                         fetch_wait   <= {FETCH_WAIT_W{1'b0}};
-                    end else if (fetch_wait == FETCH_WAIT_MAX) begin
+                    end else if (fetch_expire) begin
                         dstate        <= D_IDLE;
                         fetch_wait    <= {FETCH_WAIT_W{1'b0}};
-                        fetch_timeout <= 1'b1;
                     end else begin
                         fetch_wait <= fetch_wait + 1'b1;
                     end
@@ -1799,12 +1953,23 @@ module pilot_top #(
             // rates must not lose an upset to its own recovery.
             if (lif_err_cfg) sticky_errcfg <= 1'b1;
             // A dispatcher that waited out D_FETCH was hung; the recovery
-            // to D_IDLE is silent unless it is recorded here.
-            if (fetch_timeout) sticky_errcfg <= 1'b1;
+            // to D_IDLE is silent unless it is recorded here. This reads
+            // the combinational expiry term, not a pulse register, so
+            // this latch and the return to D_IDLE happen on the same
+            // edge (header section 8.1).
+            if (fetch_expire) sticky_errcfg <= 1'b1;
             // The same for the show-ahead adapter (header section 8): an
             // oh_req with no read behind it wedges the output path
             // outright, and its recovery must not be silent either.
-            if (oh_timeout) sticky_errcfg <= 1'b1;
+            if (oh_expire) sticky_errcfg <= 1'b1;
+            // The show-ahead valid flag's two rails disagreeing (header
+            // section 8.2). This is a DETECTED and not a corrected
+            // upset: the held event is dropped rather than presented,
+            // and dropping it silently is exactly the failure the
+            // campaign measured this flag doing. It is not counted in
+            // CNT_TMR, which is an episode counter for corrections that
+            // the voter MASKED, and nothing was masked here.
+            if (oh_valid_mm) sticky_errcfg <= 1'b1;
 
             // ---- FAULT_CLR (npu_regbank C2 re-export) ----------------
             // A clear coincident with its own event restarts the
@@ -1918,6 +2083,67 @@ module pilot_top #(
     wire _unused = &{1'b0, dec_syndrome, enc_code, fo_drop,
                      tmr_inj[7:6], evw[13:10], 1'b0};
 
+endmodule
+
+// =====================================================================
+// pilot_flag_rail: one physical rail of a dual-rail one-bit flag
+// =====================================================================
+//
+// pilot_cfg_bank below, cut down to one bit and to two replicas, and
+// for the reason header section 8.2 gives: over ONE variable there are
+// exactly two storage functions, x and ~x, so two rails can be held
+// apart by polarity alone and provably, while three cannot be held
+// apart at all without an attribute. This module is therefore the
+// widest redundancy a single flag can carry under this repository's own
+// rule that the structural difference must not depend on a tool
+// honouring a hint.
+//
+// Both defences of pilot_cfg_bank are here and neither is trusted
+// alone:
+//
+//   keep_hierarchy   `flatten` skips this module and `opt_merge` does
+//                    not merge instances of user-defined modules unless
+//                    invoked with -share_all. Portable across the
+//                    LibreLane/yosys ASIC flow and synth_ecp5; NOT
+//                    portable to a front end that ignores attributes,
+//                    which is why POL exists.
+//   POL              the per-rail storage transform. One rail stores
+//                    the flag and the other stores its complement, so
+//                    the two flip-flops present different (D, EN,
+//                    reset) signatures and structural hashing has
+//                    nothing to match with the hierarchy gone. At 55
+//                    bits this same layer was measured to hold the
+//                    configuration domain's replicas A and B apart
+//                    under a forced flatten while the third, which had
+//                    no third function available, collapsed. At one bit
+//                    there is no third function to want.
+//
+// The port presents `bits ^ POL`, so both rails read in true polarity
+// and a reader compares them for EQUALITY. A debugger reading
+// u_ohv_b.bits sees the complement of the flag, by design.
+//
+// Two rails DETECT and do not correct: the consumer is responsible for
+// choosing the safe interpretation of a disagreement and for reporting
+// it. hw/rtl/pilot_top.v drops the held event and latches
+// sticky_errcfg.
+(* keep_hierarchy *)
+module pilot_flag_rail #(
+    parameter POL = 1'b0              // per-rail storage polarity
+) (
+    input  wire clk,
+    input  wire rst_n,
+    input  wire en,                   // write enable, already qualified
+    input  wire d,                    // write data, true polarity
+    output wire q                     // stored value, true polarity
+);
+    (* keep *) reg bits;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)   bits <= 1'b0 ^ POL;
+        else if (en)  bits <= d ^ POL;
+    end
+
+    assign q = bits ^ POL;
 endmodule
 
 // =====================================================================

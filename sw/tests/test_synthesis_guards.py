@@ -384,6 +384,82 @@ def _assert_pointer_banks(census, flow, exact=True):
         f"netlist: {census.total}.")
 
 
+# =====================================================================
+# 1c. the show-ahead valid flag is two physical rails
+# =====================================================================
+# hw/rtl/pilot_top.v header section 8.2. docs/16 section 6.2 ranked the
+# EVQ_OUT show-ahead adapter first for wave 6 because four of its six
+# silent-corruption records sit in two one-bit valid flags, and this is
+# the half of that pair which lives in pilot_top.v.
+#
+# It is TWO rails and not three replicas, and the reason is a proof
+# rather than a budget. What holds replicas apart without depending on
+# an attribute is that each stores a different FUNCTION of the value;
+# over one bit there are exactly two such functions, x and ~x. Two
+# rails take one each and are provably non-collidable. A third has
+# nothing left to take. The configuration domain measured the same
+# bound at 55 bits (test_config_tmr_survives_a_flow_that_ignores_
+# keep_hierarchy) and escaped it with the MIX layer, which needs at
+# least four bits and so does not exist here.
+#
+# Two rails detect and do not correct. That is a design decision
+# recorded in the RTL, not something this file can check; what this
+# file checks is that the second rail is physically there, because a
+# merged pair is a single flip-flop that agrees with itself and
+# reports nothing -- and, unlike the configuration collapse, it is
+# invisible to simulation in BOTH directions, since two rails that
+# store the same function never disagree in RTL either.
+#
+# Mutation-checked 2026-08-30 [fact]: with `.POL(1'b1)` on u_ohv_b
+# changed to `.POL(1'b0)` -- functionally identical RTL, no simulation
+# can tell -- the ECP5 attribute-free census reads u_ohv_a 0 and
+# u_ohv_b 1, and the ASIC total goes 1274 -> 1273, so
+# test_show_ahead_valid_is_two_rails_without_keep_hierarchy_in_ecp5 and
+# test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy both fail
+# and nothing else in this file does.
+OH_RAILS = ("u_ohv_a", "u_ohv_b")
+
+
+def _assert_two_rails(census, flow, exact=True):
+    found = {r: census.in_instance(f"{r}.") for r in OH_RAILS}
+    ok = (all(v == 1 for v in found.values()) if exact
+          else all(v >= 1 for v in found.values()))
+    assert ok, (
+        f"the show-ahead valid flag's two rails collapsed in the {flow} "
+        f"netlist: expected 1 flip-flop per rail, found {found}. Two "
+        f"one-bit flip-flops written from the same enable and the same "
+        f"datum are one flip-flop after opt_dff + opt_merge, and a "
+        f"mismatch detector reading one flip-flop twice never fires -- "
+        f"in the netlist OR in RTL simulation, which is why only this "
+        f"census can see it. What separates them is the POL polarity of "
+        f"pilot_flag_rail (hw/rtl/pilot_top.v header section 8.2). "
+        f"Total flip-flops in this netlist: {census.total}.")
+
+
+@needs_yosys
+def test_show_ahead_valid_is_two_rails_in_the_asic_flow(asic):
+    _assert_two_rails(asic, "ASIC (yosys/LibreLane-shaped)")
+
+
+@needs_yosys
+def test_show_ahead_valid_is_two_rails_in_the_ecp5_flow(ecp5):
+    _assert_two_rails(ecp5, "synth_ecp5")
+
+
+@needs_yosys
+def test_show_ahead_valid_is_two_rails_without_keep_hierarchy_in_ecp5(
+        ecp5_forced):
+    """The attribute-free case, asked of synth_ecp5 for the same reason
+    the pointer test is: that flow keeps the instance path in the cell
+    names once keep_hierarchy is gone, so each rail can be counted where
+    it lives. The ASIC side of the question is covered by
+    test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy, which
+    allows zero lost flip-flops across the whole design; a merged rail
+    is exactly one lost flip-flop there."""
+    _assert_two_rails(ecp5_forced,
+                      "synth_ecp5, keep_hierarchy stripped", exact=False)
+
+
 @needs_yosys
 def test_pointer_tmr_is_three_banks_per_pointer_in_the_asic_flow(asic):
     _assert_pointer_banks(asic, "ASIC (yosys/LibreLane-shaped)")

@@ -185,8 +185,10 @@ EXT_RNG = random.Random(CAMPAIGN_SEED ^ 0xECC_0001)
 # different form, so the check fields are targets now.
 #
 # Extended again 2026-08-30 with the two BOUNDED-WAIT COUNTERS, for the
-# same reason one step further out. `fetch_wait`/`fetch_timeout` and
-# `oh_wait`/`oh_timeout` exist only to convert a silent hang into a
+# same reason one step further out. `fetch_wait` and `oh_wait` (and, in
+# the first version of this extension, the `fetch_timeout` /
+# `oh_timeout` pulses that have since been retired -- see target_list
+# item 14) exist only to convert a silent hang into a
 # host-visible fault -- they were added after this campaign found a
 # deadlock in D_FETCH (docs/16 section 5.1) and another in oh_req
 # (section 5.7). They were then left out of the target list, so the
@@ -425,6 +427,34 @@ def resolve(dut, path):
     return h
 
 
+# Names the target list and the directed scripts still carry, and which
+# the design deliberately no longer has. Nothing else may go missing: a
+# target that stops resolving is otherwise a hard error, because a
+# campaign that quietly shrinks reports a fault tolerance it did not
+# measure (target_list item 9 records what that cost once already).
+#
+# `fetch_timeout` and `oh_timeout` were the one-cycle report pulses of
+# the two bounded waits. pilot_top.v header section 8.1 retired them on
+# 2026-08-30 -- the expiry terms are wires now, and the same wire ends
+# the wait and latches sticky_errcfg on one edge -- so there is no
+# storage at those names to deposit into. They stay listed, and they
+# stay drawn for, for two reasons: removing an entry from target_list
+# would move every injection phase drawn after it and make the surviving
+# records incomparable with the run that measured the defect, and a
+# resolvable name here is exactly how the campaign notices the pulse
+# registers coming back.
+RETIRED_TARGETS = ("fetch_timeout", "oh_timeout")
+
+
+def state_present(dut, path):
+    """True when `path` still names something a deposit can land in."""
+    try:
+        resolve(dut, path)
+    except (AttributeError, IndexError, KeyError):
+        return False
+    return True
+
+
 def read_defined(handle, path):
     """int(handle) with a message that names the path when it is X.
 
@@ -607,6 +637,17 @@ async def run_script(dut, steps):
 
       ("wait", n)                  advance n clock cycles
       ("xor", path, bits)          a genuine single-event deposit
+      ("xor?", path, bits)         the same, into a RETIRED_TARGETS name:
+                                   deposited if the design still has that
+                                   state, and otherwise logged as "no
+                                   state" and skipped. This is what makes
+                                   a report case measure the repair of
+                                   section 8.1 rather than assume it --
+                                   the same script reproduces the erased
+                                   report on a design that still has the
+                                   pulse register, and records that there
+                                   is nothing to erase on one that does
+                                   not
       ("force", path, value)       an absolute write; the popcount of the
                                    change is logged, because it is not
                                    necessarily one bit
@@ -638,6 +679,14 @@ async def run_script(dut, steps):
         elif kind == "xor":
             v = xor_now(dut, step[1], step[2])
             log.append(f"xor {step[1]} bit {step[2]} -> {v}")
+        elif kind == "xor?":
+            assert step[1] in RETIRED_TARGETS, \
+                f"'xor?' is only for a declared retirement, not {step[1]}"
+            if state_present(dut, step[1]):
+                v = xor_now(dut, step[1], step[2])
+                log.append(f"xor {step[1]} bit {step[2]} -> {v}")
+            else:
+                log.append(f"NO SUCH STATE {step[1]}")
         elif kind == "force":
             n = force_now(dut, step[1], step[2])
             log.append(f"force {step[1]} = {step[2]} ({n} bit(s) flipped)")
@@ -1044,7 +1093,20 @@ def target_list(n_neurons, n_axons, q_depth):
 
     # 11. the EVQ_OUT show-ahead adapter (pilot_top.v section 8) and the
     #     queue's own registered read port.
-    t += [("evq_hold", "oh_valid", [0], 2, True),
+    #
+    #     `oh_valid` is TWO RAILS since 2026-08-30 (pilot_top.v header
+    #     section 8.2), so the injector is retargeted onto the rails'
+    #     storage exactly as item 9 retargeted the pointer group: a
+    #     deposit into the voted or checked WIRE measures a node nothing
+    #     claims to protect, and that mistake cost this campaign a day
+    #     of wrong numbers once already. The two rails share one drawn
+    #     phase and are injected one at a time, so `phases()` consumes
+    #     the same numbers it consumed before and no group drawn after
+    #     this one moves; only `oh_valid`'s own records do, from 2 to 4.
+    #     Bit 0 is the flag in both rails -- pilot_flag_rail stores the
+    #     complement in rail B, so the DEPOSIT is still one bit and the
+    #     rails still disagree afterwards, which is the whole mechanism.
+    t += [("evq_hold", ("u_ohv_a.bits", "u_ohv_b.bits"), [0], 2, True),
           ("evq_hold", "oh_req", [0], 2, True),
           ("evq_hold", "oh_data", [0, 2, 14], 2, True),
           ("evq_hold", "u_evq_out.rd_valid", [0], 2, True),
@@ -1111,14 +1173,24 @@ def target_list(n_neurons, n_axons, q_depth):
     #         every successful fetch, so its corrupted values are
     #         short-lived. Sampled low / mid / high.
     #       * the TIMEOUT PULSE (`fetch_timeout`, `oh_timeout`, one bit
-    #         each) is the report itself. It is high for exactly one
-    #         cycle in the whole run, and only in the cycle a fault is
-    #         being announced -- so a random draw measures the FABRICATED
-    #         direction (a report of a fault that did not happen) and
-    #         essentially never the ERASED direction. Three phases here
-    #         for the fabricated direction; test_04 constructs the erased
-    #         one deliberately, because that is the case a rate cannot
-    #         find and the one the whole question is about.
+    #         each) WAS the report itself, and was targeted here with
+    #         three phases each between 2026-08-30 and the repair later
+    #         the same day. All six injections came back DETECTED on a
+    #         run whose output was correct -- a fabricated configuration
+    #         error, six times out of six -- and test_04 constructed the
+    #         opposite direction and erased a real report. pilot_top.v
+    #         header section 8.1 retired both pulses: the expiry terms
+    #         are now the wires `fetch_expire` / `oh_expire`, and the
+    #         same wire ends the wait and latches sticky_errcfg on one
+    #         edge.
+    #
+    #         There is therefore nothing left here to inject INTO, and
+    #         the six records are gone rather than passing. The entries
+    #         stay in this list (RETIRED_TARGETS): test_01 draws their
+    #         phases and skips them, so the six disappear without moving
+    #         the phase of any other target, and the day a pulse
+    #         register comes back the six injections come back with it,
+    #         at the same phases they were measured at.
     t += [("wdog_fetch", "fetch_wait", [0, 2, 5], 2, True),
           ("wdog_fetch", "fetch_timeout", [0], 3, True),
           ("wdog_oh", "oh_wait", [0, 2, 5], 2, True),
@@ -1301,9 +1373,23 @@ async def test_01_structural_injections(dut):
         # phases of any group drawn after this one (target_list item 9).
         paths = path if isinstance(path, tuple) else (path,)
         rng = EXT_RNG if group in EXT_GROUPS else RNG
+        # A target the design no longer has. Only the declared retirements
+        # may vanish; anything else that stops resolving is a shrinking
+        # campaign and fails here rather than reporting a smaller total
+        # as if nothing had changed. The phases are drawn either way, so
+        # a retirement moves no other target's injection window.
+        live = [p for p in paths if state_present(dut, p)]
+        missing = [p for p in paths if p not in live]
+        assert all(p in RETIRED_TARGETS for p in missing), \
+            f"target {missing} does not resolve in the design and is not " \
+            f"a declared retirement (RETIRED_TARGETS): the campaign " \
+            f"would silently stop measuring it"
+        if missing:
+            dut._log.info(f"retired target {missing} ({group}): no state "
+                          f"to deposit into, phases drawn and skipped")
         for bit in bits:
             for b, d in phases(n_phase, pin_first, rng):
-                for one in paths:
+                for one in live:
                     await injection(dut, geo, group, one, bit, b, d,
                                     latent_regs=lat.get(one, ()))
     dut._log.info(f"structural injections: {len(RESULTS)}")
@@ -1411,7 +1497,8 @@ def watchdog_cases():
       fire_spurious  the same, with no fault present, on a legitimate
                      one-cycle wait. This is the dangerous direction:
                      the net firing on a design that was working.
-      report_kept    the CONTROL for the case below, and it is written
+      report_kept    the CONTROL for the two cases below, and it is
+                     written
                      to be exact: byte-for-byte the same steps, INCLUDING
                      the 64-cycle poll that waits for the pulse, with
                      only the final deposit removed. The poll is part of
@@ -1434,6 +1521,19 @@ def watchdog_cases():
     single-bit XOR: `dstate` D_IDLE -> D_FETCH with no read outstanding
     (docs/16 section 5.1), and `oh_req` set with no read outstanding
     (section 5.7). Only the upset in the net itself is ever a `force`.
+
+    2026-08-30, after the repair of pilot_top.v header section 8.1. The
+    two cases that deposit into the report -- report_erased and
+    report_fabricated -- are unchanged in every step except that the
+    deposit is now a `xor?`, and the cycle they are placed at is now
+    found by polling the expiry WIRE (`fetch_expire` / `oh_expire`)
+    rather than the pulse register that used to follow it one cycle
+    later. `wait 1` restores that cycle, so on a design that still has
+    the pulse the deposit lands exactly where it landed when the defect
+    was measured, and on the repaired design the script runs to the same
+    place and finds nothing to deposit into. Both are recorded; test_04
+    asserts which one it got. report_kept carries the same `wait 1` so
+    that it stays byte-identical to report_erased but for the deposit.
     """
     return [
         # ---- the dispatcher's D_FETCH bound -------------------------
@@ -1457,16 +1557,18 @@ def watchdog_cases():
          "control: the same deadlock, the net left alone",
          [("until", "dstate", D_IDLE, 60),
           ("xor", "dstate", 0),
-          ("until", "fetch_timeout", 1, 90)]),
+          ("until", "fetch_expire", 1, 90),
+          ("wait", 1)]),
         ("wdog_fetch_dir", "report_erased",
          "real deadlock, and the timeout pulse erased in its one cycle",
          [("until", "dstate", D_IDLE, 60),
           ("xor", "dstate", 0),
-          ("until", "fetch_timeout", 1, 90),
-          ("xor", "fetch_timeout", 0)]),
+          ("until", "fetch_expire", 1, 90),
+          ("wait", 1),
+          ("xor?", "fetch_timeout", 0)]),
         ("wdog_fetch_dir", "report_fabricated",
          "no fault; the timeout pulse set for one cycle",
-         [("wait", 5), ("xor", "fetch_timeout", 0)]),
+         [("wait", 5), ("xor?", "fetch_timeout", 0)]),
 
         # ---- the show-ahead adapter's oh_req bound -------------------
         ("wdog_oh_dir", "clear_midwait",
@@ -1486,15 +1588,17 @@ def watchdog_cases():
         ("wdog_oh_dir", "report_kept",
          "control: the same deadlock, the net left alone",
          [("xor", "oh_req", 0),
-          ("until", "oh_timeout", 1, 90)]),
+          ("until", "oh_expire", 1, 90),
+          ("wait", 1)]),
         ("wdog_oh_dir", "report_erased",
          "real deadlock, and the timeout pulse erased in its one cycle",
          [("xor", "oh_req", 0),
-          ("until", "oh_timeout", 1, 90),
-          ("xor", "oh_timeout", 0)]),
+          ("until", "oh_expire", 1, 90),
+          ("wait", 1),
+          ("xor?", "oh_timeout", 0)]),
         ("wdog_oh_dir", "report_fabricated",
          "no fault; the timeout pulse set for one cycle",
-         [("wait", 5), ("xor", "oh_timeout", 0)]),
+         [("wait", 5), ("xor?", "oh_timeout", 0)]),
     ]
 
 
@@ -1508,18 +1612,31 @@ async def test_04_watchdog_directed(dut):
     the net matters, when what is needed is whether the net still works
     WHEN it matters. The five cases per net construct that directly.
 
-    This test records; it does not judge the design against a hoped-for
-    answer. Its one hard criterion is the safety property the nets
-    actually promise -- that the wait stays bounded -- and it holds even
-    where the report does not. The classification of the rest is the
-    finding, and docs/16 section 5.8 states it.
+    Written 2026-08-30, this test recorded and did not judge: its one
+    hard criterion was the safety property the nets actually promise --
+    that the wait stays bounded -- and that held even where the report
+    did not. What it measured was a real weakness in the report, and a
+    criterion written around a weakness is a criterion written to pass.
+
+    The weakness is closed (pilot_top.v header section 8.1), so the
+    criteria at the end of this test now judge as well as record. The
+    bound is still the first of them and still the one that matters
+    most; the three that follow are the repair, each written so that the
+    mutation which undoes it fails here with the pre-repair record in
+    the message.
     """
     geo = await campaign_setup(dut)
+    by_case = {}
     for group, case, note, steps in watchdog_cases():
         rec = await injection(dut, geo, group, case, None, 0, None,
                               script=steps)
         rec["case"], rec["note"] = case, note
         rec["errcfg"] = bool(rec["status"] & ST_ERR_CFG)
+        # False when a `xor?` step found no state at the retired name --
+        # i.e. when the design has no one-cycle report to corrupt.
+        rec["deposit_landed"] = not any(s.startswith("NO SUCH STATE")
+                                        for s in rec["script"])
+        by_case[(group, case)] = rec
         assert rec["constructed"], \
             f"the directed case {group}/{case} did not construct: a " \
             f"cycle it had to land on never occurred, so its outcome " \
@@ -1541,6 +1658,54 @@ async def test_04_watchdog_directed(dut):
             if r["group"].startswith("wdog_") and not r["completed"]]
     assert not hung, \
         f"a bounded wait failed to bound: {[(r['group'], r.get('case')) for r in hung]}"
+
+    # ---- the report, after the repair of section 8.1 -----------------
+    # Until 2026-08-30 this test recorded and did not judge, because what
+    # it measured was a weakness and a criterion written around a
+    # weakness is a criterion written to pass. The weakness is closed
+    # now, and the criteria below are what keep it closed. Each one is
+    # written so that RESTORING the one-cycle pulse register -- the exact
+    # mutation, verified against a scratch copy of pilot_top.v -- fails
+    # it with the pre-repair record in the message.
+    for net, report in (("wdog_fetch_dir", "fetch_timeout"),
+                        ("wdog_oh_dir", "oh_timeout")):
+        kept = by_case[(net, "report_kept")]
+        erased = by_case[(net, "report_erased")]
+        fab = by_case[(net, "report_fabricated")]
+        spur = by_case[(net, "fire_spurious")]
+
+        # 1. There is no separate report to erase. The two records differ
+        #    by one deposit and nothing else, so any difference between
+        #    them IS that deposit -- and there is no longer a deposit.
+        assert not erased["deposit_landed"], \
+            f"{net}: `{report}` still exists as state a single deposit " \
+            f"can land in, so the report is separable from the recovery " \
+            f"again. Script: {erased['script']}"
+        assert erased["class"] == kept["class"] == "DETECTED" \
+            and erased["errcfg"] and kept["errcfg"], \
+            f"{net}: a real deadlock recovered by the bounded wait must " \
+            f"reach the host. control {kept['class']} " \
+            f"STATUS {kept['status']:#04x}, case {erased['class']} " \
+            f"STATUS {erased['status']:#04x} -- an erased report reads " \
+            f"SDC at 0x06 against a control at 0x16 (docs/16 5.8)"
+
+        # 2. And no deposit fabricates one either. With nothing to set,
+        #    the run is uninjected and must come back exactly as clean as
+        #    test_00's control run.
+        assert not fab["deposit_landed"] and fab["class"] == "MASKED" \
+            and not fab["errcfg"], \
+            f"{net}: a single deposit fabricated a configuration error " \
+            f"on a run that was working: {fab['class']} " \
+            f"STATUS {fab['status']:#04x}"
+
+        # 3. A spurious expiry costs the report and nothing else. The
+        #    D_IDLE capture arm of pilot_top.v is what makes this true on
+        #    the dispatcher side; the adapter has always had it.
+        assert spur["out_ok"], \
+            f"{net}: a spurious expiry on a legitimate wait lost an " \
+            f"event -- the fetched word was dropped instead of being " \
+            f"captured in D_IDLE: {spur['got_events']} != " \
+            f"{spur['exp_events']}"
     dut._log.info(f"after the directed watchdog cases: {len(RESULTS)} "
                   f"injections")
 
@@ -1689,12 +1854,44 @@ async def test_05_summary(dut):
     assert ptr and ptr["CORRECTED"] == sum(ptr.values()), \
         f"a single-replica AER pointer upset must always be CORRECTED -- " \
         f"masked by the vote and counted in CNT_TMR -- got {ptr}"
+    # The show-ahead valid flag's two rails (pilot_top.v header section
+    # 8.2), on the same two-part footing as the pointers and for the
+    # same reason: the failure to catch is a mis-targeted injector, not
+    # a broken detector.
+    #
+    #   (a) every valid-flag target is a rail's storage register. An
+    #       edit that re-points this at the checked wire `oh_valid`
+    #       would measure a node the rails do not claim to protect and
+    #       would report the pre-hardening result against a working
+    #       detector, which is exactly what the pointer group did for a
+    #       day (target_list item 9); and
+    #   (b) every one of those upsets is DETECTED. Two rails detect and
+    #       do not correct, so the held event is still lost and the run
+    #       is still wrong -- the promise is that it is never wrong
+    #       SILENTLY, which is the SDC-to-DETECTED move docs/16 section
+    #       6.2 costed this hardening at.
+    rail_paths = sorted({r["target"] for r in RESULTS
+                         if r["group"] == "evq_hold"
+                         and "ohv" in str(r["target"])})
+    assert len(rail_paths) == 2 and all(p.endswith(".bits")
+                                        for p in rail_paths), \
+        f"every show-ahead valid-flag target must be a rail's storage " \
+        f"register (pilot_flag_rail.bits), not the checked wire " \
+        f"oh_valid: {rail_paths}"
+    rail = {c: 0 for c in CLASSES}
+    for r in RESULTS:
+        if r["group"] == "evq_hold" and "ohv" in str(r["target"]):
+            rail[r["class"]] += 1
+    assert rail["DETECTED"] == sum(rail.values()), \
+        f"an upset in one rail of the show-ahead valid flag must always " \
+        f"be DETECTED -- the rails disagree, the adapter presents " \
+        f"nothing and sticky_errcfg latches -- got {rail}"
     # The two bounded-wait counters (target_list item 14 and test_04).
-    # Presence, not outcome: the measured outcome of the directed cases
-    # includes a real weakness (docs/16 section 5.8) and a criterion
-    # written around it would be a criterion written to pass. What must
-    # not happen silently is the groups disappearing, which is how the
-    # nets came to be unmeasured in the first place.
+    # Presence here, outcome in test_04. What must not happen silently
+    # is the groups disappearing, which is how the nets came to be
+    # unmeasured in the first place -- and, since the repair of section
+    # 8.1 retired two targets out of these groups, exactly the failure
+    # this check has to keep telling apart from that repair.
     for g in ("wdog_fetch", "wdog_oh", "wdog_fetch_dir", "wdog_oh_dir"):
         assert groups.get(g), \
             f"the safety-net group {g} is missing: the structures that " \
