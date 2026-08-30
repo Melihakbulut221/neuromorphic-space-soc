@@ -259,6 +259,7 @@ silicon and no radiation data, and the licence is unsigned.
 | `docs/25-sky130-6x2.md` | SKY130A at twelve tiles. Routes where 4x2 diverged, every manufacturability deck at zero on both PDKs, and the slow corner still missed — with a decomposition of the miss that supersedes the diagnosis in `docs/18`. |
 | `docs/26-gate-level-fault-injection.md` | Fault injection on the hardened netlist rather than the RTL, with the validation that the method models a transient upset and not a stuck-at. 355 of 357 comparable injections agree with the RTL campaign; the two that do not are named and analysed. |
 | `docs/27-reharden-wave6.md` | Re-harden after the timeout retirement and the three valid-flag rails. The netlist census guards pass by name rather than skipping, so the redundancy is confirmed present in the shipped netlist; records that the slow-corner margin has fallen to +0.32 ns. |
+| `docs/28-timing-recovery.md` | Where the slow-corner margin went and how it was recovered — and two flow defects found on the way: the OCV derate was silently zero on both PDKs, and the setup checker only ever examined the typical corner. Read this before quoting any timing figure produced before it. |
 | `docs/regmap-npu.md` | Generated register-map documentation. Single source: `regmap/regmap.yaml`. |
 | `README.md` | Project summary and repository layout. |
 | `ROADMAP.md` | Phased plan with gates and external clocks. |
