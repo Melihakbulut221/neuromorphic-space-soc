@@ -8,8 +8,10 @@
 #   sby -f aer_fifo.sby cover      reachability of full/drain/drop states,
 #                                  P6, which pins the read port to the
 #                                  registered (not show-ahead) shape that
-#                                  two consumers depend on, and P9, a
-#                                  corrected pointer upset during traffic
+#                                  two consumers depend on, P9, a
+#                                  corrected pointer upset during traffic,
+#                                  and P13, a detected entry upset during
+#                                  traffic followed by a good delivery
 #
 # The properties live in formal/aer_fifo_props.v, textually included at
 # the end of the aer_fifo module body under `ifdef FORMAL (read_verilog
@@ -28,6 +30,13 @@
 # a design that does not exist, and a separate faulty task would let the
 # two drift apart.
 #
+# The same is true of the ENTRY-PARITY fault (docs/29): a seventh free
+# vector corrupts the fetched codeword, constrained to the weight one
+# check bit can claim, and P10..P12 say the corrupted entry is discarded
+# and reported rather than delivered. It is on in all four tasks for the
+# same reason, and P5's readout assertions are qualified by rd_pass
+# rather than rd_ok so that they state what the hardened design does.
+#
 # Cost of that decision, measured on the pinned toolchain (yosys 0.67+146,
 # yices) so that a future slowdown has a reference, and because one of
 # these numbers is large enough that it has to be defended rather than
@@ -36,6 +45,20 @@
 #   prove     41 s      bmc  5 min 48 s      prove_d4  1 s
 #   cover     29 min 19 s, against 3 min 57 s for the same job on the
 #             pre-TMR sources
+#
+# Re-measured 2026-08-30 with the entry-parity fault of docs/29 added,
+# same toolchain, otherwise idle machine [fact]:
+#
+#   prove     80 s      bmc  12 min 11 s     prove_d4  3.58 s
+#   cover     41 min 55 s
+#
+# Roughly 2x on the three assertion-carrying jobs, and it is the fault
+# model rather than the properties: seventeen more free bits per cycle
+# over the fetched codeword. The properties themselves are cheap in the
+# form that shipped and were expensive in the form that did not -- an
+# earlier P10 stated over all DEPTH slots took prove past ten minutes
+# without converging, which formal/aer_fifo_props.v records next to the
+# code that replaced it.
 #
 # The cover job is the whole cost, and it is the fault model rather than
 # the redundancy that buys it. Measured on the same machine, same job,

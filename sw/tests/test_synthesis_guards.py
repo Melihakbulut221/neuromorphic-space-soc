@@ -96,6 +96,28 @@ PTR_BANKS = ("u_wptr_a", "u_wptr_b", "u_wptr_c",
              "u_rptr_a", "u_rptr_b", "u_rptr_c")
 PTR_REPLICAS = tuple(f"{q}.{b}" for q in PTR_QUEUES for b in PTR_BANKS)
 
+# The third replicated-or-coded structure inside aer_fifo: the
+# entry-parity check field, one aer_par_bank instance per queue holding
+# one even-parity bit per slot (hw/rtl/aer_fifo.v, section "entry
+# parity"). docs/16 section 6.2 measured the queue storage as the leading
+# residual silent corruptor -- 7 of 32 injections into mem[] ending in a
+# wrong event word handed to a consumer that cannot tell it from a real
+# spike -- and this is the check that turns those into announced drops.
+#
+# The hazard is NOT opt_merge: a check field has no twin to be hashed
+# into. It is the one hw/rtl/lif_core.v's wchk and smem carry, and it is
+# sharper here because the field is one bit wide. par_shadow[i] is a pure
+# function of mem[i] in every reachable state, so a tool able to reason
+# across sequential state could delete the storage, rebuild the bit from
+# the write-side encoder, and leave a checker that reports every word
+# clean -- protection that passes every simulation in this repository and
+# detects nothing in silicon.
+#
+# Two queue instances, EVQ_*_DEPTH slots each; pilot_top defaults both to
+# 4, so each bank is 4 flip-flops and the design pays 8 for the pair.
+PAR_W = 4
+PAR_BANKS = tuple(f"{q}.u_par" for q in PTR_QUEUES)
+
 # The dual-rail valid flags. One bit each, so unlike the banks above
 # these carry exactly two rails and not three: over a single bit there
 # are only two storage functions, a third replica is bit-for-bit
@@ -403,6 +425,57 @@ def _assert_pointer_banks(census, flow, exact=True):
         f"fabricates events (docs/16 section 5.2). See the pointer TMR "
         f"section of hw/rtl/aer_fifo.v. Total flip-flops in this "
         f"netlist: {census.total}.")
+
+
+# =====================================================================
+# 1d. the queue entry-parity check field is physically stored
+# =====================================================================
+def _assert_par_banks(census, flow, exact=True):
+    found = {b: census.in_instance(f"{b}.") for b in PAR_BANKS}
+    ok = (all(v == PAR_W for v in found.values()) if exact
+          else all(v >= PAR_W for v in found.values()))
+    assert ok, (
+        f"the AER queue entry-parity field is short of flip-flops in the "
+        f"{flow} netlist: expected {PAR_W} per queue instance, found "
+        f"{found}. Each bit is the even parity of the event word in the "
+        f"matching slot, so it is a pure function of mem[] in every "
+        f"reachable state and a sequential-equivalence optimisation could "
+        f"replace the storage with the write-side encoder -- leaving a "
+        f"checker that reports every word clean, which passes every "
+        f"simulation in this repository and detects nothing in silicon. "
+        f"See the entry-parity section of hw/rtl/aer_fifo.v. Total "
+        f"flip-flops in this netlist: {census.total}.")
+
+
+@needs_yosys
+def test_entry_parity_is_stored_in_the_asic_flow(asic):
+    _assert_par_banks(asic, "ASIC (yosys/LibreLane-shaped)")
+
+
+@needs_yosys
+def test_entry_parity_is_stored_in_the_ecp5_flow(ecp5):
+    _assert_par_banks(ecp5, "synth_ecp5")
+
+
+@needs_yosys
+def test_entry_parity_survives_a_flow_that_ignores_keep_hierarchy(
+        ecp5_forced):
+    """The attribute-free case, asked of synth_ecp5 for the same reason
+    the pointer and rail tests are: that flow keeps the instance path in
+    the cell names once keep_hierarchy is gone.
+
+    Unlike the replicated domains there is no storage transform behind
+    the attribute here, and there is nothing for one to do -- a check
+    field has no twin. What holds the storage in place without the
+    attribute is that no pass in this yosys does the sequential
+    equivalence the fold would need. That makes this test the weaker of
+    the pair and the ASIC total in
+    test_config_tmr_survives_a_flow_that_ignores_keep_hierarchy, which
+    allows zero lost flip-flops across the whole design, the stronger:
+    a folded check field is eight lost flip-flops there.
+    """
+    _assert_par_banks(ecp5_forced, "synth_ecp5, keep_hierarchy stripped",
+                      exact=False)
 
 
 # =====================================================================
@@ -916,7 +989,16 @@ RUN_TREES = (
     ROOT / "hw" / "openlane" / "pilot_sky130" / "runs",
     ROOT / "hw" / "openlane" / "pilot_ihp" / "runs",
     ROOT / "tt" / "runs",
-)
+) + tuple(Path(p) for p in
+          os.environ.get("NSSOC_RUN_TREES", "").split(os.pathsep) if p)
+# NSSOC_RUN_TREES adds run trees OUTSIDE the repository, colon separated.
+# It exists because a harden sometimes has to write somewhere else --
+# another change owning hw/openlane/, a read-only checkout, a run kept
+# beside a report -- and a witness that is not read is the same as no
+# witness. It only ever ADDS: the three trees above are still searched,
+# still the default, and nothing about the discriminator below changes,
+# so this cannot be used to point the guards at a friendlier netlist
+# while the real one goes unchecked.
 # pilot_ihp was absent from this tuple until 2026-08-30, and that was a
 # real hole rather than a missing line. A re-harden placed there would
 # have produced every sign-off number a document could quote while
@@ -1003,10 +1085,62 @@ def test_config_tmr_survives_the_real_hardening_flow():
             f"section 9. Total flip-flops in this netlist: {len(flops)}.")
 
 
-# The RTL file whose banks the test below counts. Its modification time
-# is the provenance discriminator: a run produced before it cannot be
-# expected to contain the structure it introduced.
+# The RTL file whose banks the test below counts.
 _PTR_RTL = RTL / "aer_fifo.v"
+
+
+# ---------------------------------------------------------------------
+# provenance: which runs are witnesses for which structure
+# ---------------------------------------------------------------------
+# A guard on the shipped netlist has to tell two states apart that look
+# identical from the netlist alone: "nobody has hardened this RTL yet"
+# and "synthesis ate the structure". The first must SKIP and the second
+# must FAIL, and the discriminator must therefore be about the run's
+# INPUT, never about its output -- a netlist-shaped skip condition skips
+# on exactly the symptom these tests exist to catch.
+#
+# Modification time was the discriminator until 2026-08-30 and it is not
+# sufficient. It assumes the RTL on disk is the RTL a later run was built
+# from, and that is false whenever two changes are in flight: measured
+# on this repository, hw/openlane/pilot_ihp/runs/tr-control postdates the
+# edit that introduced aer_par_bank, was hardened from a tree that did
+# not contain it, and was therefore accepted as a witness and reported a
+# missing check field as a collapse [fact]. Same failure would hit the
+# pointer and rail guards the moment anyone hardens an older tree.
+#
+# What replaces it is the run's own yosys JSON header, which lists the
+# module names the ELABORATED design contained -- written before any
+# optimisation pass runs, so it records what synthesis was handed and not
+# what it did. A run whose header does not name the module was not built
+# from RTL that declares it and is not a witness. Runs with no header on
+# disk fall back to the mtime rule, so an older run tree still behaves as
+# it did.
+def _run_declares(run, module):
+    """True / False / None (no header on disk, so unknown)."""
+    headers = sorted(run.glob("*-yosys-jsonheader/*.h.json"))
+    if not headers:
+        return None
+    for header in headers:
+        try:
+            modules = json.loads(header.read_text()).get("modules", {})
+        except (ValueError, OSError):
+            continue
+        if any(module in name for name in modules):
+            return True
+    return False
+
+
+def _witness_runs(module, rtl_file):
+    """Runs that were built from RTL declaring `module`."""
+    rtl_mtime = rtl_file.stat().st_mtime
+    out = []
+    for run, nl in _hardening_netlists():
+        declared = _run_declares(run, module)
+        if declared is True:
+            out.append((run, nl))
+        elif declared is None and nl.stat().st_mtime >= rtl_mtime:
+            out.append((run, nl))
+    return out
 
 
 def test_pointer_tmr_survives_the_real_hardening_flow():
@@ -1014,14 +1148,16 @@ def test_pointer_tmr_survives_the_real_hardening_flow():
     same question test_config_tmr_survives_the_real_hardening_flow asks
     of the configuration domain.
 
-    Skipped unless a run POSTDATES hw/rtl/aer_fifo.v, and that condition
-    is deliberately about provenance rather than about the netlist. A
-    skip that looked for the banks and gave up when they were missing
-    would skip on precisely the symptom this file exists to catch. Every
-    run on disk when the pointer TMR was written predates it -- the
-    configuration domain needed its own re-harden for the same reason,
-    which is what tt/runs/tmr-reharden is -- so this reports nothing
-    until someone re-hardens, and then reports on the real artifact.
+    Skipped unless a run was BUILT FROM RTL that declares aer_ptr_bank,
+    and that condition is deliberately about provenance rather than
+    about the netlist. A skip that looked for the banks and gave up when
+    they were missing would skip on precisely the symptom this file
+    exists to catch. Every run on disk when the pointer TMR was written
+    predates it -- the configuration domain needed its own re-harden for
+    the same reason, which is what tt/runs/tmr-reharden is -- so this
+    reports nothing until someone re-hardens, and then reports on the
+    real artifact. See _witness_runs for why the test is no longer the
+    run's modification time.
     """
     netlists = _hardening_netlists()
     if not netlists:
@@ -1029,14 +1165,12 @@ def test_pointer_tmr_survives_the_real_hardening_flow():
             "no deferred_flatten LibreLane run with a final netlist; "
             "produce one with hw/openlane/pilot_sky130/run_sky130.sh")
 
-    rtl_mtime = _PTR_RTL.stat().st_mtime
-    fresh = [(run, nl) for run, nl in netlists
-             if nl.stat().st_mtime >= rtl_mtime]
+    fresh = _witness_runs("aer_ptr_bank", _PTR_RTL)
     if not fresh:
         pytest.skip(
-            f"every LibreLane run on disk predates {_PTR_RTL.name}, which "
-            "is where the pointer banks are declared; re-harden to close "
-            "this check")
+            "no LibreLane run on disk was built from RTL declaring "
+            "aer_ptr_bank, where the pointer banks live; re-harden to "
+            "close this check")
 
     for run, nl in fresh:
         text = nl.read_text()
@@ -1053,6 +1187,52 @@ def test_pointer_tmr_survives_the_real_hardening_flow():
             f"flip-flops in this netlist: {len(flops)}.")
 
 
+def test_entry_parity_survives_the_real_hardening_flow():
+    """The queue's parity check field, in the netlist LibreLane produced.
+
+    This is the reason the field is an aer_par_bank instance rather than
+    a `reg [DEPTH-1:0]` in aer_fifo. Under deferred_flatten abc has
+    renumbered every cell to `_NNNN_` before the flatten, so an instance
+    path is the only naming that reaches the shipped netlist; a plain reg
+    vector would be a structure checkable in this file's MODEL of
+    synthesis and not in the artifact that becomes silicon, which is the
+    distinction the whole section 4 exists to make.
+
+    Same provenance rule as the pointer and rail guards: skip on what the
+    run was BUILT FROM, never on the absence of the storage, because a
+    netlist-shaped skip condition would skip on precisely the symptom.
+    This test is the one that found the rule's old form to be wrong --
+    see _witness_runs.
+    """
+    netlists = _hardening_netlists()
+    if not netlists:
+        pytest.skip(
+            "no deferred_flatten LibreLane run with a final netlist; "
+            "produce one with hw/openlane/pilot_ihp/run_ihp.sh or the "
+            "sky130 equivalent")
+
+    fresh = _witness_runs("aer_par_bank", _PTR_RTL)
+    if not fresh:
+        pytest.skip(
+            "no LibreLane run on disk was built from RTL declaring "
+            "aer_par_bank, where the entry-parity check field lives; "
+            "re-harden to close this check")
+
+    for run, nl in fresh:
+        flops = [name for ctype, name in _NETLIST_CELL.findall(nl.read_text())
+                 if _is_flop(ctype)]
+        found = {b: sum(1 for n in flops if f"{b}." in n) for b in PAR_BANKS}
+        assert all(v == PAR_W for v in found.values()), (
+            f"the queue entry-parity field is short in "
+            f"{nl.relative_to(ROOT)}: expected {PAR_W} flip-flops per "
+            f"queue instance, found {found}. This is the shipped netlist "
+            f"of run {run.name}, so it is the structure that would have "
+            f"been fabricated. A missing check field is a checker that "
+            f"reports every stored word clean -- see the entry-parity "
+            f"section of hw/rtl/aer_fifo.v. Total flip-flops in this "
+            f"netlist: {len(flops)}.")
+
+
 def test_valid_flag_rails_survive_the_real_hardening_flow():
     """The eight dual-rail valid flags, in the netlist LibreLane produced.
 
@@ -1065,9 +1245,12 @@ def test_valid_flag_rails_survive_the_real_hardening_flow():
     distinguish. Only counting cells in the real netlist sees it, so the
     count has to be automatic or it will drift.
 
-    Same provenance rule as the pointer guard: skip on the age of the
-    run, never on the absence of the banks, because a netlist-shaped skip
-    condition would skip on precisely the symptom being looked for.
+    Same provenance rule as the pointer guard: skip on what the run was
+    BUILT FROM, never on the absence of the banks, because a
+    netlist-shaped skip condition would skip on precisely the symptom
+    being looked for. All three rail modules are required, one per file,
+    so a run built from a tree carrying only some of them is not a
+    witness for the pair it is missing.
     """
     netlists = _hardening_netlists()
     if not netlists:
@@ -1076,14 +1259,19 @@ def test_valid_flag_rails_survive_the_real_hardening_flow():
             "produce one with hw/openlane/pilot_ihp/run_ihp.sh or the "
             "sky130 equivalent")
 
-    newest_rtl = max((RTL / f).stat().st_mtime for f in _RAIL_RTL)
-    fresh = [(run, nl) for run, nl in netlists
-             if nl.stat().st_mtime >= newest_rtl]
+    rail_modules = ("pilot_flag_rail", "aer_flag_rail", "lif_flag_rail")
+    per_module = [dict(_witness_runs(m, RTL / f))
+                  for m, f in zip(rail_modules, _RAIL_RTL)]
+    common = set(per_module[0])
+    for d in per_module[1:]:
+        common &= set(d)
+    fresh = sorted(((run, per_module[0][run]) for run in common),
+                   key=lambda rn: rn[0].name)
     if not fresh:
         pytest.skip(
-            "every LibreLane run on disk predates one of "
-            f"{', '.join(_RAIL_RTL)}, where the rails are declared; "
-            "re-harden to close this check")
+            "no LibreLane run on disk was built from RTL declaring all of "
+            f"{', '.join(rail_modules)}, where the rails live; re-harden "
+            "to close this check")
 
     for run, nl in fresh:
         flops = [name for ctype, name in _NETLIST_CELL.findall(nl.read_text())

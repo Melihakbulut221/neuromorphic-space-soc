@@ -5,7 +5,8 @@
 // (mem, wr_ptr, rd_ptr, wr_ok, rd_ok, wr_drop, level) directly. It is
 // invisible to Icarus simulation and to synthesis.
 //
-// EVERY property below is proven UNDER A SINGLE-REPLICA POINTER FAULT.
+// EVERY property below is proven UNDER A SINGLE-REPLICA POINTER FAULT
+// AND A SINGLE-BIT FAULT IN THE FETCHED QUEUE ENTRY.
 // hw/rtl/aer_fifo.v declares six free fault vectors under `ifdef FORMAL,
 // one per pointer replica, XORed into the replica on its way to the
 // voter; they are unconstrained every cycle except for the one
@@ -14,6 +15,14 @@
 // where the solver picks zero, and P1..P6 are masking theorems rather
 // than statements made beside one. Nothing selects this: it is on in all
 // four jobs of formal/aer_fifo.sby, and it costs nothing to run.
+//
+// The entry-parity fault model is the same shape and runs in the same
+// four jobs. hw/rtl/aer_fifo.v declares one further free vector over the
+// FETCHED codeword {check bit, data word}, free every cycle and
+// constrained to the weight one check bit can claim: at most one bit
+// wrong, assumed below. So P1..P6 hold under a queue-entry upset as well
+// as under a pointer upset, and P10..P12 are what say an entry upset is
+// discarded and counted rather than delivered as a spike.
 //
 // Proven by k-induction (mode prove):
 //   P1  level bookkeeping: level == accepted writes - accepted reads,
@@ -37,6 +46,22 @@
 //       and through them rd_data and rd_valid -- is a function of the
 //       voted pointers alone, so P7 is what makes P1..P6 hold under a
 //       fault, and P1..P6 are what say the masking is complete.
+//   P10 the stored-parity invariant. A slot that is currently in the
+//       queue holds a check bit equal to the even parity of its data
+//       word, stated over P5's anyconst slot and therefore over every
+//       slot. P11 and P12 are conditioned on that slot being the one the
+//       read pointer is on, which is how the invariant reaches the head.
+//   P11 the detection is reported, exactly, in both directions. par_err
+//       is high if and only if a read was accepted while the fetched
+//       codeword actually carried an upset. No missed discard, and no
+//       false discard during ordinary traffic -- the second half matters
+//       as much as the first here, because a false discard is a lost
+//       event manufactured by the protection itself.
+//   P12 the safety theorem, and the one the campaign is about: an event
+//       is never DELIVERED corrupted. Whenever rd_valid is high, rd_data
+//       is the word that was written into that slot. Under the fault
+//       model an upset entry is either not fetched or not flagged valid,
+//       so no consumer can be handed a fabricated spike.
 //   P8  the correction is reported, exactly. ptr_mismatch is high if and
 //       only if a replica is actually faulty this cycle: no missed
 //       correction, and no false alarm during ordinary traffic. Both
@@ -161,14 +186,25 @@ always @(*) if (rst_n) begin
         assert ((f_addr1 - rd_ptr) < (f_addr2 - rd_ptr));
 end
 
-// readout: each token appears on the registered output, unmodified
+// readout: each token appears on the registered output, unmodified.
+//
+// The qualifier is rd_pass and not rd_ok, and that is the entry-parity
+// change written into P5 rather than beside it. rd_pass is "the read was
+// accepted AND the fetched codeword checked", so under a single-bit
+// entry upset the two differ exactly on the reads this hardening
+// discards. Asserting the old form would be asserting that a corrupted
+// entry is still delivered correctly, which is the claim the check
+// exists to refuse; asserting this form says the delivered word is
+// unmodified whenever it is delivered at all, which is P12 restated on
+// the two tokens. The remaining reads are covered by P11 (they are
+// reported) and by P1/P3 (they still advance the queue by exactly one).
 always @(posedge clk) if (f_past_valid && rst_n && $past(rst_n)) begin
-    if ($past(rd_ok) && $past(rd_ptr) == f_addr1 && $past(f_in1))
+    if ($past(rd_pass) && $past(rd_ptr) == f_addr1 && $past(f_in1))
         assert (rd_valid && rd_data == f_data1);
-    if ($past(rd_ok) && $past(rd_ptr) == f_addr2 && $past(f_in2))
+    if ($past(rd_pass) && $past(rd_ptr) == f_addr2 && $past(f_in2))
         assert (rd_valid && rd_data == f_data2);
-    // rd_valid is exact: raised iff a read was accepted
-    assert (rd_valid == $past(rd_ok));
+    // rd_valid is exact: raised iff a read was accepted and checked
+    assert (rd_valid == $past(rd_pass));
     if (!$past(rd_ok))
         assert (rd_data == $past(rd_data));  // registered output holds
 end
@@ -212,6 +248,18 @@ end
 wire f_ptr_faulty = f_w_bad_a || f_w_bad_b || f_w_bad_c
                  || f_r_bad_a || f_r_bad_b || f_r_bad_c;
 
+// The entry fault model: at most one bit of the fetched codeword is
+// wrong. `x & (x - 1)` clears the lowest set bit, so it is zero exactly
+// for a vector of weight 0 or 1 -- plain Verilog-2005, no $countones.
+// This is the claim a single check bit makes and no more: an even-weight
+// error passes the check and is delivered, which hw/rtl/aer_fifo.v's
+// header states and hw/tb/test_aer_fifo.py measures rather than leaving
+// to be discovered.
+always @(*)
+    assume ((f_inj_mem & (f_inj_mem - 1'b1)) == PAR_ZERO);
+
+wire f_mem_faulty = |f_inj_mem;
+
 always @(*) if (rst_n) begin
     // P7a: the replicas themselves never diverge. Each is loaded from
     // the voted value, so a fault is corrected at the next edge rather
@@ -238,6 +286,87 @@ always @(*) if (rst_n) begin
 end
 
 // ---------------------------------------------------------------------
+// P10 / P11 / P12: entry parity
+// ---------------------------------------------------------------------
+//
+// P10 is the invariant the other two stand on, and it reuses P5's
+// anyconst slot rather than stating itself DEPTH times. f_addr1 is a
+// symbolic constant the solver picks freely, so proving the statement
+// for it proves it for every address; the first draft of this section
+// wrote a generate loop over all DEPTH slots instead, on the reasoning
+// that P11 needs the invariant AT rd_ptr and a symbolic constant is one
+// fixed address inside a trace. That reasoning is wrong and it is
+// expensive: measured on this design, sixty-four sixteen-input XOR
+// reductions inside the inductive invariant took the prove job from 41
+// seconds to over ten minutes without converging. The correct move is
+// below -- state the invariant once, and CONDITION the properties that
+// need it at the head on f_addr1 being the head. Universal
+// quantification over f_addr1 then delivers them at every reachable head
+// address, which is what "for all a: a == rd_ptr -> P(a)" means.
+//
+// Inductiveness, which is the same argument P5's mem invariant makes:
+// the only writer of both fields is `if (wr_ok)`, which sets mem[wr_idx]
+// and the bank's bit from the same wr_data on the same edge, so a slot
+// entering the queue enters it consistent; a slot leaving the queue
+// drops out of f_in1; and while a slot is in the queue neither field
+// moves, because the write index is the tail and the tail is not in the
+// queue unless the queue is full, when there is no write.
+
+always @(*) if (rst_n) begin
+    // P10: an in-flight slot's check bit is the even parity of its word.
+    // Both of P5's tokens, not just the first: P5's readout assertions
+    // are now qualified by rd_pass, and rd_pass carries information only
+    // where the invariant holds. Measured -- with the invariant stated
+    // for f_addr1 alone, the induction step fails on token TWO's readout
+    // (aer_fifo_props.v:205), because the solver is free to start in a
+    // state where slot f_addr2 holds a check bit that is not its word's
+    // parity, pass the check with a compensating injection, and deliver
+    // a word that is not f_data2.
+    if (f_in1)
+        assert (par_shadow[f_addr1[AW-1:0]] == ^mem[f_addr1[AW-1:0]]);
+    if (f_in2)
+        assert (par_shadow[f_addr2[AW-1:0]] == ^mem[f_addr2[AW-1:0]]);
+
+    // P11: exact reporting, both directions, on P8's footing. The
+    // forward half says an upset entry is never handed over quietly; the
+    // reverse half says the protection never invents a loss of its own,
+    // which for a structure whose whole output is a discard matters just
+    // as much -- a checker that fired on clean traffic would destroy
+    // events at the rate the queue runs at.
+    //
+    // Qualified by the anyconst slot being the one the read pointer is
+    // on, which is how P10 reaches the head; f_in1 is implied by
+    // rd_ok && f_addr1 == rd_ptr, since a read is accepted only when the
+    // queue is not empty.
+    if (rd_ok && f_addr1 == rd_ptr)
+        assert (par_err == f_mem_faulty);
+
+    // ... and the half that needs no invariant at all: when no read is
+    // accepted there is nothing to discard and nothing to report,
+    // whatever any slot holds.
+    if (!rd_ok)
+        assert (!par_err);
+end
+
+always @(posedge clk) if (f_past_valid && rst_n && $past(rst_n)) begin
+    // P12: no corrupted event is ever DELIVERED. If the fetched codeword
+    // carried an upset, rd_valid cannot be high on the following cycle,
+    // so a consumer is never handed a word that is not the word that was
+    // written. Stated on the injection vector rather than on mem[] so
+    // that it is one assertion about every slot rather than a statement
+    // about P5's two tokens.
+    //
+    // Under the weight-one fault model the whole vector is asserted
+    // zero, not just its data field: an upset in the check BIT is also
+    // refused, which is a good event discarded rather than a bad one
+    // delivered. That is the safe direction to fail in and it is the
+    // price of putting the check bit inside the codeword it protects;
+    // P11 reports it and hw/tb/test_aer_fifo.py measures it.
+    if (rd_valid && $past(f_addr1 == rd_ptr))
+        assert ($past(f_inj_mem) == PAR_ZERO);
+end
+
+// ---------------------------------------------------------------------
 // Reachability covers: the interesting states are not vacuous
 // ---------------------------------------------------------------------
 
@@ -248,6 +377,16 @@ always @(posedge clk or negedge rst_n) begin
         f_seen_full <= 1'b0;
     else if (full)
         f_seen_full <= 1'b1;
+end
+
+// "an entry has been discarded at some point in this trace", for P13.
+reg f_seen_par;
+initial f_seen_par = 1'b0;
+always @(posedge clk or negedge rst_n) begin
+    if (!rst_n)
+        f_seen_par <= 1'b0;
+    else if (par_err)
+        f_seen_par <= 1'b1;
 end
 
 always @(posedge clk) if (f_past_valid && rst_n) begin
@@ -265,4 +404,21 @@ always @(posedge clk) if (f_past_valid && rst_n) begin
     // alarm.
     cover (ptr_mismatch && rd_valid);
     cover (ptr_mismatch && full);
+    // P13: the entry-parity fault model is not vacuous either. A stored
+    // word is fetched, fails its check and is discarded; and the queue
+    // goes on to deliver a good event AFTERWARDS, which is what says the
+    // discard consumed the entry rather than parking the read pointer on
+    // it. If the assumption above were ever tightened into vacuity, P11
+    // and P12 would still pass and these two covers would fail.
+    //
+    // The second one is written against the sticky f_seen_par and not
+    // against $past(par_err), and that is a correction rather than a
+    // preference: par_err high at cycle t means rd_pass was LOW at t,
+    // and rd_valid at t+1 is exactly $past(rd_pass), so
+    // `$past(par_err) && rd_valid` is unsatisfiable by construction.
+    // The cover job found it -- unreached at depth 150 -- which is the
+    // job doing its work on the property file rather than on the design
+    // [fact, 2026-08-30].
+    cover (par_err);
+    cover (rd_valid && f_seen_par);
 end

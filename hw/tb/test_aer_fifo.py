@@ -5,15 +5,16 @@ saturation, read-on-empty refusal, and reset mid-traffic. A Python
 scoreboard model mirrors the contract; the randomized test drives both
 against the same stimulus. Fully port-driven, Icarus-clean.
 
-The last four tests are the pointer-TMR group and are the exception to
-"fully port-driven": they reach into the replica banks and corrupt the
-stored image directly, because that is the fault docs/16 section 5.2
-measured and there is no port that produces it. They are the simulation
-half of the evidence for the pointer TMR; the other half is
-sw/tests/test_synthesis_guards.py, which is what says the replicas exist
-as separate cells in the netlist, and formal/aer_fifo_props.v P7/P8,
-which is what says the masking holds for every fault of the class rather
-than the ones enumerated here.
+The pointer-TMR group and the entry-parity group are the exception to
+"fully port-driven": they reach into the replica banks and into the
+queue's storage and corrupt it directly, because that is the fault
+docs/16 sections 5.2 and 6.2 measured and there is no port that produces
+it. They are the simulation half of the evidence for those two
+hardenings; the other half is sw/tests/test_synthesis_guards.py, which is
+what says the replicas and the parity bank exist as separate cells in the
+netlist, and formal/aer_fifo_props.v P7/P8 and P10/P11/P12, which are
+what say the masking and the detection hold for every fault of the class
+rather than for the ones enumerated here.
 """
 
 import random
@@ -545,3 +546,276 @@ async def test_pointer_fault_under_simultaneous_read_write(dut):
     assert got == expected[:len(got)], (
         f"order broken under injection: {got} vs {expected[:len(got)]}")
     assert int(dut.drop_cnt.value) == 0
+
+
+# =====================================================================
+# entry parity (hw/rtl/aer_fifo.v, docs/16 section 6.2 item 4)
+# =====================================================================
+# One even-parity bit per queue slot, held in the aer_par_bank instance
+# u_par and checked on every accepted read. It DETECTS and does not
+# correct: a stored word that fails its check is consumed, discarded,
+# reported on par_err, and rd_valid stays low for that read.
+#
+# These tests deposit into the storage directly for the same reason the
+# pointer group does -- an upset lands on a physical cell and no port
+# produces one -- and they walk all four cases the header claims:
+# a single upset in the data word (detected), a single upset in the check
+# bit itself (detected, as a false discard of a good event), a
+# double-bit upset (NOT detected, which is what one check bit costs), and
+# a corrupted slot that is rewritten before it is read (repaired).
+#
+# The loops deliberately do not re-reset between cases. reset() starts a
+# clock, so calling it in a loop would start several; and after a full
+# fill and drain both pointers have advanced by DEPTH, so the slot
+# indices realign and event k of the next fill lands in slot k again.
+
+
+def word_parity(value, width):
+    """Even parity of an event word: the bit aer_fifo stores beside it."""
+    return bin(value & ((1 << width) - 1)).count("1") & 1
+
+
+def slots_under_test(depth):
+    """First, middle and last slot. Walking all 64 at the default DEPTH
+    would multiply the runtime of four tests by twenty for no new
+    mechanism: the parity bank is one flip-flop per slot with no carry
+    and no interaction between slots."""
+    return sorted({0, depth // 2, depth - 1})
+
+
+def bits_under_test(width):
+    """Bit 0, a middle bit and the top bit. docs/16 section 6.2 records
+    that the evq_mem records were spread over bit 0 and bit 14 alike with
+    no concentration to exploit, so position is sampled rather than
+    walked."""
+    return sorted({0, width // 2, width - 1})
+
+
+async def read_probed(dut):
+    """One accepted read, reporting what the check did with it.
+
+    par_err is combinational and belongs to the cycle of the read, so it
+    is sampled BEFORE the edge that captures the answer; rd_valid belongs
+    to the cycle after it. Returns (par_err, rd_valid, rd_data).
+    """
+    assert dut.empty.value == 0, "read_probed called on an empty FIFO"
+    dut.rd_en.value = 1
+    await Timer(1, unit="ns")          # settle the combinational check
+    err = int(dut.par_err.value)
+    await RisingEdge(dut.clk)
+    dut.rd_en.value = 0
+    await Timer(1, unit="ns")          # settle past the NBA update
+    return err, int(dut.rd_valid.value), int(dut.rd_data.value)
+
+
+async def fill(dut, width, depth, base):
+    """Fill an empty queue with DEPTH distinct events; event k lands in
+    slot k. Returns the events."""
+    assert dut.empty.value == 1, "fill called on a non-empty FIFO"
+    mask = (1 << width) - 1
+    events = [(base + i * 7) & mask for i in range(depth)]
+    for ev in events:
+        await push(dut, ev)
+    return events
+
+
+async def drain_probed(dut, depth):
+    """Drain DEPTH accepted reads. Returns (delivered words, par_err
+    count, the read indices that were discarded)."""
+    got, errs, dropped = [], 0, []
+    for i in range(depth):
+        err, valid, data = await read_probed(dut)
+        errs += err
+        if valid:
+            got.append(data)
+        else:
+            dropped.append(i)
+        assert valid != err, (
+            f"read {i}: par_err={err} and rd_valid={valid} -- a discarded "
+            "read must not also answer, and an answered read must not "
+            "also be reported")
+    return got, errs, dropped
+
+
+def flip_stored_word(dut, slot, *bits):
+    """Flip the named bits of one stored event word in ONE write: the
+    docs/16 evq_mem fault, and its double-bit companion.
+
+    All the bits at once is not tidiness. A cocotb value write lands at
+    the end of the delta cycle, so two successive read-modify-writes to
+    the same handle both read the pre-write value and the second wins --
+    a two-bit deposit written that way is a one-bit deposit, which the
+    check detects, and the double-bit test would pass while measuring
+    nothing.
+    """
+    word = int(dut.mem[slot].value)
+    for bit in bits:
+        word ^= 1 << bit
+    dut.mem[slot].value = word
+
+
+def flip_check_bit(dut, slot):
+    """Flip one slot's stored parity bit inside the aer_par_bank."""
+    dut.u_par.bits.value = int(dut.u_par.bits.value) ^ (1 << slot)
+
+
+@cocotb.test()
+async def test_entry_parity_is_quiet_and_stored_beside_the_word(dut):
+    """No traffic pattern raises par_err, every read answers, and the
+    bank holds the even parity of the word in the matching slot.
+
+    A checker that fired during ordinary work would be worth nothing: it
+    would convert good events into losses at the rate the queue runs at,
+    which is a worse failure than the one it exists to catch. The stored
+    image is asserted as well as the behaviour, because a bank that held
+    something else and was checked against itself would also be quiet.
+    """
+    width, depth, _ = params(dut)
+    await reset(dut)
+    assert dut.par_err.value == 0, "par_err out of reset"
+    events = await fill(dut, width, depth, 0x2A5)
+    for slot, ev in enumerate(events):
+        stored = (int(dut.u_par.bits.value) >> slot) & 1
+        assert stored == word_parity(ev, width), (
+            f"slot {slot}: bank holds {stored}, event 0x{ev:X} has parity "
+            f"{word_parity(ev, width)}")
+    for _ in range(4):                       # writes into a full FIFO
+        await push(dut, 0)
+        assert dut.par_err.value == 0, "par_err on a dropped write"
+    got, errs, dropped = await drain_probed(dut, depth)
+    assert errs == 0 and dropped == [], (
+        f"a clean queue reported {errs} parity errors at reads {dropped}")
+    assert got == events, "clean drain did not preserve the events"
+    assert int(dut.drop_cnt.value) == 4, "the write-side count moved"
+
+
+@cocotb.test()
+async def test_single_bit_upset_in_a_stored_word_is_discarded(dut):
+    """The docs/16 section 6.2 experiment, re-run against the check.
+
+    That table is 32 single-bit deposits into the two queues' mem[] with
+    7 ending in silent data corruption -- a wrong event word handed to a
+    consumer that has no way to tell it from a real spike, because
+    docs/10 section 7.1 freezes the word at TYPE plus a 10-bit ID with no
+    sequence number and no length. Every one of those deposits is a
+    single bit and therefore odd weight, which is exactly what one parity
+    bit detects.
+
+    For each sampled slot and bit: fill, corrupt one stored bit, drain.
+    The corrupted read must report par_err and answer nothing, every
+    other event must come out golden and in order, and the queue must
+    still empty -- the entry is consumed, not parked on.
+    """
+    width, depth, _ = params(dut)
+    await reset(dut)
+    base = 0x111
+    for slot in slots_under_test(depth):
+        for bit in bits_under_test(width):
+            events = await fill(dut, width, depth, base)
+            base += 0x40
+            flip_stored_word(dut, slot, bit)
+            await Timer(1, unit="ns")
+            got, errs, dropped = await drain_probed(dut, depth)
+            assert dropped == [slot], (
+                f"slot {slot} bit {bit}: discarded reads {dropped}, "
+                f"expected exactly [{slot}] -- an undetected single-bit "
+                "upset is the silent corruption this check exists for")
+            assert errs == 1, (
+                f"slot {slot} bit {bit}: par_err fired {errs} times")
+            assert got == [e for i, e in enumerate(events) if i != slot], (
+                f"slot {slot} bit {bit}: the surviving events were "
+                f"{[hex(g) for g in got]}")
+            assert dut.empty.value == 1, (
+                f"slot {slot} bit {bit}: the discarded entry was not "
+                f"consumed, level={int(dut.level.value)}")
+            assert int(dut.drop_cnt.value) == 0, (
+                f"slot {slot} bit {bit}: a parity discard moved the "
+                "write-side drop counter, which counts refused writes")
+
+
+@cocotb.test()
+async def test_upset_in_the_check_bit_is_a_reported_false_discard(dut):
+    """The check bit is inside the codeword it protects, so an upset in
+    the parity bank itself is detected too -- as the loss of a good
+    event rather than as the delivery of a bad one.
+
+    That is the right side to fail on and it is worth measuring rather
+    than assuming: the failure is a counted, announced drop of one event,
+    not a corruption, and it costs exactly the same as the case it exists
+    to catch. These flip-flops are new state this hardening adds, and
+    this is the test that says what an upset in them does.
+    """
+    width, depth, _ = params(dut)
+    await reset(dut)
+    base = 0x333
+    for slot in slots_under_test(depth):
+        events = await fill(dut, width, depth, base)
+        base += 0x40
+        flip_check_bit(dut, slot)
+        await Timer(1, unit="ns")
+        got, errs, dropped = await drain_probed(dut, depth)
+        assert dropped == [slot] and errs == 1, (
+            f"check bit {slot}: discarded {dropped}, par_err {errs}")
+        assert got == [e for i, e in enumerate(events) if i != slot], (
+            f"check bit {slot}: an upset in the parity bank corrupted an "
+            "event instead of dropping one")
+        assert dut.empty.value == 1
+
+
+@cocotb.test()
+async def test_double_bit_upset_is_not_detected(dut):
+    """The honest limit of one check bit, measured rather than stated.
+
+    Even-weight corruption passes the check and is DELIVERED as a valid
+    event. This is the residual after this hardening and it is what the
+    SECDED (22,16) code of docs/16 section 6.2 item 4 would buy for six
+    check bits per entry instead of one -- correction of the single-bit
+    case and detection of this one. A test that only walked the covered
+    cases would make the protection look complete.
+    """
+    width, depth, _ = params(dut)
+    if width < 2:
+        return
+    await reset(dut)
+    lo, hi = 0, width - 1
+    for slot in slots_under_test(depth):
+        events = await fill(dut, width, depth, 0x555)
+        flip_stored_word(dut, slot, lo, hi)
+        await Timer(1, unit="ns")
+        got, errs, dropped = await drain_probed(dut, depth)
+        assert errs == 0 and dropped == [], (
+            f"slot {slot}: a two-bit upset was reported, which one parity "
+            "bit cannot do -- the check has changed and this bound with it")
+        corrupted = events[slot] ^ (1 << lo) ^ (1 << hi)
+        expected = list(events)
+        expected[slot] = corrupted
+        assert got == expected, (
+            f"slot {slot}: expected the corrupted word 0x{corrupted:X} to "
+            f"be delivered undetected, got {[hex(g) for g in got]}")
+        assert dut.empty.value == 1
+
+
+@cocotb.test()
+async def test_a_rewritten_slot_is_repaired(dut):
+    """A corrupted slot that is written again before it is read carries
+    no error afterwards: the check bit is rewritten with the word from
+    the same wr_data on the same edge, so the pair cannot drift apart.
+
+    Without this the protection would accumulate -- one upset would make
+    a slot report an error for the rest of the mission, turning a
+    single-event upset into a permanent one-in-DEPTH event loss.
+    """
+    width, depth, _ = params(dut)
+    await reset(dut)
+    events = await fill(dut, width, depth, 0x77)
+    flip_stored_word(dut, 0, 0)
+    await Timer(1, unit="ns")
+    got, errs, dropped = await drain_probed(dut, depth)
+    assert dropped == [0] and errs == 1
+    assert got == events[1:]
+    fresh = await fill(dut, width, depth, 0x99)
+    got, errs, dropped = await drain_probed(dut, depth)
+    assert errs == 0 and dropped == [], (
+        "a slot corrupted in the previous fill still reported an error "
+        f"after being rewritten: discarded {dropped}")
+    assert got == fresh

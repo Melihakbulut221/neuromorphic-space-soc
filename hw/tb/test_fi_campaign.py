@@ -197,7 +197,7 @@ EXT_RNG = random.Random(CAMPAIGN_SEED ^ 0xECC_0001)
 # puts the design back where it was with nothing to say so. docs/16
 # section 7.3 named that as the next campaign's first item; this is it.
 EXT_GROUPS = ("lif_wchk", "lif_wchk_unread", "lif_smem",
-              "wdog_fetch", "wdog_oh")
+              "wdog_fetch", "wdog_oh", "evq_par")
 
 CLK_NS = 10          # 100 MHz simulation clock, as every other suite
 HALF = 20            # serial half period: SER_SCK = clk/4, the fast limit
@@ -1218,6 +1218,33 @@ def target_list(n_neurons, n_axons, q_depth):
           ("wdog_oh", "oh_wait", [0, 2, 5], 2, True),
           ("wdog_oh", "oh_timeout", [0], 3, True)]
 
+    # 15. THE QUEUE ENTRY-PARITY CHECK FIELD. Added with the hardening of
+    #     the queue storage (hw/rtl/aer_fifo.v, section "entry parity"),
+    #     and for the same reason item 13 targets `wchk` and `smem`: a
+    #     check field is storage, the hardening pays for it in flip-flops,
+    #     and if an upset in one of those bits could corrupt an inference
+    #     the protection would be importing the risk it removes. The
+    #     question is asked with a deposit rather than answered with an
+    #     argument.
+    #
+    #     The expected answer is a REPORTED FALSE DISCARD, not a
+    #     corruption: the check bit is inside the codeword it protects, so
+    #     an upset in it makes a good event fail its check and be dropped
+    #     with par_err raised and the consumer's bounded wait expiring.
+    #     One event lost and announced, which is the same outcome as the
+    #     case the field exists to catch and is why it is acceptable to
+    #     add unprotected state here at all.
+    #
+    #     `bits` is the packed per-slot vector inside the aer_par_bank
+    #     instance, so the bit index IS the slot index, and the targets
+    #     are the storage register rather than the checked wire -- the
+    #     distinction items 9 and 11 were rewritten for. It draws from
+    #     EXT_RNG and is appended last, so every phase drawn by the
+    #     twelve groups of the campaign of record and by items 13 and 14
+    #     is untouched.
+    t += [("evq_par", f"{q}.u_par.bits", spread(q_depth, 2), 2, False)
+          for q in ("u_evq_in", "u_evq_out")]
+
     return t
 
 
@@ -1912,6 +1939,42 @@ async def test_05_summary(dut):
         f"low rather than trusting it, and sticky_errcfg latches. Two " \
         f"rails detect and do not correct, so the run may still be " \
         f"wrong; what it may never be is silent -- got {rail}"
+    # The queue entry parity (hw/rtl/aer_fifo.v, section "entry parity"),
+    # on the same two-part footing as the pointers and the rails and for
+    # the same reason: the failure to catch is a mis-targeted injector,
+    # not a broken checker.
+    #
+    #   (a) every evq_mem target is a queue STORAGE word, not the
+    #       registered read port, and every evq_par target is the check
+    #       field's own storage register. `u_evq_out.rd_data` is
+    #       deliberately in the evq_hold group and not here: it is
+    #       downstream of the check and nothing claims to protect it.
+    #   (b) no single-bit upset in a stored event word may be SILENT.
+    #       One check bit detects every odd-weight error, so a corrupted
+    #       entry is discarded on the read, the consumer's bounded wait
+    #       expires and STATUS.ERR_CFG latches -- DETECTED, with the
+    #       event still lost, which is the SDC-to-announced-drop move
+    #       docs/16 section 6.2 item 4 costed this hardening at. A slot
+    #       the workload never reads stays MASKED, and that is why this
+    #       is written as "no SDC" rather than "all DETECTED".
+    mem_paths = sorted({r["target"] for r in RESULTS
+                        if r["group"] == "evq_mem"})
+    assert mem_paths and all(".mem[" in p for p in mem_paths), \
+        f"every evq_mem target must be a stored queue word, or the " \
+        f"group is measuring something the entry parity does not " \
+        f"protect: {mem_paths}"
+    par_paths = sorted({r["target"] for r in RESULTS
+                        if r["group"] == "evq_par"})
+    assert len(par_paths) == 2 and all(p.endswith("u_par.bits")
+                                       for p in par_paths), \
+        f"every evq_par target must be the parity bank's storage " \
+        f"register, not the checked wire: {par_paths}"
+    qmem = {c: sum(groups.get(g, {}).get(c, 0)
+                   for g in ("evq_mem", "evq_par")) for c in CLASSES}
+    assert sum(qmem.values()) > 0 and qmem["SDC"] == 0, \
+        f"a single-bit upset in a queue entry or in its check bit must " \
+        f"never be a silent corruption: the check discards the entry and " \
+        f"the consumer's bounded wait reports it. Got {qmem}"
     # The two bounded-wait counters (target_list item 14 and test_04).
     # Presence here, outcome in test_04. What must not happen silently
     # is the groups disappearing, which is how the nets came to be
