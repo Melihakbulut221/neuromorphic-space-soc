@@ -53,5 +53,9 @@
     "RUN_HEURISTIC_DIODE_INSERTION": false,
     "//antenna": "Explicit, though it is also the LibreLane 3.0.5 default (flows/classic.py). Stated because it is the one antenna knob docs/12 section 4.5 measured rather than assumed on sg13g2 -- 3 diodes off versus 4,641 diodes on for the same zero-violation result -- and because leaving it implicit would make a sky130 diode count unattributable. Note that GRT_REPAIR_ANTENNAS is NOT set here: it is a recognised deprecated alias for RUN_ANTENNA_REPAIR and would change behaviour silently if carried over from a sky130 config written for an older OpenLane (docs/12 section 2.4c). The sibling sky130 project's config does carry it; that is the trap, not the precedent.",
     "//derate": "The PDK sets this as the integer 5 and LibreLane's base.sdc and io.tcl consume it with Tcl integer division, so `expr 5 / 100` is 0 and the flow applies NO derate while logging '5%'. Written as a float here so the division is real. docs/28 section 4.4.",
-    "TIME_DERATING_CONSTRAINT": 5.0
+    "TIME_DERATING_CONSTRAINT": 5.0,
+    "//setupcheck": "LibreLane resolves a timing checker's corners as <TYPE>_VIOLATION_CORNERS or TIMING_VIOLATION_CORNERS, and both PDKs ship TIMING_VIOLATION_CORNERS as [\"*typ*\"]. With this key unset the setup checker therefore examined the typical corner and nothing else, so the slow corner -- the one that decides whether the part works -- was gated by no checker at all, and four claims that a corner closes were published from runs that did not. HOLD_VIOLATION_CORNERS already ships as [\"*\"], so only setup was affected. docs/28 section 4.4a. This is the second defect of its shape here: docs/23 records design__violations not aggregating hold. A green checker is only as wide as the corners it was pointed at.",
+    "SETUP_VIOLATION_CORNERS": [
+        "*"
+    ]
 }
