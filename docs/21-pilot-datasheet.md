@@ -9,6 +9,15 @@ frozen for content and is being re-hardened after the configuration-TMR
 fix of 2026-08-26; silicon is expected 2027-06-25 with boards around
 2027-08 (`ROADMAP.md` section 1).
 
+*Updated 2026-08-30.* The re-hardening is **complete**, and the tile
+shape changed while it ran: the submission is **Tiny Tapeout 6x2 =
+12 tiles**, not 4x2 = 8. Content is unchanged — the same 8 x 8 geometry,
+the same protections, the same pin contract — and what moved is the
+number of tiles the hardened design needs. Sections 7.1 and 7.2 carry
+the replacement figures and `docs/23-tile-shape-decision.md` is the
+decision record. The **[in flux]** tag of section 0 no longer applies to
+any figure in this document.
+
 ## 0. How to read the numbers in this document
 
 Every quantity is tagged:
@@ -111,11 +120,24 @@ plainly, and binding on every public description of this part
 | Power | see section 7.3 | [TBD] |
 | Radiation performance | see section 7.3 | [TBD] |
 
+*Superseded 2026-08-30 — four rows.* **Tile shape: Tiny Tapeout 6x2,
+12 tiles. Die area 404,499 um2, core 392,988 um2. Total mapped
+flip-flops 1275, tag [measured] rather than [measured, in flux].**
+**[fact, `docs/23` sections 1.4 and 2.1, and `docs/22` section 9.5.]**
+Section 7.1 carries the full replacement set and section 7.2 says what
+moved the shape. Every other row of this table is unaffected: the
+geometry, the protection schemes and the host interface are the same
+design at a larger tile count.
+
 The 8 x 8 geometry is an elaboration parameter, not an architectural
 limit. `hw/rtl/pilot_top.v` accepts N_NEURONS and N_AXONS as powers of
 two in [4, 16]; the architecture the pilot instantiates a slice of is
 specified at 512 x 512 (`docs/10-npu-mvp-spec.md` section 2). The pilot
-is the geometry that fits eight Tiny Tapeout tiles.
+is the geometry that fits eight Tiny Tapeout tiles. *Superseded
+2026-08-30: it is the geometry that needs **twelve**.* Two rounds of
+hardening — the `lif_core` memory ECC and the AER pointer TMR — grew it
+past the 70 % planning criterion at eight **[fact, `docs/22`
+section 9.4]**.
 
 ---
 
@@ -992,6 +1014,40 @@ better: a third per-bit function would have to mix in a second signal,
 which turns a single upset into a multi-bit error and defeats the voter
 it is meant to protect.
 
+**The same failure mode, caught before tape-out rather than after
+(added 2026-08-30).** A second replicated domain has since been added —
+the four AER queue pointers, each held in three `aer_ptr_bank` replicas
+behind a bitwise majority vote (`hw/rtl/aer_fifo.v`) — and the hazard
+there was **sharper** than in the configuration domain, not milder: all
+three replicas of a pointer are loaded from one net, the voted next
+pointer, which is precisely the signature `opt_merge` hashes on. Without
+the per-replica storage transform the collapse would have been the
+expected outcome rather than a risk.
+
+It did not happen, and that is a measurement rather than an
+expectation. The shipped netlist carries **3 flip-flops under each of
+the twelve pointer banks**, 36 in total, out of 1,275, with the
+configuration domain still at 55/55/55 beside it **[measured,
+`docs/22` sections 3 and 9.3, counted in
+`final/nl/tt_um_melihakbulut_nssoc.nl.v` after placement, CTS and
+routing have all had a chance to touch it]**. The synthesis netlist
+agrees with the final netlist on both PDKs, so nothing downstream of
+mapping ate a bank either.
+
+Two points carry forward from the correction above rather than being
+re-learned. The guard **counts cells, not names**: `(* keep *)` was
+already measured to leave replica wire names in a netlist whose storage
+had disappeared. And the guard that covers this was **skipping** rather
+than passing until a hardening run existed that postdated the RTL
+declaring the banks — a skip on *provenance*, deliberately not on the
+netlist, because a netlist-shaped skip would skip on exactly the symptom
+the file exists to catch. `test_pointer_tmr_survives_the_real_hardening_flow`
+now passes **[measured, `docs/22` section 3]**. The difference between
+this case and the one above is only when it was measured: the
+configuration TMR was found collapsed *after* a harden had already
+shipped a netlist to this datasheet, and the pointer TMR was found
+intact before one did.
+
 ### 6.4 What is not protected, and the residual risk
 
 **The honest statement, corrected 2026-08-29.** This paragraph opened
@@ -1170,6 +1226,36 @@ is quoted:
 | Serial clock ceiling | `clk`/4 | [measured] | RTL contract, held at the boundary by the test suite |
 | Clock target | 50 MHz (20 ns) | [target] | `ROADMAP.md`; the harden runs at this constraint |
 
+*Superseded 2026-08-30. The table above is the `tmr-reharden` state and
+is kept as it stood.* Replacement values, and the runs they are read
+from — `tt/runs/wave5-ihp-b/` for the current RTL at 4x2, and
+`hw/openlane/pilot_ihp/runs/shape-6x2/` for the shape actually
+submitted:
+
+| Parameter | Above | **Current** | Tag |
+|---|---|---|---|
+| Tile shape | 4x2, 8 tiles | **Tiny Tapeout 6x2, 12 tiles** | [measured] |
+| Die area | 268,059 um2 | **404,499 um2** | [measured] |
+| Core / placement-row area | 259,837 um2 | **392,988 um2** | [measured] |
+| Mapped flip-flops | 1155, [in flux] | **1275 `sg13g2_dfrbpq_1`** | **[measured]** — no longer in flux |
+| of which configuration TMR | 55 in each of three banks | **55 in each of three banks** | [measured] — unchanged |
+| of which AER pointer TMR | not present | **3 in each of twelve banks**, 36 total | [measured] |
+| Placed standard-cell area | 158,268 um2 | **185,840 um2** | [measured] |
+| Utilization | 60.91 % | **47.2887 %** | [measured] |
+
+**[fact, `docs/22` sections 9.3 and 9.5 and `docs/23` sections 1.4, 2.1
+and 5; the pointer-bank census is counted with
+`sw/tests/test_synthesis_guards.py`'s own flip-flop predicate over the
+shipped netlist.]** The die and core areas moved for one reason only —
+the tile is larger. The design's own placed area differs between the two
+shapes by 85 um2, 0.05 %.
+
+**Source paths.** Every `tt/runs/tmr-reharden/…` path in this section
+should be read as **`tt/runs/wave5-ihp-b/…`** for the current 4x2
+figures, or as `hw/openlane/pilot_ihp/runs/shape-6x2/…` for the
+submitted shape. `tt/runs/` is gitignored, so the run tag and the metric
+key are the record rather than the path.
+
 **FPGA fit, as an independent implementation check — not an ASIC
 timing statement.** The same RTL, unchanged, synthesises, places, routes
 and packs on an open-source Lattice ECP5 toolchain with zero source
@@ -1194,6 +1280,21 @@ The design's sign-off before the TMR fix was equivalent in character:
 all three corners clean, worst setup slack +5.3141 ns, zero DRC, zero
 LVS and zero antenna violations.
 
+*Superseded 2026-08-30.* **The re-harden is no longer in progress**; it
+completed twice at 4x2 and twice more at twelve tiles. All three IHP PVT
+corners still close at 20 ns with **zero setup, hold, max-capacitance
+and max-slew violations**, at worst setup slack **+0.9121 ns** and worst
+hold slack **+0.1180 ns** at 4x2 (`wave5-ihp-b`, `0448282`), and
+**+1.2347 ns** and **+0.1089 ns** on the submitted 6x2 shape — the best
+slow corner of any harden of this netlist **[measured, `docs/22`
+sections 9.3 and 9.5; `docs/23` section 3.1]**. Slow-corner Fmax is
+**53.3 MHz** at 6x2 against the 50 MHz declared **[estimate, arithmetic
+on a measured slack]**. The margin has narrowed by about 5.2 ns since
+the +6.4359 ns above, spent by the memory ECC and returned in part by
+every step since; `docs/22` section 2.3 records the resulting caution,
+that on this design netlist size does not predict slack in either
+direction.
+
 **Verification status, run for this document [measured]:**
 
 - `sw/tests/`: 152 passed, 1 skipped — including the eight synthesis
@@ -1202,6 +1303,19 @@ LVS and zero antenna violations.
   reset.
 - `hw/tb/Makefile.pilot`: 23 cocotb tests, zero failures, driving the
   Tiny Tapeout top level.
+
+*Superseded 2026-08-30, and it should be re-derived rather than patched.*
+The synthesis-guard file alone is now **17 passed, 0 skipped**: the
+skipped test was `test_pointer_tmr_survives_the_real_hardening_flow`,
+which declined to assert a property no run on disk could witness, and it
+passes against the wave-5 netlists **[measured, `docs/22` sections 3 and
+9.2]**. The whole-suite figure above is stale in both directions and
+`docs/22` open item 5 says to re-run it rather than adjust it by hand.
+The last whole-suite run on record is **1 failed, 195 passed**, and the
+one failure is deliberate: `test_tile_shape_is_the_documented_decision`
+asserts `tiles == "4x2"` and the documented decision moved to 6x2, so
+the guard caught the submission moving with it. It is a one-line change
+in a file `docs/23` did not own **[measured, `docs/23` section 9.2]**.
 
 ### 7.2 Figures that are in flux
 
@@ -1223,6 +1337,54 @@ was written: post-route STA is clean, and DRC, LVS and antenna results
 for the current netlist are **pending**. The pre-fix run's results for
 those checks were all zero.
 
+> **Superseded 2026-08-30: this table is no longer in flux, and the
+> flux warning above it is withdrawn.** Four hardens have completed
+> since — two at 4x2 and two at twelve tiles — and the figures below are
+> [measured] against a named run rather than directionally right. The
+> table above is kept as the record of what was in motion.
+>
+> | Quantity | "Current run" above | **4x2 at `0448282`** | **6x2, submitted** |
+> |---|---|---|---|
+> | Mapped flip-flops | 1155 | **1275** | **1275** |
+> | Post-synthesis cell area | 126,647 um2 | **151,789.11 um2** | **151,789.11 um2** |
+> | Placed standard-cell area | 158,268 um2 | **185,755 um2** | **185,840 um2** |
+> | Utilization | 60.9 % | **71.4890 %** | **47.2887 %** |
+> | Worst slow-corner setup slack | +6.4359 ns | **+0.9121 ns** | **+1.2347 ns** |
+> | Total power at 50 MHz, typical | not yet re-measured | **5.191 mW** | **5.130 mW** |
+>
+> **[measured, `docs/22` sections 9.3 and 9.5 and `docs/23` sections 2.1,
+> 3.1 and 3.3.]**
+>
+> Three things the table does not say on its own.
+>
+> - **The power figure is now measured, and it is not a silicon
+>   measurement.** 5.130 mW at 6x2 breaks down as 4.2402 mW internal,
+>   0.8755 mW switching and 14.35 uW leakage, and it is the flow's own
+>   estimate from **default switching activity**, not an
+>   annotated-activity analysis. The 4.36 mW this section carried was a
+>   real figure for a design 36 % smaller. Section 7.3's [TBD] on silicon
+>   power stands unchanged.
+> - **"Utilization of the 4x2 block … still well inside the tile" is
+>   retracted.** At 71.49 % the design is *inside the tile* and **outside
+>   the 70 % planning criterion**, by 5,527 um2 or 2.13 % of the core.
+>   Those are two different statements: 4x2 closed to a GDS with zero DRC
+>   on every deck, and the planning margin — the allowance for a precheck
+>   that places differently and for a shuttle-side reharden — was gone.
+>   That finding is what moved the submission to **6x2**, where the same
+>   netlist sits at 47.29 % with 32.44 % of the core spare **[fact,
+>   `docs/22` sections 4.2 and 9.4, `docs/23` sections 2.2 and 6]**.
+> - **DRC, LVS and antenna are no longer pending; they are complete and
+>   all zero, including KLayout DRC.** On the submitted 6x2 run: route
+>   DRC 0, Magic DRC 0, KLayout DRC 0, Netgen LVS 0 on all seven
+>   counters, antenna 0 nets and 0 pins with **zero repair diodes**, 0
+>   power-grid violations, `design__violations` 0 and
+>   `flow__errors__count` 0 **[measured, `docs/23` sections 2.1, 3.3 and
+>   4.4, and the seven `design__lvs_*` counters read directly from
+>   `hw/openlane/pilot_ihp/runs/shape-6x2/final/metrics.json`; the
+>   KLayout deck is also closed at `c5a5a6e` on 4x2 by `docs/22`
+>   section 2.4]**. The Magic/KLayout XOR is still not run on IHP and is
+>   not claimed.
+
 The synthesis flow for this design now requires
 `SYNTH_HIERARCHY_MODE: "deferred_flatten"`, which flattens *after* the
 configuration banks have become standard cells. Without it the parameterised
@@ -1238,7 +1400,12 @@ offered:
 - **Supply voltage, current and total power on silicon.** [TBD] The
   4.36 mW figure above is a flow-computed power estimate at the typical
   corner, from the post-route parasitic-extracted netlist of the
-  *superseded* pre-fix design. It is not a silicon measurement, it does
+  *superseded* pre-fix design. *Updated 2026-08-30: the current
+  equivalent is **5.130 mW** on the submitted 6x2 netlist, and every
+  word of this bullet applies to it unchanged* — it is the same
+  flow-computed estimate from the same default activity assumptions, on
+  a design that has grown, and it is **not** a silicon measurement
+  **[measured, `docs/23` section 3.3]**. It is not a silicon measurement, it does
   not describe the current netlist, and it says nothing about power
   under a realistic event workload — the flow's activity assumptions are
   not this device's.

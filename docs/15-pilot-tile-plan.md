@@ -24,12 +24,36 @@ Verification: `hw/tb/test_pilot_top.py`, run by
 `scripts/gen_tt_submission.py`, guarded by
 `sw/tests/test_tt_submission.py`.
 
+> **Superseded on the tile shape, 2026-08-30, and kept in full.** Two
+> later measurement rounds have moved this record's central conclusion.
+> `docs/22` section 9 re-hardened the current RTL (`0448282`) at 4x2 and
+> found the design **over the 70 % planning criterion by 5,527 um2,
+> -2.13 % of the core**, where section 4 below records +0.46 % spare.
+> `docs/23` then hardened both twelve-tile shapes and **moved the
+> submission from 4x2 to 6x2**, on routing convergence, timing and clock
+> skew rather than on area: measured utilization **47.29 % at 6x2** and
+> **41.92 % at 3x4**, both far inside the criterion. **The current
+> submission shape is 6x2 = 12 tiles (~EUR 840).** Every "4x2" below is
+> the shape this record decided and is retained as the reasoning that
+> produced the change; where it reads as the *current* shape, a dated
+> note beside it says so. Section 4's over-budget finding is not
+> withdrawn — it is the finding that forced the shape change.
+
 ---
 
 ## 0. Headline
 
 **The tile shape is 4x2 = 8 tiles (~EUR 560), and the submission tree is
 built at that shape.**
+
+*Superseded 2026-08-30.* **The shape is 6x2 = 12 tiles (~EUR 840) and
+the submission tree is regenerated at that shape** (`docs/23` sections 6
+and 9.1; `tt/info.yaml` now reads `tiles: "6x2"`). What moved it is
+below and in `docs/22` section 9.4: on the current RTL the design is
+**2.13 % over** the 70 % criterion at 4x2, and 6x2 measures **47.29 %**
+utilization with **+127,502 um2** of spare **[fact, `docs/23`
+sections 2.1 and 2.2]**. The rest of this headline is the 4x2 record and
+is left as written.
 
 This is no longer a projection. The design has been taken through the
 complete `Classic` flow at 4x2 locally, against the submission's own
@@ -52,7 +76,10 @@ went the same way: the slow corner closes at +0.632 ns, down from
 +6.436 ns (section 4.6).
 
 **The tile budget is settled, and the reasoning that used to leave it
-open was wrong.** Earlier revisions of this record argued that 4x2 was
+open was wrong.** *Retracted as a statement about 4x2, 2026-08-30: the
+budget is settled at 6x2, and the reasoning below is still the right
+reasoning about the wrong shape — see section 4 and `docs/22`
+section 9.4.* Earlier revisions of this record argued that 4x2 was
 unresolved because the `MIX` transform's measured **+0.92 %** of
 *synthesis* area was larger than the 0.68 % of core the previous harden
 left spare, and called the 70 % criterion "a coin toss for this design
@@ -415,6 +442,33 @@ estimate.]** The die and core did not move at any step: 268,059 um2 and
 259,837 um2 throughout **[fact, `design__die__area` and
 `design__core__area`]**.
 
+**Superseded 2026-08-30 by two later rounds, and kept in full.** The
+`ihp-mix` column above is the last run this section measured, and it is
+the correct predecessor for both of them; it is not withdrawn. Two
+hardening rounds have landed since: the AER pointer TMR and the
+`0448282` deadlock fix (`docs/22`), and then the twelve-tile shape
+comparison (`docs/23`). The same six quantities, from the same three
+files in each run:
+
+| Quantity | `ihp-mix` (above) | `wave5-ihp-b`, 4x2 at `0448282` | **`shape-6x2`, the submission shape** |
+|---|---|---|---|
+| mapped flip-flops | 1,235 | **1,275** | **1,275** |
+| post-synthesis cell area | 147,649 um2 | **151,789.11 um2** | **151,789.11 um2** |
+| **placed standard cells** | 181,043 um2 | **185,755 um2** | **185,840 um2** |
+| **utilization** | 69.6756 % | **71.4890 %** | **47.2887 %** |
+| **worst-corner setup slack** | +0.6315 ns | **+0.9121 ns** | **+1.2347 ns** |
+| placed instances | 23,763 | **23,685** | **33,801** |
+
+**[fact, `tt/runs/wave5-ihp-b/` and
+`hw/openlane/pilot_ihp/runs/shape-6x2/`, read the same way as the
+columns above; `docs/22` section 9.3 and `docs/23` section 2.1.]** Two
+things to read out of it. The netlist grew by 40 flip-flops and
+4,712 um2 of placed cells across the two rounds, which is what took 4x2
+past the criterion. The utilization collapse in the last column is
+**the denominator changing, not the design shrinking**: the 6x2 core is
+392,988 um2 against 4x2's 259,837, and the placed area differs by
+85 um2, 0.05 %.
+
 Three consequences, and only the first two matter for the decision.
 
 1. **The tile budget is settled: 4x2, with 0.46 % of the core spare.**
@@ -429,7 +483,26 @@ Three consequences, and only the first two matter for the decision.
    259,837 - 258,633 = **1,204 um2, or 0.46 % of the core** **[estimate,
    arithmetic on measured areas]**. Where `tmr-reharden` left 12.99 % and
    `ihp-memecc` left 0.68 %, this run leaves 0.46 %. **The pilot fits 4x2
-   and no further run is needed to say so.** What 0.46 % is not is a
+   and no further run is needed to say so.**
+
+   > *Both bolded claims retracted 2026-08-30.* **The tile budget is not
+   > settled at 4x2 and a further run was needed.** At `0448282` the
+   > design needs **265,364 um2** of rows against the 259,837 um2 the
+   > 4x2 core offers — a shortfall of **5,527 um2, -2.13 % of the core**,
+   > 102.13 % of the budget consumed **[fact for the placed area and
+   > utilization, `tt/runs/wave5-ihp-b/final/metrics.json`; the criterion
+   > arithmetic is an estimate on them; `docs/22` section 9.4]**. The
+   > spare progression this consequence records — 12.99 % (`tmr-reharden`)
+   > → 0.68 % (`ihp-memecc`) → 0.46 % (`ihp-mix`) — continues **-1.70 %
+   > (`wave5-ihp`) → -2.13 % (`wave5-ihp-b`)**. The budget is settled
+   > again, at a different shape: `docs/23` measures **47.29 % and
+   > +127,502 um2 spare at 6x2**, and the submission has moved there. The
+   > sentence retracted here is worth keeping visible for what it got
+   > wrong — it was true of the run it was written against and false one
+   > RTL increment later, which is the case against calling a single
+   > clean harden a settled budget.
+
+   What 0.46 % is not is a
    growth allowance: it is one thousand two hundred square microns, and
    anything added from here comes out of it — beginning with the
    `lif_core` ECC status ports of section 5.2, unconnected in this run and
@@ -448,6 +521,14 @@ Three consequences, and only the first two matter for the decision.
    arithmetic on a measured slack]**. Against `tmr-reharden`'s +6.436 ns
    it is still 5.80 ns down: the memory hardening spent that, and `MIX`
    gave a fraction of it back. Section 4.6 states it as what it is.
+
+   > *Superseded 2026-08-30.* The slow corner reads **+0.9121 ns** at
+   > `0448282` on 4x2 (Fmax **52.4 MHz**) and **+1.2347 ns** on the 6x2
+   > submission shape (Fmax **53.3 MHz**), still with every violation
+   > counter at zero on all three corners **[fact, `docs/22` section 9.3
+   > and `docs/23` section 3.1]**. The reading above — that a larger
+   > netlist can close better — survives both rounds.
+
 3. **The hardening itself is intact.** The configuration TMR survived
    synthesis: **55 flip-flops under each of `u_cfg_a`, `u_cfg_b` and
    `u_cfg_c`** in the final netlist, and
@@ -456,6 +537,18 @@ Three consequences, and only the first two matter for the decision.
    `final/metrics.json`]**. Sign-off is clean on every deck the Tiny
    Tapeout configuration runs: Magic DRC 0, Netgen LVS 0 on all seven
    counters, antenna 0 nets / 0 pins, detailed-route DRC 0 (section 5.3).
+
+   > *Extended 2026-08-30, not corrected.* The 55/55/55 count is still
+   > 55/55/55, now witnessed on `wave5-ihp-b` rather than on `ihp-mix`,
+   > and a second replicated domain is witnessed alongside it: the AER
+   > pointer TMR reads **3 flip-flops under each of twelve banks**, 36 in
+   > total, in the shipped netlist **[fact, `docs/22` sections 3 and 9.3,
+   > counted with `sw/tests/test_synthesis_guards.py`'s own predicate]**.
+   > `test_pointer_tmr_survives_the_real_hardening_flow` no longer skips.
+   > The sign-off zeros hold on both later rounds, and KLayout DRC is
+   > **0** on the 6x2 run as well **[fact, `docs/23` section 2.1 and
+   > `shape-6x2/final/metrics.json`]**.
+
 
 **What `MIX` is, and what it cost at synthesis.** Replica C of the
 configuration TMR carries an invertible XOR **mixing** transform
@@ -543,6 +636,38 @@ extrapolate from it; that step is gone.
 | same factor on `ihp-memecc` | 1.2347 | 180,651 / 146,310 **[estimate]** |
 | same factor on `tmr-reharden` | 1.2497 | 158,268 / 126,647 **[estimate]** |
 | same factor from `aer_fifo` (docs/12) | 1.2843 | 114,645 / 89,266 **[estimate]** |
+
+**Superseded 2026-08-30, row by row, and the method is unchanged.** The
+table above is `ihp-mix`; the design has hardened twice since and moved
+shape once. The replacements, read out of the same metric keys in the
+same two files:
+
+| Quantity | `ihp-mix` (above) | `wave5-ihp-b`, 4x2 at `0448282` | **`shape-6x2`, the submission shape** |
+|---|---|---|---|
+| post-synthesis cell area | 147,649 um2 | **151,789.11 um2** | **151,789.11 um2** |
+| mapped flip-flops, all `sg13g2_dfrbpq_1` | 1,235 | **1,275** | **1,275** |
+| **placed standard cells** | 181,043 um2 | **185,755 um2** | **185,840 um2** |
+| placed instances, all classes | 23,763 | **23,685** | **33,801** |
+| of which timing-repair buffers | 29,885 um2 (2,394) | **30,111.8 um2 (2,414)** | **(2,430 cells)** |
+| of which clock buffers and inverters | 3,485 um2 (167) | **3,365.71 um2** | not quoted in the source |
+| of which sequential cells | 60,501 um2 | **62,460.7 um2** | not quoted in the source |
+| of which antenna cells | 0 diodes | **6 diodes** | **0 diodes** |
+| place-and-route growth factor | 1.2262 | **1.2238** | **1.2243** |
+
+**[fact for the flip-flop, area and instance rows, `docs/22` sections
+9.3 and 9.5 and `docs/23` sections 2.1 and 4.4; the growth factors are
+arithmetic on two measured areas and are therefore estimates.]** Two
+cells of the 6x2 column are left empty on purpose: `docs/23` section 2.1
+reports the buffer *count* but not the buffer area, and does not break
+out clock-buffer or sequential area at all, and nothing here derives
+them. The instance count including fill rises to 33,801 because the
+larger core is filled with decap and tap cells, which is not design
+growth — `docs/23` section 2.1 makes the same point.
+
+Synthesis is identical between the two shapes to the cell and to two
+decimal places of area, and the placed areas differ by 85 um2. The tile
+shape is a floorplan input; it cannot reach Yosys **[fact, `docs/23`
+section 2.1]**.
 
 **The local-Yosys tool-delta row is gone.** The previous revision carried
 a 105,452 um2 local Yosys 0.33 `synth -flatten` measurement and a
@@ -793,6 +918,29 @@ direction of that error is known and unhelpful for the small shapes: a
 denser floorplan makes the resizer work harder, so a real 2x2 run would
 need *more* than 142.9 %, not less.
 
+*Superseded 2026-08-30, and the 4x2 verdict cell is retracted.* "0.46 %
+of the core spare … and that is the settled figure, not a projection"
+was true of `ihp-mix` and is false on the current RTL. Re-run on the
+185,840 um2 the submission netlist places, with the two twelve-tile rows
+now **measured** rather than estimated:
+
+| Shape | Tiles | Utilization needed | Verdict |
+|---|---|---|---|
+| 2x2 | 4 | **146.7 %** **[estimate]** | impossible |
+| 3x2 | 6 | **96.2 %** **[estimate]** | far above anything this project has achieved |
+| 4x2 | 8 | **71.49 %** **[fact]** | closes to a GDS, but **2.13 % over** the 70 % criterion — a run that worked, not a budget that holds |
+| **6x2** | **12** | **47.29 %** **[fact]** | **measured: closes, 0 DRC on every deck, 0 timing violations, +32.44 % of the core spare — the submission shape** |
+| 3x4 | 12 | **41.92 %** **[fact]** | closes, +40.12 % spare, but two route passes and one hold violation |
+| 8x2 | 16 | **35.3 %** **[estimate]** | not priced here |
+
+**[fact for the three hardened rows, `docs/22` section 9.4 and `docs/23`
+sections 2.1 and 2.2; the other three apply the measured placed area to
+a different die size and remain estimates for the same reason as
+above.]** The 4x2 row keeps its place because it is the measurement that
+moved the decision: the flow closed the tile and the *planning
+criterion* is what failed, which are different statements and `docs/22`
+section 4.2 keeps them apart.
+
 **The 4x2 row is the one that changed character.** It used to be a
 comfortable row — 60.9 % needed against a 70 % criterion. It is now a
 row that clears the criterion by 0.32 points of utilization, or
@@ -949,6 +1097,44 @@ the five are worth naming, because they are not just a bigger number:
   256-synapse variant is therefore not a 12-tile design in any shape that
   is certainly on sale.
 
+**Superseded 2026-08-30: the growth factor, the scaled column and the
+8 x 8 row.** The modelled columns and the method are unchanged; what
+moved is the factor they are scaled by, because the design hardened
+twice more. The measured factor is now **185,755 / 136,107 = 1.3648,
++36.5 %** against the +33.0 % below **[fact for both placed areas,
+`docs/22` sections 9.3 and 9.5; the ratio is arithmetic]**. Re-running
+the last two columns at +36.5 %:
+
+| Geometry | Placed at +36.5 % **[estimate]** | Min rows at 70 % | Smallest shape |
+|---|---|---|---|
+| 4 x 8 | 218,137 | 218,137 | 4x2 (8 tiles) — unchanged |
+| 8 x 4 | 237,026 | 237,026 | 4x2 (8 tiles) — unchanged |
+| **8 x 8** | **185,755 [fact]** | **265,364** | **6x2 (12 tiles)** — the 4x2 core is **5,527 um2 short, -2.13 %**; measured, not scaled |
+| 8 x 16 | 314,701 | 314,701 | 6x2 or 3x4 (12 tiles) — unchanged |
+| 16 x 8 | 350,994 | 350,994 | 6x2 or 3x4 (12 tiles) — unchanged |
+| 16 x 16 | 454,917 | 454,917 | **8x2 (16 tiles)** — it has now left twelve tiles altogether |
+
+The scaled figures are `docs/22` section 9.5's; the shape column is the
+same rule as the table below, applied to the section 4.3 row counts
+**[estimate, a scaled model on an unverified model, exactly as this
+section cautions]**.
+
+Two sentences below are now false and are corrected rather than deleted.
+**"Recomputed at +33.0 %, no row changes shape against the +32.7 %
+column" no longer holds**: at +36.5 % the **8 x 8** row leaves 4x2 —
+which is the measured result, not a modelled one — and the **16 x 16**
+row leaves 3x4. And the 16 x 16 bullet's "the spare there has fallen
+from 0.3 % to 0.09 % — 407 um2 of a 443,784 um2 core" is superseded: at
++36.5 % that row needs 454,917 um2 against 443,784, which is
+**-11,133 um2, -2.51 %**, so it does not fit 3x4 at all and the smallest
+shape that holds it is 8x2 at 526,140 um2 of rows **[estimate]**. The
+row to watch is still the right instinct; the number it was watching is
+gone. The purchasability caveat in that bullet is also refined rather
+than removed: `docs/23` section 7 finds 3x4 present in the tooling, in
+the shuttle's own pinned tt-support-tools and in Tiny Tapeout's pricing
+table, and **still unconfirmed as purchasable on TTIHP26b**. It does not
+gate anything now, because the submission is 6x2.
+
 **Superseded areas (2026-08-26, extended 2026-08-27).** Every cell area
 in this table predates the configuration-TMR synthesis fix, the
 `lif_core` memory hardening *and* `MIX`. Before the fix, yosys merged the three
@@ -957,6 +1143,11 @@ flip-flops where the RTL then declared 1,161; with the fix the mapped
 count was 1,155, and with the memory hardening it is **1,235** against
 1,241 declared (see `docs/16` section 7.4 and
 `sw/tests/test_synthesis_guards.py`, which passes on the current RTL).
+*Superseded 2026-08-30:* with the AER pointer TMR and the `0448282`
+deadlock fix the mapped count is **1,275** **[fact, `docs/22` sections
+9.2 and 9.5]**. The declared count moves with the pointer TMR, and
+`sw/tests/test_synthesis_guards.py` asserts it against the netlist
+rather than hardcoding it, so no second number needs maintaining here.
 
 An earlier revision of this note estimated the TMR area impact at
 "roughly 3 % low". **That estimate was wrong, and `docs/20` measured
@@ -982,6 +1173,16 @@ row's shape column does not move, and this is now measured for the whole
 of the current RTL rather than for part of it.** Five other rows move,
 per the scaled column above.
 
+*Superseded 2026-08-30.* **The 4x2 decision did not survive the fourth
+and fifth corrections.** The utilization series continues 52.38 % →
+60.91 % → 69.52 % → 69.68 % → **71.19 %** (`wave5-ihp`) → **71.49 %**
+(`wave5-ihp-b`), and the spare against the 70 % criterion continues
+25.2 % → 12.99 % → 0.68 % → 0.46 % → **-1.70 %** → **-2.13 %**
+**[fact for each utilization; the spare column is arithmetic on measured
+areas, `docs/22` sections 4.1 and 9.4]**. The 8 x 8 row's shape column
+does move, at the sixth measurement: the submission is 6x2 and the row
+reads **47.29 %** there **[fact, `docs/23` section 2.1]**.
+
 **The tile budget is settled.** Every earlier revision of this paragraph
 called it open, and the last of them made the argument that has now been
 disproved: that the `MIX` transform's **+0.92 %** of synthesis area
@@ -995,6 +1196,20 @@ ones: the shape is 4x2, and there is no growth allowance behind it. The
 next RTL increment of the memory hardening's size is a 12-tile
 conversation rather than an 8-tile one, and at 1,204 um2 of spare even
 one the size of `MIX` is worth measuring before it is committed to.
+
+> *Superseded 2026-08-30, and the paragraph above is kept because its
+> second half was right.* **"The tile budget is settled" was settled at
+> the wrong shape.** Of the two conclusions it says survive verbatim,
+> the second one held and the first did not: there was no growth
+> allowance, and the very next increment — the AER pointer TMR, then a
+> seven-flip-flop deadlock fix — spent past the line, to **-2.13 %** of
+> the core **[fact, `docs/22` section 9.4]**. The 12-tile conversation
+> this paragraph anticipated is the one that happened, one increment
+> later than it expected: `docs/23` hardened 6x2 and 3x4 end to end and
+> the submission is now **6x2**, which the paragraph's own reasoning
+> points at. What is settled today is the shape, not a margin — 6x2
+> leaves **+127,502 um2**, and it would take **48 % more placed area**
+> to cross the criterion there **[fact, `docs/23` sections 2.2 and 6]**.
 
 Sanity check on the model: for the 8 x 8 row it predicts 135,840 um2 and
 the flow measured 181,043, so **the model is 25.0 % low** on its one
@@ -1016,6 +1231,16 @@ boundary case. The 8 x 8 row now needs **258,633** um2 against 3x2's
 over. The default geometry is a 4x2 design and not a 3x2 one by a wide
 distance now, at the 70 % criterion as well as at any criterion this
 project has actually achieved.
+
+*Superseded 2026-08-30.* The 8 x 8 row needs **265,364 um2** at
+`0448282`, which is 37 % over 3x2 and 2.1 % over 4x2 **[fact for the
+placed area, `docs/22` section 9.4; the comparison is arithmetic]**. The
+sanity check below moves the same way: against the measured 185,755 um2
+the model's 135,840 um2 prediction is **26.9 % low** rather than 25.0 %,
+and in the same direction for the fifth time **[estimate]**. The
+conclusion the check draws — that this model is no longer a planning
+instrument — is unaffected, and the default geometry is now a 12-tile
+design rather than a 4x2 one.
 
 The docs/06 section B.6 default content line — "16-32 LIF neuron
 crossbar" in 2x2 — is off by roughly a factor of three in tiles once the
@@ -1060,7 +1285,24 @@ moved the same way at both steps (+11.423 → +7.554 → +7.709 and
 +14.167 → +11.808 → +11.926). The memory-hardening drop is consistent
 with the critical path getting longer rather than with a placement
 accident: the path already ran through SECDED XOR trees, and the
-hardening added two more coded fields for it to run through. The `MIX`
+hardening added two more coded fields for it to run through.
+
+*Extended 2026-08-30.* The progression continues, on the same metric
+from the same report file in each run: `tmr-reharden` +6.436 ns,
+`ihp-memecc` +0.4035, `ihp-mix` **+0.6315**, `wave5-ihp` **+1.1554**,
+`wave5-ihp-b` **+0.9121**, and on the 6x2 submission shape
+**+1.2347 ns** — the best slow corner of any harden of the current
+netlist **[fact, `docs/22` sections 2.3, 9.3 and 9.5, and `docs/23`
+section 3.1]**. Typical and fast move with it: **+7.8999 / +11.9855 ns**
+at 4x2 and **+8.1297 / +12.1329 ns** at 6x2. Worst hold on the fast
+corner is **+0.1180 ns** at 4x2 and **+0.1089 ns** at 6x2, and every
+setup, hold, max-cap and max-slew counter is zero on all three corners
+in both **[fact]**. The pointer TMR bought slack rather than spending it
+— a fourth instance of the same surprise — and `docs/22` section 2.3
+states the rule this record should hold to: **on this design, netlist
+size does not predict slack in either direction.**
+
+The `MIX`
 recovery is the opposite kind of result and deserves to be named as a
 surprise rather than smoothed over — a *larger* netlist closed *better*,
 on every corner, with fewer timing-repair buffers (section 4 head). The
@@ -1481,6 +1723,18 @@ flip-flop pilot needs anyway. The gate now decides content, and the
 budget line in docs/06 (~EUR 560) is unchanged for the flip-flop
 variant.
 
+*Superseded 2026-08-30.* The conclusion holds and its arithmetic does
+not: **the flip-flop pilot needs twelve tiles on its own**, without the
+macro, because two rounds of hardening grew it past 4x2 (section 4 and
+`docs/22` section 9.4). So the budget line is **EUR 840, +EUR 280**
+against the figure above — and it is still the same line item, because
+docs/06 B.6 already prices a 12-tile option; what changed is its
+*justification*, which B.6 attached to the SRAM-macro variant and which
+now belongs to the flip-flop pilot **[fact, `docs/23` section 8]**. The
+gate still decides content rather than tile count, which is the point
+this paragraph was making, and the macro go/no-go is recorded as no-go
+for TTIHP26b.
+
 What the macro would add, if it passes:
 
 - **Synapse capacity.** `RM_IHPSG13_1P_512x32` holds 16 kbit = 4,096
@@ -1603,6 +1857,24 @@ failed.
    submitting with thirteen. Earlier revisions of this item said a
    re-harden was still needed to settle whether the criterion was met; it
    has been run, and the answer is that it is met.
+
+   > *Superseded 2026-08-30.* **Submit at 6x2 = 12 tiles (~EUR 840).**
+   > Two more hardening increments put 4x2 at **-2.13 %** against the
+   > criterion (`docs/22` section 9.4), and `docs/23` hardened both
+   > twelve-tile shapes end to end and chose 6x2: it routes in one
+   > detailed-route pass of five iterations against 3x4's two passes of
+   > eleven, needs **zero antenna diodes** against one, closes the slow
+   > corner best of the three at **+1.2347 ns**, and carries no timing
+   > violation where 3x4 carries one hold violation of -6.27 ps
+   > **[fact, `docs/23` sections 3.1, 4.3 and 4.4]**. Utilization did
+   > **not** decide it — both twelve-tile shapes clear the criterion by
+   > more than thirty points. The item above is kept because the caution
+   > it ends on is the reason this happened: submitting with half a
+   > percent in hand is a different proposition from submitting with
+   > thirteen, and half a percent is what the next increment consumed.
+   > Cost consequence: **+EUR 280** against the `docs/06` B.6 line, and
+   > the line item itself is unchanged because B.6 already prices a
+   > 12-tile option (`docs/23` section 8).
 2. **3x2 = 6 tiles is not the floor, it is a gamble.** It needs
    **93.7 %**, far above every reference point this project has, and it
    would start global placement at **76.4 %** against the template's
@@ -1640,7 +1912,12 @@ failed.
 ### 8.1 What exists
 
 `tt/` is a port of the Tiny Tapeout Verilog template, at 4x2, with this
-project's RTL in it. Provenance, recorded rather than assumed:
+project's RTL in it. *Superseded 2026-08-30: the tree is regenerated at
+**6x2**.* `scripts/gen_tt_submission.py` carries `TILES = "6x2"`,
+`tt/info.yaml` reads `tiles: "6x2"`, and `tt/src/config_merged.json`
+carries `DIE_AREA 0 0 1289.28 313.74` with the 6x2 DEF template
+**[fact, `docs/23` section 9.1]**. Provenance, recorded rather than
+assumed:
 
 - template: `https://github.com/TinyTapeout/ttihp-verilog-template`,
   commit `6598bef4d3159f19fe471a2a2225df52e6f5ad25` ("chore: update tags
@@ -1816,7 +2093,9 @@ cannot be done from this environment at all:
 
 1. **Reserve the tiles and pay.** A Tiny Tapeout account, a TTIHP26b
    slot at 4x2 and payment of ~EUR 560. Nothing in `tt/` can be
-   submitted without it. Close: **2026-09-21**.
+   submitted without it. Close: **2026-09-21**. *Superseded 2026-08-30:*
+   the slot is **6x2, 12 tiles, EUR 840** — **+EUR 280** against the
+   figure above **[fact, `docs/23` section 8]**.
 2. **Decide the licence.** `tt/LICENSE.PENDING.md` records the state:
    `docs/14-licensing-decision.md` is unsigned, its own signature
    deadline is 2026-08-31, and a Tiny Tapeout submission is a public
@@ -1866,6 +2145,16 @@ cannot be done from this environment at all:
    budget for the RTL it consumed, and the tree has moved once since. Pin
    it (section 8.5) and requote section 4 from it. The *shape* is not in
    question at this size of change; the 0.46 % spare is.
+
+> *Items 8 and 9 closed 2026-08-30, and item 9's last sentence was
+> wrong.* The re-harden was run, pinned, twice — `docs/22` sections 2
+> and 9 — and it measured the connected ECC ports at **+9 flip-flops in
+> `pilot_top`'s own scope**, alongside the pointer TMR's +24. What it
+> did not do is leave the shape alone: the 0.46 % spare went to
+> **-2.13 %**, and the shape moved to 6x2 (`docs/23`). "The *shape* is
+> not in question at this size of change" is the claim to keep in view —
+> at half a percent of margin, a change this size did put the shape in
+> question.
 
 The item that used to sit at number 9 — "re-harden against the current
 `hw/rtl`, and settle the tile budget" — **was done** by run 5, which was

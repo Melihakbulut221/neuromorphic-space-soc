@@ -129,6 +129,47 @@ The one finding that does **not** move with the RTL revision is section
 3.3b's diagnosis, because it is a property of the flow and the PDK — a
 parasitic model, not a netlist. That is why it is the durable result.
 
+> **Superseded 2026-08-30 in three ways, and the preamble above is kept
+> as the state it described.** Read this before the sky130 columns
+> below.
+>
+> 1. **The sky130 side was re-hardened at 4x2, and it stopped routing.**
+>    Run `sky-08-ptrtmr` on the pointer-TMR RTL reaches
+>    **123,766 um2 placed at 82.96 % placement utilization** and then
+>    diverges in detailed routing — 218,483 violations after the 0th
+>    optimization iteration, 348,149 after the 1st, 364,603 after the
+>    2nd, still rising when it was stopped **[fact, `docs/22`
+>    section 5]**. It reached no sign-off deck, so it supersedes the
+>    sky130 columns below **in status, not in value**: their zeros were
+>    true of `sky-04-tmr` and are not statements about the current RTL at
+>    4x2.
+> 2. **At twelve tiles sky130 routes again, and the portability claim is
+>    back and stronger.** `docs/23` section 5 hardens sky130 **6x2** and
+>    **3x4** end to end: detailed routing, Magic DRC, the KLayout deck,
+>    the Magic/KLayout XOR, Netgen LVS on all seven counters and the
+>    antenna checks, **all zero on both**, with **zero global-route
+>    overflow** against 4x2's 22,357 **[fact]**. What section 5 of
+>    `docs/22` recorded as a portability failure was a **tile-size
+>    failure**: sky130's 4x2 core is 149,183 um2 against IHP's 259,837,
+>    and the design outgrew the smaller one first.
+> 3. **The submission is no longer 4x2.** It is **6x2 = 12 tiles**
+>    (`docs/23` sections 6 and 9.1), so this document's title and its
+>    "same 4x2 tile count" framing describe the shape the comparison was
+>    made at, not the shape being taped out. The IHP side has also
+>    hardened twice more since `ihp-mix`: **185,755 um2 at 71.4890 %**
+>    with **+0.9121 ns** slow-corner setup at 4x2 (`wave5-ihp-b`,
+>    `0448282`), and **185,840 um2 at 47.2887 %** with **+1.2347 ns** on
+>    the 6x2 submission shape **[fact, `docs/22` sections 9.3 and 9.5,
+>    `docs/23` sections 2.1 and 3.1]**.
+>
+> One bookkeeping note, so that no figure is silently dropped.
+> `docs/22` section 6.2 is written against `c5a5a6e` and its section 9.5
+> excludes section 6.2 as a block from the `0448282` re-statement, on
+> the grounds that no sky130 run exists at either commit — while listing
+> the same IHP *quantities* individually as superseded. Both commits are
+> therefore quoted below wherever section 6.2's replacement text carries
+> an IHP number, `c5a5a6e` first and `0448282` beside it.
+
 **Headline, 2026-08-26.**
 
 - **The design is PDK-portable for manufacturability, and this was
@@ -388,7 +429,28 @@ on sky130, exactly as on IHP.
 That the *disconnected pin* count is 6 on both PDKs, with 0 critical, is
 worth noting on its own: it is a property of the netlist (the Tiny
 Tapeout wrapper ties off pins the design does not use), not of the
-technology, and it reproduces to the instance.
+technology, and it reproduces to the instance. That count is **still 6**
+on every later run of both PDKs **[fact, `docs/22` section 9.3]**.
+
+*Superseded in status 2026-08-30, and one cell superseded in value.*
+
+- **The sky130A column is a `sky-04-tmr`-era result.** Every zero in it
+  was measured and none of it is withdrawn, but it is **not established
+  on the current RTL at 4x2**: `sky-08-ptrtmr` diverged in detailed
+  routing and reached none of these steps **[fact, `docs/22`
+  section 5]**. At twelve tiles the whole column is re-established —
+  sky130 6x2 and 3x4 both return **0** on Magic DRC, the KLayout deck,
+  the Magic/KLayout XOR, all seven Netgen counters, antenna and
+  detailed-route DRC **[fact, `docs/23` section 5]**.
+- **The ihp-sg13g2 "KLayout DRC — *not run*" cell is now a zero.** The
+  deck was run on a variant config that differs from the submission
+  config in that one key: `ihp-klayoutdrc-w5` reports
+  `klayout__drc_error__count: 0` at `c5a5a6e` **[fact, `docs/22`
+  section 2.4]**, and the 6x2 submission-shape run reports **0** as well,
+  from a config that carries `RUN_KLAYOUT_DRC: 1` outright **[fact,
+  `docs/23` section 1.3 and
+  `hw/openlane/pilot_ihp/runs/shape-6x2/final/metrics.json`]**. The
+  Magic/KLayout XOR is still **not run on IHP** and is not claimed.
 
 ### 3.2 Area and utilization [fact]
 
@@ -423,6 +485,37 @@ command, `hw/openlane/pilot_sky130/run_sky130.sh --run-tag sky-07-memecc`
 or similar, and until it is run the honest statement about the sky130
 cost of the memory hardening and of `MIX` is that it is unmeasured
 **[planned — no date and no artifact]**.
+
+**Superseded 2026-08-30. The sky130 run was made, and it did not
+route.** Three corrections to the two paragraphs above, none of which
+touches the `sky-04-tmr` / `tmr-reharden` ratio they exist to protect.
+
+- **"On sky130 neither has: no run exists against that RTL" is no longer
+  true.** `sky-08-ptrtmr` exists and reaches **123,766 um2 at 82.96 %
+  placement utilization**, then diverges in detailed routing and yields
+  **no routed area and no sign-off figure** **[fact, `docs/22`
+  section 5]**. The like-for-like gap it was meant to close is still
+  open at 4x2, and it is now blocked behind a routing problem rather
+  than a scheduling one.
+- **The latest IHP figures.** `docs/22` section 6.2 gives
+  **184,969 um2 at 71.1867 %** (`wave5-ihp`, `c5a5a6e`); at `0448282`
+  the same run series reads **185,755 um2 at 71.4890 %**
+  (`wave5-ihp-b`), and on the 6x2 submission shape **185,840 um2 at
+  47.2887 %** **[fact, `docs/22` sections 9.3 and 9.5, `docs/23`
+  section 2.1]**. **The instruction above still stands**: the
+  `sky-04-tmr` / `tmr-reharden` pair remains the only like-for-like one
+  this document has, and it should stay the quoted ratio. Do not divide
+  any of these three by a sky130 area.
+- **"sky130 sits 6.1 points above the IHP utilization"** is unchanged as
+  a statement about that pair. On the current RTL at 4x2 the placement
+  utilizations are **82.96 % sky130 against 71.19 %** (`c5a5a6e`) or
+  **71.49 %** (`0448282`) IHP — about **11.5 to 11.8 points above**
+  **[estimate, arithmetic on measured utilizations]**. At twelve tiles
+  the sign of that gap survives and the magnitude collapses: **55.88 %
+  sky130 6x2 against 47.29 % IHP 6x2**, 8.6 points **[fact, `docs/23`
+  sections 2.1 and 5]**. The mechanism is the one this section already
+  names — the sky130 tile is smaller in absolute terms at every shape,
+  so the same design lands denser on it.
 
 There is now a measured reason to expect that a sky130 re-run would not
 be predictable from synthesis. On IHP, `MIX` cost **+0.92 % of synthesis
@@ -557,6 +650,39 @@ corner — which is worth noting here only as a caution about
 extrapolating slack from netlist size, on either PDK. Any arithmetic below that subtracts an IHP slack from a
 sky130 slack is quoted on the `tmr-reharden` / `sky-04-tmr` pair and
 should stay that way until a sky130 run exists on the current RTL.
+
+**Superseded 2026-08-30.** The reference table above is still correct
+for `tmr-reharden` and is not withdrawn. Three corrections:
+
+- **The IHP column has now moved four times, not twice**, and the
+  current values are, in order: `ihp-mix` +0.6315 / +7.7094 / +11.9259;
+  `wave5-ihp` (`c5a5a6e`) **+1.1554 / +8.0521 / +12.1355**;
+  `wave5-ihp-b` (`0448282`) **+0.9121 / +7.8999 / +11.9855**; and on the
+  6x2 submission shape **+1.2347 / +8.1297 / +12.1329**, the best slow
+  corner of any harden of this netlist. Every setup, hold, max-cap and
+  max-slew counter is zero at all three corners in each **[fact,
+  `docs/22` sections 2.3, 9.3 and 9.5; `docs/23` section 3.1]**. Worst
+  hold on the fast corner is **+0.1180 ns** at 4x2 and **+0.1089 ns** at
+  6x2.
+- **The sky130 column has moved too, and not in a way that helps.** A
+  sky130 run on the current RTL was attempted at 4x2 and **does not
+  route**, so the -2.9659 ns at `max_ss_100C_1v60` is still the last
+  measured sky130 slack, still on `sky-04-tmr`, and it is neither
+  confirmed nor superseded **[fact, `docs/22` section 5.2]**. At twelve
+  tiles the corner is measurable again and the miss is **worse, not
+  better**: **-5.4953 ns at 3x4** and **-7.3054 ns at 6x2**, 227
+  violating paths in both **[fact, `docs/23` section 5]**. That is the
+  same corner sky130 has always missed, now measured on a larger
+  netlist — not a shape effect being discovered.
+- **The instruction stands and its condition is still not met.** Do not
+  subtract a current IHP slack from a `sky-04-tmr` slack: at 4x2 there
+  is no routed sky130 netlist to subtract from, and at twelve tiles the
+  two PDKs are no longer the same shape as the pair above. Read as
+  frequency, the current IHP slow-corner path is **19.088 ns ->
+  52.4 MHz** at 4x2 and **18.765 ns -> 53.3 MHz** at 6x2 **[estimate,
+  arithmetic on a measured slack]** — replacing this section's
+  53.1 MHz (`wave5-ihp`) and the 51.6 MHz below, and belonging in the
+  IHP column only.
 
 **Read as frequency [estimate — a single-point extrapolation from one
 run, and a weak one on the sky130 side: 3.3b shows the flow optimized
@@ -1105,6 +1231,42 @@ LVS all **0**, and 0 antenna-violating nets, exactly as here **[fact,
 **The one-sentence version:** the design is manufacturably portable and
 temporally not, which is exactly the distinction a gate that checks
 Antenna, LVS and DRC cannot make for you.
+
+> **Superseded 2026-08-30 in scope, and the conclusion survives with a
+> qualifier the original did not have.** This section concludes that
+> portability holds for structure and stops at timing. Two later rounds
+> add a term between them: **it also stops at the tile, and the tile is
+> a PDK-specific quantity.**
+>
+> - **At 4x2 on the current RTL, sky130 does not reach a routed netlist
+>   at all** — `sky-08-ptrtmr` diverges in detailed routing at 82.96 %
+>   placement utilization **[fact, `docs/22` section 5]**. For one round
+>   this read as portability failing earlier than timing.
+> - **At twelve tiles it routes, and the first bullet of "Proved" is
+>   re-established on a larger netlist than it was first written for.**
+>   sky130 6x2 and 3x4 both complete the whole sign-off, zero on every
+>   deck including the Magic/KLayout XOR, which this document had never
+>   run to a zero on a shape this size **[fact, `docs/23` section 5]**.
+>   The 4x2 failure was a **tile-size** failure, not a technology one:
+>   the sky130 4x2 core is 149,183 um2 against IHP's 259,837, so the
+>   design outgrows the smaller tile first. This is the same asymmetry
+>   section 3.2 already flagged as "the number to watch if the design
+>   grows", and it is what happened.
+> - **"Timing does not port" is confirmed and is worse.** On the
+>   twelve-tile netlists sky130 misses `max_ss_100C_1v60` by **-5.4953 ns
+>   at 3x4** and **-7.3054 ns at 6x2** with 227 violating paths, while
+>   IHP closes all three of its corners at both shapes **[fact,
+>   `docs/23` sections 3.1 and 5]**. The IHP half of the comparison is
+>   now **+1.2347 ns** at 6x2 rather than the +0.63 ns quoted above, so
+>   `clock_hz: 50000000` is correct by about 3.3 MHz rather than 1.6.
+>   Section 3.3b's parasitic-model diagnosis was **not** re-tested at
+>   twelve tiles and remains the open item it was **[planned — no date
+>   and no artifact, `docs/23` section 10 item 6]**.
+>
+> **The one-sentence version, restated:** the design is manufacturably
+> portable at a tile count large enough to route it, temporally not, and
+> the tile count that is large enough is not the same number on both
+> PDKs.
 
 ---
 

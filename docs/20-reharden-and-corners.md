@@ -16,16 +16,23 @@ including the 60.91 % utilization, the 158,268 um2 of placed cells, the
 1,155 flip-flops, the +6.436 ns slow-corner slack, and the "4x2 still
 fits, with 13.0 % of the core spare" conclusion drawn from them.
 
-The replacement figures are **not restated here**, deliberately.
 `docs/22-reharden-wave5.md` is the document that re-hardens the current
 netlist and its **section 6.3 is a location-by-location correction list
 for this document** — each row naming what this document says, what
-replaces it, and which artifact the replacement was read from. That is
-where the current numbers live. A further IHP run
-(`tt/runs/wave5-ihp-b/`) was still executing when this note was written,
-so the exact values in `docs/22` may move again; `docs/22` is the
-authority on its own status, and nothing in this document should be
-quoted without checking it first.
+replaces it, and which artifact the replacement was read from.
+
+**Amended 2026-08-30: the replacement figures are now restated here.**
+The reason this note originally withheld them no longer holds —
+`tt/runs/wave5-ihp-b/` was still executing when it was written, and it
+has since completed and is `docs/22` section 9. A second round has
+landed on top of it: `docs/23-tile-shape-decision.md` hardened both
+twelve-tile shapes and **moved the submission from 4x2 to 6x2**, so the
+`docs/22` section 6.3 rows that correct a 4x2 figure toward another 4x2
+figure are applied below *and* carried forward to the shape actually
+being submitted. Each correction is placed beside the text it replaces,
+with its source. Where `docs/22` section 6.3 (written at `c5a5a6e`) and
+its section 9.5 (`0448282`) differ, section 9.5 is used and both values
+are shown.
 
 The *findings* of this document are not withdrawn and do not depend on
 the superseded numbers: `PNR_CORNERS` does not close the sky130 slow
@@ -55,6 +62,22 @@ Two jobs, both consequences of commit `e45d52d`:
   ns *better* than the run it supersedes, despite being 16.3 % larger.
 - **4x2 still fits, with 13.0 % of the core spare** beyond the `docs/15`
   70 % planning criterion, down from 25.2 % before the fix.
+
+> *Both bullets superseded 2026-08-30.* The sign-off bullet reads
+> **1,275 flip-flops, 185,755 um2 of placed cells, 71.4890 %
+> utilization, +0.9121 ns** on the slow corner for the current RTL at
+> 4x2, with the same zeros on every deck **[fact, `docs/22` sections 9.3
+> and 9.5; `docs/22` section 6.3 gives the intermediate `c5a5a6e`
+> figures 1,268 / 184,969 um2 / 71.1867 % / +1.1554 ns]**. **The
+> "4x2 still fits, with 13.0 % of the core spare" bullet is retracted**:
+> at the same criterion the design is **over budget by 5,527 um2,
+> -2.13 % of the core**, and the spare series runs 25.2 % → 13.0 % →
+> 0.68 % → 0.46 % → -1.70 % → **-2.13 %** **[fact for the placed areas
+> and utilizations; the criterion arithmetic is an estimate on them]**.
+> The submission has since moved to **6x2 = 12 tiles**, where the same
+> netlist places 185,840 um2 at **47.2887 %** with **+127,502 um2**
+> spare and closes the slow corner at **+1.2347 ns** **[fact, `docs/23`
+> sections 2.1, 2.2 and 3.1]**.
 - **`docs/15`'s "roughly 3 % low" note is itself wrong.** The measured
   growth is +16.3 % placed, +17.5 % at synthesis, and section 3
   decomposes it: about half is the TMR fix, about half is the
@@ -213,6 +236,58 @@ cosmetic; section 3.3 measures what it buys and what it costs.
 | Worst IR drop, VPWR | 0.64 mV | 0.489 mV (0.04 %) | — |
 | Summed step runtime | not comparable | 36.3 min | see below |
 
+**Superseded 2026-08-30, column by column, and the table above is kept
+as the `tmr-reharden` record.** Two hardening rounds and one shape
+change have landed since. The replacement column for the current RTL at
+4x2 is `wave5-ihp-b` (`docs/22` section 9.3); the column that describes
+what is being submitted is `shape-6x2` (`docs/23` sections 2.1, 3.3
+and 4.4):
+
+| Quantity | `tmr-reharden` (above) | `wave5-ihp-b`, 4x2 at `0448282` | **`shape-6x2`, submitted** |
+|---|---|---|---|
+| Mapped flip-flops | 1,155 | **1,275** | **1,275** |
+| Synthesis cells | 7,791 | **9,821** | **9,821** |
+| Synthesis cell area | 126,647 um2 | **151,789.11 um2** | **151,789.11 um2** |
+| Placed cells, excl. fill | 10,164 | **12,424** | **12,418** |
+| Instances incl. fill | 22,940 | **23,685** | **33,801** |
+| **Placed cell area** | 158,268 um2 | **185,755 um2** | **185,840 um2** |
+| of which sequential | 56,582 um2 | **62,460.7 um2** | not quoted in the source |
+| of which timing-repair buffers | 28,181 um2 (2,213) | **30,111.8 um2 (2,414)** | **(2,430 cells)** |
+| of which clock buffers | 3,422 um2 | **3,365.71 um2** | not quoted in the source |
+| Die area | 268,059 um2 | **268,059 um2** | **404,499 um2** |
+| Core area | 259,837 um2 | **259,837 um2** | **392,988 um2** |
+| **Utilization** | 60.91 % | **71.4890 %** | **47.2887 %** |
+| Routed wirelength | 386,429 um | **480,088 um** | **469,914 um** |
+| Route (TritonRoute) DRC | 0 | **0** | **0** |
+| **Magic DRC** | 0 | **0** | **0** |
+| **KLayout DRC** | not run | not re-run at `0448282`; **0** at `c5a5a6e` (§2.3) | **0** |
+| **Netgen LVS**, all seven counters | 0 | **0** | **0** |
+| **Antenna-violating nets / pins** | 0 / 0 | **0 / 0** | **0 / 0** |
+| Antenna diodes inserted | 0 | **6** | **0** |
+| Unmapped instances | 0 | **0** | **0** |
+| Power-grid violations | 0 | **0** | **0** |
+| Disconnected pins | 6 | **6** | not quoted in the source |
+| Max-fanout counter | 77 | **85** | not quoted in the source |
+| `design__violations` / `flow__errors__count` | 0 / 0 | **0 / 0** | **0 / 0** |
+| Worst IR drop, VPWR | 0.489 mV | **1.277 mV** | **0.616 mV** |
+| Total power, 50 MHz typical | not quoted | **5.191 mW** | **5.130 mW** |
+
+**[fact, `docs/22` sections 9.3 and 9.5 and `docs/23` sections 2.1, 3.3
+and 4.4.]** Four cells are left empty rather than filled by inference:
+`docs/23` reports the repair-buffer *count* but not its area, and does
+not break out clock-buffer or sequential area, the disconnected-pin
+count or the max-fanout counter for the 6x2 run. The IR figures remain
+indicative on every column — no `VSRC_LOC_FILES` — and the power figures
+are the flow's own estimates from default switching activity, not
+annotated-activity measurements.
+
+Two readings worth keeping. The instance count including fill rises to
+33,801 at 6x2 because the larger core is filled with decap and tap
+cells, which is **not** design growth; and the placed cell area differs
+between the two shapes by 85 um2, 0.05 %, because **only the denominator
+changes** — synthesis is identical to the cell, since a floorplan input
+cannot reach Yosys **[fact, `docs/23` section 2.1]**.
+
 Runtime is deliberately not given a delta. `tt/runs/tt-harden` was
 pruned from 553 MB to the artefacts `docs/15` cites, and 4 of its 34
 surviving step directories still carry a `runtime.txt` **[fact]** — any
@@ -233,6 +308,20 @@ mapped). The number that matters is that **all three 55-bit replicas are
 present**: 1,155 - 1,045 = 110, exactly the two banks the merge used to
 eat.
 
+*Extended 2026-08-30, not corrected.* That account of the configuration
+domain still holds, and the census has since been repeated on the
+shipped netlist: **55 flip-flops under each of `u_cfg_a`, `u_cfg_b` and
+`u_cfg_c`**. Two increments sit on top of it. The AER pointer TMR adds
+**+24** — twelve pointer banks at **3** flip-flops each, 36 in total,
+where the four queue pointers previously held 6 flip-flops per queue —
+and the `lif_core` ECC status ports add **+9** in `pilot_top`'s own
+scope, taking the count to 1,268 at `c5a5a6e`; the `0448282` deadlock
+fix then adds the **+7** its commit message predicts, for **1,275**
+**[fact, `docs/22` sections 2.2, 3, 9.2 and 9.3, counted by instance
+path in the final netlists]**. Both replicated domains are now witnessed
+in a shipped artefact by
+`sw/tests/test_synthesis_guards.py`, which no longer skips.
+
 ### 2.2 Timing, three corners, post-route with OpenRCX parasitics
 
 | Corner | `docs/15` §4.6 — **superseded** | Re-harden | Delta |
@@ -251,6 +340,28 @@ one it replaces, despite being 16.3 % larger.** That is worth stating
 plainly because it is the opposite of the intuitive result. +6.436 ns of
 slack at a 20 ns period is a 13.56 ns critical path and a post-route
 slow-corner Fmax of about **73.7 MHz**, against `docs/15`'s 68.1 MHz.
+
+**Superseded 2026-08-30.** The table above is `tmr-reharden` and is not
+withdrawn; the corner figures for the current RTL are:
+
+| Corner | `tmr-reharden` (above) | `wave5-ihp-b`, 4x2 at `0448282` | **`shape-6x2`, submitted** |
+|---|---|---|---|
+| `nom_slow_1p08V_125C` | +6.436 ns | **+0.9121 ns** | **+1.2347 ns** |
+| `nom_typ_1p20V_25C` | +11.423 ns | **+7.8999 ns** | **+8.1297 ns** |
+| `nom_fast_1p32V_m40C` | +14.167 ns | **+11.9855 ns** | **+12.1329 ns** |
+| Worst hold, slow / fast | +0.646 / +0.119 ns | **+0.6218 / +0.1180 ns** | **+0.6039 / +0.1089 ns** |
+| Setup / hold / max-cap / max-slew violations, all corners | 0 | **0** | **0** |
+
+**[fact, `docs/22` sections 9.3 and 9.5 and `docs/23` section 3.1;
+`docs/22` section 6.3 gives the intermediate `c5a5a6e` figures
++1.1554 / +8.0521 / +12.1355.]** Read as frequency, the slow-corner
+Fmax is **52.4 MHz** at 4x2 and **53.3 MHz** at 6x2, not the 73.7 MHz
+above **[estimate, arithmetic on a measured slack]**. The mechanism
+paragraph below survives all of it, and has since been generalised: the
+pointer TMR also closed *better* than the run it replaced. `docs/22`
+section 2.3 states the rule — **on this design, netlist size does not
+predict slack in either direction** — which is a caution against sizing
+a future increment's timing from its area delta, in either direction.
 
 The mechanism is visible in the netlist: before the fix, one merged
 55-bit bank fanned out to all three voter inputs, so the voter's inputs
@@ -271,6 +382,18 @@ off rather than the config forked. The sky130 runs of sections 4 to 6 do
 run both decks and both report 0, so the deck is not untested on this
 design, only untested *on this PDK*. Closing it properly is a named
 follow-up (section 9).
+
+*Closed 2026-08-30.* KLayout DRC has now run on the IHP tile and reports
+**0**, twice. First on `ihp-klayoutdrc-w5`, a variant config differing
+from the submission config in that one key, at `c5a5a6e` — which also
+served as a reproducibility control, reproducing every other figure of
+that run to the last digit **[fact, `docs/22` section 2.4]**. Then on
+the 6x2 submission-shape run, whose config carries `RUN_KLAYOUT_DRC: 1`
+outright so that one run per shape yields the whole sign-off set
+**[fact, `docs/23` section 1.3 and
+`hw/openlane/pilot_ihp/runs/shape-6x2/final/metrics.json`]**. The deck
+was **not** re-run at `0448282` on 4x2, and `docs/22` open item 7 says
+so. `RUN_KLAYOUT_XOR` is still 0 on IHP: not run, not claimed.
 
 Also absent, unchanged from `docs/15` §5.3 and `docs/18` §7: no
 signal-integrity analysis, no `VSRC_LOC_FILES` so the IR numbers are
@@ -311,6 +434,43 @@ below it in the `docs/15` table is now much closer than it reads. The
 measured +16.3 % it lands near 268,000 um2, i.e. **above** the 4x2 core.
 That row should be treated as 6-tile until someone hardens it.
 **[estimate — scaled model, not a run]**
+
+> **Superseded 2026-08-30. The whole of this fit calculation, and the
+> decision it draws.** The section is kept because it is the record of
+> where the margin went, one increment at a time.
+>
+> | Quantity | §2.4 above (`tmr-reharden`) | `wave5-ihp-b`, 4x2 | **`shape-6x2`, submitted** |
+> |---|---|---|---|
+> | Placed cell area | 158,268 um2 | **185,755 um2** | **185,840 um2** |
+> | Core offered | 259,837 um2 | **259,837 um2** | **392,988 um2** |
+> | Core needed at the 70 % criterion | 226,097 um2 | **265,364 um2** | **265,486 um2** |
+> | Spare against the criterion | +33,740 um2 (**+13.0 %**) | **-5,527 um2 (-2.13 %)** | **+127,502 um2 (+32.44 %)** |
+> | Budget consumed | 87.0 % | **102.13 %** | **67.6 %** |
+>
+> **[fact for the placed areas and cores, `docs/22` section 9.4 and
+> `docs/23` section 2.2; the criterion arithmetic is an estimate on
+> measured areas.]**
+>
+> **"The decision does not change — 4x2 was and remains the minimum
+> shape" is retracted.** It changed twice. First the design went over
+> the criterion at 4x2 — while still *closing* the tile physically, with
+> 0 DRC on every deck, which `docs/22` section 4.2 keeps carefully apart
+> from the planning failure. Then `docs/23` hardened 6x2 and 3x4 end to
+> end and moved the submission to **6x2**, and it did **not** decide on
+> area: both twelve-tile shapes clear the criterion by more than thirty
+> points, so utilization stopped being the discriminator. 6x2 won on
+> **routing convergence** (one detailed-route pass of five iterations
+> against 3x4's two passes of eleven), **antenna** (zero diodes against
+> one), **timing** (no violation against 3x4's one 6.27 ps hold
+> violation) and **clock skew** — the near-square die gives the clock
+> tree a longer reach, and 3x4's worst hold skew is 65 % larger than
+> 6x2's on the same netlist **[fact, `docs/23` sections 3.1, 3.2, 4.3
+> and 4.4]**. Cost: **EUR 840, +EUR 280** against the 8-tile line.
+>
+> The 8 x 16 row estimate is superseded too. At the current growth factor
+> of +36.5 % it needs about **314,701 um2** of rows **[estimate,
+> `docs/22` section 9.5]**. "6-tile" was wrong in the direction this
+> paragraph already suspected: it is a **12-tile** row.
 
 ---
 
@@ -471,6 +631,29 @@ churn. What the comparison is used for below is only the **baseline
 slack the corner experiments are measured against**, and for that
 purpose `sky-04-tmr` is the correct reference and `sky-02-signoff` is
 superseded outright.
+
+*Status note, 2026-08-30: this table is **not** superseded in value, and
+that is itself the finding.* No later sky130 run replaced it at 4x2.
+`sky-08-ptrtmr`, on the pointer-TMR RTL, reaches **123,766 um2 placed at
+82.96 % placement utilization** and then **diverges in detailed
+routing** — 218,483 violations after the 0th optimization iteration,
+348,149 after the 1st, 364,603 after the 2nd, with routed wirelength
+flat to within 0.5 %, which is congestion rather than slow progress. It
+produced no routed netlist, no sign-off deck and no post-route slack, so
+there is nothing here to replace **[fact, `docs/22` section 5]**. The
+-2.9659 ns above therefore remains the last measured sky130 slack, and
+the experiments of sections 5 to 7 keep their baseline.
+
+At **twelve** tiles sky130 routes again: `sky-09-6x2` and `sky-10-3x4`
+both converge monotonically to zero DRC and pass Magic, KLayout, the
+XOR, all seven Netgen counters and antenna, with **zero global-route
+overflow** against 4x2's 22,357 **[fact, `docs/23` sections 4.2, 4.3
+and 5]**. The slow corner is still missed there, and by more:
+**-5.4953 ns at 3x4** and **-7.3054 ns at 6x2**, 227 violating paths in
+both. So the 4x2 divergence was a tile-size effect, and the corner miss
+this document diagnoses is not — which is consistent with section 6.2's
+parasitic-model account, though that account has **not** been re-tested
+at twelve tiles **[planned, `docs/23` section 10 item 6]**.
 
 ---
 
@@ -843,6 +1026,20 @@ times, `107,782` 7 times, `52.38` 5 times — so treat this as a
 substitution table applied throughout, not as a list of single edits.
 The occurrence counts are given so nothing is missed.
 
+**Superseded 2026-08-30, and the substitutions below were applied
+before it.** This list corrects `docs/15` from `tt-harden` to
+`tmr-reharden`. `docs/15` has since been corrected twice more, so a
+reader applying this table today would be substituting a value that is
+itself two rounds old — the current post-synthesis cell area is
+**151,789.11 um2**, the current placed area **185,755 um2** at 4x2 and
+**185,840 um2** at 6x2, and the current mapped flip-flop count
+**1,275** **[fact, `docs/22` sections 9.3 and 9.5, `docs/23`
+section 2.1]**. `docs/22` section 6.1, as re-stated by its section 9.5,
+is the current correction list for `docs/15`, and those corrections are
+applied in `docs/15` itself. The table below is kept as the record of
+the `tt-harden` → `tmr-reharden` step and of how many places each figure
+had reached.
+
 | Old value | Occurrences | New value | Source |
 |---|---|---|---|
 | 107,782 um2 (post-synthesis cell area) | 7 | **126,647 um2** | `tmr-reharden/06-yosys-synthesis/reports/stat.json` |
@@ -877,6 +1074,13 @@ and section 2.4 gives the margin. No other row of the §4.5 table was
 re-measured, so the rest of that table remains an unverified model and
 is now known to be low by roughly the same 16 %.
 
+*Superseded 2026-08-30: the 8 x 8 row's shape column does move.* It
+needs **265,364 um2** of rows at the current netlist against the
+259,837 um2 the 4x2 core offers, so it is a **12-tile** row, and the
+submission is at 6x2 **[fact, `docs/22` section 9.4, `docs/23`
+section 6]**. The model is now known to be low by about **27 %**, not
+16 % **[estimate, 135,840 modelled against 185,755 measured]**.
+
 ### 8.2 `docs/18-cross-pdk-portability.md`
 
 | Location | Current text | Correction |
@@ -890,6 +1094,18 @@ is now known to be low by roughly the same 16 %.
 | §7 "Not proved", "the honest statement is that the number is unknown until a run with the slow corner inside `PNR_CORNERS` is made, and that run has not been made" | | **That run has now been made.** Rewrite: the number is unknown because the PnR wire-RC estimate and the OpenRCX extraction disagree by ~2.7 ns of WNS on this design, not because a corner was missing from a list |
 | §3.3b, "`PNR_CORNERS` resolves to `null` here, so `DEFAULT_CORNER` … is the only corner loaded. Confirmed directly: the `or_metrics_out.json` of `36-`, `38-` and `43-openroad-stamidpnr` each contain **exactly one** `timing__setup_vio__count__corner:*` key" | | **The observation is right; the inference is not.** `STAMidPNR` writes metrics for one corner unconditionally — `corner.tcl:51-55` iterates the corner dict and `break`s on the first entry. A single key proves nothing about `PNR_CORNERS` (section 5.3a) |
 | §3.3, area/util figures for `sky-02-signoff` | 56.84 %, 84,801 um2 | **66.98 %, 99,923 um2** (`sky-04-tmr`) |
+
+*Extended 2026-08-30.* This list is superseded as the *complete* set of
+corrections for `docs/18`, not in any of its rows. Two later lists sit
+on top of it and are applied in `docs/18` itself: **`docs/22`
+section 6.2**, which turns the sky130 sign-off column from a value
+statement into a status statement, closes the IHP KLayout cell at 0 and
+refreshes the IHP area, utilization and slack figures; and **`docs/23`
+section 5**, which re-establishes the whole sky130 sign-off column at
+twelve tiles and re-measures the slow-corner miss at -5.4953 ns (3x4)
+and -7.3054 ns (6x2). Section 8.3 below is unaffected — it is about a
+`docs/15` clause and a synthesis property, neither of which any later
+run touches.
 
 ### 8.3 One clause in `docs/15`'s new correction overstates the guarantee
 
@@ -944,6 +1160,21 @@ under each replica") are confirmed by this work and need no change.
    re-hardened netlist (`docs/15` §5.4 is now stale).
 4. **The three-replica polarity collision of section 3.3** is an RTL
    observation, not an RTL change. `hw/rtl` is another workstream's.
+
+*Updated 2026-08-30.* Item 1 is **closed**: KLayout DRC ran on the IHP
+tile and reports **0**, at `c5a5a6e` on `ihp-klayoutdrc-w5` and again on
+the 6x2 submission-shape run **[fact, `docs/22` section 2.4, `docs/23`
+section 1.3]**. It was **not** re-run at `0448282` on 4x2, which is
+`docs/22` open item 7. Item 2 is **closed differently than it expected**:
+the `docs/15` §4.5 table was not re-measured row by row, but its one
+measured row left 4x2 — the design went 2.13 % over the criterion — and
+the shape moved to 6x2 (`docs/23`). Item 3 is **still open and staler**;
+the netlist to re-run the gate-level smoke against is now
+`hw/openlane/pilot_ihp/runs/shape-6x2/final/nl/` **[`docs/23` section 10
+item 3]**. Item 4 is unchanged. One open item that `docs/22` section 5.3
+added and `docs/23` then closed: **a sky130 harden at a larger tile
+count** — it was run at both twelve-tile shapes and both route
+DRC-clean.
 
 ---
 
