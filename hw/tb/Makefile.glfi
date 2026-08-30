@@ -1,0 +1,147 @@
+# Gate-level fault-injection campaign, against the hardened submission
+# netlist.
+#
+#   cd hw/tb && make -f Makefile.glfi provenance   # what would be read
+#   cd hw/tb && make -f Makefile.glfi              # the campaign
+#   cd hw/tb && make -f Makefile.glfi GLFI_GROUPS=lif_fsm,evq_ptr
+#
+# What this is, and what it is not. hw/tb/Makefile.fi runs the campaign
+# of record (docs/16) against hw/rtl/pilot_top.v. This fragment runs the
+# same workload, the same golden model and the same classifier against
+# the placed-and-routed netlist that the shuttle receives, so the
+# hardening rates can be checked at the level they will be manufactured
+# at rather than at the level they were designed at. docs/24 section 8
+# item 2 records that there was no gate-level fault-injection evidence
+# at all; docs/26 is the result of this fragment.
+#
+# It is a SEPARATE simulator target from Makefile.gl on purpose, exactly
+# as Makefile.fi is separate from Makefile.pilot: this suite deposits
+# into internal state and runs a full inference per injection, so it must
+# not share a build directory or a results file with a functional suite.
+#
+# Everything below about the netlist, the cell models, -gspecify and the
+# Icarus version is inherited from Makefile.gl and is documented there in
+# full. The two duplicated blocks are the netlist resolution (never "the
+# latest run") and the Icarus >= 13 guard (Icarus 12 leaves
+# sg13g2_dfrbpq_1's delayed_CLK undriven and every flop in the design
+# clocks on z, which presents as a dead design rather than as a tool
+# failure). Neither may be dropped here: this suite would report a
+# campaign of 100 % MASKED, which reads like a perfectly hardened chip.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS := $(abspath $(lastword $(MAKEFILE_LIST)))
+HERE := $(abspath $(dir $(THIS)))
+REPO := $(abspath $(HERE)/../..)
+
+VENV_BIN := $(abspath $(HERE)/../.venv/bin)
+
+include $(REPO)/tools.mk
+.DEFAULT_GOAL := sim
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS) --no-print-directory $@
+
+else
+
+# ---------------------------------------------------------------------
+# 1. The netlist, named and pinned (Makefile.gl section 1)
+# ---------------------------------------------------------------------
+GL_TAG ?= shape-6x2
+GL_RUN ?= $(REPO)/hw/openlane/pilot_ihp/runs/$(GL_TAG)
+GL_NETLIST ?= $(GL_RUN)/final/nl/tt_um_melihakbulut_nssoc.nl.v
+export GL_NETLIST
+
+ifeq ($(wildcard $(GL_NETLIST)),)
+$(error no netlist at $(GL_NETLIST); set GL_RUN to a completed harden)
+endif
+
+# ---------------------------------------------------------------------
+# 2. The cell models, resolved from the run rather than assumed
+# ---------------------------------------------------------------------
+GL_PDK_ROOT ?= $(shell python3 -c "import json,sys; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['PDK_ROOT'])")
+GL_PDK ?= $(shell python3 -c "import json,sys; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['PDK'])")
+GL_SCL ?= $(shell python3 -c "import json,sys; \
+	print(json.load(open('$(GL_RUN)/resolved.json'))['STD_CELL_LIBRARY'])")
+GL_CELLS ?= $(GL_PDK_ROOT)/$(GL_PDK)/libs.ref/$(GL_SCL)/verilog/$(GL_SCL).v
+export GL_CELLS
+
+ifeq ($(wildcard $(GL_CELLS)),)
+$(error no cell models at $(GL_CELLS); the run's resolved.json points \
+	PDK_ROOT at $(GL_PDK_ROOT) -- is that PDK version still installed?)
+endif
+
+# ---------------------------------------------------------------------
+# 3. Elaboration
+# ---------------------------------------------------------------------
+VERILOG_SOURCES := $(GL_CELLS) $(GL_NETLIST)
+TOPLEVEL := tt_um_melihakbulut_nssoc
+
+COCOTB_TEST_MODULES := test_gl_fi
+
+COMPILE_ARGS += -gspecify
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# Campaign knobs, all optional. GLFI_GROUPS restricts the run to a
+# comma-separated list of RTL group names, for iterating on one structure
+# without paying for the whole campaign; a restricted run writes its log
+# to a differently named file so it cannot be mistaken for the full one.
+export GLFI_GROUPS
+export GLFI_TAG
+
+# ---------------------------------------------------------------------
+# 3b. Which Icarus (Makefile.gl section 3b, and it is not optional)
+# ---------------------------------------------------------------------
+GL_IVERILOG ?= $(firstword $(wildcard \
+	$(HOME)/.local/opt/iverilog13/usr/bin/iverilog) \
+	$(shell command -v iverilog 2>/dev/null))
+ifeq ($(wildcard $(GL_IVERILOG)),)
+$(error no iverilog found; set GL_IVERILOG)
+endif
+
+GL_IVERILOG_MAJOR := $(shell $(GL_IVERILOG) -V 2>/dev/null | \
+	sed -n '1s/.*version \([0-9]*\).*/\1/p')
+ifeq ($(shell test $(GL_IVERILOG_MAJOR) -ge 13 2>/dev/null && echo ok),)
+$(error $(GL_IVERILOG) is Icarus $(GL_IVERILOG_MAJOR); this run needs >= 13. \
+Icarus 12 leaves sg13g2_dfrbpq_1's delayed_CLK undriven, so every flop in \
+the netlist is clocked by z. This suite would then report every injection \
+MASKED, which reads like a perfectly hardened chip. See Makefile.gl \
+section 3b.)
+endif
+
+ICARUS_BIN_DIR := $(patsubst %/,%,$(dir $(GL_IVERILOG)))
+
+SIM_BUILD           ?= $(HERE)/sim_build_glfi_$(GL_TAG)
+COCOTB_RESULTS_FILE ?= $(HERE)/results_glfi_$(GL_TAG).xml
+export COCOTB_RESULTS_FILE
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# ---------------------------------------------------------------------
+# 4. Provenance
+# ---------------------------------------------------------------------
+.PHONY: provenance
+provenance:
+	@echo "run tag     : $(GL_TAG)"
+	@echo "netlist     : $(GL_NETLIST)"
+	@echo "netlist blob: $$(git -C $(REPO) hash-object $(GL_NETLIST))"
+	@echo "pdk         : $(GL_PDK) at $(GL_PDK_ROOT)"
+	@echo "cell models : $(GL_CELLS)"
+	@echo "models blob : $$(git -C $(REPO) hash-object $(GL_CELLS))"
+	@echo "rtl campaign: $(HERE)/test_fi_campaign.py"
+	@echo "        blob: $$(git -C $(REPO) hash-object $(HERE)/test_fi_campaign.py)"
+	@echo "rtl log     : $(HERE)/fi_campaign_results.json"
+	@echo "        blob: $$(git -C $(REPO) hash-object $(HERE)/fi_campaign_results.json)"
+	@echo "iverilog    : $(GL_IVERILOG)"
+	@echo "              $$($(GL_IVERILOG) -V 2>/dev/null | head -1)"
+	@echo "sim build   : $(SIM_BUILD)"
+	@echo "results     : $(COCOTB_RESULTS_FILE)"
+
+endif

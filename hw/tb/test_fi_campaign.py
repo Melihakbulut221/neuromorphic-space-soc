@@ -118,6 +118,18 @@ could otherwise make a corrupted read look correct:
 
 Both are asserted, not assumed, in test_00_control.
 
+Not every question this campaign has to answer is a rate. `test_04`
+holds the DIRECTED cases: multi-step injections that place a fault and
+then an upset in the structure that is supposed to catch it, at the one
+cycle where the second one matters. Those cases exist because the two
+bounded-wait counters report through a pulse that is high for one cycle
+in a whole run, and a drawn phase finds that cycle essentially never --
+so a rate over them would report robustness that was never tested. They
+are logged in the same schema and counted in the same histogram, with a
+`case` field naming the construction and a `script` field recording
+every deposit including how many bits each one moved. Read docs/16
+section 5.8 with them.
+
 Reproducibility: one seed (CAMPAIGN_SEED) drives every randomised
 injection cycle. Targets, bits and phase counts are an explicit curated
 list -- no hierarchy scraping -- so the map reads directly as a hardening
@@ -171,7 +183,19 @@ EXT_RNG = random.Random(CAMPAIGN_SEED ^ 0xECC_0001)
 # the codeword. A protection whose own storage is unmeasured is a claim,
 # which is the same mistake the configuration-TMR domain made in a
 # different form, so the check fields are targets now.
-EXT_GROUPS = ("lif_wchk", "lif_wchk_unread", "lif_smem")
+#
+# Extended again 2026-08-30 with the two BOUNDED-WAIT COUNTERS, for the
+# same reason one step further out. `fetch_wait`/`fetch_timeout` and
+# `oh_wait`/`oh_timeout` exist only to convert a silent hang into a
+# host-visible fault -- they were added after this campaign found a
+# deadlock in D_FETCH (docs/16 section 5.1) and another in oh_req
+# (section 5.7). They were then left out of the target list, so the
+# structures that catch the failure class this chip exists to rule out
+# were themselves unmeasured against it, and an upset that disables one
+# puts the design back where it was with nothing to say so. docs/16
+# section 7.3 named that as the next campaign's first item; this is it.
+EXT_GROUPS = ("lif_wchk", "lif_wchk_unread", "lif_smem",
+              "wdog_fetch", "wdog_oh")
 
 CLK_NS = 10          # 100 MHz simulation clock, as every other suite
 HALF = 20            # serial half period: SER_SCK = clk/4, the fast limit
@@ -415,6 +439,38 @@ def read_defined(handle, path):
     return int(s, 2)
 
 
+def xor_now(dut, path, bits):
+    """XOR one or more bits into a flip-flop at the current sim time.
+
+    The caller is responsible for standing 3 ns past a clock edge; see
+    `deposit`. Returns the deposited value.
+    """
+    h = resolve(dut, path)
+    v = read_defined(h, path)
+    for b in (bits if isinstance(bits, tuple) else (bits,)):
+        v ^= 1 << b
+    h.value = v
+    return v
+
+
+def force_now(dut, path, value):
+    """Write an absolute value into a flip-flop at the current sim time.
+
+    Used ONLY by the directed watchdog cases of test_04, and deliberately
+    reported as what it is. `xor_now` with one bit is a single-event
+    upset; this is not necessarily one. Clearing a 6-bit counter that
+    holds 20, or driving it to its 6-bit maximum, takes as many bit flips
+    as the two values differ in, and the returned popcount is recorded in
+    the log so no reader has to take "an upset cleared the counter" on
+    trust. Some of those cases are outside the single-bit fault model of
+    docs/16 section 7.4 and section 5.8 says which ones.
+    """
+    h = resolve(dut, path)
+    old = read_defined(h, path)
+    h.value = value
+    return bin(old ^ value).count("1")
+
+
 async def deposit(dut, path, bits):
     """XOR one or more bits into a flip-flop, 3 ns after a clock edge.
 
@@ -425,11 +481,7 @@ async def deposit(dut, path, bits):
     """
     await RisingEdge(dut.clk)
     await Timer(3, unit="ns")
-    h = resolve(dut, path)
-    v = read_defined(h, path)
-    for b in (bits if isinstance(bits, tuple) else (bits,)):
-        v ^= 1 << b
-    h.value = v
+    xor_now(dut, path, bits)
 
 
 async def fill_fifo_sentinel(dut):
@@ -539,7 +591,75 @@ async def inject_after_busy(dut, path, bits, delay):
     await deposit(dut, path, bits)
 
 
-async def run_stimulus(dut, inj_burst=None, path=None, bits=None, delay=0):
+async def run_script(dut, steps):
+    """A multi-step directed injection inside one burst's busy window.
+
+    The random campaign draws ONE deposit at ONE drawn cycle, which is
+    the right instrument for measuring a rate and the wrong one for
+    asking whether a safety net survives the fault it exists to catch.
+    That question needs two deposits placed against each other -- the
+    fault, and then the upset in the net at the one cycle where it
+    matters -- and the second of the two is a single cycle in a 63-cycle
+    window, which a drawn delay would find roughly never. So the
+    directed cases construct it.
+
+    Steps, executed in order, each standing 3 ns past a clock edge:
+
+      ("wait", n)                  advance n clock cycles
+      ("xor", path, bits)          a genuine single-event deposit
+      ("force", path, value)       an absolute write; the popcount of the
+                                   change is logged, because it is not
+                                   necessarily one bit
+      ("until", path, value, n)    advance until the named flop reads
+                                   `value`, at most n cycles. This is an
+                                   OBSERVATION of internal state used to
+                                   PLACE a deposit, not to classify one:
+                                   nothing in the record depends on it
+                                   except where the deposit landed.
+
+    Returns the log, including whether every `until` found its cycle.
+    """
+    for _ in range(BUSY_BUDGET):
+        await RisingEdge(dut.clk)
+        await Timer(3, unit="ns")
+        if pin(dut, "busy"):
+            break
+    else:
+        raise AssertionError("BUSY never rose for a directed injection")
+
+    log = []
+    for step in steps:
+        kind = step[0]
+        if kind == "wait":
+            for _ in range(step[1]):
+                await RisingEdge(dut.clk)
+                await Timer(3, unit="ns")
+            log.append(f"wait {step[1]}")
+        elif kind == "xor":
+            v = xor_now(dut, step[1], step[2])
+            log.append(f"xor {step[1]} bit {step[2]} -> {v}")
+        elif kind == "force":
+            n = force_now(dut, step[1], step[2])
+            log.append(f"force {step[1]} = {step[2]} ({n} bit(s) flipped)")
+        elif kind == "until":
+            _, path, want, budget = step
+            hit = False
+            for _ in range(budget + 1):
+                if read_defined(resolve(dut, path), path) == want:
+                    hit = True
+                    break
+                await RisingEdge(dut.clk)
+                await Timer(3, unit="ns")
+            log.append(f"until {path} == {want}: {'hit' if hit else 'MISSED'}")
+            if not hit:
+                log.append("NOT CONSTRUCTED")
+        else:
+            raise AssertionError(f"unknown directed step {step}")
+    return log
+
+
+async def run_stimulus(dut, inj_burst=None, path=None, bits=None, delay=0,
+                       script=None, script_log=None):
     """Push the three bursts, injecting inside `inj_burst`'s busy window.
 
     Returns (completed, drained event words). `completed` is False when a
@@ -552,11 +672,14 @@ async def run_stimulus(dut, inj_burst=None, path=None, bits=None, delay=0):
         injector = None
         if b == inj_burst:
             injector = cocotb.start_soon(
-                inject_after_busy(dut, path, bits, delay))
+                run_script(dut, script) if script is not None
+                else inject_after_busy(dut, path, bits, delay))
         for kind, axon in burst:
             await pin_event(dut, kind, axon)
         if injector is not None:
-            await injector
+            got_log = await injector
+            if script_log is not None and got_log:
+                script_log.extend(got_log)
         ok = await wait_idle(dut)
         words.extend(await drain(dut))
         if not ok:
@@ -651,7 +774,7 @@ def classify(completed, obs, out_ok):
 
 async def injection(dut, geo, group, target, bits, burst, delay,
                     ecc_inj=None, scrub=False, poison_word=None,
-                    expect_tel=None, latent_regs=()):
+                    expect_tel=None, latent_regs=(), script=None):
     """One complete injection: bring-up, stimulus, observation, class.
 
     target None means the fault is delivered by the design's own ECC
@@ -665,12 +788,18 @@ async def injection(dut, geo, group, target, bits, burst, delay,
     exp_events = [w for b in exp_bursts for w in b]
 
     await bring_up(dut, words, ecc_inj=ecc_inj, scrub_en=scrub)
-    if target is None:
+    extra = {}
+    if script is not None:
+        slog = []
+        completed, got = await run_stimulus(dut, burst, script=script,
+                                            script_log=slog)
+        extra["script"] = slog
+        extra["constructed"] = "NOT CONSTRUCTED" not in slog
+    elif target is None:
         completed, got = await run_stimulus(dut)
     else:
         completed, got = await run_stimulus(dut, burst, target, bits, delay)
 
-    extra = {}
     if scrub:
         # The design's re-check request. With CTRL.SCRUB_EN set a
         # correctable stored word is repaired in place, so the readback
@@ -964,6 +1093,37 @@ def target_list(n_neurons, n_axons, q_depth):
            2, True)
           for j in spread(n_neurons, 3)]
 
+    # 14. THE TWO BOUNDED-WAIT COUNTERS -- the safety nets themselves.
+    #     Added 2026-08-30; docs/16 section 7.3 named them as the next
+    #     campaign's first item and this is that item. They draw from
+    #     EXT_RNG (EXT_GROUPS above) and are appended AFTER item 13, so
+    #     every phase drawn by the twelve groups of the campaign of
+    #     record and by the three check-field groups is untouched:
+    #     measured, the first 335 records of this run are field-for-field
+    #     identical to the 335 of the previous one.
+    #
+    #     Each net is two registers with different jobs and different
+    #     exposure, so they are targeted separately rather than as one
+    #     group:
+    #
+    #       * the WAIT COUNTER (`fetch_wait`, `oh_wait`, 6 bits each) is
+    #         live only while a wait is in progress, and is re-zeroed on
+    #         every successful fetch, so its corrupted values are
+    #         short-lived. Sampled low / mid / high.
+    #       * the TIMEOUT PULSE (`fetch_timeout`, `oh_timeout`, one bit
+    #         each) is the report itself. It is high for exactly one
+    #         cycle in the whole run, and only in the cycle a fault is
+    #         being announced -- so a random draw measures the FABRICATED
+    #         direction (a report of a fault that did not happen) and
+    #         essentially never the ERASED direction. Three phases here
+    #         for the fabricated direction; test_04 constructs the erased
+    #         one deliberately, because that is the case a rate cannot
+    #         find and the one the whole question is about.
+    t += [("wdog_fetch", "fetch_wait", [0, 2, 5], 2, True),
+          ("wdog_fetch", "fetch_timeout", [0], 3, True),
+          ("wdog_oh", "oh_wait", [0, 2, 5], 2, True),
+          ("wdog_oh", "oh_timeout", [0], 3, True)]
+
     return t
 
 
@@ -1220,8 +1380,173 @@ async def test_03_telemetry_erasure(dut):
     dut._log.info(f"after the telemetry domain: {len(RESULTS)} injections")
 
 
+# ---------------------------------------------------------------------
+# directed watchdog cases (test_04)
+# ---------------------------------------------------------------------
+# The dispatcher FSM encodings, repeated here rather than imported,
+# because the campaign is not allowed to include the RTL and a wrong
+# constant would silently construct the wrong experiment. test_04
+# asserts that every `until` step found the cycle it was looking for, so
+# a constant that stops matching fails the test instead of reporting a
+# robustness the design does not have.
+D_IDLE, D_FETCH = 0, 1
+WAIT_MAX = 63          # FETCH_WAIT_MAX and OH_WAIT_MAX, 6 bits of ones
+
+
+def watchdog_cases():
+    """The six constructed cases of docs/16 section 5.8, per safety net.
+
+    Each entry is (group, case, note, steps). The steps run inside burst
+    0's busy window; `run_script` documents the step grammar.
+
+    The pattern is the same on both ends of the pipe because the two
+    nets are the same circuit twice:
+
+      clear_midwait  an upset zeroes the counter while it is counting.
+                     Does the timeout still fire, or does the wait
+                     restart forever?
+      fire_early     an upset drives the counter to its bound while a
+                     REAL fault is being waited out. Fires early -- does
+                     that cost anything?
+      fire_spurious  the same, with no fault present, on a legitimate
+                     one-cycle wait. This is the dangerous direction:
+                     the net firing on a design that was working.
+      report_kept    the CONTROL for the case below, and it is written
+                     to be exact: byte-for-byte the same steps, INCLUDING
+                     the 64-cycle poll that waits for the pulse, with
+                     only the final deposit removed. The poll is part of
+                     the control on purpose. It reads internal state and
+                     changes nothing in the design, but it does hold up
+                     `run_stimulus` for 64 cycles before the drain
+                     begins, and a control that skipped it would differ
+                     from the case below in TWO things -- the deposit
+                     and the harness timing -- which is how a first
+                     version of it came out golden while the case it
+                     controls came out corrupted. As written, the two
+                     records differ in exactly one deposit, and any
+                     difference between them is that deposit.
+      report_erased  THE CASE. The fault happens, the net catches it,
+                     and an upset lands on the one-cycle report in the
+                     one cycle it is high. The recovery still happens.
+                     Does anything tell the host it did?
+
+    The fault is planted the same way in both nets and by a genuine
+    single-bit XOR: `dstate` D_IDLE -> D_FETCH with no read outstanding
+    (docs/16 section 5.1), and `oh_req` set with no read outstanding
+    (section 5.7). Only the upset in the net itself is ever a `force`.
+    """
+    return [
+        # ---- the dispatcher's D_FETCH bound -------------------------
+        ("wdog_fetch_dir", "clear_midwait",
+         "counter zeroed 20 cycles into a real bounded wait",
+         [("until", "dstate", D_IDLE, 60),
+          ("xor", "dstate", 0),
+          ("wait", 20),
+          ("force", "fetch_wait", 0)]),
+        ("wdog_fetch_dir", "fire_early",
+         "counter driven to its bound 10 cycles into a real wait",
+         [("until", "dstate", D_IDLE, 60),
+          ("xor", "dstate", 0),
+          ("wait", 10),
+          ("force", "fetch_wait", WAIT_MAX)]),
+        ("wdog_fetch_dir", "fire_spurious",
+         "counter driven to its bound during a LEGITIMATE D_FETCH",
+         [("until", "dstate", D_FETCH, 60),
+          ("force", "fetch_wait", WAIT_MAX)]),
+        ("wdog_fetch_dir", "report_kept",
+         "control: the same deadlock, the net left alone",
+         [("until", "dstate", D_IDLE, 60),
+          ("xor", "dstate", 0),
+          ("until", "fetch_timeout", 1, 90)]),
+        ("wdog_fetch_dir", "report_erased",
+         "real deadlock, and the timeout pulse erased in its one cycle",
+         [("until", "dstate", D_IDLE, 60),
+          ("xor", "dstate", 0),
+          ("until", "fetch_timeout", 1, 90),
+          ("xor", "fetch_timeout", 0)]),
+        ("wdog_fetch_dir", "report_fabricated",
+         "no fault; the timeout pulse set for one cycle",
+         [("wait", 5), ("xor", "fetch_timeout", 0)]),
+
+        # ---- the show-ahead adapter's oh_req bound -------------------
+        ("wdog_oh_dir", "clear_midwait",
+         "counter zeroed 20 cycles into a real bounded wait",
+         [("xor", "oh_req", 0),
+          ("wait", 20),
+          ("force", "oh_wait", 0)]),
+        ("wdog_oh_dir", "fire_early",
+         "counter driven to its bound 10 cycles into a real wait",
+         [("xor", "oh_req", 0),
+          ("wait", 10),
+          ("force", "oh_wait", WAIT_MAX)]),
+        ("wdog_oh_dir", "fire_spurious",
+         "counter driven to its bound during a LEGITIMATE oh_req wait",
+         [("until", "oh_req", 1, 200),
+          ("force", "oh_wait", WAIT_MAX)]),
+        ("wdog_oh_dir", "report_kept",
+         "control: the same deadlock, the net left alone",
+         [("xor", "oh_req", 0),
+          ("until", "oh_timeout", 1, 90)]),
+        ("wdog_oh_dir", "report_erased",
+         "real deadlock, and the timeout pulse erased in its one cycle",
+         [("xor", "oh_req", 0),
+          ("until", "oh_timeout", 1, 90),
+          ("xor", "oh_timeout", 0)]),
+        ("wdog_oh_dir", "report_fabricated",
+         "no fault; the timeout pulse set for one cycle",
+         [("wait", 5), ("xor", "oh_timeout", 0)]),
+    ]
+
+
+@cocotb.test(timeout_time=600, timeout_unit="sec")
+async def test_04_watchdog_directed(dut):
+    """What happens when the watchdog itself is upset.
+
+    The two bounded waits are the only structures in the pilot whose
+    entire job is to make a hang visible, so a random-phase rate over
+    them answers the wrong question: it measures how OFTEN an upset in
+    the net matters, when what is needed is whether the net still works
+    WHEN it matters. The five cases per net construct that directly.
+
+    This test records; it does not judge the design against a hoped-for
+    answer. Its one hard criterion is the safety property the nets
+    actually promise -- that the wait stays bounded -- and it holds even
+    where the report does not. The classification of the rest is the
+    finding, and docs/16 section 5.8 states it.
+    """
+    geo = await campaign_setup(dut)
+    for group, case, note, steps in watchdog_cases():
+        rec = await injection(dut, geo, group, case, None, 0, None,
+                              script=steps)
+        rec["case"], rec["note"] = case, note
+        rec["errcfg"] = bool(rec["status"] & ST_ERR_CFG)
+        assert rec["constructed"], \
+            f"the directed case {group}/{case} did not construct: a " \
+            f"cycle it had to land on never occurred, so its outcome " \
+            f"says nothing about the safety net. Script log: " \
+            f"{rec['script']}"
+        dut._log.info(f"{group:<16}{case:<18}{rec['class']:<10}"
+                      f"ERR_CFG={int(rec['errcfg'])} "
+                      f"out_ok={int(rec['out_ok'])} "
+                      f"completed={int(rec['completed'])}")
+
+    # The one criterion. A bounded wait promises exactly one thing: the
+    # wait ends. Everything else the net does -- the report, the counter,
+    # the sticky -- is downstream of that and is measured rather than
+    # required here, because the measurement found a case where the
+    # downstream part fails and a criterion written to pass would have
+    # hidden it. If any of these HANGs, the bound itself is breakable by
+    # a single upset and the fix is not optional.
+    hung = [r for r in RESULTS
+            if r["group"].startswith("wdog_") and not r["completed"]]
+    assert not hung, \
+        f"a bounded wait failed to bound: {[(r['group'], r.get('case')) for r in hung]}"
+    dut._log.info(f"after the directed watchdog cases: {len(RESULTS)} "
+                  f"injections")
+
+
 @cocotb.test(timeout_time=120, timeout_unit="sec")
-async def test_04_summary(dut):
+async def test_05_summary(dut):
     """Aggregate, dump the per-injection log, enforce the pass criteria."""
     await Timer(10, unit="ns")
     wall = time.time() - WALL.get("t0", time.time())
@@ -1364,3 +1689,22 @@ async def test_04_summary(dut):
     assert ptr and ptr["CORRECTED"] == sum(ptr.values()), \
         f"a single-replica AER pointer upset must always be CORRECTED -- " \
         f"masked by the vote and counted in CNT_TMR -- got {ptr}"
+    # The two bounded-wait counters (target_list item 14 and test_04).
+    # Presence, not outcome: the measured outcome of the directed cases
+    # includes a real weakness (docs/16 section 5.8) and a criterion
+    # written around it would be a criterion written to pass. What must
+    # not happen silently is the groups disappearing, which is how the
+    # nets came to be unmeasured in the first place.
+    for g in ("wdog_fetch", "wdog_oh", "wdog_fetch_dir", "wdog_oh_dir"):
+        assert groups.get(g), \
+            f"the safety-net group {g} is missing: the structures that " \
+            f"convert a silent hang into a reported one must stay in " \
+            f"the target list (docs/16 section 7.3)"
+    # Whatever else an upset in a bounded wait does, the wait must stay
+    # bounded -- that is the whole promise of the structure and it is the
+    # one thing this campaign will not let regress.
+    wdog = {c: sum(groups[g][c] for g in groups if g.startswith("wdog_"))
+            for c in CLASSES}
+    assert wdog["HANG"] == 0, \
+        f"an upset in a bounded-wait counter re-opened the silent-hang " \
+        f"failure class the counter exists to close: {wdog}"

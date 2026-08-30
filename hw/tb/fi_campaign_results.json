@@ -57,13 +57,13 @@
    28
   ]
  },
- "wall_seconds": 891.6,
- "total": 335,
+ "wall_seconds": 566.8,
+ "total": 365,
  "histogram": {
-  "MASKED": 79,
+  "MASKED": 91,
   "CORRECTED": 193,
-  "DETECTED": 37,
-  "SDC": 26,
+  "DETECTED": 53,
+  "SDC": 28,
   "HANG": 0
  },
  "groups": {
@@ -193,6 +193,20 @@
    "SDC": 0,
    "HANG": 0
   },
+  "wdog_fetch": {
+   "MASKED": 6,
+   "CORRECTED": 0,
+   "DETECTED": 3,
+   "SDC": 0,
+   "HANG": 0
+  },
+  "wdog_oh": {
+   "MASKED": 6,
+   "CORRECTED": 0,
+   "DETECTED": 3,
+   "SDC": 0,
+   "HANG": 0
+  },
   "ecc_port_single": {
    "MASKED": 0,
    "CORRECTED": 12,
@@ -219,6 +233,20 @@
    "CORRECTED": 3,
    "DETECTED": 2,
    "SDC": 0,
+   "HANG": 0
+  },
+  "wdog_fetch_dir": {
+   "MASKED": 0,
+   "CORRECTED": 0,
+   "DETECTED": 5,
+   "SDC": 1,
+   "HANG": 0
+  },
+  "wdog_oh_dir": {
+   "MASKED": 0,
+   "CORRECTED": 0,
+   "DETECTED": 5,
+   "SDC": 1,
    "HANG": 0
   }
  },
@@ -349,6 +377,20 @@
    "tel_differs": 18,
    "latent": 0
   },
+  "wdog_fetch": {
+   "n": 9,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
+  "wdog_oh": {
+   "n": 9,
+   "sdc_stream": 0,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
   "ecc_port_single": {
    "n": 12,
    "sdc_stream": 0,
@@ -376,9 +418,23 @@
    "sdc_state_only": 0,
    "tel_differs": 4,
    "latent": 0
+  },
+  "wdog_fetch_dir": {
+   "n": 6,
+   "sdc_stream": 1,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
+  },
+  "wdog_oh_dir": {
+   "n": 6,
+   "sdc_stream": 1,
+   "sdc_state_only": 0,
+   "tel_differs": 0,
+   "latent": 0
   }
  },
- "detected_with_wrong_output": 20,
+ "detected_with_wrong_output": 23,
  "state_only_divergence": 3,
  "latent_register_corruption": 15,
  "telemetry_mismatch": 185,
@@ -23949,6 +24005,1392 @@
    "telemetry_ok": false
   },
   {
+   "group": "wdog_fetch",
+   "target": "fetch_wait",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_wait",
+   "bit": 0,
+   "burst": 0,
+   "delay": 9,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_wait",
+   "bit": 2,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_wait",
+   "bit": 2,
+   "burst": 2,
+   "delay": 6,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_wait",
+   "bit": 5,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_wait",
+   "bit": 5,
+   "burst": 1,
+   "delay": 18,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_timeout",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_timeout",
+   "bit": 0,
+   "burst": 0,
+   "delay": 14,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_fetch",
+   "target": "fetch_timeout",
+   "bit": 0,
+   "burst": 0,
+   "delay": 1,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_wait",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_wait",
+   "bit": 0,
+   "burst": 1,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_wait",
+   "bit": 2,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_wait",
+   "bit": 2,
+   "burst": 1,
+   "delay": 7,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_wait",
+   "bit": 5,
+   "burst": 0,
+   "delay": 0,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_wait",
+   "bit": 5,
+   "burst": 1,
+   "delay": 16,
+   "class": "MASKED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_timeout",
+   "bit": 0,
+   "burst": 0,
+   "delay": 0,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_timeout",
+   "bit": 0,
+   "burst": 2,
+   "delay": 26,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
+   "group": "wdog_oh",
+   "target": "oh_timeout",
+   "bit": 0,
+   "burst": 2,
+   "delay": 10,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "telemetry_ok": true
+  },
+  {
    "group": "ecc_port_single",
    "target": null,
    "bit": null,
@@ -26226,6 +27668,1035 @@
     ]
    ],
    "telemetry_ok": false
+  },
+  {
+   "group": "wdog_fetch_dir",
+   "target": "clear_midwait",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "until dstate == 0: hit",
+    "xor dstate bit 0 -> 1",
+    "wait 20",
+    "force fetch_wait = 0 (2 bit(s) flipped)"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "clear_midwait",
+   "note": "counter zeroed 20 cycles into a real bounded wait",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_fetch_dir",
+   "target": "fire_early",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "until dstate == 0: hit",
+    "xor dstate bit 0 -> 1",
+    "wait 10",
+    "force fetch_wait = 63 (4 bit(s) flipped)"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "fire_early",
+   "note": "counter driven to its bound 10 cycles into a real wait",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_fetch_dir",
+   "target": "fire_spurious",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": false,
+   "spikes_ok": false,
+   "state_ok": false,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    2,
+    3,
+    4,
+    6,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -13,
+     0
+    ],
+    [
+     -54,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "until dstate == 1: hit",
+    "force fetch_wait = 63 (6 bit(s) flipped)"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "fire_spurious",
+   "note": "counter driven to its bound during a LEGITIMATE D_FETCH",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_fetch_dir",
+   "target": "report_kept",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": false,
+   "spikes_ok": false,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "until dstate == 0: hit",
+    "xor dstate bit 0 -> 1",
+    "until fetch_timeout == 1: hit"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "report_kept",
+   "note": "control: the same deadlock, the net left alone",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_fetch_dir",
+   "target": "report_erased",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "SDC",
+   "completed": true,
+   "out_ok": false,
+   "spikes_ok": false,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "until dstate == 0: hit",
+    "xor dstate bit 0 -> 1",
+    "until fetch_timeout == 1: hit",
+    "xor fetch_timeout bit 0 -> 0"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "report_erased",
+   "note": "real deadlock, and the timeout pulse erased in its one cycle",
+   "errcfg": false
+  },
+  {
+   "group": "wdog_fetch_dir",
+   "target": "report_fabricated",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "wait 5",
+    "xor fetch_timeout bit 0 -> 1"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "report_fabricated",
+   "note": "no fault; the timeout pulse set for one cycle",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_oh_dir",
+   "target": "clear_midwait",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "xor oh_req bit 0 -> 1",
+    "wait 20",
+    "force oh_wait = 0 (2 bit(s) flipped)"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "clear_midwait",
+   "note": "counter zeroed 20 cycles into a real bounded wait",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_oh_dir",
+   "target": "fire_early",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "xor oh_req bit 0 -> 1",
+    "wait 10",
+    "force oh_wait = 63 (4 bit(s) flipped)"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "fire_early",
+   "note": "counter driven to its bound 10 cycles into a real wait",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_oh_dir",
+   "target": "fire_spurious",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "until oh_req == 1: hit",
+    "force oh_wait = 63 (6 bit(s) flipped)"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "fire_spurious",
+   "note": "counter driven to its bound during a LEGITIMATE oh_req wait",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_oh_dir",
+   "target": "report_kept",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": false,
+   "spikes_ok": false,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "xor oh_req bit 0 -> 1",
+    "until oh_timeout == 1: hit"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "report_kept",
+   "note": "control: the same deadlock, the net left alone",
+   "errcfg": true
+  },
+  {
+   "group": "wdog_oh_dir",
+   "target": "report_erased",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "SDC",
+   "completed": true,
+   "out_ok": false,
+   "spikes_ok": false,
+   "state_ok": true,
+   "status": 6,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 0,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "xor oh_req bit 0 -> 1",
+    "until oh_timeout == 1: hit",
+    "xor oh_timeout bit 0 -> 0"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "report_erased",
+   "note": "real deadlock, and the timeout pulse erased in its one cycle",
+   "errcfg": false
+  },
+  {
+   "group": "wdog_oh_dir",
+   "target": "report_fabricated",
+   "bit": null,
+   "burst": 0,
+   "delay": null,
+   "class": "DETECTED",
+   "completed": true,
+   "out_ok": true,
+   "spikes_ok": true,
+   "state_ok": true,
+   "status": 22,
+   "counters": {
+    "cnt_sec": 0,
+    "cnt_ded": 0,
+    "cnt_ovf": 0,
+    "cnt_oor": 0,
+    "cnt_tmr": 0
+   },
+   "pins": {
+    "err": 1,
+    "sec_seen": 0,
+    "ded_seen": 0,
+    "tmr_seen": 0
+   },
+   "got_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "exp_events": [
+    1,
+    2,
+    5,
+    6,
+    4,
+    2
+   ],
+   "state": [
+    [
+     -32,
+     0
+    ],
+    [
+     -27,
+     0
+    ],
+    [
+     -3,
+     1
+    ],
+    [
+     -10,
+     0
+    ],
+    [
+     -2,
+     0
+    ],
+    [
+     -5,
+     0
+    ],
+    [
+     9,
+     0
+    ],
+    [
+     -13,
+     0
+    ]
+   ],
+   "script": [
+    "wait 5",
+    "xor oh_timeout bit 0 -> 1"
+   ],
+   "constructed": true,
+   "telemetry_ok": true,
+   "case": "report_fabricated",
+   "note": "no fault; the timeout pulse set for one cycle",
+   "errcfg": true
   }
  ]
 }

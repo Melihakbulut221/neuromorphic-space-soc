@@ -24,13 +24,13 @@ plainly, and it should be read before section 6 is quoted anywhere.
 | Device under test | `hw/rtl/pilot_top.v`, 8 x 8 neurons/axons, EVQ depth 4 |
 | Oracle | `sw/golden/lif_core.py` (`LIFCore`, `LIFConfig`) |
 | Seed | `0x16F12026` |
-| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29 (section 2) |
-| Simulated time | 22.23 ms at 255 injections; 28.77 ms at 335 |
-| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it; 892 s for 335 injections on a loaded machine (Icarus 12, single-threaded; section 8) |
+| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29; 365 from 2026-08-30 (section 2) |
+| Simulated time | 22.23 ms at 255 injections; 28.77 ms at 335; 31.31 ms at 365 |
+| Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it; 892 s for 335 injections on a loaded machine; 567 s for 365 on a quiet one — and 1769 s for an identical 365-injection run alongside three other simulator jobs (Icarus, single-threaded; section 8) |
 
-### Four runs, kept side by side
+### Five runs, kept side by side
 
-This document reports the campaign **four times**, and the runs are
+This document reports the campaign **five times**, and the runs are
 kept side by side rather than one overwriting the other. That is the
 whole value of the document: it shows what each change to the design did
 to the measured upset response, which a single current number cannot.
@@ -49,27 +49,38 @@ to the measured upset response, which a single current number cannot.
   above is exact; and once extended by 32 injections into the 80 check
   flip-flops the hardening itself added, because a protection whose own
   storage is unmeasured is a claim (section 3.2).
-- The **post-wave-5** run of 2026-08-29 is the current one. Three things
-  changed under it: `hw/rtl/aer_fifo.v` triplicated the four AER queue
-  pointers; the injector was **retargeted** onto the pointer replicas'
-  storage, because the old targets had become voted wires and the group
-  was reporting a number about a node nothing protects (section 3.3);
-  and `hw/rtl/pilot_top.v` gained the bounded `oh_req` wait of section
-  5.7, for a deadlock this run found. It is 335 injections: the 24
-  pointer records are replaced by 72, and the other 263 are unchanged
-  targets.
+- The **post-wave-5** run of 2026-08-29. Three things changed under it:
+  `hw/rtl/aer_fifo.v` triplicated the four AER queue pointers; the
+  injector was **retargeted** onto the pointer replicas' storage,
+  because the old targets had become voted wires and the group was
+  reporting a number about a node nothing protects (section 3.3); and
+  `hw/rtl/pilot_top.v` gained the bounded `oh_req` wait of section 5.7,
+  for a deadlock this run found. It is 335 injections: the 24 pointer
+  records are replaced by 72, and the other 263 are unchanged targets.
+- The **safety-net** run of 2026-08-30 is the current one, and it is
+  the only one of the five in which **no RTL changed at all**. What
+  changed is the instrument: the two bounded-wait counters that convert
+  a silent hang into a host-visible fault — added after this campaign
+  found the two deadlocks, and never injected into — are in the target
+  list, with 18 random-phase injections and 12 directed ones (section
+  5.8). It is 365 injections and all 335 of the previous run are
+  unchanged, record for record.
 
 Every number in this document is labelled with which run it comes from.
 Where a section is not labelled the runs agree.
 
-`hw/tb/fi_campaign_results.json` holds the **335-injection
-post-wave-5** log, because that is the design that exists. Exactly
-five of the 255 records differ between the pre-fix and post-fix runs and
-section 5.1 lists all five; exactly 43 differ between the post-fix and
-post-hardening runs and section 3.2 accounts for every one; and between
-the post-hardening run and this one **exactly one common record changed
-class** — `evq_hold` / `oh_req`, HANG to DETECTED — with the 24 pointer
-records retired and 72 new ones taking their place (section 3.4).
+`hw/tb/fi_campaign_results.json` holds the **365-injection safety-net**
+log, because that is the design that exists. Exactly five of the 255
+records differ between the pre-fix and post-fix runs and section 5.1
+lists all five; exactly 43 differ between the post-fix and
+post-hardening runs and section 3.2 accounts for every one; between the
+post-hardening run and the wave-5 one **exactly one common record
+changed class** — `evq_hold` / `oh_req`, HANG to DETECTED — with the 24
+pointer records retired and 72 new ones taking their place (section
+3.4); and between the wave-5 run and this one **not one of the 335
+common records changed anything at all**, because the RTL did not move
+and the 30 new records draw from the second seeded stream (section
+3.5).
 
 **Headline, pre-fix [fact].** 255 single-bit injections: **83 MASKED
 (32.5%), 42 CORRECTED (16.5%), 34 DETECTED (13.3%), 91 SDC (35.7%),
@@ -98,18 +109,44 @@ show-ahead adapter's one HANG becomes DETECTED under the bounded wait of
 section 5.7. Of the 263 targets this run shares with the previous one,
 **exactly one record changed class** and it is that HANG.
 
-**Read the three headline denominators before comparing any two of
-them**, because they are not the same experiment: 255, 287 and 335
+**Headline, safety-net [fact].** 365 injections, 2026-08-30, against
+byte-identical RTL: **91 MASKED (24.9%), 193 CORRECTED (52.9%), 53
+DETECTED (14.5%), 28 SDC (7.7%), 0 HANG**. The 7.8% → 7.7% is
+arithmetic on a larger denominator and says nothing. What this run says
+is in section 5.8, and it is the first headline in this document that
+is not an improvement:
+
+> **The two bounded-wait counters are partially robust. The wait itself
+> cannot be broken by an upset — 12 of 12 counter injections MASKED,
+> and the reason is structural rather than statistical. The one-cycle
+> pulse each of them reports through can be. An upset that sets it
+> fabricates a fault the host cannot distinguish from a real one (6 of
+> 6). An upset that clears it in the single cycle it is high erases the
+> report entirely: the design deadlocks, recovers, returns a wrong
+> answer, and reads `STATUS` = `0x06` with every counter at zero and
+> every fault pin low. Two SDC records, each with a paired control that
+> classifies DETECTED — same fault, same cycle, byte-identical wrong
+> output, one deposit apart.** The structure that closes the
+> silent-hang failure class is itself a silent-failure path, and the
+> fix costs −2 flip-flops.
+
+**Read the four headline denominators before comparing any two of
+them**, because they are not the same experiment: 255, 287, 335 and 365
 injections. The 32 added on 2026-08-27 are the memory hardening's own
 check-field flip-flops, which did not exist before it; the 48 net added
-on 2026-08-29 are the pointer TMR's replicas, likewise. **The only
-defensible before/after figure for the memory hardening is 35.7% → 18.8%
-SDC on the identical 255 injections** (section 3.2). Pairing 35.7% with
-16.7% — or now with 7.8% — divides by a denominator the earlier run did
-not have, and section 3.4 gives the like-for-like arithmetic for the
-pointer TMR the same way.
+on 2026-08-29 are the pointer TMR's replicas, likewise; and the 30
+added on 2026-08-30 are two structures that existed all along and had
+never been injected into. **The only defensible before/after figure for
+the memory hardening is 35.7% → 18.8% SDC on the identical 255
+injections** (section 3.2). Pairing 35.7% with 16.7% — or now with 7.7%
+— divides by a denominator the earlier run did not have, and sections
+3.4 and 3.5 give the like-for-like arithmetic for the pointer TMR and
+for this run the same way. The 2026-08-30 run has the cleanest such
+statement of the four, because **no RTL changed under it at all**: all
+335 previous records are identical and the 30 new ones are the whole
+difference.
 
-In all four runs every hardened structure kept its promise with zero
+In all five runs every hardened structure kept its promise with zero
 counterexamples — the neuron-core FSM (12/12 detected), the
 configuration TMR domain (15/15 corrected and counted, but read the
 correction of 2026-08-26 in section 4 before quoting that number: the
@@ -127,6 +164,12 @@ the pointer TMR the residual is 26 records of which **19 are in the AER
 event path that is still unprotected** — queue storage 7, the
 show-ahead adapter 6, the dispatcher 6 — with the neuron scan at 6 and
 the register bank at 1. The pointers have left that list entirely.
+**Two more records joined it on 2026-08-30 and they are of a different
+kind**: they are not in a structure the pilot never claimed to protect,
+they are in a structure it added *in order to* protect itself, and they
+are there because the report is one flip-flop wide (section 5.8). That
+is why the residual is now 28 and why the wave-6 ranking in section 6.2
+puts a −2 flip-flop item above all five of the structures it ranks.
 
 **The result that is not a number.** The corrections *were* invisible.
 Until 2026-08-27 the memory hardening's four telemetry outputs were left
@@ -146,9 +189,14 @@ Section 4.1 carries both numbers and what the gap cost.
 ### 1.1 What was adapted, and what was not
 
 The method comes from the sibling programme's campaign
-(`/home/hasanmelih/Documents/radhard-edge-ai`, its `docs/27`, its
-`hw/tb/test_fi_campaign.py`, and the harness lessons in its `docs/25`
-section 3). Four things were taken directly:
+(`/home/hasanmelih/Documents/radhard-edge-ai`, its
+`radhard-edge-ai/docs/27`, its `hw/tb/test_fi_campaign.py`, and the
+harness lessons in its `radhard-edge-ai/docs/25` section 3). The
+repository prefix is not decoration. This corpus now has a `docs/25` of
+its own, and `scripts/build_docs.py` turns a bare `docs/NN` into a local
+hyperlink, so an unqualified sibling citation would quietly send a
+reader to the wrong document — which is exactly what happened to the
+`docs/25` reference on this line. Four things were taken directly:
 
 1. **The SEU model**: XOR one bit into a named architectural flip-flop,
    with the deposit landing 3 ns after a clock edge. An on-edge deposit
@@ -363,11 +411,24 @@ of these is false [fact, all passing]:
   be measuring nothing. The probe result is then discarded — it is a
   self-test, not a data point.
 
-`test_04_summary` additionally fails if the campaign shrinks below 200
+`test_05_summary` additionally fails if the campaign shrinks below 200
 injections, if any FSM injection is not DETECTED, if any single
 configuration-TMR replica upset is SDC, if any single-bit weight-word
 upset is not CORRECTED, if any double-bit weight-word upset is not
 DETECTED, or if any single-bit upset in a coded memory file is SDC.
+
+**Added 2026-08-30, with the safety-net groups.** Two more criteria,
+and the shape of them is the point. The first is a *presence* check:
+all four `wdog_*` groups must be in the log, because the way these
+structures came to be unmeasured was not a decision but an omission,
+and an omission that fails a test cannot repeat. The second is the one
+behavioural promise a bounded wait makes — **no `wdog_*` injection may
+classify HANG** — which holds even in the two cases where the report is
+erased, because the recovery survives the upset and only the
+announcement does not. There is deliberately no criterion asserting
+that a timeout is reported: the measurement found a case where it is
+not (section 5.8), and a criterion written around a known weakness is a
+criterion written to pass. It tightens when the fix lands.
 
 **Added 2026-08-29, and it is a criterion about the harness as much as
 about the design.** Two more clauses cover the AER pointer TMR:
@@ -389,7 +450,7 @@ campaign at HEAD on 2026-08-29 instead of letting it report 23 SDC and
 zero corrections against a working TMR.
 
 Every one of those criteria is an RTL criterion and none of them can
-fail because a structure vanished in synthesis; `test_04_summary` would
+fail because a structure vanished in synthesis; `test_05_summary` would
 have passed unchanged on a netlist with one configuration bank instead
 of three. `sw/tests/test_synthesis_guards.py` is the separate,
 netlist-level criterion that covers that class, and it is not a
@@ -438,6 +499,9 @@ the design the map speaks about, not how exhaustively.
 | **Total represented, from 2026-08-27** | | **1076** | **287** |
 | AER pointer TMR replicas, `aer_ptr_bank.bits` [§] | `evq_ptr` | +24 | +48 |
 | **Total represented, from 2026-08-29** | | **1100** | **335** |
+| Dispatcher bounded wait, `fetch_wait`/`fetch_timeout` [¶] | `wdog_fetch`, `wdog_fetch_dir` | 7 | 15 |
+| Show-ahead bounded wait, `oh_wait`/`oh_timeout` [¶] | `wdog_oh`, `wdog_oh_dir` | 7 | 15 |
+| **Total represented, from 2026-08-30** | | **1114** | **365** |
 
 [†] 165 in the RTL, and 55 in the netlist until 2026-08-26 — the three
 replicas were merged into one register bank by synthesis. Corrected in
@@ -450,6 +514,19 @@ flip-flops, and the campaign injects into all of them — one replica at
 a time, three replicas per drawn phase, so 72 injections against the
 same 24 phases (section 3.3). The `+24 / +48` row is the delta, so the
 `evq_ptr` row and this one together read 36 FF and 72 injections.
+
+[¶] Added to the target list on 2026-08-30, closing the gap section 7.3
+named as the next campaign's first item. These 14 flip-flops are the two
+safety nets themselves — the structures added after this campaign found
+the `D_FETCH` deadlock of section 5.1 and the `oh_req` deadlock of
+section 5.7, whose entire job is to convert a silent hang into a
+host-visible fault. They draw from the same second seeded stream as the
+check fields and are appended after them, so no phase drawn by any
+earlier group moved: measured, the first 335 records of the 365-injection
+run are field-for-field identical to the 335-injection run [fact]. Each
+row is 9 random-phase injections plus 6 directed ones (section 5.8);
+`fetch_wait` and `oh_wait` are sampled low / mid / high and the two
+one-bit timeout pulses take three phases each.
 
 [‡] Added to the target list on 2026-08-27, with the memory hardening
 that created them. They are the 80 flip-flops the protection itself
@@ -480,13 +557,20 @@ unrepresented count at 171 [fact]. The `dispatch` group's 18 FF above
 is `dstate` and `evw` only, unchanged.
 
 The section 5.7 fix of 2026-08-29 does the same thing to the other end
-of the pipe: `oh_wait[5:0]` and `oh_timeout` are 7 more flip-flops the
-target list does not inject into, and the `evq_hold` group's 35 FF above
-is unchanged. Both bounded-wait counters are among the unrepresented
-flip-flops, which is worth stating rather than leaving implicit — the
+of the pipe: `oh_wait[5:0]` and `oh_timeout` are 7 more flip-flops, and
+the `evq_hold` group's 35 FF above is unchanged.
+
+**Corrected 2026-08-30.** Until that date this paragraph read "the target
+list does not inject into" those two structures, and added that "the
 structures that convert a hang into a report are themselves unmeasured
 by this campaign, and an upset in one of them is an unmeasured way to
-get the hang back. Section 7.3.
+get the hang back." That was true and it is no longer. Both bounded
+waits are in the target list now, with 30 injections between them, and
+the sentence they earned is section 5.8: an upset in one of them is a
+*measured* way to get the hang back, and the measurement found it. The
+`dispatch` and `evq_hold` group flip-flop counts above still exclude
+them — the two `wdog_*` rows carry them — so no structure is counted
+twice.
 
 **A note on the several flip-flop totals in this document, because they
 look like a contradiction and are not.** Each is a measurement of the
@@ -507,8 +591,10 @@ The last two are measured with the same census, on 2026-08-29:
 the same constant recorded before and after the configuration-TMR fix
 and before and after the pointer TMR, so nothing new is disappearing.
 
-Against that census the represented share is **1,100 of 1,281, or 86%**,
-with 181 flip-flops unrepresented — and the two numbers come from
+Against that census the represented share was **1,100 of 1,281, or 86%**,
+with 181 flip-flops unrepresented, and is **1,114 of 1,281, or 87%**,
+with 167 unrepresented, since the two bounded waits joined the target
+list on 2026-08-30 — and the two numbers come from
 different counting methods, which is the caveat this paragraph exists
 for. 1,100 is hand-counted from the RTL declarations in the coverage
 table above; 1,281 is the yosys census. They disagree by a handful of
@@ -880,7 +966,7 @@ says nothing about the design. **The like-for-like figure for the memory
 hardening is 91/255 = 35.7% to 48/255 = 18.8%**, the same 255
 experiments before and after, which is section 3.2.
 
-### 3.4 Post-wave-5 — the campaign of record
+### 3.4 Post-wave-5 — superseded as the campaign of record by 3.5, and unchanged by it
 
 Same seed, same geometry, same workload, 2026-08-29, against
 `hw/rtl/aer_fifo.v` with the pointer TMR, `hw/rtl/pilot_top.v` with the
@@ -958,8 +1044,82 @@ of 263**, unchanged, which is what a change confined to the pointers
 should do. Wave 5 removed a structure from the SDC list; it did not
 improve any other structure and does not claim to.
 
+### 3.5 Post-wave-5 plus the safety nets — the campaign of record
 
+Same seed, same geometry, same workload, same RTL — **`hw/rtl` is
+byte-identical to the run above** — 2026-08-30. The only change is to
+the campaign: the two bounded-wait counters of sections 5.1 and 5.7 are
+in the target list at last, with 18 random-phase injections between them
+and 12 directed ones. **365 injections, 567 s wall, 31.31 ms
+simulated [fact]:**
 
+| Group | MASKED | CORRECTED | DETECTED | SDC | HANG | n | SDC rate | stream | state |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `evq_hold` | 7 | 0 | 1 | 6 | 0 | 14 | 42.9% | 6 | 0 |
+| `dispatch` | 8 | 0 | 4 | 6 | 0 | 18 | 33.3% | 6 | 0 |
+| `lif_scan` | 15 | 0 | 0 | 6 | 0 | 21 | 28.6% | 3 | 3 |
+| `evq_mem` | 25 | 0 | 0 | 7 | 0 | 32 | 21.9% | 7 | 0 |
+| `wdog_fetch_dir` (directed) | 0 | 0 | 5 | 1 | 0 | 6 | 16.7% | 1 | 0 |
+| `wdog_oh_dir` (directed) | 0 | 0 | 5 | 1 | 0 | 6 | 16.7% | 1 | 0 |
+| `regbank_cfg` | 9 | 1 | 5 | 1 | 0 | 16 | 6.2% | 1 | 0 |
+| `wdog_fetch` | 6 | 0 | 3 | 0 | 0 | 9 | 0.0% | 0 | 0 |
+| `wdog_oh` | 6 | 0 | 3 | 0 | 0 | 9 | 0.0% | 0 | 0 |
+| every other group | 15 | 192 | 27 | **0** | 0 | 234 | 0.0% | 0 | 0 |
+| **TOTAL** | **91** | **193** | **53** | **28** | **0** | **365** | **7.7%** | **25** | **3** |
+
+The seventeen groups folded into "every other group" are unchanged from
+the section 3.4 table, row for row, and are not repeated here.
+
+**What moved, record by record [fact].** The two logs share all 335
+targets of the previous run, and **not one of them changed class** —
+not `completed`, not `out_ok`, not a status word, not a counter. That
+is the phase discipline working as designed: the new groups draw from
+`EXT_RNG` and are appended after every existing group, so the
+comparison with the 335 is exact and the 30 new records are the whole
+difference.
+
+| | count | |
+|---|---:|---|
+| common records | 335 | of which **0** differ in any field |
+| new random-phase records | 18 | 12 MASKED, 6 DETECTED, 0 SDC, 0 HANG |
+| new directed records | 12 | 10 DETECTED, 2 SDC, 0 HANG |
+
+**Diff the log by key, not by line.** The two new random-phase groups
+are appended to `target_list`, so the 18 records they add sit at the
+*end of the structural block* and push the ECC and telemetry records
+18 positions down the file. A naive positional or line-by-line
+comparison therefore shows hundreds of differences and none of them are
+real. Matched on `(group, target, bit, burst, delay)`, **every one of
+the 335 old records is present and identical field for field, and there
+are exactly 30 new ones** [fact, verified against the previous file in
+git].
+
+The cross-cutting numbers, and only one of them moved for a reason that
+is not simply "there are 30 more records" [fact]:
+
+- **23 of the 53 DETECTED outcomes also had a corrupted output**, up
+  from 20 of 37, and all three additions are directed cases. Two are
+  the `report_kept` controls — a real deadlock, caught, reported, and
+  the run still wrong, which is what section 5.1 already said a bounded
+  wait is: a recovery and not a repair. The third is `wdog_fetch_dir` /
+  `fire_spurious`, where the dispatcher's own bound, fired early by an
+  upset in its counter, destroys the event it was fetching. Section
+  5.8.
+- **3 of the 28 SDC outcomes corrupted only the retained neuron
+  state**, unchanged — so **both new SDC records corrupted the drained
+  event stream**. They are the two `report_erased` cases and they are
+  the finding of section 5.8.
+- **15 latent registers**, unchanged. **185 telemetry mismatches**,
+  unchanged: nothing in the two new groups moves a counter, because
+  a bounded-wait timeout latches `STATUS.ERR_CFG` and no counter
+  counts it (section 5.8 says why that matters).
+
+**The like-for-like figure.** 7.8% → 7.7% SDC is arithmetic on a larger
+denominator and means nothing; the two runs measure the same design.
+The defensible statement is per-structure: **the residual SDC list of
+section 3.4 is unchanged, record for record, at 26 across the same five
+structures, and two new records join it from a sixth that had never
+been injected into — the safety nets themselves.**
 
 
 ## 4. What held
@@ -968,6 +1128,14 @@ Every mechanism the pilot claims was exercised and none produced a
 counterexample. These are the campaign's positive results and they are
 the reason the negative ones below are worth acting on rather than
 worth panicking about.
+
+**One thing is deliberately not in this list, as of 2026-08-30.** The
+two bounded-wait counters are protective structures and they were
+measured for the first time in the 365-injection run, and they do not
+appear here because **they produced a counterexample.** Half of each of
+them held for a structural reason worth having; the one-cycle pulse
+each reports through did not. Section 5.8, and it is in section 5
+rather than in section 4 for exactly that reason.
 
 **Neuron-core FSM: 12/12 DETECTED [fact].** All four bits of
 `lif_core.state`, three injection phases each. The five legal encodings
@@ -1136,7 +1304,7 @@ the same 8 x 8 geometry: `lif_wmem` 16/16, `lif_vmem` 24/24,
 `lif_smem` 18/18 — every single-bit deposit into a coded memory file or
 its check field left the drained event stream and the retained neuron
 state bit-exact against `sw/golden`, with no silent corruption. The
-campaign now enforces that as a pass criterion (`test_04_summary`: *a
+campaign now enforces that as a pass criterion (`test_05_summary`: *a
 single-bit upset in a coded memory file must never be SDC*), so a future
 edit that bypasses a decoder or widens a word past the code fails the
 suite rather than quietly reducing the number.
@@ -1151,10 +1319,11 @@ MASKED to CORRECTED. The silent-corruption count is unchanged at 48,
 which is the expected result and worth saying plainly: wiring telemetry
 changes what the chip can *report*, never what it computes.
 
-(That 287-injection figure is the last one before wave 5. The current
-335-injection run is section 3.4; the 84 coded-memory injections are
-unchanged in it — still 0 SDC — and 79 of them still classify CORRECTED
-for the reason recorded here.)
+(That 287-injection figure is the last one before wave 5. The
+335-injection run is section 3.4 and the current 365-injection run is
+section 3.5; the 84 coded-memory injections are unchanged in both —
+still 0 SDC — and 79 of them still classify CORRECTED for the reason
+recorded here.)
 
 Two notes from doing it. The counters are shared with the weight-load
 and scrub codec rather than split per domain, because `CNT_SEC` is
@@ -1362,6 +1531,14 @@ still had a corrupted output — the upset had already damaged the run —
 which is why they are DETECTED-with-wrong-output and not CORRECTED. A
 bounded wait is a recovery, not a repair, and this document does not
 claim otherwise.
+
+**And a bounded wait is itself state, which this section did not ask
+about and section 5.8 does [fact, 2026-08-30].** The 7 flip-flops
+above went into the target list a day later than they should have. The
+counter survives an upset for a structural reason; the one-cycle
+`fetch_timeout` pulse that reports the recovery does not, and an upset
+that clears it in that cycle puts this section's failure back exactly
+as it was — recovered, wrong, and unannounced.
 
 **Zero HANG does not mean zero hang.** The campaign's 255 injections
 reach 86% of the design's flip-flops (section 2) and its HANG class is
@@ -1711,6 +1888,12 @@ fails at the `AER_OUT_VLD` poll with "the adapter never issued another
 read", and the other 26 tests of that suite still pass — so the mutant
 is killed by this test and by nothing else.
 
+**What that test does not cover [fact, 2026-08-30].** It removes the
+bounded wait and checks that the test notices. It says nothing about
+what happens when the bounded wait is *present and upset*, which is the
+question section 5.8 answers for both nets: the `oh_wait` counter holds,
+and the `oh_timeout` pulse it reports through is one flip-flop wide.
+
 #### The general finding
 
 This is where the sibling programme's "small routing state carries the
@@ -1724,6 +1907,226 @@ state — a mis-steered scan writes the right update to the wrong neuron
 without changing what was emitted. That is the opposite emphasis from
 the sibling's `yw_ptr` result and is the clearest single example of why
 its conclusions were not imported.
+
+### 5.8 The safety nets are partially robust — the counter holds, the report is a single point of failure
+
+This section answers the question section 7.3 left open on 2026-08-29:
+what happens when the watchdog itself is upset. The two bounded waits
+of sections 5.1 and 5.7 are the only structures in the pilot whose
+entire job is to convert a silent hang into a host-visible fault. They
+were added because this campaign found the two deadlocks, and they were
+then left out of the target list — so the structures that catch the
+failure class this chip exists to rule out were themselves unverified
+against that same failure class. They are in it now, and the answer is
+**partially robust**: the wait counter is sound and cannot be made to
+lose a timeout, and the one-cycle report it fires through is a single
+point of failure that a single upset turns back into a silent hang.
+
+#### The counter holds, and it holds for a structural reason
+
+**Random phases [fact].** 12 injections into `fetch_wait[5:0]` and
+`oh_wait[5:0]`, six per counter, at low / mid / high bit positions:
+**12 MASKED, 0 SDC, 0 HANG.** Two things make that not luck:
+
+- **A single-bit upset cannot fire either timeout early.** Both
+  counters increment by one and exit on an equality test against
+  `{6{1'b1}}` = 63. From the zero the counter holds outside a wait, one
+  flipped bit can only produce 1, 2, 4, 8, 16 or 32, and none of them is
+  63. Reaching the bound from that zero takes all six bits at once, and
+  from a counter part way through a wait it takes however many bits the
+  two values differ in; the directed `fire_*` cases below had to move
+  six and four respectively, and the log records the popcount of every
+  constructed deposit for exactly this reason.
+- **A single-bit upset cannot stop either timeout firing.** Monotone
+  increment with an equality test at the maximum reaches that maximum
+  from every value below it, and fires immediately from the maximum
+  itself. There is no counter value from which the wait does not end.
+  Nor does a corrupted value persist: `fetch_wait` is zeroed on every
+  successful fetch and `oh_wait` on every `fo_rd_valid` and every
+  re-arm, so its lifetime is one event and not a mission.
+
+**Directed, `clear_midwait` [fact].** The counter zeroed 20 cycles into
+a real bounded wait, on both nets. Both still time out, both still
+latch `STATUS.ERR_CFG` (`STATUS` = `0x16`), both recover, and both
+produce the golden event stream and the golden neuron state. The wait
+is longer — one upset buys one more full 63-cycle count, bounded, not a
+restart loop — and nothing else changes. **The answer to "does it
+restart forever" is no, and it is no by construction.**
+
+#### Firing early costs one event on one net and nothing on the other
+
+**Directed, `fire_early` [fact].** The counter driven to its bound 10
+cycles into a real wait, on both nets: DETECTED, `ERR_CFG` set, golden
+output on both. Firing early during a genuine fault is a faster
+recovery and costs nothing.
+
+**Directed, `fire_spurious` [fact].** The same deposit with no fault
+present, placed on a *legitimate* one-cycle wait, and here the two nets
+diverge:
+
+| | dispatcher (`fetch_wait` → 63 in a legitimate `D_FETCH`) | adapter (`oh_wait` → 63 in a legitimate `oh_req`) |
+|---|---|---|
+| class | DETECTED | DETECTED |
+| `STATUS` | `0x16`, ERR pin high | `0x16`, ERR pin high |
+| output | **corrupted** — got `[2, 3, 4, 6, 2]` against golden `[1, 2, 5, 6, 4, 2]` | golden, spike for spike and neuron for neuron |
+
+**The dispatcher's own bound destroys the event it was fetching and the
+adapter's does not, and the difference is one guard.** The read had
+already been granted: `aer_fifo` advanced its pointer and delivers
+`fi_rd_valid` the cycle after the spurious timeout took `dstate` back
+to `D_IDLE`, and the `D_IDLE` arm has no branch that accepts a late
+grant, so the popped word is gone. The adapter captures under
+`if (fo_rd_valid)`, which is not gated on `oh_req`, so the same late
+grant still lands in `oh_data` and the run is untouched. The same
+circuit twice, opposite outcomes.
+
+Two caveats, both load-bearing. The construction takes six bit flips,
+so it is **outside the single-bit fault model** of section 7.4 — a
+statement about what the structure does when driven to that state, not
+a rate. And the loss is *announced*: `ERR_CFG` is set and the ERR pin
+is high, so this is a detected event loss and not a silent one. It is
+reported here because the fix costs zero flip-flops.
+
+#### The report is where the net breaks
+
+`fetch_timeout` and `oh_timeout` are one-bit pulse registers, high for
+exactly one cycle, cleared unconditionally at the top of their own
+`always` block, and `sticky_errcfg` samples them at the following clock
+edge. That single cycle is the whole of the protection, in both
+directions.
+
+**Set spuriously — 6 of 6 [fact].** Every one of the six random-phase
+injections into the two pulse flops came back DETECTED with a golden
+output: a report of a fault that did not happen, at a 100% rate for
+that bit. The host cannot tell it from a real one. `STATUS.ERR_CFG` is
+shared with the parked-core term and the invalid-configuration term, no
+counter counts a timeout and no status bit names one — so a fabricated
+timeout is indistinguishable from a genuine `D_FETCH` deadlock, and on
+a part flown to *measure* upset rates that is a corrupted measurement
+as surely as an erased one (section 5.5 makes the same point about the
+counters).
+
+**Cleared in that one cycle — and this is the finding [fact].** The
+`report_erased` cases plant the real fault, let the net catch it, and
+flip the pulse in the one cycle it is high. The `report_kept` controls
+run byte-for-byte the same script with the final deposit removed —
+including the 64-cycle poll that waits for the pulse, so the two
+records differ in exactly one deposit and in nothing else. **One
+deposit apart:**
+
+| Case | class | `STATUS` | ERR pin | drained event stream (golden: `[1, 2, 5, 6, 4, 2]`) |
+|---|---|---|---|---|
+| `wdog_fetch_dir` / `report_kept` | DETECTED | `0x16` | high | `[0, 1, 2, 3, 4, 2]` |
+| `wdog_fetch_dir` / `report_erased` | **SDC** | `0x06` | **low** | `[0, 1, 2, 3, 4, 2]` |
+| `wdog_oh_dir` / `report_kept` | DETECTED | `0x16` | high | `[0, 1, 2, 3, 4, 2]` |
+| `wdog_oh_dir` / `report_erased` | **SDC** | `0x06` | **low** | `[0, 1, 2, 3, 4, 2]` |
+
+Read the table row by row. **All four runs deadlocked, all four
+recovered, and all four returned the same wrong answer, word for word.
+The class changes anyway, because the only thing that changed is
+whether the chip said so.** The event streams are byte-identical across
+the pair — which is what makes this a controlled experiment rather than
+an anecdote, and which also confirms directly what the RTL says: the
+timeout pulse feeds `sticky_errcfg` and nothing in the datapath, so
+erasing it removes the report and only the report.
+
+**Why the control had to include the poll, recorded because the first
+version of it did not [fact].** Written without the 64-cycle wait, the
+control returned a *golden* output while the case it controls returned
+a corrupted one — which would have supported a much stronger and false
+claim, that erasing the report also corrupts the run. It does not.
+`sticky_errcfg` drives `status_word` and the `err` pin and nothing else
+in `hw/rtl/pilot_top.v`; there is no datapath consumer for it. The
+difference was the harness: the erasure script holds `run_stimulus` up
+for 64 more cycles before the serial drain begins, and that moves the
+drain relative to the recovery. Making the control wait the same 64
+cycles removed the difference and the two streams became identical.
+**A control that differs from its case in two things measures
+neither**, and this one now differs in one deposit.
+
+The recovery still happens in all four — `completed` is true everywhere
+and the campaign's bounded-wait criterion holds, which is why
+`test_04_watchdog_directed`'s one hard assertion passes. What does not
+happen is the report. The design deadlocks, unwedges itself, returns a
+wrong answer, and says nothing: **`STATUS` reads `0x06`
+(`EVQ_IN_EMPTY | EVQ_OUT_EMPTY`), every counter reads zero and every
+fault pin is low.** That is the exact operator-visible picture section
+5.1 documented for the *pre-fix* design, restored by one bit.
+
+**So, plainly: the bounded waits are partially robust, and the claim
+this campaign supports is narrower than "the safety nets hold".** The
+counter half is robust and provably so. The reporting half is a single
+unreplicated flip-flop with a one-cycle live window, and it is a
+silent-failure path: one upset in it converts a caught fault back into
+an uncaught one. The bounded *wait* is not a single point of failure —
+the count cannot be broken — but the *announcement* of it is, and it
+needs the same treatment the pointers got.
+
+**What the rate does and does not say.** The random draw found the
+fabricated direction six times out of six and the erased direction not
+once, and it never will: the erasure window is one cycle of a 31 ms run
+and it exists only while a timeout is already firing, so the joint
+probability is negligible and the expected number of such events in a
+mission is far below one [estimate]. That is an argument about how
+*often*, and it is not the argument that matters here. The pilot exists
+to make upsets visible, and the one case where the report is lost is by
+construction the case where something happened. This is why the cases
+were constructed rather than drawn, and it is the one place in this
+document where section 7.1's "treat the ordering as the result" advice
+cuts the wrong way: an outcome a rate cannot reach is not an outcome
+that does not exist.
+
+#### The fix, and its cost
+
+**Not implemented in this pass.** `hw/rtl/pilot_top.v` is shared and was
+being worked in concurrently; all three items below need the section
+5.1 and 5.7 regression tests re-run and a fresh flip-flop census, which
+is a wave and not an edit. Ordered by benefit per flip-flop:
+
+1. **Retire the pulse flops and latch the stickies from the timeout
+   condition.** `sticky_errcfg` is set today from the registered pulse.
+   Setting it instead from the combinational expiry term — `dstate ==
+   D_FETCH && !fi_rd_valid && fetch_wait == FETCH_WAIT_MAX`, and its
+   `oh_req && !fo_rd_valid && oh_wait == OH_WAIT_MAX` twin — makes the
+   report and the recovery the same clock edge. **The design cannot then
+   recover without reporting, and there is no one-cycle flop left to
+   upset.** Cost: **−2 flip-flops** [fact, counted from the RTL
+   declarations], plus a three-term AND and a 6-bit equality carried
+   into the fault-counter process. It closes the erased direction
+   outright and the fabricated direction with it, because the term is
+   derived rather than stored. [estimate] the combinational path is
+   short and neither flow is near its timing bound, but it is a path
+   into a block on a different reset net, which is why item 2 exists.
+2. **If that path is unacceptable, duplicate and OR.**
+   `fetch_timeout_b` and `oh_timeout_b` written from the same
+   expressions, with `sticky_errcfg` set from the OR of each pair. An
+   upset that clears one copy is masked. Cost: **+2 flip-flops.**
+   Strictly weaker — it closes the erased direction and leaves the
+   fabricated one exactly as it is — and worth taking only as a
+   fallback.
+3. **Give `D_IDLE` the arm the adapter already has**, so a grant that
+   arrives after a timeout is consumed rather than dropped: `if
+   (fi_rd_valid) begin evw <= fi_rd_data; dstate <= D_ISSUE; end`. This
+   removes the `fire_spurious` event loss above and makes the
+   dispatcher's recovery match the adapter's, which is worth having on
+   its own. Cost: **0 flip-flops**, one mux on `evw` and one on
+   `dstate`.
+
+**Not proposed: TMR on the wait counters.** Twenty-four flip-flops for
+the half of the structure the measurement says is already sound. The
+counter is not where the weakness is, and spending there would repeat
+the mistake of ranking by fault magnitude instead of by measured
+behaviour.
+
+**And one line for the telemetry wave (section 6.1 item 3, still
+open).** Neither
+timeout has a counter. `CNT_SEC`, `CNT_DED`, `CNT_EVQ_OVF`,
+`CNT_AXON_OOR` and `CNT_TMR` each name their event; a bounded-wait
+expiry lands in `STATUS.ERR_CFG` alongside two unrelated causes and is
+counted nowhere, so the host cannot tell one timeout from ten, or a
+timeout from a parked core. A `CNT_TIMEOUT` on the existing counter
+convention is 8 flip-flops and would make the two deadlock classes
+measurable rather than merely visible.
 
 ---
 
@@ -1833,6 +2236,99 @@ the same sentence covers **122 for 122** at a further cost of 24 FF. They are th
 story at all, and the list above is what it would take to make the rest
 of the block deserve the same sentence.
 
+### 6.2 The ranking for wave 6 — and why the argument matters more than the number now
+
+**The residual is flat.** After the memory hardening and the pointer
+TMR the silent-corruption tail is 26 records across five structures —
+four of them carrying six or seven records each and the fifth carrying
+one — and no structure dominates it the way `wmem` and the pointers
+dominated the wave-4 table. The two `wdog_*` records of section 5.8 are
+excluded from this ranking on purpose: they are a defect with a named
+fix that costs negative flip-flops, not a structure to be weighed
+against the others.
+
+| Structure | Group | SDC | n | rate | FF | weighted |
+|---|---|---:|---:|---:|---:|---:|
+| AER queue storage | `evq_mem` | 7 | 32 | 21.9% | 128 | **28.0** |
+| EVQ_OUT show-ahead adapter | `evq_hold` | 6 | 14 | 42.9% | 35 | **15.0** |
+| Neuron scan and emission state | `lif_scan` | 6 | 21 | 28.6% | 23 | **6.6** |
+| Event dispatcher | `dispatch` | 6 | 18 | 33.3% | 18 | **6.0** |
+| Register-bank configuration | `regbank_cfg` | 1 | 16 | 6.2% | 75 | **4.7** |
+
+[fact for the rates and the counts; the weighting is arithmetic on the
+section 2 flip-flop counts, and it is the same weighting section 6.1
+used so the two tables can be read against each other.] The wave-4
+table had a leader at 144 and a second at 117; this one has a leader at
+28 and a second at 15 out of a total of 60. **The ordering is no longer
+the answer, so the argument has to be.**
+
+**The per-target split is what the group rates hide [fact].** Read out
+of `hw/tb/fi_campaign_results.json` rather than off the table above:
+
+| Structure | where its SDC actually is |
+|---|---|
+| `evq_hold` | `oh_valid` 2/2, `u_evq_out.rd_valid` 2/2, `oh_data` 2/6 — **4 of 6 in two single-bit valid flags** |
+| `lif_scan` | `out_pend` 3/3, `jj` 2/6, `ev_axon_r` 1/6 — **3 of 6 in one valid flag**, and the other 3 corrupt only retained state |
+| `dispatch` | `dstate` 3/10, `evw` 3/8 — evenly split between the state register and the event word |
+| `evq_mem` | spread over 4 of the 8 queue slots (`u_evq_in.mem[0]`, `u_evq_out.mem[1..3]`), at bit 0 and bit 14 alike — no concentration to exploit |
+| `regbank_cfg` | `ctrl_en` 1/16 — one record, and it is a latent-register case section 5.6 already covers by driver contract |
+
+**Wave 6 should take `evq_hold`.** Not because it leads the weighted
+table — it does not, `evq_mem` does — but because the recommendation
+column in section 6.1 has always been ordered by benefit per flip-flop
+spent, and on that basis it is not close:
+
+1. **Two flip-flops carry two thirds of the group's silent
+   corruption.** `oh_valid` and `u_evq_out.rd_valid` are 4 of the 6
+   records and 4 of 4 in their own right. Triplicating two one-bit
+   flags on the `aer_ptr_bank` pattern already in the tree costs
+   **+4 flip-flops** and removes 4 of the 26 residual records: **1.0
+   SDC records per flip-flop spent**, against 0.15 for SECDED on
+   `evq_mem`. [estimate for the cost; the rates are measured.]
+2. **It is the highest per-bit rate left in the design** at 42.9%, and
+   section 5.7's general finding says why: in this design the dangerous
+   small state is the valid flags, not the indices. A valid flag
+   fabricates an event out of stale `oh_data` or drops the one it was
+   holding, and no consumer downstream can tell either from a real
+   spike. `evq_mem` corruption is a wrong event *word*, which is at
+   least bounded by the ID range and, with item 4 below, becomes
+   detectable for a fraction of the cost.
+3. **The same mechanism extends across the structure boundary for two
+   more flip-flops.** `lif_core`'s `out_pend` is the third valid flag
+   and it is 3/3 SDC. Triplicating all three — `oh_valid`,
+   `u_evq_out.rd_valid`, `out_pend` — is **+6 flip-flops for 7 of the
+   26 residual records**, 27% of the whole tail at 1.17 records per
+   flip-flop. That is the best measured benefit per flip-flop anywhere
+   left in the pilot, and it is invisible in the structure table above
+   because it is not a structure: it is a class.
+4. **`evq_mem` leads the weighted table and should still not lead the
+   wave.** 128 flip-flops of transient event storage, and SECDED (22,16)
+   at 6 check bits per 16-bit entry is +48 flip-flops for 7 records —
+   0.15 per flip-flop, the worst ratio in the table. This is the same
+   judgement section 6.1 item 4 made about `wmem`, for the same reason:
+   the right answer for a large regular array arrives with the SRAM
+   macro, where the ECC comes with the compiler rather than out of the
+   flip-flop budget. The cheap interim is worth costing separately —
+   **one parity bit per queue entry, +8 flip-flops**, which does not
+   correct but converts all 7 SDC records into a counted drop, at 0.88
+   records per flip-flop [estimate]. That is competitive, it covers 128
+   flip-flops rather than 3, and it belongs in the same wave as the
+   second item rather than the first.
+5. **`dispatch` and `regbank_cfg` stay where they are.** The
+   dispatcher's 6 records split evenly between `dstate` and `evw`, so
+   there is no cheap concentrated fix: an HD-2 encoding for `dstate`
+   (+2 FF) converts 3 SDC into DETECTED and does nothing for `evw`,
+   which would need its own parity. It is a reasonable third item and
+   not a first. `regbank_cfg` at one record in sixteen is below the
+   noise of this sample size (section 7.1) and section 5.6's driver
+   contract already covers the mechanism.
+
+**And the item this campaign added [fact, section 5.8].** The
+bounded-wait *reports* are now a measured silent-failure path and the
+primary fix costs **−2 flip-flops**. Nothing else in this document
+proposes a hardening that reduces the register count, and it should
+land before any of the five above.
+
 ---
 
 ## 7. Where this evidence is thin
@@ -1921,10 +2417,11 @@ Deposits land inside the AER stimulus windows only. Four structures are
 therefore untouched (152 FF); together with the EVQ_OUT drop counter,
 which cannot increment by design, and four isolated control flops, they
 made up the 164 flip-flops section 2 did not represent when this
-section was written. The two bounded-wait counters added since are a
-fifth entry and a different reason — they are inside the window and
-simply have no target — taking the list to 166 FF of named structures
-plus the isolated flops:
+section was written. A fifth entry was added on 2026-08-29 for a
+different reason — the two bounded-wait counters were inside the window
+and simply had no target — and **was closed on 2026-08-30**, which is
+what section 5.8 reports. The list is back to the original four
+structures, 152 FF, plus the isolated flops:
 
 - **the serial shift engine** (80 FF) — live only during a serial frame.
   Reaching it needs the injection scheduled against the frame rather
@@ -1945,19 +2442,24 @@ plus the isolated flops:
 - **the SYNC echo path and the EVQ_IN read register** (34 FF) — the
   workload contains no SYNC barrier, so half of this is untested by
   construction.
-- **the two bounded-wait counters** (`fetch_wait` + `fetch_timeout`,
-  `oh_wait` + `oh_timeout`, 14 FF, added 2026-08-29 to this list) — the
-  structures that convert a silent hang into a reported one. An upset in
-  `fetch_wait` or `oh_wait` shortens or lengthens a wait that is
-  otherwise never near its bound, which is harmless; an upset in either
-  `*_timeout` flop fabricates an `ERR_CFG` the host cannot distinguish
-  from a real one. **Unmeasured**, and the cheapest remaining gap to
-  close: they are named registers live inside the injection window, and
-  the `EXT_GROUPS` mechanism of section 2 exists precisely so a target
-  can be appended without moving any drawn phase. It was left out of
-  this wave to keep the run a single-variable change against the
-  previous one, not because it is hard. It is the first item for the
-  next campaign.
+- ~~**the two bounded-wait counters**~~ (`fetch_wait` + `fetch_timeout`,
+  `oh_wait` + `oh_timeout`, 14 FF, added 2026-08-29 to this list,
+  **closed 2026-08-30**) — the structures that convert a silent hang
+  into a reported one. This entry is kept struck through rather than
+  deleted, because the prediction it made is worth comparing against
+  what was measured. It said: an upset in `fetch_wait` or `oh_wait`
+  "shortens or lengthens a wait that is otherwise never near its bound,
+  which is harmless; an upset in either `*_timeout` flop fabricates an
+  `ERR_CFG` the host cannot distinguish from a real one." Both halves
+  held [fact] — 12 of 12 counter injections MASKED, 6 of 6 pulse
+  injections a fabricated `ERR_CFG` with a golden output. **What the
+  prediction missed is the other direction of the same flop:** an upset
+  that *clears* the pulse in the one cycle it is high erases the report
+  entirely, and the design then recovers from a real deadlock with a
+  wrong answer and nothing flagged — SDC, not a false alarm. A random
+  draw cannot find that cycle, which is why the closure needed
+  constructed cases and not only 18 more phases. Section 5.8 has the
+  measurement, the paired controls and the fix.
 
 ### 7.4 The fault model is single-bit, flip-flop only, at RTL
 
@@ -2105,6 +2607,37 @@ carrying a load average of about 12 of 20 cores throughout. A CI job
 should budget twenty minutes, and the argument for keeping this suite
 off the default sweep is correspondingly stronger.
 
+The 365-injection run of section 3.5 took **567 s for 31.31 ms** [fact]
+on a quiet machine. An identical run — same seed, same target list,
+same 365 records — took **1769 s** earlier the same day with three
+other simulator jobs on the host [fact]. Same measurement, same log,
+3.1x the wall time. **Quote the 31.31 ms when comparing hosts and the
+wall time never**; the 892 s and 674 s figures above carry the same
+warning and are the reason the CI budget in this section is three
+times the observed best case rather than equal to it. The directed
+cases of section 5.8 are cheap either way —
+`test_04_watchdog_directed` is 18 s of the 567, twelve injections that
+each stall the design for 60 to 90 cycles — so closing the section 7.3
+gap cost about 3% of the run.
+
+One operational note learned on 2026-08-30 and worth writing down.
+`hw/tb/sim_build_fi_8x8_q4x4/` and `hw/tb/fi_campaign_results.json` are
+**shared, unlocked artifacts**: two concurrent invocations of this
+target on the same machine will recompile `sim.vvp` under each other
+(and if their `iverilog` versions differ, the second one's `vvp`
+refuses to run the first one's output) and will overwrite each other's
+log. There is no locking and there should not be one; the fix when it
+matters is to pass a private build directory, which the cocotb
+makefiles already support:
+
+```
+make -f Makefile.fi SIM_BUILD=$PWD/sim_build_fi_mine \
+                    COCOTB_RESULTS_FILE=$PWD/results_fi_mine.xml
+```
+
+The JSON path is still shared, so check the record count and the seed
+in the file before quoting it as the run you just started.
+
 Relationship to the rest of the verification programme:
 
 - `hw/tb/test_pilot_top.py` keeps the directed demonstrators. They are
@@ -2122,10 +2655,20 @@ Relationship to the rest of the verification programme:
   acceptance baseline for any later campaign — an FPGA saboteur run or a
   beam campaign inherits this target list, these classes and this seed,
   and any structure whose measured behaviour disagrees with this file is
-  a finding. It now holds the 335-injection post-wave-5 run; the earlier
+  a finding. It now holds the 365-injection safety-net run; the earlier
   numbers survive in this document, in the headline, in sections 3.1 to
-  3.4, in the section 5.1 table of the five records that changed and in
-  the section 3.4 table of the one that changed this time.
+  3.5, in the section 5.1 table of the five records that changed, in
+  the section 3.4 table of the one that changed at wave 5, and in
+  section 3.5's statement that none of the 335 changed at all this
+  time.
+- `hw/tb/test_fi_campaign.py`'s `test_04_watchdog_directed` is the one
+  test in this file that does not draw its phases. It constructs a
+  fault and an upset in the structure meant to catch it, placed against
+  each other cycle by cycle, because the case that matters is one cycle
+  wide and a rate cannot reach it (section 5.8). Its multi-step deposits
+  are logged with the popcount of every write, so a reader can see at a
+  glance which of them are single-event upsets and which are
+  constructions outside the section 7.4 fault model.
 
 ### Notes for the integrator
 
