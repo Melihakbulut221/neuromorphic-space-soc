@@ -629,7 +629,9 @@ fragments, so from the repository root:
     make -C formal regbank_all   # npu_regbank: prove prove_cnt2 prove_n256 bmc cover
     make -C formal ecc           # secded + tmr_voter, all eleven tasks
     make -C formal lif_all       # lif_ctrl, all eight tasks
-    make -C formal everything    # all four of the above
+    make -C formal lif_mem_all   # lif_core memory codes, all eight tasks
+    make -C formal scrub_all     # scrub controller, all nine tasks
+    make -C formal everything    # all six of the above
     make -C formal clean-all     # remove every sby working directory
 
 Note the trap in the first line: `all` covers only `aer_fifo`. It was
@@ -652,11 +654,16 @@ Or invoke sby directly, which is what every target above reduces to:
 
     cd formal && <sby> -f tmr_voter.sby bmc_w32
 
-**Twenty-eight tasks exist in total**: four for `aer_fifo`, five for
+**Forty-five tasks exist in total**: four for `aer_fifo`, five for
 `npu_regbank`, three for `secded`, eight for `tmr_voter`, eight for
-`lif_ctrl` **[fact — counted from the four `.sby` `[tasks]` sections and
-confirmed by the target lists in `formal/Makefile` and the three
-fragments]**. Each writes a working directory `formal/<task>/`; `-f`
+`lif_ctrl`, eight for `lif_mem`, nine for `scrub` **[fact — counted from
+the seven `.sby` `[tasks]` sections and confirmed by
+`make -C formal -n everything | grep -c "sby -f"`, which prints 45]**.
+The count was 28 until the memory-hardening and scrub blocks were wired
+in; `lif_mem` in particular sat on disk passing for a day before
+`formal/lif_mem.mk` was included here, which is why the count is now
+stated with a command that recomputes it rather than as a number to be
+trusted. Each writes a working directory `formal/<task>/`; `-f`
 forces a clean re-run, so a stale directory is never mistaken for a
 result.
 
@@ -738,10 +745,10 @@ Two property styles are in use, and the choice is per block **[decision]**:
 
 | Job | Task | Mode / depth | Parameters | Substance |
 |---|---|---|---|---|
-| `aer_fifo.sby` | `prove` | k-induction, depth 15 | WIDTH=16, DEPTH=64 | P1 level bookkeeping; P2 exact empty/full flags; P3 no overflow corruption; P4 drop-counter semantics with saturation; P5 FIFO order preservation by the two-token method |
+| `aer_fifo.sby` | `prove` | k-induction, depth 15 | WIDTH=16, DEPTH=64 | P1 level bookkeeping; P2 exact empty/full flags; P3 no overflow corruption; P4 drop-counter semantics with saturation; P5 FIFO order preservation by the two-token method; **P7 pointer TMR masking** — the three replicas of each pointer agree at all times and the voted pointer is bit-identical to a fault-free reference count whatever the faulty replica does, under a symbolic fault XORed into one replica per pointer with the single assumption of at most one faulty replica per pointer per cycle. P7 is what makes P1..P6 hold under a fault, and P1..P6 are what say the masking is complete; **P8 the correction is reported exactly** — `ptr_mismatch` is high if and only if a replica is faulty this cycle, so neither a missed correction nor a false alarm during clean traffic |
 | | `prove_d4` | k-induction, depth 15 | DEPTH=4, WIDTH=8 via `chparam` | same properties, fast parameterization check |
 | | `bmc` | bounded, depth 40 | defaults | bounded backstop |
-| | `cover` | reachability, depth 150 | defaults | empty, full, wrap-around, drop all reachable |
+| | `cover` | reachability, depth 150 | defaults | seven statements: empty, full, wrap-around and drop; **P6** a word queued while `rd_data` is not that word, which pins the read port as registered rather than show-ahead; and **P9** a corrected upset reachable while the queue is delivering an event. P9 is the vacuity alarm for the fault model — if an assumption were ever tightened until no fault is reachable, P7 and P8 would still pass and only this cover would fail (section 7.4) |
 | `npu_regbank.sby` | `prove` | k-induction, depth 10 | CNT_W=32 (silicon) | P1 reset values; P2 decode integrity (write enables one-hot-or-zero, none outside a decoded address); P3 no phantom writes, and a decoded write lands; P4 read-only immunity; P5 W1C semantics; P6 counter semantics; P7 bus response; P8 configuration lock and start gating; **P9 EVQ_OUT read and pop are atomic** (docs/10 section 7.2, C9 — proven with a ghost bit tracking whether the presented head has already been handed out); **P10 the exported datapath ports** (P3..P8 assert on the internal `r_*` state; P10 carries the same claims out to the ports the rest of the chip sees) |
 | | `prove_cnt2` | k-induction, depth 10 | CNT_W=2 via `chparam` | same properties at the width the cover task uses |
 | | `prove_n256` | k-induction, depth 10 | N_NEURONS=256, N_AXONS=256 via `chparam` | same properties on a core smaller than the regmap default — the C8 parameter-versus-literal case |
@@ -1144,8 +1151,40 @@ lines, no `DONE` line of any other kind, and exit code 0 — the first in
 **13 min 60 s** with a second formal gate competing for CPU **[fact,
 both read from the captured stdout of the run rather than from the task
 directories, for the reason in section 7.1]**. The counts in the table
-are from the second run, which is the one that saw the current
-`aer_fifo_props.v`. All eight `tmr_voter` tasks write the full status
+are from the second run.
+
+**SUPERSEDED 2026-08-30, and the way it went stale is the point.** The
+suite is now 45 tasks, and a full `make -C formal everything` emitted
+**45 `DONE (PASS, rc=0)` lines, no `DONE` line of any other kind, and no
+`make` error marker** **[fact]**. The table above is kept as the record
+of the 28-task gate; it is not a current inventory.
+
+That green run did **not** cover `aer_fifo`, and nothing in it said so.
+`hw/rtl/aer_fifo.v` and `formal/aer_fifo.sby` were written at 19:31 and
+`formal/aer_fifo_props.v` at 18:37, against a run whose `aer_fifo` tasks
+executed at 16:21 — so the four tasks that reported `PASS` had seen
+neither the pointer TMR nor the properties written for it, and the
+sentence above claiming the table saw "the current `aer_fifo_props.v`"
+was already false when it was written. A gate is only evidence about the
+sources it read, and a per-task timestamp is the only thing that says
+which sources those were. Re-running the block against the current tree
+gives `prove`, `prove_d4`, `bmc` and `cover` all `PASS`, with all seven
+cover statements reached — the last of them, `empty && f_seen_full`, at
+step 130 of the 150 available **[fact]**.
+
+One failure mode worth naming because it cost an hour here. The first
+re-run ended `DONE (ERROR, rc=16)` on `cover` with
+`FileNotFoundError: engine_0/trace5.vcd` from `yosys-smtbmc`, after
+reaching six of the seven statements. That is the section 7.1 collision
+in a form that section does not describe: it leaves a `status` file
+saying `ERROR` rather than leaving none, so the "no status file" test
+does not catch it. **The reliable signature is the elapsed-time pair in
+the task summary** — that run reported 55 min 26 s of clock time against
+**9 s** of process time, a ratio that means the solver was not computing
+but waiting on a working directory being removed under it. The identical
+task in isolation reported 20 min 41 s clock against 20 min 42 s
+process, and passed. Compare the two numbers before reading any `ERROR`
+as a property failure. All eight `tmr_voter` tasks write the full status
 line `PASS 0 0`; section 7.3 explains why that trailing zero is a
 runtime and not a proof depth.
 
@@ -1217,10 +1256,15 @@ Measured wall time for that sequence on the reference machine
 **[estimate]**: the register-map check plus the whole Python suite is
 under a second; the six cocotb suites together are on the order of a
 minute, most of it elaboration and the LIF lockstep runs;
-`make -C formal everything` is **11 min 34 s** end to end for all 28
-tasks on a quiet machine and **14 min** with a second formal gate
-competing. The formal number is dominated by two `aer_fifo` tasks —
-`bmc` at over six minutes and `cover` at about two and a half — with
+`make -C formal everything` was **11 min 34 s** end to end for the
+28-task gate on a quiet machine and **14 min** with a second formal gate
+competing. At 45 tasks it is longer and has not been timed end to end;
+`aer_fifo cover` alone now takes **20 min 41 s** against the two and a
+half minutes below, because the pointer-TMR cover statements reach much
+deeper — one of them at step 130 **[fact]**. Treat the 11 min 34 s as
+history, not as a target. The old formal number was dominated by two
+`aer_fifo` tasks — `bmc` at over six minutes and `cover` at about two
+and a half — with
 `npu_regbank bmc` the next largest at about 80 s of CPU. Everything else
 is small: `lif_ctrl`'s eight tasks close in about 30 s of CPU together,
 and `secded` plus `tmr_voter` in about 10. Solver time moves with
@@ -1240,9 +1284,12 @@ which should print `0` for each file **[fact]**, and
 
     for d in formal/*/; do [ -f "$d/status" ] && echo "$(basename $d) $(cat $d/status)"; done
 
-which should print 28 lines, every one beginning `PASS 0`. If a task
+which should print 45 lines, every one beginning `PASS 0`. If a task
 directory has no `status` file at all, that is the collision of section
-7.1 and not a result — check `pgrep -af 'sby -f'` first.
+7.1 and not a result — check `pgrep -af 'sby -f'` first. A `status` file
+reading `ERROR` is not automatically a result either: compare the
+task summary's clock time against its process time before believing it,
+for the reason recorded in section 8.3.
 
 **The file list in the first command is spelled out on purpose; do not
 widen it to `hw/tb/results*.xml`.** An earlier revision of this section
