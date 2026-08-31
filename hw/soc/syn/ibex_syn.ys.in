@@ -1,0 +1,92 @@
+# Yosys synthesis of the sv2v-converted Ibex onto ihp-sg13g2.
+#
+# Placeholders substituted by flow/syn_ibex.sh:
+#   @GEN@       hw/soc/gen           (sv2v output)
+#   @RTL@       hw/soc/rtl           (sg13g2 glue: prim_clock_gating)
+#   @LIB@       sg13g2 typical liberty (mapping target)
+#   @OUT@       output directory for this configuration
+#   @CFG@       configuration name
+#   @ABC_D@     ABC delay target, in liberty time units (ns)
+#   @P_*@       Ibex parameters (see flow/syn_ibex.sh for the values and
+#               ext/ibex/rtl/ibex_pkg.sv for the enum encodings)
+#
+# Mapping is done against the TYPICAL corner, matching what the pilot's
+# LibreLane runs do (synthesis maps at one corner; sign-off checks all
+# of them -- see sta/ibex_sta.tcl).
+
+read_liberty -lib @LIB@
+
+# The clock gate is a real sg13g2 cell, so Yosys must know its interface
+# before ibex_top instantiates it. read_liberty above already supplied
+# sg13g2_lgcp_1 as a blackbox; prim_clock_gating is the thin binding.
+read_verilog -defer @RTL@/prim_clock_gating.v
+read_verilog -defer @GEN@/*.v
+
+# ---- configuration ---------------------------------------------------
+chparam -set BaseIsa          @P_BASEISA@   ibex_top
+chparam -set RV32E            @P_RV32E@     ibex_top
+chparam -set RV32M            @P_RV32M@     ibex_top
+chparam -set RV32B            @P_RV32B@     ibex_top
+chparam -set RV32ZC           @P_RV32ZC@    ibex_top
+chparam -set RegFile          @P_REGFILE@   ibex_top
+chparam -set BranchTargetALU  @P_BTALU@     ibex_top
+chparam -set WritebackStage   @P_WBSTAGE@   ibex_top
+chparam -set ICache           @P_ICACHE@    ibex_top
+chparam -set ICacheECC        @P_ICACHEECC@ ibex_top
+chparam -set ICacheScramble   @P_ICACHESCR@ ibex_top
+chparam -set BranchPredictor  @P_BP@        ibex_top
+chparam -set DbgTriggerEn     @P_DBGTRIG@   ibex_top
+chparam -set SecureIbex       @P_SECURE@    ibex_top
+chparam -set PMPEnable        @P_PMPEN@     ibex_top
+chparam -set PMPGranularity   @P_PMPGRAN@   ibex_top
+chparam -set PMPNumRegions    @P_PMPNUM@    ibex_top
+chparam -set MHPMCounterNum   @P_MHPMNUM@   ibex_top
+chparam -set MHPMCounterWidth @P_MHPMW@     ibex_top
+
+hierarchy -check -top ibex_top
+
+# ---- redundancy anchors ---------------------------------------------
+# Under SecureIbex, ibex_top instantiates a delayed shadow core and
+# compares its outputs (rtl/ibex_top.sv line 873 onwards). Deliberately
+# redundant logic is exactly what a synthesiser is built to delete, so
+# the prim_* wrappers that carry the redundancy are held as hierarchy
+# boundaries across `synth` and `abc` and released only afterwards.
+# This is upstream's own guard (syn/tcl/yosys_run_synth.tcl) and it is
+# applied unconditionally here: in the non-secure configurations these
+# modules are absent, so the setattr is a no-op rather than a variant.
+setattr -mod -set keep_hierarchy 1 *prim_generic_and2*
+setattr -mod -set keep_hierarchy 1 *prim_generic_buf*
+setattr -mod -set keep_hierarchy 1 *prim_generic_clock_mux2*
+setattr -mod -set keep_hierarchy 1 *prim_generic_flop*
+
+# ---- synthesis -------------------------------------------------------
+synth -flatten -top ibex_top
+opt -purge
+
+write_verilog @OUT@/ibex_top.pre_map.v
+
+# ---- technology mapping ---------------------------------------------
+dfflibmap -liberty @LIB@
+opt
+abc -liberty @LIB@ -constr @OUT@/abc.constr -D @ABC_D@
+
+# Redundancy is mapped; release the anchors and do the final flatten.
+setattr -mod -set keep_hierarchy 0 *prim_generic_and2*
+setattr -mod -set keep_hierarchy 0 *prim_generic_buf*
+setattr -mod -set keep_hierarchy 0 *prim_generic_clock_mux2*
+setattr -mod -set keep_hierarchy 0 *prim_generic_flop*
+flatten
+setundef -zero
+opt_clean -purge
+
+write_verilog -noattr @OUT@/ibex_top.netlist.v
+
+# OpenSTA-readable netlist: no expressions, no attributes, one bit per
+# net. Same treatment upstream's flow applies for the same reason.
+splitnets
+clean
+write_verilog -noattr -noexpr -nohex -nodec @OUT@/ibex_top.sta.v
+
+check
+tee -o @OUT@/area.rpt stat -liberty @LIB@
+tee -o @OUT@/hierarchy.rpt stat

@@ -1,0 +1,76 @@
+# Single-corner STA of the synthesised Ibex netlist. flow/sta_ibex.sh
+# invokes this once per corner and aggregates across corners.
+#
+# Placeholders: @LIB@ @CORNER@ @NETLIST@ @SDC@ @OUT@
+#
+# Why one corner per run rather than OpenSTA's define_corners: the
+# aggregation across corners then happens on OpenSTA's own printed
+# output, in the shell, over a corner list that is written out in full.
+# docs/28 section 4.4a records what an implicit corner list costs -- the
+# pilot's setup checker silently defaulted to ["*typ*"] and four
+# published "corner closes" claims came from runs where the slow corner
+# was gated by nothing. There is no default here to get wrong.
+#
+# WHAT IS REPORTED, AND WHY ALL OF IT IS REPORTED. Three numbers per
+# corner:
+#
+#   setup  worst slack over EVERY path group (worst_slack_cmd max)
+#   hold   worst slack over EVERY path group (worst_slack_cmd min)
+#   the same setup number decomposed into the synchronous (clk_i) and
+#   asynchronous (reset recovery/removal) path groups
+#
+# The decomposition is diagnostic only. It never narrows the verdict:
+# flow/sta_ibex.sh forms its verdict from the two all-group numbers, so
+# a path group cannot fail while the summary line stays green. That
+# failure mode is this repository's recurring one -- docs/28 section
+# 4.4a (setup checker pointed at ["*typ*"]), docs/34 section 8.5 and
+# docs/36 section 3.3 (max-cap/max-slew checkers pointed at no corner
+# at all), docs/23 (design__violations not aggregating hold) -- and the
+# shape is always the same: a green result only as wide as the thing it
+# examined.
+
+read_liberty @LIB@
+read_verilog @NETLIST@
+link_design ibex_top
+read_sdc @SDC@
+
+puts "======== corner @CORNER@ ========"
+
+puts "---- setup, worst 10, all path groups ----"
+report_checks -path_delay max -group_path_count 10 \
+              -format full_clock_expanded -digits 4
+
+puts "---- hold, worst 10, all path groups ----"
+report_checks -path_delay min -group_path_count 10 \
+              -format full_clock_expanded -digits 4
+
+# The machine-readable lines are built from OpenSTA's own slack query
+# rather than from report_worst_slack's text: OpenSTA's report stream
+# and Tcl's stdout are separate channels and interleave unpredictably,
+# so `puts -nonewline` followed by a report command does not produce one
+# line. sta::worst_slack_cmd is what report_worst_slack itself calls
+# (its body is `report_line "worst slack $min_max [format_time
+# [worst_slack_cmd $min_max] ...]"`), so this is the same number, not a
+# reconstruction of it. sta::format_time converts from OpenSTA's
+# internal seconds to the liberty time unit, ns.
+puts [format "WORSTSLACK setup @CORNER@ %s" \
+      [sta::format_time [sta::worst_slack_cmd max] 4]]
+puts [format "WORSTSLACK hold @CORNER@ %s" \
+      [sta::format_time [sta::worst_slack_cmd min] 4]]
+puts [format "TNS setup @CORNER@ %s" \
+      [sta::format_time [sta::total_negative_slack_cmd max] 4]]
+
+# Diagnostic decomposition. Written to files and parsed by the shell,
+# because a per-path-group worst slack has no Tcl accessor.
+report_checks -path_delay max -path_group clk_i -group_path_count 1 \
+              -format full_clock_expanded -digits 4 \
+              > @OUT@/path_@CORNER@_setup_sync.rpt
+report_checks -path_delay max -path_group asynchronous \
+              -group_path_count 1 \
+              -format full_clock_expanded -digits 4 \
+              > @OUT@/path_@CORNER@_setup_async.rpt
+report_checks -path_delay min -group_path_count 1 \
+              -format full_clock_expanded -digits 4 \
+              > @OUT@/path_@CORNER@_hold.rpt
+
+exit

@@ -1,0 +1,64 @@
+# Timing constraints for the synthesised Ibex netlist on ihp-sg13g2.
+#
+# This is LibreLane's scripts/base.sdc, specialised by hand to this
+# design, with the ihp-sg13g2 PDK defaults substituted in literally so
+# the constraint set can be read without running the flow:
+#
+#   SYNTH_DRIVING_CELL          sg13g2_buf_4 / X
+#   OUTPUT_CAP_LOAD             6.0 fF
+#   MAX_FANOUT_CONSTRAINT       10
+#   CLOCK_UNCERTAINTY_CONSTRAINT 0.25 ns
+#   CLOCK_TRANSITION_CONSTRAINT  0.15 ns
+#   IO_DELAY_CONSTRAINT         20 %
+#   TIME_DERATING_CONSTRAINT    5 %
+# (libs.tech/librelane/sg13g2_stdcell/config.tcl, PDK commit
+#  c4b8b4e5e7a05f375cca3815d51b3a37721fbf5c)
+#
+# TWO THINGS ARE DELIBERATE HERE, both inherited from docs/28 section
+# 4.4 and the pilot's config.signoff-6x2.json:
+#
+#  1. The derate is written as 5.0, not 5. The PDK ships the integer 5
+#     and base.sdc computes [expr $x / 100] in Tcl, which for an integer
+#     is 0 -- so the stock flow applies NO derate while logging "5%".
+#     Every number this file produces is derated because the constant is
+#     a float.
+#  2. Clocks are ideal (unset_propagated_clock). There is no clock tree:
+#     this is a synthesis netlist, not a placed and routed one. Calling
+#     the clock propagated over a netlist with no CTS would report a
+#     zero-skew clock as if it had been built. Ideal clocks plus the
+#     0.25 ns uncertainty is what LibreLane itself uses at the
+#     pre-CTS checkpoints, and it is the honest label for these numbers:
+#     pre-layout, no parasitics, no clock tree.
+#
+# @PERIOD@ is substituted by flow/sta_ibex.sh.
+
+set clock_port clk_i
+set period @PERIOD@
+
+create_clock [get_ports $clock_port] -name $clock_port -period $period
+
+set io_delay [expr $period * 20 / 100.0]
+
+set_max_fanout 10 [current_design]
+
+set clk_input      [get_port $clock_port]
+set clk_indx       [lsearch [all_inputs] $clk_input]
+set all_inputs_wo_clk [lreplace [all_inputs] $clk_indx $clk_indx ""]
+set clocks         [get_clocks $clock_port]
+
+set_input_delay  $io_delay -clock $clocks $all_inputs_wo_clk
+set_output_delay $io_delay -clock $clocks [all_outputs]
+
+set_driving_cell -lib_cell sg13g2_buf_4 -pin X $all_inputs_wo_clk
+set_driving_cell -lib_cell sg13g2_buf_4 -pin X $clk_input
+
+set_load [expr 6.0 / 1000.0] [all_outputs]
+
+set_clock_uncertainty 0.25 $clocks
+set_clock_transition  0.15 $clocks
+
+# 5.0, not 5. See note 1 above.
+set_timing_derate -early [expr 1 - (5.0 / 100)]
+set_timing_derate -late  [expr 1 + (5.0 / 100)]
+
+unset_propagated_clock [all_clocks]
