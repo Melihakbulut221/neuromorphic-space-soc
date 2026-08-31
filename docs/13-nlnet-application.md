@@ -164,8 +164,47 @@ record on any of the following. **[fact]**
    unchanged and is the strongest scheduling fact in this document.
 4. **Decision lag**: "You can expect the process to take between three
    and five months. This is counted from the date of the deadline of the
-   open call". For 2026-11-03 that is **2027-02 to 2027-04**, MoU after
-   that.
+   open call" (`https://nlnet.nl/restack/faq/`). The quotation is
+   accurate and re-confirmed verbatim on 2026-08-31. **[fact that NLnet
+   states this]**
+
+   > **Corrected 2026-08-31 — the quote stays, the window derived from
+   > it does not.**
+   >
+   > **Superseded text**, kept as it stood: "For 2026-11-03 that is
+   > **2027-02 to 2027-04**, MoU after that." That was NLnet's advertised
+   > three-to-five months applied arithmetically, and it was tagged
+   > **[fact]** by inheritance from the quotation it followed.
+   >
+   > **Why it moved.** NLnet's own 2026 selection announcements do not
+   > run at the advertised rate. Each names the call round it decides:
+   > the **2026-03-02** announcement says "This is the selection for the
+   > **August** call of the NGI Zero Commons Fund fund only" and the
+   > **2026-04-09** announcement says "for the **October** call"
+   > (`https://nlnet.nl/news/2026/20260302-announce-commons-fund.html`,
+   > `https://nlnet.nl/news/2026/20260409-announce-commons-fund.html`,
+   > both sentences read verbatim 2026-08-31). Against the bi-monthly
+   > deadlines of 2025-08-01 and 2025-10-01 those are **213 days (7.0
+   > months)** and **190 days (6.3 months)** — outside the advertised
+   > range at both points. The wider set of 2026 announcements falls in
+   > the **4.3-6.5 month** band (`docs/37` section 2). **[fact for the
+   > two round-attributed data points.]**
+   >
+   > **Replacement.** Expected decision on a 2026-11-03 submission:
+   > **2027-03 to 2027-06**, taking the full observed 4.3-7.0 month
+   > spread. MoU after that. **[estimate — a projection from two
+   > verified data points and an observed range, not a commitment by the
+   > funder, and explicitly not what the funder advertises.]**
+   >
+   > **What moved:** the tag and the window. The quotation is unchanged
+   > and stays **[fact]** as a statement of NLnet's claim; the derived
+   > window is retagged **[estimate]** and widened by roughly two months
+   > at each end. Nothing about whether to apply changes — a later
+   > decision sits closer to the "budget fully allocated (expected early
+   > 2027)" horizon of item 3, which strengthens the case for this round
+   > rather than a later one. What it does change is the milestone
+   > arithmetic in section 5, which must be read against an MoU in
+   > mid-2027.
 5. **Cadence**: deadlines are "the third day of every odd month"
    (`https://nlnet.nl/news/2026/20260803-phaseshift.html`).
 6. **Payment mechanics** (`sample_MoU.pdf`, re-retrieved 2026-08-29):
@@ -848,7 +887,7 @@ ordered by date.
 | 2026-10-27 | Full package review: positioning pass (D-17), arithmetic re-check, character counts re-run, formal gate re-run (D-21), timing-sentence re-check (D-22), D-1..D-4, D-16, D-18 closed | developer |
 | **2026-10-29** | **Submit.** Five days before the deadline, not on it | developer |
 | 2026-11-03 12:00 CEST | Hard deadline **[fact]** | — |
-| 2027-02 to 2027-04 | Expected decision window (3-5 months from the deadline **[fact]**) | — |
+| 2027-03 to 2027-06 | Expected decision window **[estimate]**. ~~2027-02 to 2027-04 (3-5 months from the deadline **[fact]**)~~ — **corrected 2026-08-31**: 3-5 months is what NLnet advertises **[fact that it says so]**, but its own 2026 announcements decided the August and October 2025 calls at 7.0 and 6.3 months. Window widened to the observed 4.3-7.0 month spread and retagged as an estimate; see section 1.5 item 4 | — |
 
 Rationale for 2026-10-29: the form accepts multiple versions before the
 deadline and the last complete one is used **[fact]**, so early

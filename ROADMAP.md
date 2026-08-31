@@ -16,7 +16,7 @@ tagged with their source document; unsourced figures are [estimate].
 |---|---|---|
 | 2026-09-03 | NLnet calls reopen (Restack fund) | open-licensing decision must be made; application drafting starts |
 | 2026-09-07 | Internal go/no-go: RM_IHPSG13 SRAM macro closes DRC/LVS in the local rootless flow | selects the macro content of the pilot, no longer its tile count (see the P1 sizing note) |
-| 2026-09-21 | TTIHP26b closes (fab IHP-2609) | pilot design frozen and submitted |
+| 2026-09-21, 20:00 UTC (23:00 Istanbul) | TTIHP26b closes (fab IHP-2609) | pilot design frozen and submitted. The time of day was never recorded here until a live check on 2026-08-31; a deadline whose hour is unknown is a deadline missed by a day |
 | 2026-11-03 | NLnet Restack submission deadline | application submitted |
 | spring 2027 (date TBC) | TTIHP27a closes | full-SoC slot IF the pre-silicon gate passes |
 | 2027-06-25 | TTIHP26b silicon arrives (boards ~2027-08) | pilot bring-up and characterization |
@@ -64,12 +64,18 @@ than only in the source. `docs/31-signoff-6x2.md` is the record and
 Two decisions below are superseded by measurement and kept for the
 record: the tile shape moved from 4x2 to 6x2 when the design outgrew the
 70 percent planning criterion (`docs/22`, `docs/23`), which takes the
-cost from EUR 560 to EUR 840; and the 2026-09-07 SRAM-macro go/no-go was
+cost from EUR 560 to EUR 840 in tiles alone — but see the corrected total
+below; and the 2026-09-07 SRAM-macro go/no-go was
 overtaken, since the pilot ships flip-flop RAM and the macro variant is
 a twelve-tile design in its own right.
 
 What remains is not engineering: a Tiny Tapeout account, a TTIHP26b 6x2
-slot, the EUR 840, and a push to a repository so the GDS action and the
+slot, **EUR 955** — corrected 2026-08-31 from a live check of the Tiny
+Tapeout pricing: twelve tiles at EUR 70 is EUR 840, but the tile-only
+figure this document and docs/06 had been quoting omits the EUR 300
+devkit, which is subsidised to EUR 100 while 88 of the first 100 remain,
+and EUR 15 of shipping — and a push to a repository so the GDS action and
+the
 hosted precheck can run. That last step has never executed and is the
 only part of this phase this repository cannot do for itself. The
 licensing decision in `docs/14` is still unsigned and a submission
