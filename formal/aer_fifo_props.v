@@ -68,6 +68,55 @@
 //       halves matter for a part whose product is a fault count --
 //       docs/16 section 5.2 is a list of corruptions that were silent,
 //       and a flag that also fired on clean cycles would be no better.
+//   P14 acceptance is the PORT-LEVEL contract, not the design's own
+//       opinion of it. Everything above is written in terms of wr_ok,
+//       rd_ok and wr_drop, which are internal wires; the whole set is
+//       therefore consistent with a design that quietly declines to
+//       accept an offered write and records nothing about it. Measured,
+//       not supposed: a mutant whose wr_ok additionally excludes a write
+//       coincident with an accepted read -- one lost event per collision,
+//       no drop counted, no flag raised -- PASSES prove, prove_d4, bmc
+//       and cover as this file stood before P14 [fact, 2026-08-31]. That
+//       is the same defect class docs/07 caught in the register bank's
+//       lock property, where an assertion phrased over the design's own
+//       locked set could not detect a wrong locked set. P14 restates the
+//       header's contract over the PORTS -- wr_en, rd_en, full, empty,
+//       level, drop_cnt, rd_valid, par_err -- so an offered write is
+//       either taken (level rises) or dropped (drop_cnt rises), and an
+//       offered read on a non-empty queue is always answered, either as
+//       a delivery or as an announced discard. There is no third outcome.
+//
+// Checked in the resync task only (`AER_PTR_RESYNC`, mode bmc), and
+// carrying docs/09 target #4b:
+//   P15 replica re-convergence, N = 1. The trace starts out of reset on
+//       an arbitrary state in which the three replicas of a pointer have
+//       ALREADY DIVERGED -- one of them holding a value the other two do
+//       not -- and with the injection vectors held at zero, i.e. with the
+//       fault removed. On the next edge all three replicas hold the same
+//       value again. This is the "after fault removal, replicas
+//       re-converge within N cycles" clause of target #4, and N is 1.
+//   P16 and they re-converge on the RIGHT value: the voted pointer of the
+//       diverged cycle, advanced by the operation that cycle accepted.
+//       A resync that agreed on the corrupted replica's value would
+//       satisfy P15 and destroy the queue, so P15 alone is not the
+//       theorem.
+//   P17 during the diverged cycle itself the module is already correct
+//       and already talking: the vote takes the value the two healthy
+//       replicas hold, and ptr_mismatch is exactly the divergence.
+//
+// Why this file can carry #4b at all, when docs/09 recorded the target as
+// blocked on RTL that does not exist: the resynchronization path is in
+// hw/rtl/aer_fifo.v, not in hw/rtl/tmr_voter.v or hw/rtl/pilot_top.v,
+// which are the two files the target row looked at. The queue's pointer
+// domain computes its next state once FROM THE VOTED VALUE and loads it
+// unconditionally into all three replicas, so a replica corrupted at any
+// time is rewritten from the vote on the next edge; the RTL says so in
+// the comment above the aer_ptr_bank instances. That is a resync path,
+// it is the only one in the design, and P15/P16 are its proof. The
+// configuration domain of hw/rtl/pilot_top.v still has none -- its banks
+// hold their own state and are restored by a host rewrite -- so #4b is
+// closed for the queue pointers and open for the configuration word, and
+// docs/09 says exactly that rather than one word for both.
 //
 // Checked by reachability (mode cover):
 //   P6  the read port is registered and NOT show-ahead. P5 pins the
@@ -91,6 +140,116 @@ initial f_past_valid = 1'b0;
 always @(posedge clk)
     f_past_valid <= 1'b1;
 
+`ifdef AER_PTR_RESYNC
+// =====================================================================
+// P15 / P16 / P17: replica re-convergence (docs/09 target #4b)
+// =====================================================================
+//
+// This property set REPLACES the one below rather than joining it, for
+// the same reason formal/lif_ctrl.sby's bmc_safe and formal/scrub.sby's
+// bmc_any carry their own sets: the starting state is different. Here the
+// whole state is free -- including mem[] and the stored parity vector --
+// so the invariants P5 and P10 stand on are false at step 0 by
+// construction, and asserting them in this task would report a failure
+// about the fault model rather than about the design.
+//
+// The trace starts out of reset, with the injection vectors held at ZERO
+// (the fault is removed, which is the precondition the target's clause
+// names) and with the replicas of at least one pointer already diverged.
+// The initial state is otherwise unconstrained, so BMC at depth 2 is
+// already exhaustive over every diverged state the class contains; the
+// task runs deeper to show the domain stays converged and to reach the
+// covers.
+//
+// The one restriction is the one TMR claims and no more: at least two
+// replicas of each pointer agree, i.e. a majority exists. A state in
+// which all three disagree is outside what a bitwise majority can
+// correct, and the design does not claim it.
+// ---------------------------------------------------------------------
+
+// No injected fault: this task is about a corruption that has already
+// happened and has stopped, not about one in progress. P7/P8 cover the
+// in-progress case, in every other task, and there the injection is free.
+always @(*) begin
+    assume (f_inj_wa == {PW{1'b0}});
+    assume (f_inj_wb == {PW{1'b0}});
+    assume (f_inj_wc == {PW{1'b0}});
+    assume (f_inj_ra == {PW{1'b0}});
+    assume (f_inj_rb == {PW{1'b0}});
+    assume (f_inj_rc == {PW{1'b0}});
+    assume (f_inj_mem == PAR_ZERO);
+end
+
+wire f_w_diverged = (wr_ptr_a != wr_ptr_b) || (wr_ptr_a != wr_ptr_c);
+wire f_r_diverged = (rd_ptr_a != rd_ptr_b) || (rd_ptr_a != rd_ptr_c);
+
+// A majority exists on each pointer: two of the three replicas agree.
+wire f_w_maj = (wr_ptr_a == wr_ptr_b) || (wr_ptr_a == wr_ptr_c)
+                                      || (wr_ptr_b == wr_ptr_c);
+wire f_r_maj = (rd_ptr_a == rd_ptr_b) || (rd_ptr_a == rd_ptr_c)
+                                      || (rd_ptr_b == rd_ptr_c);
+
+initial assume (rst_n);
+initial assume (f_w_maj && f_r_maj);
+initial assume (f_w_diverged || f_r_diverged);   // something really is wrong
+
+// P17: the diverged cycle is already masked and already reported. Stated
+// for every cycle, not only the first, so it is an iff on the flag rather
+// than a statement about one step.
+always @(*) if (rst_n) begin
+    if (wr_ptr_b == wr_ptr_c) assert (wr_ptr == wr_ptr_b);
+    if (wr_ptr_a == wr_ptr_c) assert (wr_ptr == wr_ptr_a);
+    if (wr_ptr_a == wr_ptr_b) assert (wr_ptr == wr_ptr_a);
+    if (rd_ptr_b == rd_ptr_c) assert (rd_ptr == rd_ptr_b);
+    if (rd_ptr_a == rd_ptr_c) assert (rd_ptr == rd_ptr_a);
+    if (rd_ptr_a == rd_ptr_b) assert (rd_ptr == rd_ptr_a);
+    assert (ptr_mismatch == (f_w_diverged || f_r_diverged));
+end
+
+always @(posedge clk) if (f_past_valid) begin
+    // P15: N = 1. One edge after ANY diverged state, with no fault
+    // present, the three replicas of each pointer hold the same value.
+    // This is what the unconditional load from the voted value buys, and
+    // it is exactly what a per-replica increment enable would lose.
+    assert (wr_ptr_a == wr_ptr_b);
+    assert (wr_ptr_a == wr_ptr_c);
+    assert (rd_ptr_a == rd_ptr_b);
+    assert (rd_ptr_a == rd_ptr_c);
+
+    // P16: on the right value. The corrupted replica is not what they
+    // agree on -- the vote of the diverged cycle is, advanced by the
+    // operation that cycle accepted. rst_n is free in this task as in
+    // every other, so the guard excludes the edge on which an asserted
+    // reset legitimately takes the pointers to zero instead; P15 above
+    // needs no such guard, because a reset re-converges the replicas too.
+    if (rst_n && $past(rst_n)) begin
+        assert (wr_ptr_a == ($past(wr_ptr) + {{AW{1'b0}}, $past(wr_ok)}));
+        assert (rd_ptr_a == ($past(rd_ptr) + {{AW{1'b0}}, $past(rd_ok)}));
+    end
+end
+
+// Non-vacuity. If the assumptions above were ever tightened until no
+// diverged state existed, P15..P17 would pass over an empty set and
+// these covers would fail, which is the intended alarm.
+// The divergence itself is only ever present at step 0 -- that is the
+// whole claim -- so it has to be covered by an unclocked statement.
+// Written as a clocked cover it is unsatisfiable by construction, which
+// the cover job reported rather than left to be assumed [fact,
+// 2026-08-31]; it is the same shape of correction the P13 note above
+// records.
+always @(*) if (rst_n) begin
+    cover (ptr_mismatch);
+    cover (f_w_diverged && f_r_diverged);   // both pointers hit at once
+end
+
+always @(posedge clk) if (f_past_valid && rst_n) begin
+    cover ($past(ptr_mismatch) && !ptr_mismatch);          // resynchronized
+    cover ($past(f_w_diverged) && !f_w_diverged && $past(wr_ok));
+    cover ($past(f_r_diverged) && !f_r_diverged && $past(rd_ok));
+    cover ($past(ptr_mismatch) && rd_valid);   // resync under live traffic
+end
+
+`else
 // Start in reset so the induction base matches hardware bring-up.
 initial assume (!rst_n);
 
@@ -141,6 +300,58 @@ always @(posedge clk) if (f_past_valid && rst_n && $past(rst_n)) begin
     if ($past(wr_ok) && !$past(rd_ok)) assert (!empty);
     if ($past(rd_ok) && !$past(wr_ok)) assert (!full);
     if (!$past(wr_ok) && !$past(rd_ok)) assert (level == $past(level));
+end
+
+// ---------------------------------------------------------------------
+// P14: acceptance is the contract at the PORTS
+//
+// Everything above this line is written over wr_ok, rd_ok and wr_drop,
+// which are internal wires. A design that silently declined an offered
+// write and recorded nothing would keep every one of those properties
+// true, and one did: see the P14 note in the header. What follows is the
+// module header's own contract, restated over the ports and nothing else.
+//
+//   "Overflow-safe: a write while full is dropped ... and counted"
+//   "A read while empty is refused"
+//   "level is exact occupancy (0..DEPTH)"
+//
+// f_wr_take / f_rd_take are the SPECIFICATION's acceptance conditions,
+// built from the input ports and the two status outputs. They are not
+// read out of the design, so a design whose acceptance differs from them
+// fails here instead of being followed.
+// ---------------------------------------------------------------------
+
+wire f_wr_take = wr_en && !full;
+wire f_rd_take = rd_en && !empty;
+
+always @(posedge clk) if (f_past_valid && rst_n && $past(rst_n)) begin
+    // P14a: occupancy moves by exactly the operations the ports offered
+    // and the flags allowed. One equation, ports only, and it is what
+    // makes "no event is lost between wr_en and level" a theorem.
+    assert ({1'b0, level} == ({1'b0, $past(level)}
+                              + {{(AW + 1){1'b0}}, $past(f_wr_take)}
+                              - {{(AW + 1){1'b0}}, $past(f_rd_take)}));
+
+    // P14c: an offered read on a non-empty queue is always answered, and
+    // there are exactly two answers -- the event is delivered on the next
+    // cycle, or it is discarded and announced on this one. A refusal that
+    // is neither is the read-side form of the same silent loss.
+    assert ((rd_valid || $past(par_err)) == $past(f_rd_take));
+end
+
+always @(*) if (rst_n) begin
+    // P14b: the design's own acceptance wires ARE the specification's
+    // conditions. P14a already implies this at the level output; stating
+    // it at the cut as well is what makes a counterexample readable, and
+    // it pins wr_drop to the ports so that P4's counting property is
+    // about offered writes rather than about whatever the design chose
+    // to call a drop.
+    assert (wr_ok   == f_wr_take);
+    assert (rd_ok   == f_rd_take);
+    assert (wr_drop == (wr_en && full));
+    // ... so every offered write has exactly one outcome, and no offered
+    // write has none.
+    if (wr_en) assert (wr_ok ^ wr_drop);
 end
 
 // ---------------------------------------------------------------------
@@ -422,3 +633,5 @@ always @(posedge clk) if (f_past_valid && rst_n) begin
     cover (par_err);
     cover (rd_valid && f_seen_par);
 end
+
+`endif  // AER_PTR_RESYNC

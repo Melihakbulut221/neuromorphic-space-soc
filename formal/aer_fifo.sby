@@ -5,6 +5,31 @@
 #   sby -f aer_fifo.sby prove_d4   same proof at DEPTH=4, WIDTH=8 (fast
 #                                  parameterization check)
 #   sby -f aer_fifo.sby bmc        bounded check, depth 40
+#   sby -f aer_fifo.sby resync     POINTER REPLICA RE-CONVERGENCE, the
+#                                  clause docs/09 target #4b asks for. The
+#                                  trace starts out of reset on a state in
+#                                  which one replica of a pointer has
+#                                  already diverged, with the injection
+#                                  vectors held at zero -- the fault has
+#                                  happened and has stopped -- and the
+#                                  proof is that the three replicas agree
+#                                  again on the next edge, on the right
+#                                  value. The starting state is fully
+#                                  symbolic, so depth 2 is already
+#                                  exhaustive over the class; N = 1.
+#                                  This task carries its own property set
+#                                  (AER_PTR_RESYNC in aer_fifo_props.v)
+#                                  and NOT the one below, for the same
+#                                  reason lif_ctrl.sby's bmc_safe does:
+#                                  the invariants P5 and P10 stand on are
+#                                  false at step 0 by construction here.
+#   sby -f aer_fifo.sby resync_cover  the diverged start and the resync
+#                                  that follows it are both reachable. The
+#                                  divergence exists only at step 0, so it
+#                                  is covered by an unclocked statement; a
+#                                  clocked one is unsatisfiable by
+#                                  construction, which this job reported
+#                                  rather than left to be assumed.
 #   sby -f aer_fifo.sby cover      reachability of full/drain/drop states,
 #                                  P6, which pins the read port to the
 #                                  registered (not show-ahead) shape that
@@ -93,10 +118,12 @@
 # file. See the "pointer TMR" section of hw/rtl/aer_fifo.v.
 
 [tasks]
-bmc
-prove
-prove_d4
-cover
+bmc           rd_plain
+prove         rd_plain
+prove_d4      rd_plain
+cover         rd_plain
+resync        rd_resync
+resync_cover  rd_resync
 
 [options]
 bmc: mode bmc
@@ -107,12 +134,22 @@ prove_d4: mode prove
 prove_d4: depth 15
 cover: mode cover
 cover: depth 150
+# The resync tasks answer a one-step question from a fully symbolic
+# starting state, so depth 2 is already exhaustive over the whole class of
+# diverged states. The extra steps are there to show the domain stays
+# converged rather than agreeing for one cycle, and to let the covers
+# reach a resync that happens while the queue is delivering an event.
+resync: mode bmc
+resync: depth 6
+resync_cover: mode cover
+resync_cover: depth 6
 
 [engines]
 smtbmc yices
 
 [script]
-read_verilog -formal aer_fifo.v
+rd_plain:  read_verilog -formal aer_fifo.v
+rd_resync: read_verilog -formal -DAER_PTR_RESYNC aer_fifo.v
 prove_d4: chparam -set DEPTH 4 -set WIDTH 8 aer_fifo
 prep -top aer_fifo
 

@@ -51,6 +51,32 @@ pinned tool and PDK versions in `docs/12-sg13g2-flow-bringup.md`.
 
 ### P1 — TTIHP26b pilot (to 2026-09-21)
 
+**Status 2026-08-31: engineering complete, owner actions outstanding.**
+The pilot is signed off at 6x2 = 12 tiles and the RTL is frozen. Every
+geometric and timing counter reads zero on the run built from the file
+the Tiny Tapeout tooling actually hardens, the derate is proven applied
+in the flow-written constraints, the slow corner closes at +1.2262 ns,
+the Tiny Tapeout precheck passes ten of ten, and thirty-five census
+guards confirm the redundancy is present in the shipped netlist rather
+than only in the source. `docs/31-signoff-6x2.md` is the record and
+`docs/34-pilot-freeze.md` pins the artifact set.
+
+Two decisions below are superseded by measurement and kept for the
+record: the tile shape moved from 4x2 to 6x2 when the design outgrew the
+70 percent planning criterion (`docs/22`, `docs/23`), which takes the
+cost from EUR 560 to EUR 840; and the 2026-09-07 SRAM-macro go/no-go was
+overtaken, since the pilot ships flip-flop RAM and the macro variant is
+a twelve-tile design in its own right.
+
+What remains is not engineering: a Tiny Tapeout account, a TTIHP26b 6x2
+slot, the EUR 840, and a push to a repository so the GDS action and the
+hosted precheck can run. That last step has never executed and is the
+only part of this phase this repository cannot do for itself. The
+licensing decision in `docs/14` is still unsigned and a submission
+repository is public, so it gates the push.
+
+The original content and sizing analysis follows.
+
 Content (flip-flop RAM, no SRAM-macro dependency): a reduced LIF slice
 implementing the docs/10 update equations bit-exactly, AER input/output
 FIFOs (the formally proven block), the NPU register-bank subset from
@@ -82,6 +108,16 @@ GL smoke on the TT-generated netlist.
 
 Gate G1: TT submission accepted by precheck; formal/CI targets green;
 hour-budgeted WBS in docs/06 held within its go/no-go checkpoints.
+
+**G1 status: met locally, not yet met hosted.** The precheck passes ten
+of ten on the sign-off GDS and the formal and CI targets are green. What
+the gate cannot claim is the hosted half: the Tiny Tapeout GDS action has
+never run, because running it requires the repository to be pushed. The
+local precheck is the same deck, but a gate that says "accepted by
+precheck" should mean the one that gates the shuttle, so this stays open
+until the action has run. Note also that the local precheck needs KLayout
+0.30.9 — the system 0.28.16 aborts the PDK deck and reports a failure
+that is not real.
 
 ### P2 — NLnet Restack application (2026-09-03 to 2026-11-03)
 

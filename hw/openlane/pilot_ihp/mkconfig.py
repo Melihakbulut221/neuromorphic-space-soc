@@ -24,11 +24,61 @@ Everything else is copied through. `--check` re-derives and diffs
 against what is on disk, so a drifted config is an error rather than a
 surprise in a run directory.
 
+PINNING, AND WHY EVERY TARGET IS PINNED TODAY
+---------------------------------------------
+Re-derivation is the right rule for a config that has never been
+hardened from. It is the wrong rule for one that HAS: every file this
+script writes is the literal input of a run whose numbers are published,
+and re-deriving it silently makes those numbers unreproducible from the
+file that names them.
+
+That stopped being hypothetical when `scripts/gen_tt_submission.py` put
+six keys into `tt/src/config_merged.json` -- the derate fix, the
+setup-corner fix and the four adopted timing keys (docs/31 section 10.1).
+Because this script copies the submission config through, the derivation
+of EVERY target then grew those six keys, and `--check` reported six
+drifted files where nothing had been edited (docs/31 section 10.8). The
+drift is real and it is in the safe direction, but "six files drift and
+you are supposed to know it is fine" is not a gate, it is noise, and the
+next person to run this script without reading docs/31 would have
+regenerated `config.6x2.json` and destroyed the control that measures
+what the un-fixed submission path produces.
+
+So each target now declares its status explicitly:
+
+  * PINNED -- the file is the recorded input of a run that a document
+    quotes. Its bytes are fixed by SHA-256. `--check` verifies the hash
+    instead of the derivation, so a hand edit is still caught, and the
+    write mode leaves the file alone. The derivation is still computed
+    and the key delta against it is PRINTED as a note, so the divergence
+    stays named rather than becoming invisible.
+  * derived -- re-derived and byte-diffed, the original rule.
+
+All six targets are pinned as of docs/34, because the 6x2 pilot is
+frozen for the TTIHP26b shuttle and every one of the six is either a
+published control or, in `config.json`'s case, the base that
+`mktiming.py` derives the frozen sign-off config from. `config.json` is
+the subtle one and it is measured rather than assumed: re-deriving it
+yields a config whose functional keys and values are IDENTICAL to the
+pinned bytes -- the only differences are key order and the loss of the
+two `//derate` and `//setupcheck` annotations, neither of which
+LibreLane reads. It is pinned anyway, because `mktiming.py` builds
+`config.signoff-6x2.json` by copying this file's key order, so
+regenerating it changes the bytes of the file the sign-off run was
+hardened from and takes `mktiming.py --check` from clean to drifted for
+no functional gain. docs/34 section 5 records the measurement.
+
+`--regenerate-pinned` is the way out when the freeze lifts. It is
+deliberately not the default and it prints what re-running it obliges
+you to re-run.
+
 Usage:
-    ./mkconfig.py            # write config.json and the three variants
-    ./mkconfig.py --check
+    ./mkconfig.py                     # write derived targets; skip pinned
+    ./mkconfig.py --check             # hash-check pinned, diff derived
+    ./mkconfig.py --regenerate-pinned # re-derive everything (freeze over)
 """
 
+import hashlib
 import json
 import os
 import subprocess
@@ -53,6 +103,75 @@ PNR_CORNERS = ["nom_typ_1p20V_25C", "nom_slow_1p08V_125C"]
 SHAPES = {
     "3x4": ("0 0 636.96 710.64", "tt_block_3x4_pgvdd.def"),
     "6x2": ("0 0 1289.28 313.74", "tt_block_6x2_pgvdd.def"),
+}
+
+# The pinned set. filename -> (sha256 of the pinned bytes, what consumes
+# the file, why re-deriving it costs something). Verified by --check;
+# rewritten only by --regenerate-pinned.
+#
+# Every hash here was taken at the docs/34 freeze from the bytes that
+# were on disk at commit b6738e5, which are the bytes every run named in
+# the third column actually read.
+PINNED = {
+    "config.json": (
+        "57295633ffc5a976e0a42e8307dc80e1f91efea31c5cce4c6aa045d32bad2a66",
+        "mktiming.py's SIGNOFF_BASE -> config.signoff-6x2.json -> run "
+        "`signoff-6x2` (docs/31)",
+        "mktiming.py copies this file's key ORDER into "
+        "config.signoff-6x2.json, so regenerating this file changes the "
+        "bytes of the frozen sign-off config and takes `mktiming.py "
+        "--check` from `all 8 variants match` to 1 drifted. Measured: the "
+        "re-derivation is functionally identical -- same keys, same "
+        "values, zero differences -- and loses only the //derate and "
+        "//setupcheck annotations, which LibreLane does not read. "
+        "docs/34 section 5.",
+    ),
+    "config.6x2.json": (
+        "02e10806e47085484f8352909ea4dd8b43183f0d2ed78c098be16f714805c248",
+        "run `subpath-6x2` (docs/31 section 2.2) and mktiming.py's BASE "
+        "for all seven tr-* variants (docs/28)",
+        "This is the CONTROL that measures what the submission path "
+        "produced BEFORE the six keys reached it: -0.7696 ns at the slow "
+        "corner, which the flow would have called clean. The derivation "
+        "would now add all six keys, so a regenerated file reproduces the "
+        "FIXED configuration and docs/31 section 2.2 becomes "
+        "unreproducible from the file that names it. It is also "
+        "mktiming.py's base, so regenerating it drifts all seven tr-* "
+        "variants at once.",
+    ),
+    "config.3x4.json": (
+        "205ecf4ffe7fedd40ec6935999cc3abe2990070e1b55f100758050f7ef98f86f",
+        "run `shape-3x4` (docs/23)",
+        "The other half of the tile-shape decision. docs/23 attributes "
+        "its 3x4-vs-6x2 deltas to the shape precisely because the two "
+        "configs differ in DIE_AREA and FP_DEF_TEMPLATE and nothing else; "
+        "adding six keys to one side of a two-sided comparison would "
+        "break that attribution.",
+    ),
+    "config.pnrcorners.json": (
+        "f36e11436a57c2b29128d40c04abfb1c72be502db5d45814f61b63d6d8b7c7ce",
+        "run `ihp-pnrcorners` (docs/20 section 5)",
+        "A one-key A/B against config.json as it stood. The derivation "
+        "would now add PNR_CORNERS to the BASELINE side as well, which is "
+        "the single key the experiment exists to isolate -- the "
+        "experiment would compare a configuration against itself.",
+    ),
+    "config.flatten.json": (
+        "297779e2e1d7a1e48583e2761571c6abb6a1a470968529281d3cc1a01be96f3c",
+        "run `ihp-synth-flatten` (docs/20 section 3)",
+        "A synthesis-only probe run to Yosys.Synthesis. Its numbers "
+        "separate the cost of deferred_flatten from the cost of the TMR "
+        "fix, and they are quoted against this exact base.",
+    ),
+    "config.klayoutdrc.json": (
+        "ab81ff37f1e693e840542660a4b1586d6dc94ae0d893fc28125111bfd52df9b4",
+        "runs `ihp-klayoutdrc` and `ihp-klayoutdrc-w5` (docs/20 section "
+        "11, docs/22)",
+        "Identical to config.json apart from RUN_KLAYOUT_DRC, which is "
+        "the whole claim: any other difference in a sign-off number would "
+        "itself be the finding. The derivation would introduce five more "
+        "differences.",
+    ),
 }
 
 
@@ -171,29 +290,111 @@ def blobs():
         print(f"  {h}  {os.path.relpath(f, REPO)}")
 
 
+def key_delta(have_text, want_text):
+    """Name what re-deriving a pinned file would change, ignoring order.
+
+    Returns a list of human-readable strings. Empty means the derivation
+    and the pinned bytes agree on every key and value, and the two files
+    differ only in key order or in `//`-prefixed annotations, which
+    LibreLane does not read.
+    """
+    try:
+        have = json.loads(have_text)
+    except (ValueError, TypeError):
+        return ["on-disk file is not valid JSON"]
+    want = json.loads(want_text)
+    real = lambda d: {k: v for k, v in d.items() if not k.startswith("//")}
+    h, w = real(have), real(want)
+    out = []
+    for k in sorted(set(w) - set(h)):
+        out.append(f"would ADD {k} = {json.dumps(w[k])}")
+    for k in sorted(set(h) - set(w)):
+        out.append(f"would REMOVE {k} = {json.dumps(h[k])}")
+    for k in sorted(set(h) & set(w)):
+        if h[k] != w[k]:
+            out.append(f"would CHANGE {k}: {json.dumps(h[k])} -> {json.dumps(w[k])}")
+    lost = sorted(k for k in have if k.startswith("//") and k not in want)
+    if lost:
+        out.append("would DROP annotations: " + ", ".join(lost))
+    return out
+
+
 def main():
     base, variant, flat, drc, shapes = derive()
     targets = {
-        os.path.join(HERE, "config.json"): render(base),
-        os.path.join(HERE, "config.pnrcorners.json"): render(variant),
-        os.path.join(HERE, "config.flatten.json"): render(flat),
-        os.path.join(HERE, "config.klayoutdrc.json"): render(drc),
+        "config.json": render(base),
+        "config.pnrcorners.json": render(variant),
+        "config.flatten.json": render(flat),
+        "config.klayoutdrc.json": render(drc),
     }
     for name, pairs in shapes.items():
-        targets[os.path.join(HERE, f"config.{name}.json")] = render(pairs)
-    if "--check" in sys.argv:
+        targets[f"config.{name}.json"] = render(pairs)
+
+    check = "--check" in sys.argv
+    regen_pinned = "--regenerate-pinned" in sys.argv
+
+    if check:
         bad = 0
-        for path, want in targets.items():
+        for name in sorted(targets):
+            path = os.path.join(HERE, name)
             have = open(path).read() if os.path.exists(path) else ""
-            if have != want:
+            if name in PINNED:
+                want_hash, consumer, _why = PINNED[name]
+                got = hashlib.sha256(have.encode()).hexdigest()
+                if got != want_hash:
+                    print(f"PIN-MISMATCH: {path}")
+                    print(f"    pinned {want_hash}")
+                    print(f"    found  {got}")
+                    print(f"    this file is the recorded input of: {consumer}")
+                    print(
+                        "    Restore it from git, or lift the pin deliberately "
+                        "with --regenerate-pinned."
+                    )
+                    bad = 1
+                else:
+                    delta = key_delta(have, targets[name])
+                    note = "; ".join(delta) if delta else "none"
+                    print(f"pinned  {name}  (source delta: {note})")
+            elif have != targets[name]:
                 print(f"DRIFT: {path}")
                 bad = 1
+            else:
+                print(f"derived {name}  matches tt/src/config_merged.json")
         if not bad:
-            print("configs match tt/src/config_merged.json")
+            npin = sum(1 for n in targets if n in PINNED)
+            print(
+                f"OK: {npin} pinned config(s) match their recorded hash, "
+                f"{len(targets) - npin} derived config(s) match "
+                "tt/src/config_merged.json"
+            )
         return bad
-    for path, text in targets.items():
+
+    wrote = []
+    for name, text in sorted(targets.items()):
+        path = os.path.join(HERE, name)
+        if name in PINNED and not regen_pinned:
+            _h, consumer, why = PINNED[name]
+            print(f"pinned, not written: {name}")
+            print(f"    recorded input of: {consumer}")
+            print(f"    {why}")
+            continue
         open(path, "w").write(text)
+        wrote.append(name)
         print(path)
+    if regen_pinned and wrote:
+        print()
+        print("PINS LIFTED. Re-running this script with --regenerate-pinned")
+        print("has rewritten files that recorded runs were built from. Before")
+        print("any number derived from them is quoted again you must:")
+        print("  1. update the PINNED hashes in this file to the new bytes;")
+        print("  2. re-run `mktiming.py` -- config.json feeds")
+        print("     config.signoff-6x2.json and config.6x2.json feeds all")
+        print("     seven tr-* variants, so `mktiming.py --check` will drift;")
+        print("  3. re-harden anything whose numbers you intend to keep")
+        print("     quoting, and supersede docs/34 with a new freeze record.")
+    if not wrote:
+        print("nothing written: every target is pinned (docs/34).")
+        return 0
     print("hw/rtl blobs at generation time:")
     blobs()
     return 0

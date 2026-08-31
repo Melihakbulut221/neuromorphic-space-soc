@@ -8,6 +8,18 @@
 
 # Rootless tool discovery, same house convention as formal/Makefile:
 # prefer sby on PATH, then the known oss-cad-suite checkouts.
+# This fragment's own directory, captured BEFORE the tools.mk include
+# below. `$(lastword $(MAKEFILE_LIST))` names the file make is currently
+# reading, and an `include` permanently appends the included file to that
+# list -- so computing the directory after the include yielded the
+# REPOSITORY ROOT, and every standalone `make -C formal -f <block>.mk`
+# then ran `cd <repo root> && sby -f <block>.sby`, which fails with
+# "No such file or directory". That regression arrived with the toolchain
+# pin and is fixed here rather than worked around at the call site; the
+# fragment behaved correctly when included from formal/Makefile, because
+# there SBY is already set and the include is skipped.
+REGBANK_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 ifeq ($(origin SBY),undefined)
 # Standalone invocation (`make -f <this>.mk ...`) used to rediscover sby
 # with a PATH probe and a glob over several oss-cad-suite checkouts. On
@@ -15,10 +27,9 @@ ifeq ($(origin SBY),undefined)
 # the exact incident tools.mk was written to end, still reachable
 # through a documented command. The pin is the single source now; see
 # tools.mk, and `make -f tools.mk toolcheck` for what it resolves to.
-include $(dir $(lastword $(MAKEFILE_LIST)))../tools.mk
+include $(REGBANK_DIR)/../tools.mk
 endif
 
-REGBANK_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 ifeq ($(.DEFAULT_GOAL),)
 .DEFAULT_GOAL := regbank_all

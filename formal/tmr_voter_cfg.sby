@@ -1,0 +1,116 @@
+# SymbiYosys job for the pilot's configuration TMR domain: three
+# pilot_cfg_bank replicas under one tmr_voter, as hw/rtl/pilot_top.v
+# composes them. Closes the "TMR'd CSRs vote correctly" clause of
+# docs/09-formal-verification-plan.md target #6, and gives target #4a's
+# "the masking theorem is reported per protected block" its one instance
+# in this design.
+#
+#   sby -f tmr_voter_cfg.sby prove       k-induction at the silicon parameters
+#                                  (W = 55, the pilot's three POL masks,
+#                                  MIX = 1 on replica C), reset image 0
+#   sby -f tmr_voter_cfg.sby prove_rst1  the same at an all-ones reset image, so
+#                                  the reset property is not proven over a
+#                                  zero word that the storage transforms
+#                                  map to themselves
+#   sby -f tmr_voter_cfg.sby prove_rstx  the same at an alternating reset image
+#   sby -f tmr_voter_cfg.sby prove_abc   the same property set on an independent
+#                                  engine family (AIGER/PDR via abc)
+#   sby -f tmr_voter_cfg.sby prove_w8    the same at W = 8, where the MIX
+#                                  transform's LO/HI split is 4/4 and the
+#                                  layer-2 rotation modulus is small
+#                                  enough that an off-by-one in it has
+#                                  nowhere to hide
+#   sby -f tmr_voter_cfg.sby bmc         bounded backstop, depth 20
+#   sby -f tmr_voter_cfg.sby cover       reachability of every behaviour the
+#                                  assertions constrain, including a
+#                                  partial write and a masked fault in
+#                                  each replica in turn
+#
+# Reset image. CFG_RST_VAL is assembled inside pilot_top from the
+# generated RST_* constants at the T_* field offsets. It is deliberately
+# NOT reproduced here -- see the header of tmr_voter_cfg_props.v -- so RST_VAL
+# is a parameter and the job runs at three values. What is proven is that
+# the banks reset to the image they are given, which is the module's
+# claim; that the image pilot_top gives them is the right one is
+# npu_regbank P1's business.
+#
+# Engine diversity (docs/09 C.4 item 7) is expressed as two TASKS on
+# different engine families rather than two engines racing inside one
+# task, the same way formal/secded.sby and formal/scrub.sby express it.
+#
+# Cost, measured on the pinned toolchain (yosys 0.67+146) inside a full
+# `make -C formal everything` run, so a future slowdown has a reference
+# [fact, 2026-08-31]:
+#
+#   prove < 1 s   prove_rst1 < 1 s   prove_rstx < 1 s   prove_abc 1 s
+#   prove_w8 < 1 s   bmc 4 s   cover < 1 s
+#
+# Five seconds of solver time for all seven, and 14 s for the whole
+# tmr_cfg_all block standalone including process startup and the
+# parameter guard. It is small because the composition is small: three
+# 55-bit banks and a 55-bit voter, with the rest of pilot_top.v pruned by
+# `prep -top`. docs/35 section 5 has the gate-level numbers this sits in.
+#
+# The three POL masks, the width and which replica carries MIX = 1 are
+# copied from hw/rtl/pilot_top.v because that file has no `ifdef FORMAL
+# hook and the pilot is frozen. `make -C formal -f tmr_voter_cfg.mk
+# tmr_cfg_params` reads them back out of the RTL and fails on a
+# mismatch; it runs first in tmr_cfg_all.
+
+[tasks]
+prove
+prove_rst1
+prove_rstx
+prove_abc
+prove_w8
+bmc
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+prove_rst1: mode prove
+prove_rst1: depth 4
+prove_rstx: mode prove
+prove_rstx: depth 4
+prove_abc: mode prove
+prove_abc: depth 4
+prove_w8: mode prove
+prove_w8: depth 4
+bmc: mode bmc
+bmc: depth 20
+cover: mode cover
+cover: depth 8
+
+[engines]
+prove: smtbmc boolector
+prove_rst1: smtbmc boolector
+prove_rstx: smtbmc boolector
+prove_abc: abc pdr
+prove_w8: smtbmc boolector
+bmc: smtbmc boolector
+cover: smtbmc boolector
+
+[script]
+read_verilog -formal pilot_top.v
+read_verilog -formal tmr_voter.v
+read_verilog -formal tmr_voter_cfg_props.v
+prove_rst1: chparam -set RST_VAL 64'h007FFFFFFFFFFFFF tmr_voter_cfg_props
+prove_rstx: chparam -set RST_VAL 64'h0055555555555555 tmr_voter_cfg_props
+prove_w8: chparam -set W 8 tmr_voter_cfg_props
+prep -top tmr_voter_cfg_props
+# The AIGER path cannot carry a hierarchical cell, and pilot_cfg_bank is
+# marked keep_hierarchy in the RTL -- that attribute is one of the two
+# defences that stop yosys merging the three replicas into one bank, so
+# it is stripped HERE, in this task's model only, and never in the RTL.
+# The other five tasks run against the hierarchy exactly as the pilot
+# elaborates it.
+prove_abc: setattr -mod -unset keep_hierarchy
+prove_abc: flatten
+prove_abc: opt_clean
+
+[files]
+../hw/rtl/pilot_top.v
+../hw/rtl/tmr_voter.v
+../hw/rtl/npu_regs.vh
+tmr_voter_cfg_props.v

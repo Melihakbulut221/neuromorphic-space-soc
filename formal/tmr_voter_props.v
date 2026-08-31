@@ -12,17 +12,33 @@
 //    and is reported per protected block."
 //
 // SCOPE. This file proves the voter clauses only: majority and masking,
-// exhaustively. The re-convergence clause is NOT proven anywhere in this
-// repository, and cannot be until there is something to prove it about:
-// hw/rtl/tmr_voter.v deliberately contains no resynchronization path (see
-// its header - restoring a faulty replica belongs to the protected block,
-// which alone knows how to restore its state), and hw/rtl/pilot_top.v,
-// the only current user of the voter, states that "no replica
-// resynchronization is implemented". Target #4 is therefore partly open;
-// formal/ecc.mk repeats this so the makefile
-// cannot be read as a completion claim. Closing it needs a resync path in
-// RTL plus a bounded-response property (IND with a liveness-as-bounded-
-// safety counter), which is a new property file, not an edit to this one.
+// exhaustively, over three arbitrary replica words. It says nothing about
+// any particular protected block, and it says nothing about
+// re-convergence: hw/rtl/tmr_voter.v deliberately contains no
+// resynchronization path (see its header - restoring a faulty replica
+// belongs to the protected block, which alone knows how to restore its
+// state).
+//
+// Where the other two clauses of target #4 are proven, as of 2026-08-31:
+//
+//   "the masking theorem ... is reported per protected block" -- the
+//       pilot has one protected block, the configuration TMR domain of
+//       hw/rtl/pilot_top.v, and formal/tmr_voter_cfg.sby proves the
+//       masking there over the three banks that actually store the word,
+//       each through a different storage transform. That job also proves
+//       what this one cannot see: that all three replicas present the
+//       configured value in the absence of a fault, which is the property
+//       a broken storage transform would take away silently, with this
+//       voter faithfully masking the damage.
+//
+//   #4b, "after fault removal, replicas re-converge within N cycles" --
+//       proven for the one domain in the design that has a resync path,
+//       the queue pointers of hw/rtl/aer_fifo.v, by the `resync` task of
+//       formal/aer_fifo.sby, with N = 1. Until 2026-08-31 this header and
+//       formal/ecc.mk both said the clause was proven nowhere and blocked
+//       on RTL that did not exist; the RTL did exist, in a file neither of
+//       them reads. The configuration domain still has no resync path and
+//       #4b remains open there.
 //
 // Wrapper-module style (docs/09 B.1). The three replica words are
 // $anyconst and the voter is combinational, so BMC at depth 1 is a full

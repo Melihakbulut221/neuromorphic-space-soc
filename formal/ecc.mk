@@ -18,20 +18,46 @@
 # majority(a,b,c), and no single corrupted replica can change the output -
 # are proven exhaustively here at WIDTH 1, 8 and 32, with the default width
 # additionally re-proven on a second engine family (tmr_bmc_abc).
+#
 # The third clause, "after fault removal, replicas re-converge within N
-# cycles (L as bounded safety)", is proven NOWHERE and is not scheduled by
-# this fragment. It has no subject yet: hw/rtl/tmr_voter.v contains no
-# resynchronization path by design (restoring a faulty replica belongs to
-# the protected block) and hw/rtl/pilot_top.v, the only current user of the
-# voter, states that "no replica resynchronization is implemented".
-# Closing it needs RTL first, then a bounded-response property under
-# induction - a new formal/<block>.mk and property file, not a task added
-# to this one. Until then, "ecc PASSes" means the voter theorem holds, not
-# that target #4 is complete.
+# cycles (L as bounded safety)", is still not proven by this fragment and
+# is not scheduled by it: hw/rtl/tmr_voter.v contains no resynchronization
+# path by design, because restoring a faulty replica belongs to the
+# protected block, which alone knows how to restore its state.
+#
+# It is no longer proven NOWHERE, which is what this paragraph said until
+# 2026-08-31. The design has exactly one resynchronization path and it is
+# in hw/rtl/aer_fifo.v, not in a file this fragment reads: the queue's
+# pointer domain computes its next state once from the VOTED value and
+# loads it unconditionally into all three replicas, so a replica corrupted
+# at any time is rewritten from the vote on the next edge.
+# formal/aer_fifo.sby's `resync` and `resync_cover` tasks prove exactly
+# that, from an arbitrary already-diverged replica set with the fault
+# removed, with N = 1. The configuration domain of hw/rtl/pilot_top.v
+# still has none -- its banks hold their own state and are restored by a
+# host rewrite, as that file says -- and formal/tmr_voter_cfg.mk proves
+# the masking and the storage round-trip there without claiming a resync
+# it does not have.
+#
+# So "ecc PASSes" still means the voter theorem holds and nothing more.
+# Target #4 is closed for #4a, and #4b is closed for the queue pointer
+# domain and open for the configuration domain.
 
 # Tool discovery, house convention (prefer sby on PATH, then the known
 # rootless oss-cad-suite checkouts). Skipped when the including makefile
 # has already resolved SBY.
+# This fragment's own directory, captured BEFORE the tools.mk include
+# below. `$(lastword $(MAKEFILE_LIST))` names the file make is currently
+# reading, and an `include` permanently appends the included file to that
+# list -- so computing the directory after the include yielded the
+# REPOSITORY ROOT, and every standalone `make -C formal -f <block>.mk`
+# then ran `cd <repo root> && sby -f <block>.sby`, which fails with
+# "No such file or directory". That regression arrived with the toolchain
+# pin and is fixed here rather than worked around at the call site; the
+# fragment behaved correctly when included from formal/Makefile, because
+# there SBY is already set and the include is skipped.
+ECC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 ifeq ($(origin SBY),undefined)
 # Standalone invocation (`make -f <this>.mk ...`) used to rediscover sby
 # with a PATH probe and a glob over several oss-cad-suite checkouts. On
@@ -39,10 +65,9 @@ ifeq ($(origin SBY),undefined)
 # the exact incident tools.mk was written to end, still reachable
 # through a documented command. The pin is the single source now; see
 # tools.mk, and `make -f tools.mk toolcheck` for what it resolves to.
-include $(dir $(lastword $(MAKEFILE_LIST)))../tools.mk
+include $(ECC_DIR)/../tools.mk
 endif
 
-ECC_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 
 .PHONY: ecc ecc_secded ecc_tmr ecc_clean \
         secded_bmc secded_bmc_abc secded_cover \
