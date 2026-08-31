@@ -389,13 +389,14 @@ one combinational function so that the hardened and unhardened
 configurations run identical policy; at `HARDEN = 0` that refactor is
 **7 cells and 58.17 um2 cheaper** than the sequential version `docs/40`
 measured, at the same 53 flip-flops. Quoting the delta against the older
-number would credit W6 with 5,032.88 um2 and overstate the saving by
-attributing a refactor to the hardening.
+number would put the cost of W6 at 5,032.88 um2 — **understating it by
+58.17 um2**, by crediting the hardening with a saving the refactor made.
+The direction is the small one here; the habit is not.
 
 **Where the area goes.** 49 flip-flops, and the encode/decode trees:
 sections 6.1 and 6.4 account for all of it. The two mixed replicas cost
 77 cells each against replica A's 22, so the mixing is 110 cells — about
-a third of the increase — and section 4.3 is what buys.
+a third of the increase in cells — and section 4.3 is what it buys.
 
 **Against the alternative that was declined.** `docs/38` section 8.5
 measured `SecureIbex` at 585,233 um2 against `small-pmp`'s 275,683 —
