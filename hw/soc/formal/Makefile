@@ -5,6 +5,10 @@
 #   cd hw/soc/formal && make apb        soc_apb_bridge: bmc, prove, cover
 #   cd hw/soc/formal && make clint      soc_clint: bmc, prove, cover
 #   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, cover
+#   cd hw/soc/formal && make wdogtmr    the watchdog's protected word:
+#                                       the parameter guard, then eight
+#                                       tasks over three soc_tmr_bank
+#                                       replicas under one tmr_voter
 #   cd hw/soc/formal && make clean
 #
 # sby is resolved through the repository's tools.mk, not off PATH. That
@@ -24,9 +28,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog
+all: bus apb clint wdog wdogtmr
 
 include $(REPO)/tools.mk
 
@@ -56,8 +60,47 @@ wdog:
 	  $(SBY) -f soc_wdog.sby $$t || exit 1; \
 	done
 
+# soc_wdog_tmr.sby rebuilds the composition soc_wdog.v's g_prot_tmr
+# block builds, because a fault model needs free inputs at the voter and
+# soc_wdog has no port for them. Three things are therefore copied: the
+# three POL masks and which replicas carry MIX. This target reads them
+# back out of the RTL and fails if any has moved, so the copy cannot
+# drift silently. It is the same guard formal/tmr_voter_cfg.mk applies
+# to the pilot's configuration domain, and it runs FIRST.
+#
+# The WIDTH is deliberately not guarded: soc_wdog computes PROT_W from
+# its own field layout and the proof runs at four widths instead.
+WDOG_RTL := ../rtl/soc_wdog.v
+
+wdog_tmr_params:
+	@fail=0; \
+	for pat in \
+	  "localparam \[63:0\] POL_A = 64'h0000000000000000;" \
+	  "localparam \[63:0\] POL_B = 64'h5555555555555555;" \
+	  "localparam \[63:0\] POL_C = 64'hAAAAAAAAAAAAAAAA;" \
+	  ".POL(POL_A), .MIX(0))" \
+	  ".POL(POL_B), .MIX(1))" \
+	  ".POL(POL_C), .MIX(1))" ; do \
+	  grep -qF "$$(printf '%s' "$$pat" | sed 's/\\//g')" $(WDOG_RTL) || { \
+	    echo "soc_wdog_tmr.sby copies a parameter that has MOVED in" \
+	         "$(WDOG_RTL): $$pat"; fail=1; }; \
+	done; \
+	test $$fail -eq 0 || exit 1; \
+	echo "== soc_wdog_tmr parameter guard: the masks and the MIX" \
+	     "assignments still match hw/soc/rtl/soc_wdog.v"
+
+WDOG_TMR_TASKS := prove prove_w4 prove_w5 prove_w21 prove_rst1 prove_abc \
+                  bmc cover
+
+wdogtmr: wdog_tmr_params
+	@for t in $(WDOG_TMR_TASKS); do \
+	  echo "== soc_wdog_tmr $$t"; \
+	  $(SBY) -f soc_wdog_tmr.sby $$t || exit 1; \
+	done
+
 clean:
-	rm -rf soc_bus soc_bus_bmc soc_bus_prove soc_bus_cover \
+	rm -rf $(addprefix soc_wdog_tmr_,$(WDOG_TMR_TASKS)) soc_wdog_tmr \
+	       soc_bus soc_bus_bmc soc_bus_prove soc_bus_cover \
 	       soc_apb_bridge soc_apb_bridge_bmc soc_apb_bridge_prove \
 	       soc_apb_bridge_cover \
 	       soc_clint soc_clint_bmc soc_clint_prove soc_clint_cover \

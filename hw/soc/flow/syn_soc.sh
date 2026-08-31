@@ -41,6 +41,8 @@ set -euo pipefail
 TOP=${1:?top module name, e.g. soc_bus}
 SOC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 RTL=$SOC_DIR/rtl
+# hw/rtl/tmr_voter.v is READ from here and never modified.
+PILOT_RTL=$(cd "$SOC_DIR/../rtl" && pwd)
 OUT=${2:-$SOC_DIR/out/soc-syn/$TOP}
 PERIOD_NS=${SOC_PERIOD_NS:-20}
 
@@ -137,6 +139,7 @@ read_liberty -lib $SG13G2_TYP
 read_verilog -I$RTL -defer $RTL/soc_bus.v $RTL/soc_apb_bridge.v \
                           $RTL/soc_uart.v $RTL/soc_pnp.v $RTL/soc_apb_pnp.v \
                           $RTL/soc_clint.v $RTL/soc_gptimer.v $RTL/soc_wdog.v \
+                          $RTL/soc_tmr_bank.v $PILOT_RTL/tmr_voter.v \
                           $OUT/soc_fabric_meas.v
 
 hierarchy -check -top $TOP
@@ -148,6 +151,19 @@ dfflibmap -liberty $SG13G2_TYP
 opt
 abc -liberty $SG13G2_TYP -constr $OUT/abc.constr -D $PERIOD_NS
 
+# The final flatten is LibreLane's SYNTH_HIERARCHY_MODE = deferred
+# flatten: after mapping, so nothing it produces can be merged. It has
+# to strip keep_hierarchy first, and that line is load bearing rather
+# than tidy. hw/soc/rtl/soc_tmr_bank.v carries the attribute as one of
+# its two anti-merge defences, so without this, flatten skips the three
+# replica instances -- and stat -liberty then reports FOUR modules,
+# whose per-module lines the awk below reads as one. Measured on the
+# hardened watchdog before this line was added: cells and flops came out
+# of the soc_wdog local report while the area came out of a submodule's,
+# so the block read 715 cells / 204 flops / 6,188.50 um2 against a true
+# 10,818.85 um2. A census that silently reads the wrong scope is the
+# same defect docs/33 records one level up.
+attrmap -modattr -remove keep_hierarchy
 flatten
 setundef -zero
 opt_clean -purge

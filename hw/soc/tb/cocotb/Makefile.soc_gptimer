@@ -33,12 +33,18 @@ else
 
 RTL = $(PWD)/../../rtl
 
+# hw/rtl/tmr_voter.v is READ, never modified: it is the proved,
+# golden-vector-tested majority primitive and docs/34 freezes the
+# directory it lives in. See hw/soc/rtl/soc_wdog.v, W6.
+PILOT_RTL = $(PWD)/../../../rtl
+
 # SOC_GPTIMER_SRC exists so a mutation run can point the same suite at a
 # modified copy of the RTL without editing the tree
 # (make -f Makefile.soc_gptimer SOC_GPTIMER_SRC=/path/to/mutant.v SIM_BUILD=... ).
 SOC_GPTIMER_SRC ?= $(RTL)/soc_gptimer.v
 
-VERILOG_SOURCES = $(SOC_GPTIMER_SRC) $(RTL)/soc_wdog.v
+VERILOG_SOURCES = $(SOC_GPTIMER_SRC) $(RTL)/soc_wdog.v \
+                  $(RTL)/soc_tmr_bank.v $(PILOT_RTL)/tmr_voter.v
 TOPLEVEL = soc_gptimer
 
 # The parameters test_soc_gptimer.py derives its expectations from. The
@@ -75,6 +81,7 @@ VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
 lint:
 	@test -n "$(VERILATOR)" || \
 		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
-	$(VERILATOR) --lint-only -I$(RTL) $(SOC_GPTIMER_SRC) $(RTL)/soc_wdog.v
+	$(VERILATOR) --lint-only -I$(RTL) $(SOC_GPTIMER_SRC) $(RTL)/soc_wdog.v \
+		$(RTL)/soc_tmr_bank.v $(PILOT_RTL)/tmr_voter.v
 
 endif

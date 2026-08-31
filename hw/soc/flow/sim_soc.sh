@@ -24,6 +24,10 @@
 set -euo pipefail
 
 SOC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# hw/rtl/tmr_voter.v is READ from here and never modified: it is the
+# proved majority primitive the watchdog's W6 protection votes with, and
+# docs/34 freezes the directory it lives in.
+PILOT_RTL=$(cd "$SOC_DIR/../rtl" && pwd)
 OUT=${1:-$SOC_DIR/out/sim-soc}
 
 # GRLIB's APBUART scaler feeds an 8x oversampling clock, so the bit
@@ -82,6 +86,8 @@ sym () {
   "$SOC_DIR/rtl/soc_clint.v" \
   "$SOC_DIR/rtl/soc_gptimer.v" \
   "$SOC_DIR/rtl/soc_wdog.v" \
+  "$SOC_DIR/rtl/soc_tmr_bank.v" \
+  "$PILOT_RTL/tmr_voter.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \
   "$SOC_DIR"/gen/*.v \
   2>&1 | tee "$OUT/iverilog.log"

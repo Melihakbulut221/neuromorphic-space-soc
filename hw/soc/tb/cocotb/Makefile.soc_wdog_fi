@@ -1,20 +1,31 @@
-# cocotb + Icarus suite for hw/soc/rtl/soc_wdog.v.
+# cocotb + Icarus FAULT INJECTION campaign against hw/soc/rtl/soc_wdog.v.
 #
-#   cd hw/soc/tb/cocotb && make -f Makefile.soc_wdog        run the suite
-#   cd hw/soc/tb/cocotb && make -f Makefile.soc_wdog lint   Verilator lint
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_wdog_fi
 #
-# The expectations in test_soc_wdog.py come from the five requirements
-# W1-W5 stated in the header of hw/soc/rtl/soc_wdog.v and argued in
-# docs/40-interrupts-timers-watchdog.md section 5. They are a
-# specification written before the RTL, not a description of it.
+# This is the evidence for W6 in the header of hw/soc/rtl/soc_wdog.v:
+# that an upset in the PROTECTED word is masked at the ports and counted,
+# and that an upset in the deliberately UNPROTECTED state is bounded in
+# time rather than permanent. docs/41-watchdog-hardening.md section 8
+# reports what it measured; docs/16-fault-injection-campaign.md sections
+# 1.2 to 1.6 are the method it follows.
+#
+# Deliberately a SEPARATE suite and a separate build from
+# Makefile.soc_wdog, for the reason docs/16 section 1.2 gives: a campaign
+# that shares a build with a functional suite shares its failures, and a
+# campaign is long enough that it should be runnable and skippable on its
+# own.
+#
+# The parameters below are the same ones Makefile.soc_wdog uses, and they
+# have to be: test_soc_wdog_fi.py recomputes PROT_W and the target widths
+# from them, so a change here that is not made there is a campaign
+# injecting into bits that are not where it thinks they are.
 #
 # Standalone by design, same structure as hw/tb/Makefile.regbank. Same
-# rootless tool discovery as that file: iverilog from PATH, cocotb from the
-# project venv hw/.venv -- if cocotb-config is not already on PATH the
+# rootless tool discovery as that file: iverilog from PATH, cocotb from
+# the project venv hw/.venv -- if cocotb-config is not already on PATH the
 # recipe re-invokes make with the venv prepended, because make < 4.4 does
 # not pass an exported PATH into $(shell ...), which the cocotb makefiles
-# rely on. The venv is three directories up from here (hw/.venv), not in
-# hw/soc.
+# rely on.
 
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
@@ -41,7 +52,7 @@ PILOT_RTL = $(PWD)/../../../rtl
 
 # SOC_WDOG_SRC exists so a mutation run can point the same suite at a
 # modified copy of the RTL without editing the tree
-# (make -f Makefile.soc_wdog SOC_WDOG_SRC=/path/to/mutant.v SIM_BUILD=... ).
+# (make -f Makefile.soc_wdog_fi SOC_WDOG_SRC=/path/to/mutant.v SIM_BUILD=... ).
 SOC_WDOG_SRC ?= $(RTL)/soc_wdog.v
 
 VERILOG_SOURCES = $(SOC_WDOG_SRC) $(RTL)/soc_tmr_bank.v \
@@ -56,12 +67,12 @@ COMPILE_ARGS += -Psoc_wdog.WIDTH=8
 COMPILE_ARGS += -Psoc_wdog.PRESCALE=4
 COMPILE_ARGS += -Psoc_wdog.RST_CYCLES=8
 COMPILE_ARGS += -Psoc_wdog.ESCALATE=2
-MODULE = test_soc_wdog
+MODULE = test_soc_wdog_fi
 
 # Per-block build and results paths so this suite can run alongside the
 # others without clobbering their artifacts.
-SIM_BUILD ?= sim_build_soc_wdog
-COCOTB_RESULTS_FILE ?= results_soc_wdog.xml
+SIM_BUILD ?= sim_build_soc_wdog_fi
+COCOTB_RESULTS_FILE ?= results_soc_wdog_fi.xml
 export COCOTB_RESULTS_FILE
 
 # This block includes nothing, but -I$(RTL) keeps the invocation identical

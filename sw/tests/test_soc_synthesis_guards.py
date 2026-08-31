@@ -1,0 +1,597 @@
+"""Does the watchdog's W6 protection survive synthesis?
+
+WHY THIS FILE EXISTS AND WHY IT IS SEPARATE
+
+A synthesiser deletes deliberately redundant logic, and this repository
+has been burned by exactly that twice. `hw/rtl/pilot_top.v` header
+section 9 records the configuration TMR merging away entirely -- three
+identical flip-flop banks written from the same expression are one bank
+after `opt_dff` + `opt_merge`, and the voter above them then votes three
+copies of the same corrupted value.
+`docs/38-ibex-bringup.md` section 8.5 records the other shape: an
+unguarded lockstep whose second core the optimiser removed, measured as
+a 15,455 um2 gap between what the design asked for and what it got.
+
+Every functional test in this repository would pass on a netlist with
+one replica instead of three. `hw/soc/tb/cocotb/test_soc_wdog.py` would
+pass. `hw/soc/formal/soc_wdog.sby` would pass -- it proves properties of
+the RTL, and RTL is what it reads. Even the fault-injection campaign in
+`hw/soc/tb/cocotb/test_soc_wdog_fi.py` would pass, because it deposits
+into RTL registers that exist in the RTL whatever the netlist holds.
+This file is the only check in the SoC tree that looks at the thing the
+foundry would receive, and it is not a substitute for any of those, nor
+they for it. `sw/tests/test_synthesis_guards.py` does the same job for
+the frozen NPU pilot; nothing here touches `hw/rtl` except to read
+`tmr_voter.v`, which the watchdog instantiates in place.
+
+WHAT THIS FILE DOES **NOT** COVER, stated because a green check is only
+as wide as what it examined and this repository has been bitten eight
+times by that shape:
+
+  * It examines `soc_wdog` synthesised on its own, with the default
+    parameters of the file. `soc_top.v` instantiates it inside
+    `soc_gptimer`; the guard on that composition is
+    `test_the_watchdog_inside_the_gptimer_keeps_its_replicas`, which is
+    the same census one level up, and nothing here runs the whole SoC
+    through synthesis.
+  * It counts FLIP-FLOPS and nothing else. It deliberately asserts
+    nothing about the other cells in each replica: `docs/33` measured
+    that `dfflibmap` erases the polarity coding at technology mapping,
+    that this is harmless in this flow because no merge pass runs after
+    mapping, and that a test which failed on it would be recording the
+    tool rather than the design.
+  * It says nothing about placement or routing. No SoC block has been
+    through either. A merge that happened in an OpenROAD optimisation
+    pass would be invisible here.
+  * It says nothing about whether the replicas are CORRECT. Three banks
+    that all store the wrong function are three banks.
+    `hw/soc/formal/soc_wdog_tmr.sby` is where the round trip, the
+    agreement and the masking are proved.
+  * It says nothing about the unprotected state. `counter`, `reload` and
+    `pre` are single points by decision, argued in `soc_wdog.v` W6 and
+    priced in `docs/41-watchdog-hardening.md` section 7.
+
+Run with the repository-root suite::
+
+    .venv/bin/python -m pytest sw/tests/test_soc_synthesis_guards.py
+"""
+
+import json
+import math
+import os
+import re
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+SOC_RTL = ROOT / "hw" / "soc" / "rtl"
+PILOT_RTL = ROOT / "hw" / "rtl"
+
+TOP = "soc_wdog"
+
+# The three files the watchdog elaborates from. tmr_voter.v is READ out
+# of hw/rtl and never modified; docs/34-pilot-freeze.md pins it by git
+# blob hash and test_the_voter_is_the_blob_the_pilot_freeze_pins checks
+# that this is still the file that hash names.
+SOURCES = [
+    SOC_RTL / "soc_wdog.v",
+    SOC_RTL / "soc_tmr_bank.v",
+    PILOT_RTL / "tmr_voter.v",
+]
+
+# docs/34-pilot-freeze.md section 2, the row for hw/rtl/tmr_voter.v. The
+# document prints the first twelve hex digits.
+TMR_VOTER_PINNED_BLOB = "62b5f4d2a1ea"
+
+
+# =====================================================================
+# the geometry, DERIVED from the RTL rather than written down here
+# =====================================================================
+def _int_param(text, name):
+    m = re.search(r"parameter\s+integer\s+" + name + r"\s*=\s*(\d+)", text)
+    assert m, "no integer parameter {} in soc_wdog.v".format(name)
+    return int(m.group(1))
+
+
+def _geometry():
+    """Flip-flop budget of soc_wdog at its own default parameters.
+
+    Recomputed from the parameter declarations and the field widths in
+    the source, so a width change moves the expected count with it
+    instead of turning this file red for the wrong reason. The FIELD
+    LIST is written out here on purpose: it is the specification of what
+    W6 protects, and if a field is added to the protected word without a
+    line appearing here the counts stop agreeing.
+    """
+    text = (SOC_RTL / "soc_wdog.v").read_text()
+    width = _int_param(text, "WIDTH")
+    prescale = _int_param(text, "PRESCALE")
+    rst_cycles = _int_param(text, "RST_CYCLES")
+
+    pre_w = 1 if prescale <= 1 else math.ceil(math.log2(prescale))
+    rst_w = 1 if rst_cycles <= 1 else math.ceil(math.log2(rst_cycles + 1))
+    cnt_w = 8   # saturating reset counter
+    tmc_w = 4   # saturating TMR mismatch counter
+
+    # The protected word, W6: everything whose corruption is permanent
+    # or silent.
+    prot_w = (1     # dis_q
+              + 1   # dis_seen
+              + 1   # nmi_pend
+              + 1   # rst_seen
+              + 1   # tmr_err
+              + tmc_w
+              + cnt_w
+              + rst_w)
+
+    # The W6 report: the sticky mismatch flag and the saturating
+    # mismatch counter. Counted separately because it is the part of
+    # the protected word that only EXISTS when there is redundancy to
+    # report on -- at HARDEN = 0 the mismatch wire is a constant zero
+    # and the optimiser correctly deletes these five flip-flops.
+    report = 1 + tmc_w
+
+    # Deliberately unprotected, W6's second list.
+    unprot = width + width + pre_w   # reload, counter, pre
+
+    return prot_w, report, unprot
+
+
+PROT_W, REPORT_FF, UNPROT_FF = _geometry()
+
+REPLICAS = ("g_prot_tmr.u_prot_a.",
+            "g_prot_tmr.u_prot_b.",
+            "g_prot_tmr.u_prot_c.")
+
+
+# =====================================================================
+# tool discovery -- the same rule sw/tests/test_synthesis_guards.py uses
+# =====================================================================
+def _find_yosys():
+    on_path = shutil.which("yosys")
+    if on_path:
+        return on_path
+    candidates = [Path.home() / ".local" / "bin" / "yosys"]
+    candidates += sorted(
+        Path.home().glob("Downloads/oss-cad-suite*/oss-cad-suite/bin/yosys"))
+    candidates += sorted(Path.home().glob("oss-cad-suite/bin/yosys"))
+    for c in candidates:
+        if c.is_file() and os.access(c, os.X_OK):
+            return str(c)
+    return None
+
+
+YOSYS = _find_yosys()
+needs_yosys = pytest.mark.skipif(YOSYS is None, reason="yosys not available")
+
+
+def _sg13g2_liberty():
+    pattern = (".ciel/ciel/ihp-sg13g2/versions/*/ihp-sg13g2/libs.ref/"
+               "sg13g2_stdcell/lib/sg13g2_stdcell_typ_1p20V_25C.lib")
+    libs = sorted(Path.home().glob(pattern))
+    return libs[-1] if libs else None
+
+
+def _run_yosys(script, workdir):
+    result = subprocess.run(
+        [YOSYS, "-p", script], capture_output=True, text=True,
+        cwd=workdir, timeout=900)
+    assert result.returncode == 0, (
+        "yosys failed:\n" + result.stdout[-3000:] + result.stderr[-3000:])
+    return result.stdout
+
+
+# =====================================================================
+# netlist census -- flip-flops indexed by the public net they drive
+# =====================================================================
+_FF_PREFIXES = ("$_DFF", "$_SDFF", "$_ALDFF", "$_DFFE", "$_SDFFE", "$_DFFSR")
+
+
+def _is_flop(cell_type):
+    if cell_type.startswith(_FF_PREFIXES):
+        return True
+    if cell_type == "TRELLIS_FF":                # synth_ecp5
+        return True
+    if re.match(r"^sg13g2_s?df", cell_type):     # sg13g2 mapped
+        return True
+    return False
+
+
+class Census:
+    """Flip-flops of one synthesis result, indexed by INSTANCE PATH.
+
+    The instance path is what identifies a replica bank after a
+    post-mapping flatten -- yosys renames a flattened cell
+    `$flatten\\<hierarchical.path>.<cell>` and that prefix is the only
+    thing in the netlist that still says which replica a flip-flop
+    belongs to.
+
+    Indexing by the net a flip-flop drives does NOT work here and the
+    reason is worth recording, because it produced a plausible wrong
+    answer first. Replica A's stored word and its output port are the
+    same net (POL_A is zero and MIX is off, so `q_o = bits`), and in
+    replicas B and C the bits where POL is zero alias with the encoder
+    output. yosys names a flip-flop after whichever aliased public net
+    it resolves first, so a by-net census reported 0, 11 and 11 for the
+    three replicas of a netlist that in fact holds 22, 22 and 22.
+    """
+
+    def __init__(self, design):
+        self.total = 0
+        self.by_instance = []
+        for mod in design["modules"].values():
+            for cell_name, cell in mod["cells"].items():
+                if not _is_flop(cell["type"]):
+                    continue
+                self.total += 1
+                self.by_instance.append(cell_name)
+
+    def in_instance(self, needle):
+        return sum(1 for n in self.by_instance if needle in n)
+
+
+def _census(script_body, workdir):
+    out = Path(workdir) / "census.json"
+    _run_yosys(script_body + " write_json {};".format(out), workdir)
+    return Census(json.loads(out.read_text()))
+
+
+# ---------------------------------------------------------------------
+# the recipes
+# ---------------------------------------------------------------------
+def _read(sources):
+    return "read_verilog -I {} {};".format(
+        SOC_RTL, " ".join(str(s) for s in sources))
+
+
+def _asic_script(sources, force_flatten=False, chparam=""):
+    """The recipe hw/soc/flow/syn_soc.sh runs, in the shape
+    sw/tests/test_synthesis_guards.py states it.
+
+    The trailing `attrmap -modattr -remove keep_hierarchy; flatten` is
+    LibreLane's SYNTH_HIERARCHY_MODE = deferred flatten: flatten after
+    mapping, so nothing it produces can be merged.
+
+    force_flatten strips keep_hierarchy BEFORE synthesis, which
+    simulates a front end that does not read yosys attributes. What is
+    then holding the three replicas apart is the POL/MIX storage
+    transform alone.
+    """
+    lib = _sg13g2_liberty()
+    script = _read(sources) + " hierarchy -top {};".format(TOP)
+    if chparam:
+        script += " " + chparam
+    if force_flatten:
+        script += " attrmap -modattr -remove keep_hierarchy;"
+    script += " synth -top {} -flatten;".format(TOP)
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+    script += " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;"
+    return script
+
+
+def _ecp5_script(sources, force_flatten=False):
+    script = _read(sources) + " hierarchy -top {};".format(TOP)
+    if force_flatten:
+        script += " attrmap -modattr -remove keep_hierarchy;"
+    return script + (
+        " synth_ecp5 -top {};".format(TOP)
+        + " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;")
+
+
+@pytest.fixture(scope="module")
+def workdir():
+    with tempfile.TemporaryDirectory() as d:
+        yield d
+
+
+@pytest.fixture(scope="module")
+def asic(workdir):
+    return _census(_asic_script(SOURCES), workdir)
+
+
+@pytest.fixture(scope="module")
+def ecp5(workdir):
+    return _census(_ecp5_script(SOURCES), workdir)
+
+
+# ---------------------------------------------------------------------
+# a copy of the sources with every yosys attribute deleted from the TEXT
+# ---------------------------------------------------------------------
+_ATTRS = ("(* keep_hierarchy *)", "(* keep *)")
+
+
+def _sources_without_any_attribute(workdir):
+    """Delete the attributes rather than strip them with `attrmap`.
+
+    `attrmap` removes what it is told to remove at the point it runs;
+    deleting the text means no pass can honour the attribute and none
+    can re-derive it. What is left holding the replicas apart is the
+    POL/MIX transform and nothing else, which is the claim
+    `hw/soc/rtl/soc_tmr_bank.v` makes and the only one this file can
+    check without a second flow.
+    """
+    dst = Path(workdir) / "noattr"
+    dst.mkdir(exist_ok=True)
+    out = []
+    for src in SOURCES:
+        text = src.read_text()
+        for attr in _ATTRS:
+            text = text.replace(attr, "")
+        target = dst / src.name
+        target.write_text(text)
+        out.append(target)
+    # The include search path still points at the real hw/soc/rtl, and
+    # nothing in these three files includes anything, so no attribute
+    # can sneak back in through a header.
+    return out
+
+
+@pytest.fixture(scope="module")
+def asic_noattr(workdir):
+    return _census(
+        _asic_script(_sources_without_any_attribute(workdir),
+                     force_flatten=True),
+        workdir)
+
+
+@pytest.fixture(scope="module")
+def ecp5_noattr(workdir):
+    return _census(
+        _ecp5_script(_sources_without_any_attribute(workdir),
+                     force_flatten=True),
+        workdir)
+
+
+# =====================================================================
+# 1. the protected word is three physical banks
+# =====================================================================
+def _assert_three_replicas(census, flow):
+    found = {r: census.in_instance(r) for r in REPLICAS}
+    assert all(v == PROT_W for v in found.values()), (
+        "the watchdog's protected word collapsed in the {} netlist: "
+        "expected {} flip-flops per replica, found {}. Three replicas "
+        "written from the same expression are one bank after opt_dff + "
+        "opt_merge, and the voter above them then votes three copies of "
+        "the same upset value -- which is what hw/rtl/pilot_top.v "
+        "section 9 records happening to the pilot's configuration TMR. "
+        "Total flip-flops in this netlist: {}.".format(
+            flow, PROT_W, found, census.total))
+
+
+@needs_yosys
+def test_the_protected_word_is_three_banks_in_the_asic_flow(asic):
+    _assert_three_replicas(asic, "ASIC (yosys/LibreLane-shaped)")
+
+
+@needs_yosys
+def test_the_protected_word_is_three_banks_in_the_ecp5_flow(ecp5):
+    _assert_three_replicas(ecp5, "synth_ecp5")
+
+
+@needs_yosys
+def test_no_flip_flop_is_lost_when_every_attribute_is_deleted_asic(
+        asic_noattr):
+    """The POL/MIX transform on its own, in a flow that cannot read a
+    yosys attribute even if it wanted to.
+
+    This is a TOTAL and not a per-replica census, and that is forced
+    rather than chosen: with keep_hierarchy deleted the banks are
+    flattened during `synth` and the instance path they would have been
+    counted by no longer exists. The total is the thing that matters
+    anyway -- a replica that merged is a replica whose flip-flops are
+    gone -- and it is strictly wider, because it would also catch
+    storage lost anywhere else in the block. It is the same assertion
+    `sw/tests/test_synthesis_guards.py` makes for the pilot under the
+    name test_no_flip_flop_is_lost_when_every_attribute_is_deleted.
+    """
+    expected = UNPROT_FF + 3 * PROT_W
+    assert asic_noattr.total == expected, (
+        "with every keep and keep_hierarchy deleted from the text, "
+        "soc_wdog mapped to {} flip-flops instead of {}. Something in "
+        "this block is being held together by an attribute alone, and "
+        "an attribute is not portable to a front end that does not read "
+        "yosys's.".format(asic_noattr.total, expected))
+
+
+@needs_yosys
+def test_no_flip_flop_is_lost_when_every_attribute_is_deleted_ecp5(
+        ecp5_noattr):
+    """The same question of a completely different technology mapper,
+    because a defence that is really a property of one recipe is not a
+    defence. docs/18 makes the cross-flow argument at length."""
+    assert ecp5_noattr.total == UNPROT_FF + 3 * PROT_W
+
+
+# =====================================================================
+# 2. the whole flip-flop budget, so nothing else quietly vanished either
+# =====================================================================
+@needs_yosys
+def test_the_flip_flop_budget_is_the_unprotected_state_plus_three_replicas(
+        asic):
+    """A per-replica census can pass while the block loses storage
+    somewhere else. This asserts the total against the two numbers W6
+    is a decision about: what is protected, three times, plus what is
+    deliberately not."""
+    expected = UNPROT_FF + 3 * PROT_W
+    assert asic.total == expected, (
+        "soc_wdog mapped to {} flip-flops, expected {} = {} unprotected "
+        "(reload + counter + pre) + 3 x {} protected. If the protected "
+        "word grew or shrank, _geometry() in this file has to grow or "
+        "shrink with it -- that is the point of it being derived.".format(
+            asic.total, expected, UNPROT_FF, PROT_W))
+
+
+# =====================================================================
+# 3. the mutations. A guard that cannot fail is not a guard.
+# =====================================================================
+def _mutated(workdir, name, replacements, strip_attributes=False):
+    """A scratch copy of the sources with one edit, so the mutation is
+    never made in the tree."""
+    dst = Path(workdir) / name
+    dst.mkdir(exist_ok=True)
+    out = []
+    hit = 0
+    for src in SOURCES:
+        text = src.read_text()
+        for old, new in replacements:
+            if old in text:
+                hit += text.count(old)
+                text = text.replace(old, new)
+        if strip_attributes:
+            for attr in _ATTRS:
+                text = text.replace(attr, "")
+        target = dst / src.name
+        target.write_text(text)
+        out.append(target)
+    assert hit, "mutation {} matched nothing; the source moved".format(name)
+    return out
+
+
+@needs_yosys
+def test_removing_the_mix_transform_from_one_replica_collapses_half_of_it(
+        workdir):
+    """The replication bound, measured rather than argued.
+
+    With MIX off, a replica stores `v_i ^ POL[i]` -- one of the only two
+    storage functions a single bit has. POL_A is zero and POL_C is
+    0xAAAA..., so on every bit where POL_C is 0 replica C stores exactly
+    what replica A stores and structural hashing merges the pair. The
+    surviving flip-flop count therefore drops by the number of zero bits
+    in POL_C over the protected width, which is what makes this mutation
+    a measurement of the bound and not just a red test.
+
+    Neither this mutation nor its inverse is visible to any simulation
+    or any proof in this repository: `.MIX(0)` on a replica is
+    functionally identical RTL, bit for bit at every port.
+    """
+    intact = UNPROT_FF + 3 * PROT_W
+    # POL_C = 0xAAAA...: bit i is 1 for odd i, so the bits on which
+    # replica C would store exactly what replica A stores are the even
+    # ones.
+    collided = len([i for i in range(PROT_W) if not ((0xAAAA_AAAA >> i) & 1)])
+
+    sources = _mutated(
+        workdir, "nomix_c",
+        [(".POL(POL_C), .MIX(1))", ".POL(POL_C), .MIX(0))")],
+        strip_attributes=True)
+    census = _census(_asic_script(sources, force_flatten=True), workdir)
+    assert census.total == intact - collided, (
+        "with MIX off on replica C, {} of its {} bits should collide "
+        "with replica A and be merged away, giving {} flip-flops; found "
+        "{}".format(collided, PROT_W, intact - collided, census.total))
+
+    # And with the mixing off on BOTH mixed replicas the loss doubles,
+    # which is the pigeonhole stated as a measurement: polarity offers
+    # exactly two storage functions per bit and there are three
+    # replicas, so on every bit one of the three has to collide.
+    both = _mutated(
+        workdir, "nomix_bc",
+        [(".POL(POL_B), .MIX(1))", ".POL(POL_B), .MIX(0))"),
+         (".POL(POL_C), .MIX(1))", ".POL(POL_C), .MIX(0))")],
+        strip_attributes=True)
+    census2 = _census(_asic_script(both, force_flatten=True), workdir)
+    assert census2.total == intact - 2 * collided
+
+
+@needs_yosys
+def test_harden_zero_removes_the_replicas(workdir):
+    """The mutation that proves this file is measuring the protection
+    at all, rather than counting flip-flops that were going to be there
+    anyway. HARDEN = 0 is also the configuration the area cost in
+    docs/41 section 6 is measured against."""
+    census = _census(
+        _asic_script(SOURCES, chparam="chparam -set HARDEN 0 {};".format(TOP)),
+        workdir)
+    expected = UNPROT_FF + PROT_W - REPORT_FF
+    assert census.total == expected, (
+        "HARDEN = 0 should leave one plain bank: {} unprotected + {} "
+        "protected - {} report (the mismatch flag and counter have "
+        "nothing to report on and are correctly optimised away) = {} "
+        "flip-flops, found {}".format(
+            UNPROT_FF, PROT_W, REPORT_FF, expected, census.total))
+    for r in REPLICAS:
+        assert census.in_instance(r) == 0
+
+
+# =====================================================================
+# 4. the composition, one level up
+# =====================================================================
+@needs_yosys
+def test_the_watchdog_inside_the_gptimer_keeps_its_replicas(workdir):
+    """`soc_top.v` does not instantiate `soc_wdog` directly; it
+    instantiates `soc_gptimer`, which instantiates the watchdog. A
+    census of the watchdog on its own says nothing about what happens
+    when the optimiser can see the shell's logic as well, and the shell
+    is where the register decode and the read multiplexer live."""
+    lib = _sg13g2_liberty()
+    sources = SOURCES + [SOC_RTL / "soc_gptimer.v"]
+    script = ("read_verilog -I {} {};".format(
+        SOC_RTL, " ".join(str(s) for s in sources))
+        + " hierarchy -top soc_gptimer;"
+          " synth -top soc_gptimer -flatten;")
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+    script += " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;"
+    census = _census(script, workdir)
+    found = {r: census.in_instance("u_wdog." + r) for r in REPLICAS}
+    assert census.total > 0
+    assert all(v == PROT_W for v in found.values()), (
+        "the watchdog's replicas did not survive synthesis inside "
+        "soc_gptimer: expected {} each, found {}".format(PROT_W, found))
+
+
+# =====================================================================
+# 5. what the design actually instantiates, checked textually
+# =====================================================================
+def test_nothing_in_the_design_instantiates_the_watchdog_unhardened():
+    """HARDEN exists for measurement. A parameter that can turn a
+    defence off is a parameter someone turns off, and the only thing
+    standing between that and silicon is this test."""
+    text = (SOC_RTL / "soc_wdog.v").read_text()
+    assert re.search(r"parameter\s+integer\s+HARDEN\s*=\s*1", text), (
+        "soc_wdog.v's HARDEN parameter no longer defaults to 1")
+    for name in ("soc_gptimer.v", "soc_top.v"):
+        body = (SOC_RTL / name).read_text()
+        assert ".HARDEN" not in body, (
+            "{} overrides soc_wdog's HARDEN parameter. Nothing in the "
+            "design may: HARDEN = 0 is the unprotected block.".format(name))
+
+
+def test_the_voter_is_the_blob_the_pilot_freeze_pins():
+    """The watchdog votes with `hw/rtl/tmr_voter.v` itself rather than a
+    copy of it, so the SoC's majority gate is the one
+    `formal/tmr_voter.sby` proves exhaustively and
+    `hw/tb/test_tmr_voter.py` checks against an independent Python
+    model. This asserts the file is still the blob
+    `docs/34-pilot-freeze.md` section 2 pins -- which is both a check
+    that the pilot freeze holds and a check that the SoC did not quietly
+    fork the primitive."""
+    out = subprocess.run(
+        ["git", "hash-object", str(PILOT_RTL / "tmr_voter.v")],
+        cwd=ROOT, capture_output=True, text=True, check=True)
+    assert out.stdout.strip().startswith(TMR_VOTER_PINNED_BLOB), (
+        "hw/rtl/tmr_voter.v is {} and docs/34 pins {}...".format(
+            out.stdout.strip(), TMR_VOTER_PINNED_BLOB))
+
+
+def test_the_watchdog_instantiates_that_voter_and_three_distinct_banks():
+    """Textual, and complementary to the census above rather than a
+    weaker version of it: the census proves three banks EXIST in the
+    netlist, this proves they are three banks the source asked for with
+    three different storage transforms. A future edit that made all
+    three `MIX(1)` with the same POL would still census as three banks
+    under keep_hierarchy and would be one bank without it."""
+    text = (SOC_RTL / "soc_wdog.v").read_text()
+    assert "tmr_voter #(.WIDTH(PROT_W))" in text
+    banks = re.findall(r"soc_tmr_bank\s*#\((.*?)\)\s*\n\s*u_prot_([abc])",
+                       text, re.S)
+    assert len(banks) == 3, "expected three soc_tmr_bank instances"
+    signatures = {re.sub(r"\s+", "", params) for params, _ in banks}
+    assert len(signatures) == 3, (
+        "two replicas carry the same storage transform, so they are one "
+        "bank to structural hashing: {}".format(signatures))

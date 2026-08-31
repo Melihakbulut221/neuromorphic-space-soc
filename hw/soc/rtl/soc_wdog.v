@@ -97,6 +97,103 @@
 // NMI; the fact that stage 1 happened survives in WDOGSTAT.
 //
 // =====================================================================
+// W6. ITS OWN STATE IS PROTECTED WHERE CORRUPTION IS PERMANENT OR SILENT
+// =====================================================================
+//
+// Added by docs/41-watchdog-hardening.md. docs/40 section 10 item 2
+// recorded the gap in its own words -- "the block whose job is to catch
+// upsets is itself unprotected" -- and the reason it is worse than an
+// ordinary gap is that a watchdog an upset can silently disarm is worse
+// than no watchdog, because the system believes it has one.
+//
+// THE RANKING. Not everything here deserves TMR, and the criterion is
+// not "how important does the register sound". It is PERSISTENCE times
+// SILENCE: what rewrites this register, and does its corruption
+// announce itself?
+//
+//   Protected, because nothing rewrites it and its corruption is
+//   silent. All of it lives in the power-on domain, so there is no
+//   reset in the mission that restores it and no software write that
+//   sets it:
+//     dis_q     an upset to 1 sets armed low and the block STOPS. No
+//               expiry, no NMI, no reset, for ever, with EN reading 0
+//               and WDOGSTAT.DISABLED reading 1 on a board that never
+//               asserted the pin. This is the single worst bit in the
+//               design and it is the reason this section exists.
+//     dis_seen  an upset to 0 re-opens the sampling window W1 closes,
+//               turning a bootstrap pin back into a live one.
+//     nmi_pend  an upset to 0 means stage 1 never becomes stage 2: the
+//               watchdog warns and never acts, which is exactly the
+//               failure W5's key check exists to stop software doing
+//               and which an upset would do in hardware. An upset to 1
+//               resets the system a full timeout early.
+//     rst_seen  the record W4 exists for. An upset to 0 leaves the
+//               operator with a machine that reboots for no
+//               discoverable reason.
+//     rst_count both a record and a policy: an upset up asserts the
+//               external pin on a healthy part, an upset down means the
+//               "resetting has not worked" signal never arrives.
+//     rst_hold  the only state in this file that can assert a system
+//               reset on its own; an upset down truncates the reset
+//               pulse the rest of the SoC is being held by.
+//
+//   Deliberately NOT protected, because the block already rewrites it
+//   and the worst case is bounded and loud:
+//     counter   an upset moves the deadline by at most one full timeout
+//               and is gone at the next expiry or kick, both of which
+//               reload it. Nothing accumulates.
+//     reload    an upset survives -- it is in the power-on domain too --
+//               but it cannot survive an escalation, because a stage-2
+//               reset restores it to the maximum (docs/40 section 7.2,
+//               which found that the hard way). So the worst case is at
+//               most one spurious ladder, and the protected state
+//               records it correctly while it happens.
+//     pre       an upset moves the tick by at most PRESCALE-1 clocks
+//               out of 2^WIDTH * PRESCALE.
+//   That list is a decision, not an omission, and
+//   hw/soc/tb/cocotb/test_soc_wdog_fi.py injects into all three of them
+//   so the price is measured rather than asserted.
+//
+// THE CONSTRUCTION. The protected bits are CONCATENATED into one word
+// of PROT_W bits and that word is replicated three times under
+// hw/rtl/tmr_voter.v. The bundling is not tidiness. Most of what is
+// protected here is one-bit flags, and three replicas cannot be held
+// apart over one bit -- there are exactly two storage functions, x and
+// ~x, so a third replica is bit-for-bit identical to one of the others
+// and yosys merges it away (hw/rtl/pilot_top.v section 8.2, generalised
+// in docs/30 section 3.3: over W bits the affine transforms give
+// 2 * (2^W - 1) coordinate functions, so three bits is the first width
+// at which a third replica has functions left to take). Bundling buys
+// the width. soc_tmr_bank.v carries the transform and the argument.
+//
+// THE POWER-ON DOMAIN CUTS BOTH WAYS AND THE BANK IS WRITTEN EVERY
+// CYCLE BECAUSE OF IT. docs/40 section 7.2's finding -- state outside
+// the reset domain makes the record survive AND makes stale
+// configuration survive -- applies to the protection as well: the
+// replicas are not reset either. A bank that only wrote when the value
+// changed would repair a corrupted replica only at the next write, and
+// `rst_seen` and the bootstrap latch are written once in a mission. The
+// bank is therefore written unconditionally from the VOTED word on
+// every edge, which makes the voter a continuous scrubber: the window
+// in which a second upset in a different replica is uncorrectable is
+// one clock cycle rather than the rest of the mission.
+//
+// WHAT THIS DOES NOT BUY, stated here so it is not read as more:
+//   * The unprotected registers above are still unprotected.
+//   * Two upsets in two different replicas in the same cycle on the
+//     same bit are not corrected. Nothing about three replicas claims
+//     they are.
+//   * The mismatch is COUNTED and STICKY in WDOGSTAT and nothing raises
+//     an interrupt or a pin on it. Reading it is software's job, and
+//     the software may be the thing that has failed -- docs/16 section
+//     7.6, "DETECTED depends on someone looking".
+//   * HARDEN = 0 removes all of it. That parameter exists so the area
+//     cost can be measured like for like against the same file, and
+//     because the synthesis guard needs a mutation whose flip-flop
+//     count differs. Nothing in the design instantiates it, which
+//     sw/tests/test_soc_synthesis_guards.py checks textually.
+//
+// =====================================================================
 // WHAT THIS BLOCK DOES NOT DO
 // =====================================================================
 //
@@ -104,11 +201,6 @@
 //     windowed watchdog rejects those and so catches a fast runaway loop
 //     that happens to include the kick; this one does not, and a runaway
 //     that keeps kicking is invisible to it.
-//   * No protection of its own state. The counter, the reload and the
-//     status bits have no parity, no redundancy and no TMR. The block
-//     whose job is to catch upsets is itself unprotected, which is a gap
-//     and not an omission -- docs/40 section 9 records it as the first
-//     thing the hardening architecture should reach.
 //   * No independent clock. It counts the system clock. If the clock
 //     stops, the watchdog stops with everything else and nothing fires.
 //   * It cannot tell a hung core from a core doing something slow and
@@ -133,7 +225,16 @@ module soc_wdog #(
     // Watchdog resets since power-on after which wdog_o latches.
     parameter integer ESCALATE  = 2,
     // Upper half of a control-register write, W5.
-    parameter [15:0] KEY = 16'hA51F
+    parameter [15:0] KEY = 16'hA51F,
+    // W6. 1 = the protected word is three replicas under a voter,
+    // 0 = one plain register bank and no protection at all.
+    //
+    // This exists so the area cost of W6 can be measured against the
+    // same source file rather than against a remembered number, and so
+    // that sw/tests/test_soc_synthesis_guards.py has a mutation whose
+    // flip-flop count differs. Nothing in the design sets it to 0 and
+    // that test checks textually that nothing does.
+    parameter integer HARDEN = 1
 ) (
     input  wire        clk_i,
     // POWER-ON reset. The only reset in this file, W4.
@@ -158,6 +259,7 @@ module soc_wdog #(
   localparam integer PRE_W = (PRESCALE <= 1) ? 1 : $clog2(PRESCALE);
   localparam integer RST_W = (RST_CYCLES <= 1) ? 1 : $clog2(RST_CYCLES + 1);
   localparam integer CNT_W = 8;   // saturating reset counter
+  localparam integer TMC_W = 4;   // saturating TMR mismatch counter (W6)
 
   // Sized constants, so that no expression below part-selects a
   // parameter. A part-select of a parameter is accepted by some tools
@@ -179,21 +281,103 @@ module soc_wdog #(
 
   // ---- WDOGSTAT bit positions, this project's extension ----
   localparam integer B_STAT_NMI = 0, B_STAT_RST = 1,
-                     B_STAT_ESC = 2, B_STAT_DIS = 3;
+                     B_STAT_ESC = 2, B_STAT_DIS = 3,
+                     B_STAT_TMR = 4;              // W6, sticky
+  localparam integer B_STAT_TMRCNT = 16;          // W6, TMC_W bits
 
   // -------------------------------------------------------------------
-  // The bootstrap pin, latched once
+  // The protected word (W6)
   // -------------------------------------------------------------------
-  reg dis_q, dis_seen;
-  always @(posedge clk_i or negedge rst_por_ni) begin
-    if (!rst_por_ni) begin
-      dis_q    <= 1'b0;
-      dis_seen <= 1'b0;
-    end else if (!dis_seen) begin
-      dis_q    <= dis_i;
-      dis_seen <= 1'b1;
+  //
+  // Every bit whose corruption is permanent or silent, concatenated
+  // into one word so that the MIX transform has a width to work in --
+  // three replicas cannot be held apart over one bit. The field offsets
+  // are named constants used by the packing, the unpacking and the
+  // register reads alike, because docs/40 section 7.4 records what a
+  // literal bit position cost this file once.
+  localparam integer P_DISQ    = 0;                    // 1
+  localparam integer P_DISSEEN = 1;                    // 1
+  localparam integer P_NMI     = 2;                    // 1
+  localparam integer P_RSTSEEN = 3;                    // 1
+  localparam integer P_TMRERR  = 4;                    // 1
+  localparam integer P_TMRCNT  = 5;                    // TMC_W
+  localparam integer P_RSTCNT  = P_TMRCNT + TMC_W;     // CNT_W
+  localparam integer P_RSTHOLD = P_RSTCNT + CNT_W;     // RST_W
+  localparam integer PROT_W    = P_RSTHOLD + RST_W;
+
+  // Per-replica storage transform. A is the true image; B and C are
+  // mixed, so every stored bit of either is an XOR of two or three
+  // distinct word bits and can equal neither x_i nor ~x_i for any i --
+  // which is what makes them provably non-collidable with A rather than
+  // measured to be. B and C are separated from each other by
+  // POL_B = ~POL_C on every bit.
+  //
+  // Neither mask is uniform, and that is deliberate: docs/33 measured
+  // that a bank whose reset image is all ones is one dfflibmap has to
+  // build by inversion, and abc then folds the inversion against the
+  // bank's own correction. A mixed mask leaves a mixed reset image.
+  // Whether that survives technology mapping is measured in docs/41
+  // section 6 and is not claimed here.
+  localparam [63:0] POL_A = 64'h0000000000000000;
+  localparam [63:0] POL_B = 64'h5555555555555555;
+  localparam [63:0] POL_C = 64'hAAAAAAAAAAAAAAAA;
+
+  wire [PROT_W-1:0] prot;            // the voted word, or the plain one
+  wire              prot_mismatch;   // this cycle a replica disagrees
+  reg  [PROT_W-1:0] prot_n;          // next value, combinational
+
+  // Named views. Everything below this line reads these and never the
+  // storage, so this file's register reads and the invariants in
+  // hw/soc/formal/soc_wdog_props.v are written against the same names
+  // they were written against before W6 existed.
+  wire             dis_q     = prot[P_DISQ];
+  wire             dis_seen  = prot[P_DISSEEN];
+  wire             nmi_pend  = prot[P_NMI];
+  wire             rst_seen  = prot[P_RSTSEEN];
+  wire             tmr_err   = prot[P_TMRERR];
+  wire [TMC_W-1:0] tmr_count = prot[P_TMRCNT  +: TMC_W];
+  wire [CNT_W-1:0] rst_count = prot[P_RSTCNT  +: CNT_W];
+  wire [RST_W-1:0] rst_hold  = prot[P_RSTHOLD +: RST_W];
+
+  generate
+  if (HARDEN != 0) begin : g_prot_tmr
+    wire [PROT_W-1:0] qa, qb, qc;
+
+    // Written unconditionally from prot_n on every edge. That is the
+    // scrub: this whole word is in the power-on domain, so no reset
+    // ever repairs it and some of it is written once in a mission, and
+    // a bank that held its value would accumulate corruption instead of
+    // shedding it. See soc_tmr_bank.v difference 1.
+    soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_A), .MIX(0))
+      u_prot_a (.clk_i(clk_i), .rst_ni(rst_por_ni), .d_i(prot_n), .q_o(qa));
+    soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_B), .MIX(1))
+      u_prot_b (.clk_i(clk_i), .rst_ni(rst_por_ni), .d_i(prot_n), .q_o(qb));
+    soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_C), .MIX(1))
+      u_prot_c (.clk_i(clk_i), .rst_ni(rst_por_ni), .d_i(prot_n), .q_o(qc));
+
+    // hw/rtl/tmr_voter.v, read in place and not copied. It is a
+    // standalone file with no includes, proven exhaustively in
+    // formal/tmr_voter.sby and checked against an independent Python
+    // majority model in hw/tb/test_tmr_voter.py. Nothing in hw/rtl is
+    // modified by this instantiation; docs/34's freeze is untouched.
+    tmr_voter #(.WIDTH(PROT_W)) u_prot_vote (
+        .in_a     (qa),
+        .in_b     (qb),
+        .in_c     (qc),
+        .out      (prot),
+        .mismatch (prot_mismatch)
+    );
+  end else begin : g_prot_plain
+    // HARDEN = 0: the block as docs/40 shipped it. Measurement only.
+    reg [PROT_W-1:0] plain;
+    always @(posedge clk_i or negedge rst_por_ni) begin
+      if (!rst_por_ni) plain <= {PROT_W{1'b0}};
+      else             plain <= prot_n;
     end
+    assign prot          = plain;
+    assign prot_mismatch = 1'b0;
   end
+  endgenerate
 
   wire armed = !dis_q;
 
@@ -221,13 +405,21 @@ module soc_wdog #(
   // -------------------------------------------------------------------
   // State, all of it in the power-on domain (W4)
   // -------------------------------------------------------------------
+  //
+  // The rest of the state is the protected word above:
+  //   nmi_pend   stage 1 fired, not acknowledged
+  //   rst_seen   a watchdog reset happened since POR
+  //   rst_count  saturating
+  //   rst_hold   stage-2 stretch
+  //   dis_q / dis_seen  the bootstrap latch
+  //   tmr_err / tmr_count  the W6 report
+  //
+  // The three below are deliberately NOT protected, and the argument is
+  // W6's second list: each of them is rewritten by the block itself, so
+  // an upset in it is bounded in time rather than permanent.
   reg [WIDTH-1:0] reload;
   reg [WIDTH-1:0] counter;
   reg [PRE_W-1:0] pre;
-  reg             nmi_pend;      // stage 1 fired, not acknowledged
-  reg             rst_seen;      // a watchdog reset happened since POR
-  reg [CNT_W-1:0] rst_count;     // saturating
-  reg [RST_W-1:0] rst_hold;      // stage-2 stretch
 
   wire in_reset = (rst_hold != 0);
   wire tick     = (PRESCALE <= 1) || (pre == 0);
@@ -249,6 +441,74 @@ module soc_wdog #(
   // stage-1 event forever.
   wire kick = wr_ctrl && wval[B_LD];
 
+  // A write-one-to-clear of the pending stage 1, from either the status
+  // register's NMI bit or GRLIB's IP bit in the control register. Both
+  // are the same flag and both are offered because a GRLIB driver will
+  // reach for IP and this project's own code reads the status word.
+  //
+  // The bit position here is B_STAT_NMI and it is a named constant for a
+  // reason: it was written as a literal 1 first, against a status layout
+  // that puts NMI at bit 0, and the effect was a watchdog that accepted
+  // the acknowledge and ignored it. The symptom was not "the write
+  // failed" -- it was a system reset 3,216 clocks later, with a
+  // correct-looking NMI handler in between. Nothing short of stage 2
+  // firing would have shown it.
+  wire ack = (wr_stat && wval[B_STAT_NMI]) || (wr_ctrl && wval[B_IP]);
+
+  // -------------------------------------------------------------------
+  // Next value of the protected word (W6)
+  // -------------------------------------------------------------------
+  //
+  // Written as one combinational function of the VOTED word, so that
+  // both the hardened and the HARDEN = 0 configurations run identical
+  // policy and the hardening cannot change behaviour by accident. The
+  // ordering below reproduces the last-assignment-wins semantics the
+  // sequential version had: a stage-2 reset overrides the stretch
+  // decrement, and the acknowledge is only reached when neither stage
+  // fired this cycle.
+  always @(*) begin
+    prot_n = prot;
+
+    // The bootstrap pin, sampled once, then held for ever (W1).
+    if (!dis_seen) begin
+      prot_n[P_DISQ]    = dis_i;
+      prot_n[P_DISSEEN] = 1'b1;
+    end
+
+    // The reset stretch, and then the escalation which overrides it.
+    if (in_reset) prot_n[P_RSTHOLD +: RST_W] = rst_hold - 1'b1;
+
+    if (stage2) begin
+      prot_n[P_RSTHOLD +: RST_W] = RST_TOP;
+      prot_n[P_RSTSEEN]          = 1'b1;
+      if (~&rst_count) prot_n[P_RSTCNT +: CNT_W] = rst_count + 1'b1;
+      // Cleared on purpose: see the note in the header about
+      // boot_addr + 0x7C.
+      prot_n[P_NMI]              = 1'b0;
+    end else if (expire) begin
+      prot_n[P_NMI] = 1'b1;
+    end else if (ack) begin
+      prot_n[P_NMI] = 1'b0;
+    end
+
+    // The W6 report, and it lives INSIDE the protected word on purpose.
+    // docs/16 section 5.8 measured the other arrangement on this
+    // repository's own safety nets and found the report was the single
+    // point of failure -- an upset could erase the announcement of the
+    // very event it caused. Here the write-back that repairs the
+    // replica and the write that records the repair are the same write
+    // on the same edge, so there is no cycle in which the report exists
+    // as separate, unprotected state. An upset in the report bit itself
+    // is both corrected and counted, because it is a disagreement like
+    // any other.
+    prot_n[P_TMRERR] = tmr_err | prot_mismatch;
+    if (prot_mismatch && ~&tmr_count)
+      prot_n[P_TMRCNT +: TMC_W] = tmr_count + 1'b1;
+  end
+
+  // -------------------------------------------------------------------
+  // The unprotected state (W6's second list)
+  // -------------------------------------------------------------------
   always @(posedge clk_i or negedge rst_por_ni) begin
     if (!rst_por_ni) begin
       // Armed, at the longest timeout the block allows. Anything shorter
@@ -257,19 +517,12 @@ module soc_wdog #(
       reload    <= {WIDTH{1'b1}};
       counter   <= {WIDTH{1'b1}};
       pre       <= 0;
-      nmi_pend  <= 1'b0;
-      rst_seen  <= 1'b0;
-      rst_count <= 0;
-      rst_hold  <= 0;
     end else begin
       // ---- prescaler ----
       if (PRESCALE > 1) begin
         if (pre == 0) pre <= PRE_TOP;
         else          pre <= pre - 1'b1;
       end
-
-      // ---- the reset stretch ----
-      if (rst_hold != 0) rst_hold <= rst_hold - 1'b1;
 
       // ---- counter ----
       if (kick) begin
@@ -300,33 +553,6 @@ module soc_wdog #(
       // configured, the next boot gets the whole budget.
       if (stage2)      reload <= {WIDTH{1'b1}};
       else if (wr_rld) reload <= wnum;
-
-      // ---- escalation ----
-      if (stage2) begin
-        rst_hold  <= RST_TOP;
-        rst_seen  <= 1'b1;
-        if (~&rst_count) rst_count <= rst_count + 1'b1;
-        // Cleared on purpose: see the note in the header about
-        // boot_addr + 0x7C.
-        nmi_pend  <= 1'b0;
-      end else if (expire) begin
-        nmi_pend  <= 1'b1;
-      end else if ((wr_stat && wval[B_STAT_NMI]) ||
-                   (wr_ctrl && wval[B_IP])) begin
-        // Write-one-to-clear, from either the status register's NMI bit
-        // or GRLIB's IP bit in the control register. Both are the same
-        // flag and both are offered because a GRLIB driver will reach
-        // for IP and this project's own code reads the status word.
-        //
-        // The bit position here is B_STAT_NMI and it is a named constant
-        // for a reason: it was written as a literal 1 first, against a
-        // status layout that puts NMI at bit 0, and the effect was a
-        // watchdog that accepted the acknowledge and ignored it. The
-        // symptom was not "the write failed" -- it was a system reset
-        // 3,216 clocks later, with a correct-looking NMI handler in
-        // between. Nothing short of stage 2 firing would have shown it.
-        nmi_pend  <= 1'b0;
-      end
     end
   end
 
@@ -350,16 +576,22 @@ module soc_wdog #(
                            1'b0,            // 2 LD, write-only
                            armed,           // 1 RS
                            armed};          // 0 EN
-      // The four flag bits are placed by their named constants above,
-      // so the layout the acknowledge decodes and the layout a reader
-      // sees are the same declaration.
+      // The flag bits are placed by their named constants above, so the
+      // layout the acknowledge decodes and the layout a reader sees are
+      // the same declaration.
+      //
+      // TMRERR and TMRCNT are not clearable, for the same reason
+      // WDOGRST and RSTCNT are not: they are the fault record, and a
+      // record software can erase is a record an upset can erase.
       sel_i[3]: begin
         rdata_o = 32'h0;
         rdata_o[B_STAT_NMI] = nmi_pend;
         rdata_o[B_STAT_RST] = rst_seen;
         rdata_o[B_STAT_ESC] = !wdog_no;
         rdata_o[B_STAT_DIS] = dis_q;
+        rdata_o[B_STAT_TMR] = tmr_err;
         rdata_o[15:8]       = rst_count;
+        rdata_o[B_STAT_TMRCNT +: TMC_W] = tmr_count;
       end
       default:  rdata_o = 32'h0;
     endcase

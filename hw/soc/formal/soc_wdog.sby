@@ -20,6 +20,17 @@
 # every configuration -- and in particular the cover task's claim that
 # stage 3 is reachable is a claim about ESCALATE = 2. The behaviour is
 # parameterised; the proof is at one point.
+#
+# W6, the protection added by docs/41-watchdog-hardening.md, is present
+# in this job's model -- the three soc_tmr_bank replicas and the voter
+# are elaborated, so every property below is proved over the VOTED state
+# rather than over a plain register. That is a regression statement and
+# not a redundancy proof: it says the hardening did not change the
+# policy. The redundancy itself -- that the replicas round-trip their
+# storage transforms, that they agree without a fault, and that a fault
+# free in every bit of any one replica is masked and reported exactly --
+# is soc_wdog_tmr.sby, which drives a fault model this job has no way to
+# express. Neither job substitutes for the other.
 
 [tasks]
 bmc
@@ -39,9 +50,13 @@ smtbmc yices
 
 [script]
 read_verilog -formal soc_wdog.v
+read_verilog -formal soc_tmr_bank.v
+read_verilog -formal tmr_voter.v
 chparam -set WIDTH 8 -set PRESCALE 4 -set RST_CYCLES 4 -set ESCALATE 2 soc_wdog
 prep -top soc_wdog
 
 [files]
 ../rtl/soc_wdog.v
+../rtl/soc_tmr_bank.v
+../../rtl/tmr_voter.v
 soc_wdog_props.v

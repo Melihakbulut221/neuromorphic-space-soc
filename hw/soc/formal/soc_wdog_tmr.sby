@@ -1,0 +1,106 @@
+# SymbiYosys job for the watchdog's protected word: three soc_tmr_bank
+# replicas under one tmr_voter, as hw/soc/rtl/soc_wdog.v composes them
+# in its g_prot_tmr generate block.
+#
+#   sby -f soc_wdog_tmr.sby prove       k-induction at W = 22, which is
+#                                 PROT_W at soc_wdog.v's own default
+#                                 parameters, reset image 0
+#   sby -f soc_wdog_tmr.sby prove_w4    the same at W = 4, the narrowest
+#                                 soc_tmr_bank's elaboration guard
+#                                 allows: the MIX split is 2/2 and the
+#                                 layer-2 rotation modulus is small
+#                                 enough that an off-by-one in it has
+#                                 nowhere to hide
+#   sby -f soc_wdog_tmr.sby prove_w5    W = 5, odd and narrow, so LO = 2
+#                                 and HI = 3
+#   sby -f soc_wdog_tmr.sby prove_w21   W = 21, odd at the working width
+#   sby -f soc_wdog_tmr.sby prove_rst1  W = 22 at an all-ones reset image,
+#                                 so the reset property is not proved
+#                                 over a zero word that the storage
+#                                 transforms map to themselves
+#   sby -f soc_wdog_tmr.sby prove_abc   the same property set on an
+#                                 independent engine family (AIGER/PDR
+#                                 via abc), which is docs/09 C.4 item 7's
+#                                 engine diversity expressed as a task
+#   sby -f soc_wdog_tmr.sby bmc         bounded backstop, depth 20
+#   sby -f soc_wdog_tmr.sby cover       reachability of every behaviour
+#                                 the assertions constrain, including a
+#                                 masked fault in each replica in turn,
+#                                 a fault that MOVES between replicas,
+#                                 and the scrub
+#
+# WHAT THIS JOB DOES NOT PROVE, and it is the same shape of gap
+# formal/tmr_voter_cfg.sby records: the anti-merge argument. POL and MIX
+# exist so that yosys cannot hash the three banks into one, and every
+# property here stays true of a design in which that happened --
+# `.MIX(0)` on both mixed replicas keeps this job green while destroying
+# the defence. That is a property of the MAPPED NETLIST and it stays
+# with sw/tests/test_soc_synthesis_guards.py. Neither is a substitute
+# for the other.
+#
+# Nor does it prove anything about the next-value logic (d is free
+# here; that is soc_wdog.sby) or about two simultaneously faulty
+# replicas (nothing about a bitwise majority claims anything there, and
+# the assumption in soc_wdog_tmr_props.v says so).
+
+[tasks]
+prove
+prove_w4
+prove_w5
+prove_w21
+prove_rst1
+prove_abc
+bmc
+cover
+
+[options]
+prove: mode prove
+prove: depth 4
+prove_w4: mode prove
+prove_w4: depth 4
+prove_w5: mode prove
+prove_w5: depth 4
+prove_w21: mode prove
+prove_w21: depth 4
+prove_rst1: mode prove
+prove_rst1: depth 4
+prove_abc: mode prove
+prove_abc: depth 4
+bmc: mode bmc
+bmc: depth 20
+cover: mode cover
+cover: depth 8
+
+[engines]
+prove: smtbmc boolector
+prove_w4: smtbmc boolector
+prove_w5: smtbmc boolector
+prove_w21: smtbmc boolector
+prove_rst1: smtbmc boolector
+prove_abc: abc pdr
+bmc: smtbmc boolector
+cover: smtbmc boolector
+
+[script]
+read_verilog -formal soc_tmr_bank.v
+read_verilog -formal tmr_voter.v
+read_verilog -formal soc_wdog_tmr_props.v
+prove_w4:  chparam -set W 4  soc_wdog_tmr_props
+prove_w5:  chparam -set W 5  soc_wdog_tmr_props
+prove_w21: chparam -set W 21 soc_wdog_tmr_props
+prove_rst1: chparam -set RST_VAL 64'h00000000003FFFFF soc_wdog_tmr_props
+prep -top soc_wdog_tmr_props
+# The AIGER path cannot carry a hierarchical cell, and soc_tmr_bank is
+# marked keep_hierarchy in the RTL -- that attribute is one of the two
+# defences that stop yosys merging the three replicas into one bank, so
+# it is stripped HERE, in this task's model only, and never in the RTL.
+# The other tasks run against the hierarchy exactly as soc_wdog
+# elaborates it.
+prove_abc: setattr -mod -unset keep_hierarchy
+prove_abc: flatten
+prove_abc: opt_clean
+
+[files]
+../rtl/soc_tmr_bank.v
+../../rtl/tmr_voter.v
+soc_wdog_tmr_props.v
