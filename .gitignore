@@ -10,6 +10,8 @@ hw/.venv/
 hw/tb/sim_build*/
 hw/tb/results.xml
 hw/tb/results_*.xml
+hw/soc/tb/cocotb/sim_build*/
+hw/soc/tb/cocotb/results_*.xml
 .pytest_cache/
 
 # SymbiYosys working directories: one per task. The .sby configs and the
@@ -52,3 +54,11 @@ hw/soc/ext/
 hw/soc/tools/
 hw/soc/gen/
 hw/soc/out/
+
+# SymbiYosys working directories for the SoC fabric jobs (docs/39). Same
+# rule as the formal/ entries above: the .sby configs and the property
+# files are the tracked source, these are regenerated output.
+hw/soc/formal/soc_bus/
+hw/soc/formal/soc_bus_*/
+hw/soc/formal/soc_apb_bridge/
+hw/soc/formal/soc_apb_bridge_*/

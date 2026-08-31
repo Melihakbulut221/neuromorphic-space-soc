@@ -1,0 +1,73 @@
+# cocotb + Icarus suite for hw/soc/rtl/soc_apb_bridge.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_apb_bridge        run the suite
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_apb_bridge lint   Verilator lint
+#
+# The expectations in test_soc_apb_bridge.py come from the AMBA 3 APB
+# protocol and from the generated memory map sw/golden/memmap_gen.py (the
+# APB window base and size and the peripheral slot addresses), not from the
+# RTL, so this suite is meant to keep failing usefully when
+# regmap/memmap.yaml changes.
+#
+# Standalone by design, same structure as hw/tb/Makefile.regbank. Same
+# rootless tool discovery as that file: iverilog from PATH, cocotb from the
+# project venv hw/.venv -- if cocotb-config is not already on PATH the
+# recipe re-invokes make with the venv prepended, because make < 4.4 does
+# not pass an exported PATH into $(shell ...), which the cocotb makefiles
+# rely on. The venv is three directories up from here (hw/.venv), not in
+# hw/soc.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+# APB_BRIDGE_SRC exists so a mutation run can point the same suite at a
+# modified copy of the RTL without editing the tree
+# (make -f Makefile.soc_apb_bridge APB_BRIDGE_SRC=/path/to/mutant.v SIM_BUILD=... ).
+APB_BRIDGE_SRC ?= $(RTL)/soc_apb_bridge.v
+
+VERILOG_SOURCES = $(APB_BRIDGE_SRC)
+TOPLEVEL = soc_apb_bridge
+MODULE = test_soc_apb_bridge
+
+# Per-block build and results paths so this suite can run alongside the
+# others without clobbering their artifacts.
+SIM_BUILD ?= sim_build_soc_apb_bridge
+COCOTB_RESULTS_FILE ?= results_soc_apb_bridge.xml
+export COCOTB_RESULTS_FILE
+
+# This block includes nothing, but -I$(RTL) keeps the invocation identical
+# to the sibling fabric suite and to the flow scripts.
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# Default-flag Verilator lint. The three-state machine is small enough that
+# any warning here is a real one.
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) $(APB_BRIDGE_SRC)
+
+endif

@@ -9,6 +9,10 @@ only one of them is a pytest suite:
     process that ``hw/tb/Makefile`` and ``hw/tb/Makefile.<block>`` start;
     they import ``cocotb`` and talk to a live design handle, so pytest
     cannot execute them and must not try.
+  * ``hw/soc/tb/`` the SoC fabric's cocotb modules, added with
+    ``docs/39-soc-bus-and-memory-map.md``. Same situation as ``hw/tb/``:
+    driven by ``hw/soc/tb/cocotb/Makefile.<block>`` inside the ``hw/.venv``
+    environment, not by a bare pytest.
   * ``tt/``        a vendored third-party checkout with its own test suite
     and its own dependencies (klayout and friends), run by that project's
     tooling, not by ours.
@@ -57,6 +61,7 @@ trees apart.
 
 # Paths are relative to this file's directory (the repository root).
 collect_ignore = [
-    "hw/tb",  # cocotb modules: simulator-loaded, need a design handle
-    "tt",     # vendored third-party checkout with its own suite and deps
+    "hw/tb",      # cocotb modules: simulator-loaded, need a design handle
+    "hw/soc/tb",  # the SoC fabric's cocotb modules, same reason
+    "tt",         # vendored third-party checkout with its own suite and deps
 ]

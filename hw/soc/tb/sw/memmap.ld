@@ -3,7 +3,7 @@
 /* The ROM region starts AT the reset vector, not at the region
    base. Ibex resets to {boot_addr_i[31:8], 8'h80}, so the first
    fetched instruction is at base+0x80 and nothing may be linked
-   below it -- docs/38-ibex-bringup.md section 7.4 defect 4, where
+   below it -- docs/38-ibex-bringup.md section 7.5 defect 4, where
    exactly that moved _start off the reset vector and the core ran
    the program from arbitrary offsets. Expressing the offset here,
    in generated text, is what stops the next link script from

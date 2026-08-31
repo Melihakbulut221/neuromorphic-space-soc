@@ -1,0 +1,246 @@
+# SoC memory map single source.
+#
+# This file IS the memory map. docs/08-gr801-datasheet-notes.md section
+# 3.1 proposed one in prose and section 4 item 1 said freezing it was the
+# first task; this is that freeze. Everything downstream --
+# docs/memmap-soc.md, sw/golden/memmap_gen.py, hw/soc/rtl/soc_memmap.vh,
+# hw/soc/tb/sw/soc_memmap.h, hw/soc/tb/sw/memmap.ld -- is generated from
+# here by regmap/generate_memmap.py. Do not edit the generated files.
+#
+# The same discipline regmap/regmap.yaml applies to the NPU register
+# block: one machine-readable source, a generator, and a sync test
+# (sw/tests/test_memmap.py) that fails when a generated file is stale or
+# when a property of the map is violated.
+#
+# ---------------------------------------------------------------------
+# Two Ibex facts constrain this map and are checked mechanically
+# ---------------------------------------------------------------------
+#
+# docs/38-ibex-bringup.md section 7.5 defects 3 and 4:
+#
+#   * Ibex resets to {boot_addr_i[31:8], 8'h80}. The reset vector is not
+#     free: whatever region boot_addr points at must contain
+#     base + 0x80 and must be fetchable. `boot_region` below names it and
+#     the generator derives `RESET_VECTOR` rather than letting anyone
+#     write it down twice.
+#   * Ibex's mtvec is 256-byte aligned and vectored-only -- mtvec[7:2]
+#     reads as zero regardless of what is written. A trap vector placed
+#     anywhere else is silently truncated to the enclosing 256-byte
+#     boundary. Every region base here is therefore required to be
+#     256-byte aligned, so that a trap vector can be placed at the base
+#     of any region without the map itself being the thing that breaks
+#     it.
+#
+# ---------------------------------------------------------------------
+# Decode discipline
+# ---------------------------------------------------------------------
+#
+# Every region is a naturally aligned power of two, so decode is a prefix
+# compare against a constant mask and never a magnitude comparison.
+# Regions may not overlap. Both are checked by the generator, which exits
+# non-zero rather than emitting a map that cannot be decoded cheaply.
+#
+# ---------------------------------------------------------------------
+# Provenance and divergence
+# ---------------------------------------------------------------------
+#
+# The frame is the NOELVSYS physical map (grip.pdf table 2293) with GR740
+# APB slot numbering, as docs/08 section 3.1 proposed. `source` on each
+# row records where the address came from. Two documented divergences,
+# both consequences of the interconnect decision in
+# docs/39-soc-bus-and-memory-map.md:
+#
+#   * There is no AHB in this SoC. The discovery table at 0xFFFFF000
+#     keeps GRLIB's *layout* (8-word slave records, the identification
+#     word field split, the BAR field split) because that layout is what
+#     makes a device table readable, but it is a system-bus table, not an
+#     AMBA AHB plug-and-play table, and this project does not claim AHB.
+#   * GR740's AHBSTAT slot is named BUSSTAT here for the same reason: it
+#     latches errors on this project's own system bus.
+#
+# status: implemented = RTL exists in hw/soc/rtl/ and is instantiated in
+#         soc_top.v; reserved = the address is frozen and nothing decodes
+#         it yet, so an access lands on the error slave.
+
+meta:
+  name: neuromorphic_space_soc
+  version: "0.1"
+  addr_bits: 32
+  data_bits: 32
+  # Ibex boot_addr_i is driven with this region's base; the reset vector
+  # is derived as base + RESET_VECTOR_OFFSET.
+  boot_region: ROM
+  reset_vector_offset: 0x80
+  # Region bases must be a multiple of this. Ibex forces mtvec[7:2] to
+  # zero, so a 256-byte grid is the coarsest thing a trap vector can be
+  # placed on.
+  base_alignment: 0x100
+  # GRLIB's "Various contributions" vendor code. Device IDs under it are
+  # assigned by this project and are NOT registered with Frontgrade
+  # Gaisler; a GRLIB-aware tool will show the vendor and an unrecognised
+  # device, which is the truthful outcome. Using 0x01 (Gaisler) would be
+  # misrepresentation -- docs/08 section 3 row 4.
+  vendor_id: 0x09
+
+# ---------------------------------------------------------------------
+# System bus regions
+# ---------------------------------------------------------------------
+#
+# `port` names the physical fabric slave port the region is routed to.
+# Regions with no `port` are decoded by nothing today and fall through to
+# the error slave. `type` follows the GRLIB BAR TYPE idea: memory = a
+# fetchable/cacheable aperture, io = registers.
+
+regions:
+  - name: RAM
+    base: 0x00000000
+    size: 0x00010000
+    type: memory
+    attr: rwx
+    port: ram
+    status: implemented
+    device_id: 0x001
+    desc: System SRAM, 64 KiB. Data, stack and relocated .data live here
+    source: RAM at 0x0 (NOELVSYS grip.pdf table 2293, GR740 UM 2.3)
+
+  - name: NPU
+    base: 0x10000000
+    size: 0x10000000
+    type: memory
+    attr: rw
+    status: reserved
+    device_id: 0x010
+    desc: NPU fabric window; per-node register windows and descriptor rings
+    source: project-specific (docs/08 section 3 row 21)
+
+  - name: ROM
+    base: 0xC0000000
+    size: 0x00002000
+    type: memory
+    attr: rx
+    port: rom
+    status: implemented
+    device_id: 0x002
+    desc: On-chip boot ROM, 8 KiB. Holds the reset vector and .text
+    source: ROM at 0xC0000000 (NOELVSYS, GR740 UM 5.7.4)
+
+  - name: QSPI3
+    base: 0xD0000000
+    size: 0x02000000
+    type: memory
+    attr: rx
+    status: reserved
+    device_id: 0x011
+    desc: QSPI flash execute-in-place window, 3-byte addressing
+    source: SPIMCTRL windows (GR716B UM 2.10)
+
+  - name: QSPI4
+    base: 0xD8000000
+    size: 0x08000000
+    type: memory
+    attr: rx
+    status: reserved
+    device_id: 0x012
+    desc: QSPI flash execute-in-place window, 4-byte addressing
+    source: SPIMCTRL windows (GR716B UM 2.10)
+
+  - name: CLINT
+    base: 0xE0000000
+    size: 0x00010000
+    type: io
+    attr: rw
+    status: reserved
+    device_id: 0x003
+    desc: RISC-V core-local interruptor (msip, mtimecmp, mtime)
+    source: CLINT at 0xE0000000 (NOELVSYS)
+
+  - name: PLIC
+    base: 0xF8000000
+    size: 0x00400000
+    type: io
+    attr: rw
+    status: reserved
+    device_id: 0x004
+    desc: RISC-V platform interrupt controller, single hart, single context
+    source: PLIC at 0xF8000000 (NOELVSYS)
+
+  - name: DEBUG
+    base: 0xFE000000
+    size: 0x01000000
+    type: io
+    attr: rw
+    status: reserved
+    device_id: 0x005
+    desc: RISC-V debug module
+    source: debug module at 0xFE000000 (NOELVSYS)
+
+  - name: APB
+    base: 0xFF900000
+    size: 0x00100000
+    type: io
+    attr: rw
+    port: apb
+    status: implemented
+    device_id: 0x006
+    desc: Peripheral bus bridge window, 1 MiB, 4 KiB slots
+    source: APB bridge 0 base 0xFF900000 (GR740 UM 2.3)
+
+  - name: PNP
+    base: 0xFFFFF000
+    size: 0x00001000
+    type: io
+    attr: r
+    port: pnp
+    status: implemented
+    device_id: 0x007
+    desc: System-bus device table; GRLIB PnP record layout, not AMBA AHB
+    source: AHB PnP at 0xFFFFF000 (GRLIB grlib.pdf 5.3), layout only
+
+# ---------------------------------------------------------------------
+# Peripheral bus slots
+# ---------------------------------------------------------------------
+#
+# One 4 KiB slot per peripheral instance inside the APB window
+# (docs/08 section 3 row 20). `slot` is the index; the address is derived
+# as APB base + slot * 0x1000, so no peripheral address is written twice.
+# The bridge decodes PADDR[19:12], which is why the slot index is what
+# this file records.
+#
+# irq is the interrupt source number the future PLIC will carry; 0 means
+# "no interrupt". The numbers are frozen here so that the PnP records,
+# the PLIC and the drivers cannot disagree -- docs/08 section 4 item 7.
+
+apb_slots:
+  - {name: UART0,   slot: 0x000, irq: 2,  status: implemented, device_id: 0x00C,
+     desc: "Console UART, GRLIB APBUART register map, transmit only",
+     source: "APBUART0 0xFF900000 (GR740, NOELVSYS console)"}
+  - {name: UART1,   slot: 0x001, irq: 3,  status: reserved, device_id: 0x00C,
+     desc: "Second UART", source: "APBUART1 0xFF901000 (GR740)"}
+  - {name: GPIO,    slot: 0x002, irq: 4,  status: reserved, device_id: 0x01A,
+     desc: "GRGPIO-style general purpose I/O, 16 pins", source: "GRGPIO0 0xFF902000 (GR740)"}
+  - {name: TIMER0,  slot: 0x008, irq: 8,  status: reserved, device_id: 0x011,
+     desc: "GPTIMER, last timer is the watchdog and is armed at reset", source: "GPTIMER0 0xFF908000 (GR740, NOELVSYS)"}
+  - {name: TIMER1,  slot: 0x009, irq: 12, status: reserved, device_id: 0x011,
+     desc: "Second GPTIMER", source: "GPTIMER1 0xFF909000 (GR740)"}
+  - {name: SPW,     slot: 0x00D, irq: 16, status: reserved, device_id: 0x01F,
+     desc: "SpaceWire codec, GRSPW2-shaped registers, one DMA channel", source: "GR740 SpW AMBA interface slot 0xFF90D000"}
+  - {name: CAN,     slot: 0x011, irq: 18, status: reserved, device_id: 0x0FE,
+     desc: "CAN 2.0B, SJA1000-shaped; documented divergence from GRCANFD", source: "slot only (docs/08 section 3 row 14)"}
+  - {name: SPI,     slot: 0x012, irq: 19, status: reserved, device_id: 0x02D,
+     desc: "SPICTRL-shaped SPI master", source: "SPICTRL (GR740 bridge 1) remapped"}
+  - {name: I2C,     slot: 0x013, irq: 20, status: reserved, device_id: 0x028,
+     desc: "I2CMST, the OpenCores I2C master register map", source: "family style"}
+  - {name: QSPICTL, slot: 0x014, irq: 21, status: reserved, device_id: 0x045,
+     desc: "QSPI flash controller registers behind the XIP windows", source: "family style"}
+  - {name: BUSSTAT, slot: 0x015, irq: 22, status: reserved, device_id: 0x052,
+     desc: "System-bus error latch and ECC counters; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
+  - {name: SCRUB,   slot: 0x016, irq: 23, status: reserved, device_id: 0x057,
+     desc: "Memory scrubber control, MEMSCRUB-like", source: "MEMSCRUB (GR740) remapped"}
+  - {name: BOOTREG, slot: 0x017, irq: 0,  status: reserved, device_id: 0x087,
+     desc: "Bootstrap pin readback and boot report register, GRGPREG-like", source: "GRGPREG 0xFFA09000 (GR740)"}
+  - {name: CLKGATE, slot: 0x018, irq: 0,  status: reserved, device_id: 0x02C,
+     desc: "Clock gate enable and status for NPU nodes and heavy peripherals", source: "GRCLKGATE (GR740, GR716B)"}
+  - {name: NPUCFG,  slot: 0x019, irq: 24, status: reserved, device_id: 0x013,
+     desc: "NPU fabric-level global configuration and status", source: "project-specific"}
+  - {name: APBPNP,  slot: 0x0FF, irq: 0,  status: implemented, device_id: 0x000,
+     desc: "Peripheral bus device table, two words per slot", source: "APB PnP at bridge base + 0xFF000 (GRLIB grlib.pdf 5.3), layout only"}

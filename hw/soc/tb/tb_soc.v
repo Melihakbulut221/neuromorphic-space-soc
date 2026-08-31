@@ -124,6 +124,20 @@ module tb_soc;
     if (double_fault_seen)    saw_double_fault    <= 1'b1;
   end
 
+  // "The core has run and then stopped", not "the core is not running".
+  //
+  // core_sleep_o is ALREADY HIGH while the core is held in reset -- a
+  // core that is not fetching is not busy, and Ibex says so. Waiting on
+  // core_sleep_o alone therefore returns instantly on the cycle reset is
+  // released, and the run reports a timeout at whatever cycle count the
+  // free-running counter had reached by the time the report is printed,
+  // which is a symptom that points nowhere. The first version of this
+  // file did exactly that. Requiring the core to have been observed
+  // awake first is the whole fix.
+  reg saw_awake = 1'b0;
+  always @(posedge clk) if (rst_n && !core_sleep) saw_awake <= 1'b1;
+  wire finished = saw_awake && core_sleep;
+
   integer cycles = 0;
   always @(posedge clk) if (rst_n) cycles = cycles + 1;
 
@@ -142,6 +156,25 @@ module tb_soc;
     if (rst_n && $test$plusargs("trace") && (cycles % 20000 == 0))
       $display("[TB] cycle %0d  fetch=0x%08x  data=0x%08x",
                cycles, last_instr_addr, last_data_addr);
+
+  // +bustrace dumps every fabric handshake for the first BUSTRACE_CYCLES
+  // cycles. Off by default and not part of any pass criterion: it is
+  // here because a fabric stall is invisible from the outside -- the
+  // symptom is a core that stops, with no clue which of the two masters
+  // is waiting for what.
+`ifndef BUSTRACE_CYCLES
+  `define BUSTRACE_CYCLES 400
+`endif
+  always @(posedge clk)
+    if (rst_n && $test$plusargs("bustrace") && cycles < `BUSTRACE_CYCLES)
+      $display("[BUS] %0d I:%b%b%b %08x D:%b%b%b w%b %08x | req%b gnt%b rv%b | ci%0d/%0d cd%0d/%0d",
+               cycles,
+               dut.instr_req, dut.instr_gnt, dut.instr_rvalid, dut.instr_addr,
+               dut.data_req, dut.data_gnt, dut.data_rvalid, dut.data_we,
+               dut.data_addr,
+               dut.s_req, dut.s_gnt, dut.s_rvalid,
+               dut.u_bus.cnt_i, dut.u_bus.lock_i,
+               dut.u_bus.cnt_d, dut.u_bus.lock_d);
 
   // -------------------------------------------------------------------
   // Serial receiver
@@ -202,7 +235,7 @@ module tb_soc;
     repeat (20) @(posedge clk);
     rst_n = 1'b1;
 
-    while (!core_sleep && cycles < `TIMEOUT_CYCLES) @(posedge clk);
+    while (!finished && cycles < `TIMEOUT_CYCLES) @(posedge clk);
 
     // Let any character still in the shifter finish, so the log is not
     // truncated mid-word by the core going to sleep.
@@ -212,7 +245,7 @@ module tb_soc;
     exit_magic = dut.u_ram.mem[EXIT_MAGIC_ADDR[31:2]];
 
     $display("");
-    if (!core_sleep) begin
+    if (!finished) begin
       $display("[TB] FAIL: timeout after %0d cycles without reaching WFI", cycles);
       $display("[TB]   last fetch 0x%08x, last data 0x%08x",
                last_instr_addr, last_data_addr);

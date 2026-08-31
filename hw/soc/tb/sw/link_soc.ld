@@ -17,7 +17,7 @@
  *
  * The MEMORY block is NOT written here. It is INCLUDEd from memmap.ld,
  * which regmap/generate_memmap.py emits from regmap/memmap.yaml. That is
- * deliberate: docs/38 section 7.4 defect 4 was a link-time accident that
+ * deliberate: docs/38 section 7.5 defect 4 was a link-time accident that
  * moved _start off Ibex's fixed reset vector and cost a debugging
  * session, and the cheapest defence is that no human writes the reset
  * vector down twice. Build with -L pointing at this directory.

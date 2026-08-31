@@ -1,0 +1,43 @@
+# SymbiYosys job for the system fabric.
+#
+#   sby -f soc_bus.sby prove    k-induction proof of F1-F9
+#   sby -f soc_bus.sby bmc      bounded check, depth 24
+#   sby -f soc_bus.sby cover    reachability of every proven behaviour
+#
+# Properties live in soc_bus_props.v, textually included at the end of
+# the soc_bus module body under `ifdef FORMAL (read_verilog -formal
+# defines FORMAL). soc_memmap.vh is listed in [files] as well, because
+# both the design and the decode properties read the generated address
+# constants out of it -- the point of proving the decode at all is that
+# it is proved against the frozen map rather than against itself.
+#
+# The cover task is not optional. docs/09-formal-verification-plan.md
+# section B.1 makes an assert set with unreachable behaviour a red
+# result, and several properties here (the outstanding limit, a full
+# slave queue, two responses in one cycle) are exactly the kind that a
+# too-strong environment assumption would quietly make unreachable.
+
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 24
+prove: mode prove
+prove: depth 12
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -I. -formal soc_bus.v
+prep -top soc_bus
+
+[files]
+../rtl/soc_bus.v
+../rtl/soc_memmap.vh
+soc_bus_props.v

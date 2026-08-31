@@ -1,0 +1,43 @@
+# SymbiYosys job for the system bus to APB bridge.
+#
+#   sby -f soc_apb_bridge.sby prove    k-induction proof of A1-A11
+#   sby -f soc_apb_bridge.sby bmc      bounded check, depth 24
+#   sby -f soc_apb_bridge.sby cover    reachability of every proven
+#                                      behaviour, including a transfer
+#                                      with three wait states
+#
+# Properties live in soc_apb_bridge_props.v, textually included at the
+# end of the soc_apb_bridge module body under `ifdef FORMAL. They are
+# clauses of the AMBA 3 APB specification and of the Ibex memory protocol
+# (quoted in the header of hw/soc/rtl/soc_bus.v), not restatements of the
+# state machine -- the file's own header says which property came from
+# which document.
+#
+# This is the whole reason APB was implemented and AHB was not. The
+# protocol is small enough that its compliance is a proof rather than an
+# assertion; docs/39-soc-bus-and-memory-map.md section 4 makes that
+# argument and this job is what backs it.
+
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 24
+prove: mode prove
+prove: depth 12
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_apb_bridge.v
+prep -top soc_apb_bridge
+
+[files]
+../rtl/soc_apb_bridge.v
+soc_apb_bridge_props.v
