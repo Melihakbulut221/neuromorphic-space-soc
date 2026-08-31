@@ -245,6 +245,19 @@ def derive_signoff():
             f"{SIGNOFF_BASE} does not carry SETUP_VIOLATION_CORNERS = "
             '["*"]; setup would be gated at the typical corner only. See '
             "docs/28 section 4.4a.")
+    # The same assertion for the two checkers docs/36 closed. Their
+    # default is the match-none wildcard [""] and it comes from the STEP
+    # CLASS, not from either PDK, so unlike setup they do not fall back
+    # to TIMING_VIOLATION_CORNERS -- they match no corner at all and warn
+    # instead of failing. If config.json is ever regenerated from
+    # tt/src/config_merged.json without them, the sign-off variant would
+    # silently go back to a run in which max cap and max slew cannot fail.
+    for key in ("MAX_CAP_VIOLATION_CORNERS", "MAX_SLEW_VIOLATION_CORNERS"):
+        if cfg.get(key) != ["*"]:
+            raise SystemExit(
+                f'{SIGNOFF_BASE} does not carry {key} = ["*"]; that '
+                "checker would match no corner and warn instead of "
+                "failing. See docs/36.")
     return name, cfg
 
 

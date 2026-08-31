@@ -1,9 +1,33 @@
 # 34 — The pilot freeze: the exact artifact set that constitutes the TTIHP26b submission
 
-Status: FROZEN at commit `b6738e5`. This document answers one question,
-and it is written so that the answer can be checked by running commands
-rather than by believing prose: **is what I am submitting the thing that
-was verified?**
+> **AMENDED 2026-08-31 — the frozen artifact set has moved once, and
+> deliberately.** `docs/36-checker-closure.md` applied section 10 item 2:
+> `MAX_CAP_VIOLATION_CORNERS` and `MAX_SLEW_VIOLATION_CORNERS` are now
+> `["*"]` in all three configurations that build, so the two checkers of
+> section 8.5 gate instead of warning. That forced the section 9.2
+> re-harden, and the runs this document pins are now
+> **`signoff-6x2-gated`**, **`submission-6x2-gated`** and
+> **`submission-6x2-gated-geomdecks`**.
+>
+> **Every superseded hash is retained, marked `SUPERSEDED 2026-08-31`,
+> rather than overwritten** — a freeze record that can only be checked
+> against now is not a freeze record. Sections 1, 3, 4, 5, 7, 8.5, 9.2,
+> 9.4 and 10 carry the amendment; sections 2 and 6 are unchanged and
+> still govern. **Section 9.2 item 8 is the one rule that changed** —
+> this document was amended in place instead of superseded, and the
+> reason is argued there rather than assumed.
+>
+> **The design did not change.** The re-harden reproduces the superseded
+> runs on **196 of 196** and **194 of 194** metrics, and
+> `final/nl/*.nl.v`, `final/pnl/*.pnl.v` and `final/def/*.def` are
+> **bit-identical across all four runs** **[fact, `docs/36` section
+> 5.4]**. What changed is that two more of the flow's own gates are
+> load-bearing.
+
+Status: FROZEN at commit `b6738e5`, amended as above. This document
+answers one question, and it is written so that the answer can be
+checked by running commands rather than by believing prose: **is what I
+am submitting the thing that was verified?**
 
 `docs/31-signoff-6x2.md` is the sign-off — what was measured, and what
 it means. This document is the inventory — which bytes were measured,
@@ -23,7 +47,8 @@ run directories.
 **What this document does not do.** It changes no RTL, no testbench, no
 formal script and no submission source. Its only executable change is to
 `hw/openlane/pilot_ihp/mkconfig.py`, which section 5 explains. Nothing
-in it obliges a re-harden.
+in it obliges a re-harden. **[Amendment: `docs/36` did oblige one, and
+paid it. No RTL moved there either — the netlist is the same bytes.]**
 
 ---
 
@@ -35,17 +60,29 @@ in it obliges a re-harden.
 | Design name | `tt_um_melihakbulut_nssoc` |
 | Shuttle | TTIHP26b, ihp-sg13g2, **6x2 = 12 tiles**, deadline **2026-09-21** |
 | Die area | `0 0 1289.28 313.74` um, `tt_block_6x2_pgvdd.def` pin frame |
-| Sign-off run | `signoff-6x2` (`docs/31` sections 4–7) |
-| Submission-path run | `submission-6x2` (`docs/31` section 10.4) |
-| Geometric decks for the submission run | `submission-6x2-geomdecks` (`docs/31` section 10.7) |
-| RTL the runs were pinned to | `bc91c71` / `0c22de4` — see section 2.2 |
+| Sign-off run | **`signoff-6x2-gated`** (`docs/36` section 5) — *SUPERSEDED 2026-08-31: `signoff-6x2` (`docs/31` sections 4–7)* |
+| Submission-path run | **`submission-6x2-gated`** (`docs/36` section 5) — *SUPERSEDED 2026-08-31: `submission-6x2` (`docs/31` section 10.4)* |
+| Geometric decks for the submission run | **`submission-6x2-gated-geomdecks`** (`docs/36` section 5.3, 5.6) — *SUPERSEDED 2026-08-31: `submission-6x2-geomdecks` (`docs/31` section 10.7)* |
+| RTL the runs are pinned to | **`2f6cd6f`**, the freeze content itself — *SUPERSEDED 2026-08-31: `bc91c71` / `0c22de4`, see section 2.2* |
 
-**The two runs are the same design.** `signoff-6x2` was hardened from
-`config.signoff-6x2.json`; `submission-6x2` was hardened from the
+**The two runs are the same design.** The sign-off run was hardened from
+`config.signoff-6x2.json`; the submission-path run was hardened from the
 configuration the Tiny Tapeout tooling itself derives and hands to
 LibreLane. They produce a **bit-identical netlist, powered netlist and
 DEF** (section 3.2), which is what licenses `docs/31` to report one set
 of numbers for both.
+
+**AMENDED 2026-08-31.** That equality now spans **four** runs, not two:
+the two `-gated` runs above produce the same three artifacts, byte for
+byte, as the two they supersede **[fact, `docs/36` section 5.4]**. Two
+configurations, two dates, four hardens, one netlist.
+
+**One caveat is retired by the amendment.** The superseded runs were
+pinned to `bc91c71` / `0c22de4`, so connecting them to this freeze
+commit needed section 2.2's comment-only argument. The `-gated` runs are
+pinned to `2f6cd6f`, whose `hw/rtl` blobs are the ten in section 2.1
+**[fact, `pin_rtl.py` output]**. Section 2.2 is retained as the record
+of how the earlier runs were connected; it is no longer load-bearing.
 
 ---
 
@@ -149,10 +186,30 @@ for f in tt/src/*.v tt/src/*.vh; do b=$(basename "$f"); \
 
 ### 3.1 Checksums
 
-**[fact, `sha256sum`, taken at the freeze.]** Paths are relative to
+**[fact, `sha256sum`.]** Paths are relative to
 `hw/openlane/pilot_ihp/runs/`.
 
-`signoff-6x2`:
+**CURRENT — `signoff-6x2-gated`, taken 2026-08-31 (`docs/36`):**
+
+```
+52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989  signoff-6x2-gated/final/nl/tt_um_melihakbulut_nssoc.nl.v
+39470ad135125f6b80abaf487877ef81d442ee8dd567bde5ea89ec42995ee73e  signoff-6x2-gated/final/pnl/tt_um_melihakbulut_nssoc.pnl.v
+8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4  signoff-6x2-gated/final/def/tt_um_melihakbulut_nssoc.def
+1c9f2dd7f65cc248fe8ce2b5856f8a941d0e4cf3f09a0e1ed7df9147eaf98260  signoff-6x2-gated/final/gds/tt_um_melihakbulut_nssoc.gds
+274e69513700395332037b27c1964317db278f5cfa75531ea5d8e5346c4dbbcc  signoff-6x2-gated/resolved.json
+```
+
+**CURRENT — `submission-6x2-gated`, taken 2026-08-31 (`docs/36`):**
+
+```
+52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989  submission-6x2-gated/final/nl/tt_um_melihakbulut_nssoc.nl.v
+39470ad135125f6b80abaf487877ef81d442ee8dd567bde5ea89ec42995ee73e  submission-6x2-gated/final/pnl/tt_um_melihakbulut_nssoc.pnl.v
+8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4  submission-6x2-gated/final/def/tt_um_melihakbulut_nssoc.def
+4091b468bcc43313625ffbd5ab66fb47c2e434b0ffd456562958366e7e68c998  submission-6x2-gated/final/gds/tt_um_melihakbulut_nssoc.gds
+1a8611663478256ba8bb2c1d6ef96eb25dc9e3cb54863cff5a5c10680cd285bf  submission-6x2-gated/resolved.json
+```
+
+**SUPERSEDED 2026-08-31, taken at the original freeze — `signoff-6x2`:**
 
 ```
 52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989  signoff-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v
@@ -162,7 +219,7 @@ f5e2e35e1d2faac04fa731c09645aa0ae80045ca137250415a0af311e38ac98b  signoff-6x2/fi
 c280970d1eb1478a0398e7e60aa69af387dac927dc744cd325c58ed76bbe7726  signoff-6x2/resolved.json
 ```
 
-`submission-6x2`:
+**SUPERSEDED 2026-08-31 — `submission-6x2`:**
 
 ```
 52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989  submission-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v
@@ -171,6 +228,15 @@ c280970d1eb1478a0398e7e60aa69af387dac927dc744cd325c58ed76bbe7726  signoff-6x2/re
 664326bf142635dd14f2b369b9cc8a935123f859f3100886da0f226e220a9372  submission-6x2/final/gds/tt_um_melihakbulut_nssoc.gds
 0b73090bf441af7a92e17ea03313631b79f9eef567eee5211418e1a3907c1c5e  submission-6x2/resolved.json
 ```
+
+**Read the four blocks together and the amendment states itself.** The
+netlist, powered-netlist and DEF hashes are **the same three values in
+all four runs**. Only the GDS hashes and the `resolved.json` hashes
+move: the GDS because it carries a generation timestamp (section 3.2),
+`resolved.json` because it now records
+`MAX_CAP_VIOLATION_CORNERS` and `MAX_SLEW_VIOLATION_CORNERS` as `['*']`
+where it recorded `['']` **[fact]**. **That pair of keys is the entire
+difference between the superseded artifact set and the current one.**
 
 ### 3.2 What the equality and the inequality mean
 
@@ -216,8 +282,22 @@ key by key in `docs/31` section 10.
 | `design__instance__area` | 392,988 um2 |
 
 `klayout__drc_error__count` 0 and `design__xor_difference__count` 0 are
-carried by `signoff-6x2` (in-flow) and by `submission-6x2-geomdecks`
-(for the submission stream) **[fact]**.
+carried by the sign-off run (in-flow) and by the geometric-deck
+directory (for the submission stream) **[fact]**.
+
+**AMENDED 2026-08-31.** Every value in the table above is unchanged in
+`signoff-6x2-gated` and `submission-6x2-gated`. The comparison was made
+key by key rather than row by row: **196 of 196 metrics equal** between
+`signoff-6x2` and `signoff-6x2-gated`, and **194 of 194** between
+`submission-6x2` and `submission-6x2-gated`, with **zero differences in
+either** **[fact, `docs/36` section 5.4]**. Two rows are added, and they
+are the point of the amendment — they were carried before and were
+gated by nothing:
+
+| Metric | Value | Gated at |
+|---|---|---|
+| `design__max_slew_violation__count__corner:*` | **0** at all three corners | **all corners** (was: none) |
+| `design__max_cap_violation__count__corner:*` | **0** at all three corners | **all corners** (was: none) |
 
 The derate is in the flow-written constraint file, not merely in the
 configuration — `final/sdc/tt_um_melihakbulut_nssoc.sdc` lines 100–101
@@ -236,10 +316,22 @@ set_timing_derate -late 1.0500
 manifest itself hashes to **[fact]**:
 
 ```
-0cea3939f4cc03ff98162602892bbfc5760fe6ce7855a27a7c8cd64e904ba747  tt/MANIFEST.sha256
+8d8988a12ad321f8314f9f2a68c94b7681f69f9da2ce8d5876a067f4ade5b07c  tt/MANIFEST.sha256
 ```
 
-Verified at the freeze: **29 of 29 OK, exit 0** **[fact]**.
+*SUPERSEDED 2026-08-31:
+`0cea3939f4cc03ff98162602892bbfc5760fe6ce7855a27a7c8cd64e904ba747`.
+Exactly two of the 29 manifested files moved, and only one of them by
+content: `src/config.json` gained the two `docs/36` keys, and the
+manifest line for it changed with it **[fact]**.*
+
+| File | Now | Superseded 2026-08-31 |
+|---|---|---|
+| `tt/src/config.json` | `56d3738469a2cfaecfed57dc4901e66df2c90b657f08ee54b6fbb5ffc04c9407` | `0cfb05a9c3367f0a8f3012554b3fe694b5adfe546dff728deb9dc3b4f15c2c0b` |
+
+Verified 2026-08-31: **29 of 29 OK, exit 0**, and
+`gen_tt_submission.py --check` reports `tt/ matches the generator (30
+files)` **[fact]**.
 
 `gen_tt_submission.py --check` reports **30 files**, not 29, and the two
 numbers do not contradict: the generator's set is the 29 manifested
@@ -264,6 +356,15 @@ single most consequential line item in the freeze, because `docs/31`
 section 2 measured what happens without them: **-0.7696 ns at the slow
 corner, reported as clean.**
 
+**AMENDED 2026-08-31: it carries eight keys, not six.**
+`MAX_CAP_VIOLATION_CORNERS` and `MAX_SLEW_VIOLATION_CORNERS`, both
+`["*"]`, were added under the same marker by `docs/36`. They are
+deliberately not counted among the six: the six buy timing margin, these
+two buy none — they make two checkers able to fail. The file the
+shuttle's `gds` action reads therefore now gates max cap and max slew at
+every corner **[fact]**, and so does `tt/src/config_merged.json`, which
+is the file the tooling actually hands to LibreLane.
+
 ---
 
 ## 5. The flow configuration, and the generator that writes it
@@ -275,7 +376,7 @@ corner, reported as clean.**
 recorded **inside the generator** as of this document **[fact]**:
 
 ```
-57295633ffc5a976e0a42e8307dc80e1f91efea31c5cce4c6aa045d32bad2a66  config.json
+274cc337d5147eb8ca3ac71eddd535f0d1b75ae137bcdfc04594149da3f4c1a8  config.json          <- MOVED 2026-08-31
 02e10806e47085484f8352909ea4dd8b43183f0d2ed78c098be16f714805c248  config.6x2.json
 205ecf4ffe7fedd40ec6935999cc3abe2990070e1b55f100758050f7ef98f86f  config.3x4.json
 f36e11436a57c2b29128d40c04abfb1c72be502db5d45814f61b63d6d8b7c7ce  config.pnrcorners.json
@@ -283,9 +384,39 @@ f36e11436a57c2b29128d40c04abfb1c72be502db5d45814f61b63d6d8b7c7ce  config.pnrcorn
 ab81ff37f1e693e840542660a4b1586d6dc94ae0d893fc28125111bfd52df9b4  config.klayoutdrc.json
 ```
 
+*SUPERSEDED 2026-08-31, `config.json` only:
+`57295633ffc5a976e0a42e8307dc80e1f91efea31c5cce4c6aa045d32bad2a66`,
+the bytes run `signoff-6x2` was hardened from. **The pin was lifted for
+exactly one edit and re-taken**, and the superseded hash is also kept in
+`mkconfig.py`'s own `PINNED` table beside the reason, so the record
+survives without this document. The other five are untouched and
+`--check` still matches all six **[fact]**.*
+
 `mktiming.py` derives eight more from `config.json` and
-`config.6x2.json`, including **`config.signoff-6x2.json`**, the file
-`signoff-6x2` was hardened from. Both generators self-check:
+`config.6x2.json`, including **`config.signoff-6x2.json`**, the file the
+sign-off run was hardened from. Its bytes moved with the base
+**[fact]**:
+
+```
+e7676a2dae3888f668b53f7e3a43eb7ae2d04db660b02529964b68c2df508bff  config.signoff-6x2.json
+```
+
+*SUPERSEDED 2026-08-31:
+`cb8c804dd4b7824e1639e710440550a9d92092d90f2a13fc8cec55483ccb79e3`.
+Seven lines added — the two keys and the `//capslew` annotation — and
+nothing else. **The seven `config.tr-*.json` variants were rewritten by
+the same command and came back byte-identical**, because their base
+`config.6x2.json` did not move **[fact]**.*
+
+One config outside the six also moved, and is recorded here because
+section 9.2 covers it: `hw/openlane/pilot_sky130/config.json`, now
+`cb07c80f806ffeb20729b8557c67eae746de308ac9ec994239825dda2ce83df6`,
+*superseded 2026-08-31:
+`0d5690aec322cd43415b13e8e3a14b049d6c53062da28de9b5c9c391f714a195`*. It
+builds nothing on this shuttle; `docs/36` section 4 is why it changed and
+why a sky130 harden is now expected to fail.
+
+Both generators self-check:
 
 ```bash
 python3 hw/openlane/pilot_ihp/mkconfig.py --check    # exit 0
@@ -341,6 +472,16 @@ the write mode refuses to touch a pinned file and says why.
 the three things doing so obliges: update the hashes, re-run
 `mktiming.py`, and re-harden anything whose numbers are still quoted.
 
+**AMENDED 2026-08-31 — the gate was exercised for real, and it worked.**
+`docs/36` needed one of the six changed by hand. The pin caught it, the
+hash was re-taken with the superseded value and the reason recorded in
+the `PINNED` table, `mktiming.py` was re-run, and the affected run was
+re-hardened — which is precisely the three-item obligation the paragraph
+above names, paid in that order **[fact]**. The other five never moved.
+A pin whose lifting is this legible is doing its job; the case to watch
+for is a pin lifted without the re-harden, and the freeze rule of
+section 9.2 is what forbids that.
+
 ### 5.3 `config.json` is pinned too, and the reason is measured
 
 `config.json` is the subtle case. Its on-disk bytes are stale relative to
@@ -355,6 +496,11 @@ freeze by regenerating into a scratch copy]**:
   keys added, zero removed, zero values changed. The only differences are
   key **order** and the loss of the `//derate` and `//setupcheck`
   annotations, neither of which LibreLane reads.
+  **[Amended 2026-08-31: `//capslew` joins the annotations that would be
+  lost. The two keys `docs/36` added are in the derivation as well, since
+  `tt/src/config_merged.json` now carries them, so they do not appear in
+  the delta and the "functionally identical" reading is unchanged
+  **[fact, `mkconfig.py --check`]**.]**
 - **But `mktiming.py` builds `config.signoff-6x2.json` by copying this
   file's key order.** Regenerating `config.json` and then re-running
   `mktiming.py` changes the bytes of the frozen sign-off config, and
@@ -400,14 +546,15 @@ Measured at the freeze unless a document is cited.
 | Python tests collected | **231** (230 before this document; `test_doc_links.py` parametrises per document) | `.venv/bin/python -m pytest --collect-only -q` **[fact]** |
 | Python tests passing | **231 passed, 0 failed** | `.venv/bin/python -m pytest -q` **[fact]** |
 | — the state this document found | **227 passed, 3 failed.** All three were `test_doc_links.py`, failing because `ROADMAP.md` already cited `docs/34-pilot-freeze.md` and the file did not exist. Creating it closed all three; no test was edited. | **[fact, measured before and after]** |
-| Shipped-netlist census guards | **35 passing by name, 0 skipped** | `docs/31` section 7 |
+| Shipped-netlist census guards | **40 passing, 0 skipped**, the five shipped-netlist guards by name — *SUPERSEDED 2026-08-31: this row read **35**, carried from `docs/31` section 7 rather than measured. The file collects 40 at `b6738e5` and is unmodified; the figure had gone stale in the carrying, not in the test* | `.venv/bin/python -m pytest sw/tests/test_synthesis_guards.py -q -rs` **[fact, `docs/36` section 5.5]** |
 | cocotb test functions | **166** across 10 modules | `grep -c '@cocotb.test' hw/tb/test_*.py` **[fact]** |
 | Formal property sets / tasks | **7 `.sby` files, 45 tasks** (`aer_fifo` 4, `lif_ctrl` 8, `lif_mem` 8, `npu_regbank` 5, `scrub` 9, `secded` 3, `tmr_voter` 8) | counted at `b6738e5`, not in the working tree — see the note below **[fact for the counts; the pass result is not re-run here and is not claimed]** |
-| Gate-level functional | **20 of 31 tests run at gate level**, none regressed, one known X-pessimism divergence | `docs/32` section 3 |
+| Gate-level functional | **20 of 31 tests run at gate level**, none regressed, one known X-pessimism divergence. Re-run 2026-08-31 against `signoff-6x2-gated`: **19 PASS / 1 FAIL at 2,761,090.02 ns**, and **21 PASS / 0 FAIL at 1,426,700.02 ns** under `GL_PRELOAD=1` — identical to `docs/32` to the nanosecond | `docs/32` section 3; `docs/36` section 5.7 **[fact]** |
 | Gate-level fault injection | **561 injections, 370 like-for-like with the RTL campaign, all 370 classify identically** | `docs/32` section 5 |
 | Flip-flops in the shipped netlist | **1,296**, census intact | `docs/31` section 4.3, `docs/32` |
-| Tiny Tapeout precheck | **10 of 10 pass**, `INFO: Precheck passed` | `docs/31` section 10.7 |
+| Tiny Tapeout precheck | **10 of 10 pass**, `INFO: Precheck passed`. Re-run 2026-08-31 on `submission-6x2-gated`'s GDS: **10 of 10, exit 0** | `docs/31` section 10.7; `docs/36` section 5.6 **[fact]** |
 | `tt/` manifest | **29 of 29 files OK** | `cd tt && sha256sum -c MANIFEST.sha256` **[fact]** |
+| Checkers that can fail a run | **17 of the 19 the Classic flow runs** — *SUPERSEDED 2026-08-31: **15 of 19**, before `docs/36` bound max cap and max slew.* The two that still cannot are `Checker.WireLength` and `Checker.LintWarnings`, both dispositioned in `docs/36` section 3.3 | `~/…/.venv-flow/bin/python hw/openlane/checker_audit.py <run>` **[fact, `docs/36` section 3]** |
 
 **A note on where these counts were taken, because it changes one row.**
 A concurrent workstream had uncommitted work in `formal/` and
@@ -558,6 +705,32 @@ the liberty's generic per-cell default.
 
 ### 8.5 An adjacent finding: max slew and max cap are not gated either
 
+> **CLOSED 2026-08-31 by `docs/36-checker-closure.md`.** Both keys are
+> `["*"]` in all three configurations that build, both checkers gate at
+> all three corners, both measure 0, and the re-harden this required
+> reproduced the artifact set bit for bit. The section is kept as
+> written, in the present tense of the freeze, because it is the record
+> of what was true then; read it with that closure in mind.
+>
+> Two corrections the closure work produced, and they matter to anyone
+> reasoning from this section:
+>
+> - **The mechanism below is described slightly wrong.** This section
+>   implies the same shape as the setup defect. It is not. `[""]` is a
+>   **non-empty** list, so `get_corner_wildcards()`'s `or` is already
+>   satisfied and these two checkers **never consult
+>   `TIMING_VIOLATION_CORNERS` at all** — unlike setup, where an unset
+>   key let the PDK's value through. The `[""]` comes from
+>   `corner_override` in the **step class**, and **neither PDK ships
+>   either key** **[fact, `docs/36` section 2.1]**. The practical
+>   consequence is that raising `TIMING_VIOLATION_CORNERS` would have
+>   been inert; only the per-type key changes behaviour.
+> - **A fourth instance of the shape exists**, and this section did not
+>   look for it: `Checker.WireLength` runs in every flow here, executes,
+>   and gates nothing, because `WIRE_LENGTH_THRESHOLD` is unset in both
+>   PDKs. `docs/36` section 3.3 reports it and declines to set it, for
+>   the reason section 8.4 above gives about max fanout.
+
 Found while establishing 8.4, and recorded because a freeze record
 should not leave it for someone else to rediscover.
 
@@ -636,10 +809,15 @@ freeze:
 2. Re-read every geometric deck: Magic DRC, KLayout DRC, KLayout XOR,
    Netgen LVS, antenna, route DRC.
 3. Re-check setup and hold at all three corners with
-   `SETUP_VIOLATION_CORNERS = ["*"]` and the derate proven in the
-   flow-written SDC, not merely in the config.
-4. Re-run the netlist census (35 guards) — a new netlist is not covered
-   by the old census.
+   `SETUP_VIOLATION_CORNERS = ["*"]` — **and, amended 2026-08-31, max cap
+   and max slew at all three with `MAX_CAP_VIOLATION_CORNERS` and
+   `MAX_SLEW_VIOLATION_CORNERS` = `["*"]`** — and the derate proven in
+   the flow-written SDC, not merely in the config. Confirm with
+   `hw/openlane/checker_audit.py` that the checkers that ought to gate
+   do, rather than reading the absence of a failure as a pass.
+4. Re-run the netlist census (**40** guards, amended 2026-08-31; the
+   figure in section 7 read 35 and was stale) — a new netlist is not
+   covered by the old census.
 5. Re-run gate-level functional and gate-level fault injection against
    the new netlist. `docs/32` section 1.4 is the warning about pointing
    those suites at a new netlist without re-pointing their baseline.
@@ -649,9 +827,28 @@ freeze:
 8. **Supersede this document** with a new freeze record. Do not edit
    this one — its hashes are the record of what `docs/31` measured.
 
+   **AMENDED 2026-08-31, and the amendment is a change of rule, so it is
+   argued rather than just applied.** `docs/36` amended this document in
+   place instead of superseding it. The rule's purpose is that the record
+   of what `docs/31` measured must survive; that purpose is met by
+   retaining every superseded hash beside its replacement under a dated
+   `SUPERSEDED` marker, which is what was done. Superseding would have
+   split one inventory into two documents that a reader must diff, for a
+   change whose entire content is **two configuration keys and a
+   `resolved.json` hash** — the netlist, powered netlist and DEF did not
+   move a byte. **The rule as it now stands: amend in place while the
+   built artifacts are unchanged and every superseded value is retained;
+   supersede with a new record the moment a netlist hash moves.** A
+   change that moves the netlist is a different design and deserves its
+   own inventory; this one was not.
+
 Cost, from this run's own timings: about **46 minutes** of summed step
 time for the harden **[fact, `docs/31` section 4.2]**, plus the
 gate-level campaign, whose runtime `docs/32` section 8 records.
+*(Amended 2026-08-31: `docs/36`'s two hardens summed **24.4** and
+**23.5** minutes of step time, run concurrently on a 20-core machine.
+That is a machine difference, not a scope difference — the step lists
+are the same. Budget the 46 minutes.)*
 
 ### 9.3 The one qualified case: comment-only RTL edits
 
@@ -689,18 +886,35 @@ python3 hw/openlane/pilot_ihp/mktiming.py --check            # section 5
 Expected: no mismatch warning; the ten blobs of section 2.1; no
 `DIFFERS` line; no failing manifest line; the manifest hash of section 4;
 `tt/ matches the generator`; `OK: 6 pinned config(s) ...`; `all 8
-variants match`; and a green suite.
+variants match`; and a green suite **apart from the one known
+`test_doc_links.py` index failure of section 10 item 7 [amended
+2026-08-31]**.
+
+Add one line, which the amendment makes checkable and which nothing else
+here checks — that the two gates of `docs/36` are actually bound:
+
+```bash
+~/Documents/caravel-lif-crossbar/.venv-flow/bin/python \
+  hw/openlane/checker_audit.py hw/openlane/pilot_ihp/runs/signoff-6x2-gated
+```
+
+Expected: `17 of 19 in-flow checkers gate fully`, and
+`NOT gating in full: Checker.LintWarnings, Checker.WireLength` — those
+two and no others.
 
 If the run tree is present, add:
 
 ```bash
-sha256sum hw/openlane/pilot_ihp/runs/{signoff,submission}-6x2/final/nl/*.nl.v
+sha256sum hw/openlane/pilot_ihp/runs/{signoff,submission}-6x2{,-gated}/final/nl/*.nl.v
 ```
 
-Both must print `52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989`.
-**That single equality is the tightest statement the freeze can make**:
-the netlist the decks were read against and the netlist the submission
-path builds are the same bytes.
+**All four must print
+`52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989`**
+*(amended 2026-08-31; before the amendment this was two paths, the same
+hash)*. **That single equality is the tightest statement the freeze can
+make**: the netlist the decks were read against and the netlist the
+submission path builds are the same bytes — now across two
+configurations and two dates.
 
 ---
 
@@ -710,10 +924,23 @@ path builds are the same bytes.
    The design's maximum is 19 against a library default of 8; the only
    available knob is inert; no checker exists in the pinned LibreLane;
    and the quantities the rule proxies for are 0.
-2. **Max cap and max slew are gated at no corner** (section 8.5). One
+2. ~~**Max cap and max slew are gated at no corner** (section 8.5). One
    configuration line fixes it, the design meets it at zero, and it
    costs a re-harden — so it is the first item on the far side of the
-   freeze rather than a change made under it.
+   freeze rather than a change made under it.~~
+   **CLOSED 2026-08-31, `docs/36`.** Both keys set, both checkers gate
+   at all three corners, both 0. The re-harden was paid: netlist,
+   powered netlist and DEF bit-identical, 196 of 196 and 194 of 194
+   metrics equal, all geometric decks 0, precheck 10 of 10, gate level
+   identical to `docs/32` to the nanosecond **[fact]**. The estimate that
+   the fix would be one configuration line and would cost nothing but a
+   re-harden was correct.
+   **Replaced by a smaller open item**: `Checker.WireLength` gates
+   nothing on either PDK, because neither ships `WIRE_LENGTH_THRESHOLD`
+   (`docs/36` section 3.3). Reported, not set — there is no vendor limit
+   to adopt and any number chosen here would be fitted to the
+   measurement, which is item 1's trap. The quantities it proxies for —
+   antenna, route DRC, max slew, max cap — are all 0.
 3. **The `gds` action has never executed.** Everything in section 3 is
    the same LibreLane, PDK hash and configuration file that action would
    use, run locally. The action itself is not something this repository
@@ -725,4 +952,19 @@ path builds are the same bytes.
 5. **`RUN_KLAYOUT_DRC` and `RUN_KLAYOUT_XOR` stay 0 in the submission
    configuration**, deliberately, matching upstream. Both decks were run
    here and both are 0, and the shuttle's precheck runs the KLayout DRC
-   deck regardless **[`docs/31` section 10.9 item 4]**.
+   deck regardless **[`docs/31` section 10.9 item 4]**. Re-run
+   2026-08-31 over `submission-6x2-gated`'s own stream, into
+   `submission-6x2-gated-geomdecks`: both **0** **[fact, `docs/36`
+   section 5.3]**.
+6. **Added 2026-08-31: sky130 does not meet max slew**, and
+   `hw/openlane/pilot_sky130/config.json` now gates it, so a sky130
+   re-harden is expected to fail. Not a shuttle item — sky130 is the
+   `docs/18` portability comparison, the shuttle is ihp-sg13g2 where the
+   metric is 0, and LibreLane defers this class of error so a failing
+   run still writes its full artifact set. `docs/36` section 4.
+7. **Added 2026-08-31: `docs/00-index.md` does not name `docs/36`**, so
+   `sw/tests/test_doc_links.py::test_every_document_is_reachable_from_the_index`
+   fails, 1 failed against 233 passed. `docs/36` section 7 item 5 carries
+   the row to add. Both files are outside that document's ownership;
+   this is the same disposition `docs/31` section 10.8 item 5 recorded
+   for `docs/32`.

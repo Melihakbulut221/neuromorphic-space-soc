@@ -114,9 +114,20 @@ SHAPES = {
 # the third column actually read.
 PINNED = {
     "config.json": (
-        "57295633ffc5a976e0a42e8307dc80e1f91efea31c5cce4c6aa045d32bad2a66",
+        "274cc337d5147eb8ca3ac71eddd535f0d1b75ae137bcdfc04594149da3f4c1a8",
         "mktiming.py's SIGNOFF_BASE -> config.signoff-6x2.json -> run "
-        "`signoff-6x2` (docs/31)",
+        "`signoff-6x2-gated` (docs/36)",
+        "PIN MOVED 2026-08-31 (docs/36). The superseded hash is "
+        "57295633ffc5a976e0a42e8307dc80e1f91efea31c5cce4c6aa045d32bad2a66, "
+        "the bytes at b6738e5 that run `signoff-6x2` (docs/31, docs/34 "
+        "section 5.1) was hardened from. The pin was lifted deliberately "
+        "for one edit: MAX_CAP_VIOLATION_CORNERS and "
+        "MAX_SLEW_VIOLATION_CORNERS were added as [\"*\"]. Both checkers "
+        "default to the match-none wildcard [\"\"] out of the step class, "
+        "not out of either PDK, so they warned and could not fail a run; "
+        "docs/34 section 8.5 recorded that and named fixing it the first "
+        "item on the far side of the freeze. Two keys added, nothing "
+        "removed, nothing changed. "
         "mktiming.py copies this file's key ORDER into "
         "config.signoff-6x2.json, so regenerating this file changes the "
         "bytes of the frozen sign-off config and takes `mktiming.py "

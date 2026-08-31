@@ -267,6 +267,32 @@ CONFIG_OVERRIDES: "dict[str, object]" = {
     "RUN_POST_GRT_RESIZER_TIMING": 1,
     "RUN_POST_GRT_DESIGN_REPAIR": 1,
     "GRT_RESIZER_SETUP_SLACK_MARGIN": 0.5,
+    # ------------------------------------------------------------------
+    # Added 2026-08-31, docs/36. Deliberately not counted among the six
+    # above: those buy timing margin, these buy no margin at all. They
+    # close two checkers that could not fail a run.
+    #
+    # Checker.MaxCapViolations and Checker.MaxSlewViolations each declare
+    # corner_override = [""] in librelane/steps/checker.py, and
+    # TimingViolations.get_corner_variable() turns that into the DEFAULT
+    # of the two keys below. The mechanism is NOT the
+    # SETUP_VIOLATION_CORNERS one: [""] is a non-empty list, so the `or`
+    # in get_corner_wildcards() is already satisfied and these two never
+    # consult TIMING_VIOLATION_CORNERS at all. The list is then stripped
+    # of the "" match-none wildcard, comes out empty, matches no corner,
+    # and every violation lands in warn_violating_corner -- the step
+    # warns and the flow exits 0. Neither PDK ships either key, so the
+    # design configuration is the only thing that can bind them.
+    #
+    # Third instance of the shape docs/28 section 4.4a named, after setup
+    # and after docs/23's design__violations not aggregating hold.
+    # docs/34 section 8.5 measured it and deferred it to the far side of
+    # the freeze; docs/36 closes it. On ihp-sg13g2 this design is 0 at
+    # all three corners, so the gate is a criterion already met rather
+    # than a threshold fitted to a measurement.
+    # ------------------------------------------------------------------
+    "MAX_CAP_VIOLATION_CORNERS": ["*"],
+    "MAX_SLEW_VIOLATION_CORNERS": ["*"],
 }
 
 # =====================================================================

@@ -47,5 +47,12 @@
     "//setupcheck": "LibreLane resolves a timing checker's corners as <TYPE>_VIOLATION_CORNERS or TIMING_VIOLATION_CORNERS, and both PDKs ship TIMING_VIOLATION_CORNERS as [\"*typ*\"]. With this key unset the setup checker therefore examined the typical corner and nothing else, so the slow corner -- the one that decides whether the part works -- was gated by no checker at all, and four claims that a corner closes were published from runs that did not. HOLD_VIOLATION_CORNERS already ships as [\"*\"], so only setup was affected. docs/28 section 4.4a. This is the second defect of its shape here: docs/23 records design__violations not aggregating hold. A green checker is only as wide as the corners it was pointed at.",
     "SETUP_VIOLATION_CORNERS": [
         "*"
+    ],
+    "//capslew": "Checker.MaxCapViolations and Checker.MaxSlewViolations each declare corner_override = [\"\"] (librelane/steps/checker.py), and TimingViolations.get_corner_variable() turns that into the DEFAULT of MAX_CAP_VIOLATION_CORNERS and MAX_SLEW_VIOLATION_CORNERS. The mechanism is NOT the setup one: [\"\"] is a non-empty list, so the `or` in get_corner_wildcards() is satisfied and these two never fall back to TIMING_VIOLATION_CORNERS at all. The wildcard list is then filtered of the \"\" match-none wildcard and comes out empty, no corner is matched, every violation lands in warn_violating_corner, and the step WARNS instead of failing. Neither PDK ships either key -- ihp-sg13g2 sets only TIMING_VIOLATION_CORNERS -- so the design configuration is the only place that can bind them, and setting them here is the change that alters behaviour rather than the one that looks right. This is the third instance of the shape docs/28 section 4.4a named, after setup and after docs/23's design__violations not aggregating hold. docs/34 section 8.5 recorded it and deferred it to the far side of the freeze; docs/36 closes it. The design measures 0 at all three corners, so this gates a criterion already met rather than fitting a threshold to a measurement.",
+    "MAX_CAP_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "MAX_SLEW_VIOLATION_CORNERS": [
+        "*"
     ]
 }

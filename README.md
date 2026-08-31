@@ -21,12 +21,39 @@ that is realistic for an open PDK and a small team.
 
 ## Status
 
-Research phase complete and independently reviewed. Design phase in
-progress: the NPU specification and its bit-exact golden model are
-frozen, and the register bank, LIF datapath, AER queues, SECDED codec
-and TMR voter exist as RTL with cocotb suites, golden-model lockstep and
-SymbiYosys proofs. A pilot top-level targets the Tiny Tapeout TTIHP26b
-shuttle on IHP SG13G2. `ROADMAP.md` is the phased plan.
+**The pilot is frozen and signed off; the SoC around it is not built.**
+Read `docs/00-index.md` for the full what-exists-and-what-does-not, and
+`ROADMAP.md` for the plan. In short, as of 2026-08-31:
+
+*Exists, and is verified.* An event-driven LIF inference core, its AER
+event queues, a register bank generated from a single-source map, a
+SECDED codec, a TMR voter and a scrub controller — 6,856 lines of
+Verilog. Verification is 234 Python tests against frozen bit-exact golden
+models, 166 cocotb tests, 54 SymbiYosys proof tasks, a seeded
+fault-injection campaign of 378 upsets classified against the golden
+model, and a gate-level run in which 370 of 370 comparable injections
+classify identically to RTL. `docs/34-pilot-freeze.md` pins the whole
+artifact set by hash.
+
+*Manufacturable, on every check an open flow can run.* The 6x2 pilot
+signs off on IHP SG13G2 with Magic DRC, KLayout DRC, XOR, all four
+Netgen LVS unmatched counters, antenna, power grid and illegal overlap
+at zero,
+setup and hold clean on three corners with a real 5 percent derate, and
+the Tiny Tapeout precheck at 10 of 10. No silicon exists and the hosted
+GDS action has not run.
+
+*Does not exist.* No management CPU, no spacecraft interfaces, no SRAM
+macro in any hardened design, no radiation test data, no licence, no
+funding. The pilot is a slice of the architecture and a proof of the
+flow, not the SoC.
+
+The next block is the management CPU. Bring-up is in progress against
+the candidate named in `docs/03-cpu-and-ip-survey.md`, and the first
+question it has to answer is not whether the core is good but whether
+the SystemVerilog-to-Verilog step the open flow depends on carries it
+intact — the survey named that as a single-point dependency and it has
+never been exercised on a core this size.
 
 ## Documents
 
@@ -50,6 +77,14 @@ shuttle on IHP SG13G2. `ROADMAP.md` is the phased plan.
 - `docs/17-wave2-review-record.md` — independent review record for design wave 2
 - `docs/regmap-npu.md` — generated register-map documentation (single source: `regmap/regmap.yaml`)
 - `ROADMAP.md` — phased plan with gates
+
+**`docs/00-index.md` is the canonical list and this one stops at 17 on
+purpose.** The corpus is past thirty documents, and a second hand-kept
+list is a list that drifts — this one already had, silently. The index is
+generated against the directory and `sw/tests/test_doc_links.py` fails if
+a document is missing from it or a cross-reference names a file that does
+not exist, so it cannot go stale without the suite saying so. Start
+there.
 
 ## Layout
 
