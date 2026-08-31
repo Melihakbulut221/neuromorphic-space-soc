@@ -110,6 +110,30 @@ module ibex_min_system #(
   assign halted_o    = halted;
   assign exit_code_o = exit_code;
 
+  // ---------------- memory integrity (ECC) ----------------
+  //
+  // ibex_top.sv line 41: `parameter bit MemECC = SecureIbex`. Turning
+  // SecureIbex on therefore CHANGES THE MEMORY INTERFACE CONTRACT: the
+  // core stops accepting a bare 32-bit word and requires 7 SECDED check
+  // bits alongside it on both the instruction and data read paths. A
+  // memory that ties those to zero presents a detected ECC error on the
+  // very first fetch, and the core raises alert_major_bus_o and never
+  // executes anything -- which is exactly what this testbench did
+  // before this block existed.
+  //
+  // The encoder is Ibex's own, via sv2v: prim_secded_inv_39_32_enc,
+  // already in hw/soc/gen/. Using the core's encoder rather than a
+  // hand-written one is deliberate; the inversion in "inv" is part of
+  // the code and a reimplementation would have to match it exactly.
+  //
+  // This is a testbench standing in for a memory subsystem that does not
+  // exist yet. In the real SoC these bits have to be stored, not
+  // regenerated on read -- regenerating them on read, as here, makes the
+  // check vacuous. See docs/38 section 7.4.
+  wire [38:0] instr_enc, data_enc;
+  prim_secded_inv_39_32_enc u_instr_enc (.data_i(instr_rdata), .data_o(instr_enc));
+  prim_secded_inv_39_32_enc u_data_enc  (.data_i(data_rdata),  .data_o(data_enc));
+
   // ---------------- the core ----------------
   // Only the parameters this project sets are overridden; every other
   // parameter keeps ibex_top's own default. The values are the integer
@@ -162,7 +186,7 @@ module ibex_min_system #(
       .instr_rvalid_i     (instr_rvalid),
       .instr_addr_o       (instr_addr),
       .instr_rdata_i      (instr_rdata),
-      .instr_rdata_intg_i (7'h0),
+      .instr_rdata_intg_i (instr_enc[38:32]),
       .instr_err_i        (1'b0),
 
       .data_req_o        (data_req),
@@ -175,7 +199,7 @@ module ibex_min_system #(
       .data_wdata_intg_o (),
       .data_tag_o        (),
       .data_rdata_i      (data_rdata),
-      .data_rdata_intg_i (7'h0),
+      .data_rdata_intg_i (data_enc[38:32]),
       .data_tag_i        (1'b0),
       .data_err_i        (1'b0),
 

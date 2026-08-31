@@ -464,19 +464,58 @@ RESULT PASS
 |---|---|---|---:|
 | `small` | yes | **PASS**, 10 checks (test 10 skipped: no PMP) | 131,706 |
 | **`small-pmp`** | yes | **PASS**, 11 of 11 checks | 131,694 |
-| `small-pmp-sec` | see section 7.5 | | |
+| `small-pmp-sec` | yes | **PASS**, 11 of 11 checks, no alert, lockstep active | 131,694 |
+
+**[fact, the `sim.log` files under `hw/soc/out/sim-*/`]**
 
 **What this proves.** The sv2v output of Ibex, read by Icarus with no
-SystemVerilog anywhere in the flow, fetches and executes a 1,884-byte
-program compiled by an upstream RISC-V GCC, and that program's own
-checks — arithmetic verified against values derived outside it,
-including every RV32M operation and the ISA's divide-by-zero results —
-all pass. It takes an illegal-instruction trap and returns from it. And
-with PMP enabled it **enforces a locked read-only region**: the load is
-permitted, the store faults with `mcause = 7`, and the stored value does
-not land. That last one is the mechanism `docs/09`'s chosen software
-architecture rests on, and it is now observed working rather than
-assumed from the parameter name.
+SystemVerilog anywhere in the flow, fetches and executes a program
+compiled by an upstream RISC-V GCC, and that program's own checks —
+arithmetic verified against values derived outside it, including every
+RV32M operation and the ISA's divide-by-zero results — all pass. It
+takes an illegal-instruction trap and returns from it. With PMP enabled
+it **enforces a locked read-only region**: the load is permitted, the
+store faults with `mcause = 7`, and the stored value does not land. That
+last one is the mechanism `docs/09`'s chosen software architecture rests
+on, and it is now observed working rather than assumed from a parameter
+name.
+
+And under `SecureIbex` the **shadow core runs in lockstep against the
+main core for all 131,694 cycles with `alert_major_internal_o` never
+asserting** **[fact]**.
+
+**What that is worth, stated narrowly, because the obvious reading of it
+is wrong.** An earlier draft of this section argued that "a
+mistranslation anywhere in the compared logic would have raised the
+alert," and that is backwards. `ibex_lockstep.sv` line 447 instantiates
+the shadow as **`ibex_core` — the same module as the main core**
+**[fact]**. A translation error inside `ibex_core` is therefore
+replicated identically into both copies, they agree perfectly, and no
+alert fires. Lockstep is structurally blind to exactly the part of the
+translation one would most want checked, which is the overwhelming
+majority of the logic.
+
+What the run does evidence is narrower and still worth having: the
+translation of the lockstep wrapper itself — the input delay pipeline,
+the output comparators, the shadow register file's ECC, the
+dummy-instruction LFSR — is consistent enough to run 131,694 cycles
+without a spurious mismatch, and the two instances stay bit-identical
+with no X-propagation or non-determinism between them. That is a check
+on `ibex_lockstep.sv`, `prim_secded_*` and the LFSR. It is **not** a
+substitute for the equivalence proof section 5 says was not run, and it
+says nothing about the ALU, the decoder, the LSU or the CSR file.
+
+The correction is recorded rather than silently fixed because it is the
+sixth instance in this repository of a green result being read as wider
+than the thing it examined — after `docs/28` section 4.4a, `docs/34`
+section 8.5, `docs/36` section 3.3, and section 8.2 below. The pattern
+is durable enough that it is worth naming every time: the question is
+never "did the check pass" but "what could the check have seen."
+
+The secure and non-secure runs take **identical cycle counts** (131,694)
+**[fact]**, which is the expected shape — the shadow core is parallel,
+not in series — and is a small extra check that the security features
+changed nothing functional.
 
 **What it does not prove.** It is one program, not a compliance suite.
 `riscv-tests` and `riscv-dv` were not run; Ibex's own upstream
@@ -485,7 +524,63 @@ evidence for the core being a correct RISC-V implementation, and this
 document does not restate it. What this run adds is that *the sv2v
 output of it, in this project's simulator, does the same thing*.
 
-### 7.4 Four defects were found, and all four were in this project's code, not in Ibex
+### 7.4 SecureIbex is not drop-in: it changes the memory interface contract
+
+The first attempt to run `small-pmp-sec` **never executed a single
+instruction**. Last fetch address 0x00000008, `trap_count` 0,
+`alert_major` asserted, `double_fault_seen_o` asserted **[fact]**.
+
+The cause is `ibex_top.sv` line 41:
+
+```
+parameter bit MemECC = SecureIbex,
+parameter int unsigned MemDataWidth = MemECC ? 32 + 7 : 32,
+```
+
+**[fact]**. Turning `SecureIbex` on turns `MemECC` on, and the core then
+stops accepting a bare 32-bit word from memory: it requires **7 SECDED
+check bits alongside every instruction and data read**. The testbench
+was tying `instr_rdata_intg_i` and `data_rdata_intg_i` to zero, which is
+a *detected ECC error* on the very first fetch — so the core raised
+`alert_major_bus_o`, faulted, faulted again inside the fault, and stopped.
+
+Two things came out of this and both belong in the integration step:
+
+1. **A diagnosis is only as good as the signal it is read from.** The
+   testbench had been ORing `alert_major_internal_o` and
+   `alert_major_bus_o` into one latched flag, so the failure reported as
+   "alert_major asserted" — which reads like a lockstep mismatch, i.e.
+   like a translation bug in the shadow core, i.e. like the opposite of
+   the truth. The two are now latched and reported separately, because
+   "your memory does not supply ECC bits" and "the shadow core disagrees
+   with the main core" are different problems with different owners.
+2. **The fix is to use Ibex's own encoder.** `hw/soc/tb/ibex_min_system.v`
+   now instantiates the sv2v-converted `prim_secded_inv_39_32_enc` on
+   both read paths. Reimplementing the code by hand would have to
+   reproduce the inversion that the "inv" in its name refers to, exactly.
+   With that wired, the secure configuration passes all 11 checks with no
+   alert of either kind.
+
+**What this means for the SoC, and it is not small.** If lockstep is ever
+adopted (section 8.5), the decision is not confined to the core:
+
+- The instruction and data buses become **39 bits wide, not 32**, all the
+  way to memory.
+- The check bits must be **stored, not regenerated on read**. The
+  testbench regenerates them, which makes the check vacuous — it can
+  never detect an error because it computes the syndrome from the same
+  bits it is checking. A real memory must hold 39 bits per word, which is
+  a **22 % SRAM area increase** on every byte the CPU touches, on top of
+  the core's own +112 %.
+- This project **already has a SECDED encoder and decoder** with golden
+  vectors and formal proofs (`docs/29-queue-storage-protection.md` and
+  the closed rows in `docs/35-formal-progress.md`). Adopting Ibex's
+  lockstep means adopting lowRISC's SECDED code as well on the CPU
+  buses, because the core computes the syndrome itself. Two SECDED
+  implementations in one die is a verification and maintenance cost that
+  the area table in section 8.5 does not show.
+
+### 7.5 Five defects were found, and all five were in this project's code, not in Ibex
 
 Recorded because each is a trap the integration step would otherwise
 walk into, and two of them are Ibex behaviours that differ from the
@@ -527,9 +622,19 @@ generic RISC-V assumption.
    `trap_entry & 0xff == 0` — so both are link-time errors rather than
    waveform archaeology.
 
-Defects 3 and 4 are the kind that make a "the core does not work"
-report. The core worked; the software around it did not. That
-distinction is the reason this section exists.
+5. **The `MemECC` contract of section 7.4**, which presented as an
+   apparently-catastrophic lockstep failure and was a missing testbench
+   feature.
+
+**Every one of the five presented as "the core does not work".** None of
+them was. Defects 3, 4 and 5 in particular produced symptoms — garbled
+output, a silent hang, an immediate major alert — that name nothing and
+point nowhere, and each was found by adding an observation rather than
+by reasoning: the last fetch address, the linker's own `ASSERT`, and the
+separation of two alert signals that had been ORed together. That is the
+reason this section exists at length rather than as a footnote: the
+integration step will hit the same class of thing, and the instruments
+are now in the testbench.
 
 ---
 
@@ -685,13 +790,19 @@ mechanism, and the two do not compose the way a reader might assume:
 - **`ResetAll` is not free and shows up in section 8.6.** Turning
   `SecureIbex` on also turns every flop into a reset flop, which is what
   produced the asynchronous-path finding below.
+- **The cost does not stop at the core.** `MemECC` follows `SecureIbex`,
+  so the instruction and data buses become 39 bits wide and the check
+  bits have to be *stored*: a 22 % SRAM overhead on everything the CPU
+  touches, and a second SECDED codec — lowRISC's — in a die that already
+  carries this project's own. Section 7.4 is where that was discovered
+  and it is a real part of the price.
 
-**Nothing here decides that question**, and this document deliberately
-does not. What it supplies is the price: lockstep costs 309,550 um2 over
-the PMP candidate, roughly **two pilots' worth of standard cells**, and
+**This section does not decide the question; it prices it.** Lockstep
+costs 309,550 um2 over the PMP candidate, roughly **two pilots' worth of
+standard cells**, plus a 39-bit memory subsystem, and
 delivers detection rather than correction. `docs/09`'s S2 architecture
-does not require it. The decision belongs with the hardening
-architecture, with this number in hand.
+does not require it. **The decision itself, and what it takes on, is
+recorded in section 10 item 4.**
 
 ### 8.6 Timing
 
@@ -883,7 +994,7 @@ gaps are visible rather than assumed closed:
 6. **No software beyond a self-test.** The S2 supervisor of `docs/09`
    part B track 3 is not started. Two of its requirements are now
    known — the 256-byte `mtvec` alignment and the vectored-only mode of
-   section 7.4 — and should be inputs to its design.
+   section 7.5 defect 3 — and should be inputs to its design.
 7. **The `docs/03` OpenTitan `spi_host` claim is untested.** This
    document only establishes that sv2v carries *Ibex*. The SPI host
    shares the dependency and has not been through it.

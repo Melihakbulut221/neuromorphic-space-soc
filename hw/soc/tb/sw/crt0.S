@@ -3,6 +3,19 @@
 // Deliberately tiny: this exists to get from Ibex's reset vector into C
 // and to catch traps, nothing more. It is not the S2 supervisor
 // (docs/09 part B track 3) and is not intended to become it.
+//
+// TWO PLATFORMS, ONE FILE. Without SOC_PLATFORM this is the bring-up
+// program of docs/38: one flat RAM at 0, a magic store address that
+// halts the testbench. With -DSOC_PLATFORM it targets the real SoC of
+// docs/39-soc-bus-and-memory-map.md: .text in the boot ROM, .data
+// relocated to RAM at startup, and termination by WFI with the exit code
+// left in RAM, because the frozen memory map has no address whose
+// meaning is "stop the simulator" and inventing one would put a
+// testbench artifact into a map that is supposed to describe silicon.
+//
+// The two paths are kept in one file on purpose: the reset sequence, the
+// mtvec constraint and the trap handler are properties of the CORE, not
+// of the platform, and duplicating them would let one copy drift.
 
   .section .text.start, "ax"
   .global _start
@@ -43,12 +56,50 @@ _start:
   addi  t0, t0, 4
   j     1b
 2:
+
+#ifdef SOC_PLATFORM
+  // Relocate .data from its load address in the boot ROM to its run
+  // address in RAM. This exists only on the SoC platform, and its
+  // existence is itself a check on the memory map: the copy reads
+  // through the ROM slave and writes through the RAM slave, so a decode
+  // that sent one of them to the wrong place would corrupt every
+  // initialised variable in the program before main is entered.
+  la    t0, __data_load
+  la    t1, __data_start
+  la    t2, __data_end
+4:
+  bgeu  t1, t2, 5f
+  lw    t3, 0(t0)
+  sw    t3, 0(t1)
+  addi  t0, t0, 4
+  addi  t1, t1, 4
+  j     4b
+5:
+#endif
+
   call  main
+
+#ifdef SOC_PLATFORM
+  // Terminate by sleeping. The exit code goes to a known word in RAM and
+  // the magic beside it says the word is meaningful, so a run that
+  // wandered into WFI some other way cannot be mistaken for a completed
+  // one. The testbench watches core_sleep_o and then reads both.
+  la    t0, exit_code
+  sw    a0, 0(t0)
+  la    t0, exit_magic
+  li    t1, 0x600dc0de
+  sw    t1, 0(t0)
+  fence
+3:
+  wfi
+  j     3b
+#else
   // main returns the exit code; hand it to the testbench.
   li    t0, 0x00100004
   sw    a0, 0(t0)
 3:
   j     3b
+#endif
 
   .option rvc
 
@@ -100,11 +151,24 @@ trap_entry:
   // halt the testbench with a distinct code instead of hanging.
   li    t1, 64
   bltu  t2, t1, trap_continue
+#ifdef SOC_PLATFORM
+  la    t0, exit_code
+  li    t1, 0xdead0001            // "trap storm"
+  sw    t1, 0(t0)
+  la    t0, exit_magic
+  li    t1, 0x600dc0de
+  sw    t1, 0(t0)
+  fence
+0:
+  wfi
+  j     0b
+#else
   li    t0, 0x00100004
   li    t1, 0xdead0001            // "trap storm"
   sw    t1, 0(t0)
 0:
   j     0b
+#endif
 trap_continue:
 
   // Look at the faulting instruction: (insn & 3) == 3 means 32-bit.
@@ -139,3 +203,9 @@ trap_mcause:   .word 0
 trap_mepc:     .word 0
 trap_count:    .word 0
 trap_saw_rvc:  .word 0
+#ifdef SOC_PLATFORM
+  .global exit_code
+  .global exit_magic
+exit_code:     .word 0
+exit_magic:    .word 0
+#endif

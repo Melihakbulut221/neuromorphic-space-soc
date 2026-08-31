@@ -36,15 +36,64 @@
 // PMPEnable = 0 -- the C code cannot tell, so the build passes
 // -DHAVE_PMP to say which core it is running on.
 
+// Two platforms, one program (see crt0.S). Without SOC_PLATFORM this is
+// the docs/38 bring-up program against the minimal testbench memory, and
+// its behaviour is unchanged to the byte. With -DSOC_PLATFORM the same
+// eleven checks run against the real fabric and the frozen memory map of
+// docs/39-soc-bus-and-memory-map.md -- code fetched from the boot ROM,
+// data in RAM, console output through a real UART on the peripheral bus
+// -- and three further checks (12, 13, 14) exercise things that only
+// exist there.
+//
+// Keeping one program rather than forking it is the point: if the eleven
+// original checks pass on the SoC, they passed through the bus and the
+// map rather than around them.
+
 #include <stdint.h>
 
+#ifdef SOC_PLATFORM
+#include "soc_memmap.h"
+
+// GRLIB APBUART register offsets and bits (grip.pdf table 126, adopted
+// by docs/08 section 3 row 9 and implemented as a subset in
+// hw/soc/rtl/soc_uart.v).
+#define UART_DATA   (SOC_UART0_BASE + 0x00u)
+#define UART_STATUS (SOC_UART0_BASE + 0x04u)
+#define UART_CTRL   (SOC_UART0_BASE + 0x08u)
+#define UART_SCALER (SOC_UART0_BASE + 0x0Cu)
+#define UART_STATUS_TE (1u << 2)      /* transmit holding register empty */
+#define UART_CTRL_TE   (1u << 1)      /* transmitter enable              */
+
+// The divider the testbench's serial decoder assumes. Both come from the
+// same -D on the compiler and the simulator command lines
+// (hw/soc/flow/sim_soc.sh), so they cannot disagree.
+#ifndef UART_SCALER_VAL
+#define UART_SCALER_VAL 0u
+#endif
+
+static void uart_init(void) {
+  *(volatile uint32_t *)UART_SCALER = UART_SCALER_VAL;
+  *(volatile uint32_t *)UART_CTRL   = UART_CTRL_TE;
+}
+
+// Poll before writing. The minimal testbench's character port accepted a
+// byte every cycle; a real UART does not, and a driver that ignores that
+// drops most of its output. This is the only behavioural difference the
+// eleven original checks see.
+static void putc_(char c) {
+  while (!(*(volatile uint32_t *)UART_STATUS & UART_STATUS_TE)) { }
+  *(volatile uint32_t *)UART_DATA = (uint32_t)c;
+}
+#else
 #define PUTC_ADDR 0x00100000u
 #define HALT_ADDR 0x00100004u
+
+static void putc_(char c) { *(volatile uint32_t *)PUTC_ADDR = (uint32_t)c; }
+#endif
 
 extern uint32_t trap_mcause, trap_mepc, trap_count, trap_saw_rvc;
 extern char __pmp_buf[];
 
-static void putc_(char c) { *(volatile uint32_t *)PUTC_ADDR = (uint32_t)c; }
 static void puts_(const char *s) { while (*s) putc_(*s++); }
 
 static void puthex(uint32_t v) {
@@ -103,11 +152,12 @@ static void do_illegal(void) {
                    ".option pop\n" ::: "memory");
 }
 
-#ifdef HAVE_PMP
-// Only test 10 uses this, and test 10 is compiled out on a core built
-// without PMP. -Werror makes an unused static function an error, which
-// is the wanted behaviour: it says the guard around the caller and the
-// guard around the callee have to agree.
+#if defined(HAVE_PMP) || defined(SOC_PLATFORM)
+// Test 10 (PMP) and test 14 (store into the boot ROM) both need a store
+// that is guaranteed 32-bit, so the trap handler's "skip 4" is right.
+// -Werror makes an unused static function an error, which is the wanted
+// behaviour: it says the guard around the caller and the guard around
+// the callee have to agree.
 static void do_store(volatile uint32_t *p, uint32_t v) {
   __asm__ volatile(".option push\n.option norvc\n"
                    "sw %1, 0(%0)\n"
@@ -115,10 +165,30 @@ static void do_store(volatile uint32_t *p, uint32_t v) {
 }
 #endif
 
+#ifdef SOC_PLATFORM
+// Same, for a load. Test 12 needs the fault to come from a load rather
+// than a store so that it can tell mcause 5 (load access fault) from
+// mcause 7, which test 10 already produces for a different reason.
+static uint32_t do_load(volatile uint32_t *p) {
+  uint32_t v;
+  __asm__ volatile(".option push\n.option norvc\n"
+                   "lw %0, 0(%1)\n"
+                   ".option pop\n" : "=r"(v) : "r"(p) : "memory");
+  return v;
+}
+#endif
+
 #define CSRR(name)      ({ uint32_t v_; __asm__ volatile ("csrr %0, " #name : "=r"(v_)); v_; })
 #define CSRW(name, v)   __asm__ volatile ("csrw " #name ", %0" :: "r"(v))
 
 int main(void) {
+#ifdef SOC_PLATFORM
+  // Nothing can be reported before this: the console is a peripheral on
+  // the far side of the bridge and its transmitter is disabled at reset,
+  // as GRLIB's APBUART is. A failure between the reset vector and here
+  // is silent and shows up as a testbench timeout with a fetch address.
+  uart_init();
+#endif
   puts_("ibex bring-up self-test\n");
 
   // 1 ----------------------------------------------------------------
@@ -279,6 +349,59 @@ int main(void) {
   }
 #else
   puts_("SKIP test 10 (core built with PMPEnable=0)\n");
+#endif
+
+  // 12, 13, 14 -----------------------------------------------------
+  //
+  // These exist only on the real SoC. They test the memory map and the
+  // fabric rather than the core: an unmapped address must be a bus
+  // error and not a silent zero, the device table must agree with the
+  // map it was generated from, and the boot ROM must refuse a write.
+#ifdef SOC_PLATFORM
+  {
+    /* 12: a reserved region reaches the error slave. SOC_CLINT_BASE is
+       frozen in the map and nothing decodes it, so the load must come
+       back with err and become a load access fault, mcause 5. A fabric
+       whose default was "return zero" would pass every other check in
+       this program and fail here. */
+    uint32_t before = trap_count;
+    (void)do_load((volatile uint32_t *)(uintptr_t)SOC_CLINT_BASE);
+    int ok = (trap_count == before + 1) && (trap_mcause == 5u);
+    if (!ok) { puts_("  unmapped mcause="); puthex(trap_mcause);
+               puts_(" cnt="); puthex(trap_count); putc_('\n'); }
+    check(12, ok);
+  }
+
+  {
+    /* 13: the device table. Both words are generated from
+       regmap/memmap.yaml into soc_memmap.h AND into the ROM contents of
+       hw/soc/rtl/soc_pnp.v, so this compares two independent products of
+       one source. It catches a generator that emits inconsistent
+       outputs and a decode that puts the table at the wrong address; it
+       does NOT check the record contents, only these two words. */
+    volatile uint32_t *pnp = (volatile uint32_t *)(uintptr_t)SOC_PNP_BASE;
+    uint32_t ident  = pnp[SOC_PNP_IDENT_OFF / 4];
+    uint32_t endian = pnp[SOC_PNP_ENDIAN_OFF / 4];
+    int ok = (ident == SOC_PNP_IDENT_WORD) && (endian == SOC_PNP_ENDIAN_WORD);
+    if (!ok) { puts_("  pnp ident="); puthex(ident);
+               puts_(" endian="); puthex(endian); putc_('\n'); }
+    check(13, ok);
+  }
+
+  {
+    /* 14: the boot ROM refuses a write. The program is executing out of
+       this region, so a ROM that silently accepted stores would let a
+       wild pointer rewrite the running code. mcause 7 is store access
+       fault -- the same code PMP produces in test 10, which is why test
+       12 uses a load: the two mechanisms have to be distinguishable. */
+    uint32_t before = trap_count;
+    do_store((volatile uint32_t *)(uintptr_t)(SOC_ROM_BASE + 0x100u),
+             0xdeadbeefu);
+    int ok = (trap_count == before + 1) && (trap_mcause == 7u);
+    if (!ok) { puts_("  rom-write mcause="); puthex(trap_mcause);
+               puts_(" cnt="); puthex(trap_count); putc_('\n'); }
+    check(14, ok);
+  }
 #endif
 
   check(11, trap_saw_rvc == 0u);   /* handler never had to guess a width */

@@ -75,13 +75,22 @@ module tb_ibex_min;
 
   // Latch alerts: they are pulses, and a run must fail if one ever
   // fired, not only if one is firing when the program halts.
-  reg saw_alert_minor = 1'b0;
-  reg saw_alert_major = 1'b0;
+  // The two major alerts are latched SEPARATELY. They mean different
+  // things and the difference is the whole diagnosis under SecureIbex:
+  // alert_major_bus_o is a memory integrity (ECC) failure on the fetch
+  // or load path, alert_major_internal_o is a lockstep comparator
+  // mismatch. ORing them, as the first version of this file did, turns
+  // "your testbench does not supply ECC check bits" and "the shadow
+  // core disagrees with the main core" into the same message.
+  reg saw_alert_minor     = 1'b0;
+  reg saw_alert_major_int = 1'b0;
+  reg saw_alert_major_bus = 1'b0;
   reg saw_double_fault = 1'b0;
   always @(posedge clk) begin
     if (rst_n) begin
       if (alert_minor)                             saw_alert_minor  <= 1'b1;
-      if (alert_major_internal || alert_major_bus) saw_alert_major  <= 1'b1;
+      if (alert_major_internal) saw_alert_major_int <= 1'b1;
+      if (alert_major_bus)      saw_alert_major_bus <= 1'b1;
       if (double_fault_seen)                       saw_double_fault <= 1'b1;
     end
   end
@@ -149,8 +158,12 @@ module tb_ibex_min;
       end
     end
 
-    if (saw_alert_major) begin
-      $display("[TB] FAIL: alert_major asserted during the run");
+    if (saw_alert_major_int) begin
+      $display("[TB] FAIL: alert_major_internal_o asserted (lockstep mismatch)");
+      errors = errors + 1;
+    end
+    if (saw_alert_major_bus) begin
+      $display("[TB] FAIL: alert_major_bus_o asserted (memory integrity/ECC)");
       errors = errors + 1;
     end
     if (saw_double_fault) begin

@@ -1,0 +1,58 @@
+/* GENERATED FILE - edit regmap/memmap.yaml and run regmap/generate_memmap.py */
+#ifndef SOC_MEMMAP_H
+#define SOC_MEMMAP_H
+
+#define SOC_MEMMAP_VERSION "0.1"
+#define SOC_VENDOR_ID    0x09u
+#define SOC_BOOT_ADDR    0xC0000000u
+#define SOC_RESET_VECTOR 0xC0000080u
+
+#define SOC_RAM_BASE 0x00000000u
+#define SOC_RAM_SIZE 0x00010000u
+#define SOC_NPU_BASE 0x10000000u
+#define SOC_NPU_SIZE 0x10000000u
+#define SOC_ROM_BASE 0xC0000000u
+#define SOC_ROM_SIZE 0x00002000u
+#define SOC_QSPI3_BASE 0xD0000000u
+#define SOC_QSPI3_SIZE 0x02000000u
+#define SOC_QSPI4_BASE 0xD8000000u
+#define SOC_QSPI4_SIZE 0x08000000u
+#define SOC_CLINT_BASE 0xE0000000u
+#define SOC_CLINT_SIZE 0x00010000u
+#define SOC_PLIC_BASE 0xF8000000u
+#define SOC_PLIC_SIZE 0x00400000u
+#define SOC_DEBUG_BASE 0xFE000000u
+#define SOC_DEBUG_SIZE 0x01000000u
+#define SOC_APB_BASE 0xFF900000u
+#define SOC_APB_SIZE 0x00100000u
+#define SOC_PNP_BASE 0xFFFFF000u
+#define SOC_PNP_SIZE 0x00001000u
+
+#define SOC_UART0_BASE 0xFF900000u
+#define SOC_UART1_BASE 0xFF901000u
+#define SOC_GPIO_BASE 0xFF902000u
+#define SOC_TIMER0_BASE 0xFF908000u
+#define SOC_TIMER1_BASE 0xFF909000u
+#define SOC_SPW_BASE 0xFF90D000u
+#define SOC_CAN_BASE 0xFF911000u
+#define SOC_SPI_BASE 0xFF912000u
+#define SOC_I2C_BASE 0xFF913000u
+#define SOC_QSPICTL_BASE 0xFF914000u
+#define SOC_BUSSTAT_BASE 0xFF915000u
+#define SOC_SCRUB_BASE 0xFF916000u
+#define SOC_BOOTREG_BASE 0xFF917000u
+#define SOC_CLKGATE_BASE 0xFF918000u
+#define SOC_NPUCFG_BASE 0xFF919000u
+#define SOC_APBPNP_BASE 0xFF9FF000u
+
+#define SOC_APB_BASE 0xFF900000u
+
+/* Device table words the program checks. Both are generated from
+   the same source as the ROM contents, so a table that drifts from
+   the map fails in simulation rather than in a driver. */
+#define SOC_PNP_IDENT_WORD  0x4E530001u
+#define SOC_PNP_ENDIAN_WORD 0x00000001u
+#define SOC_PNP_IDENT_OFF   0xFF0u
+#define SOC_PNP_ENDIAN_OFF  0xFF4u
+
+#endif /* SOC_MEMMAP_H */
