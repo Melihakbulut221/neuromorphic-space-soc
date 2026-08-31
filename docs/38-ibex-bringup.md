@@ -727,10 +727,24 @@ therefore fails at every period tried up to 30 ns.
 
 This is the same class of artifact as the hold violation: an unbuffered
 high-fanout net in a netlist that has not been through a resizer. It is
-recorded, not hidden — the sweep for that configuration is explicitly
-gated on the synchronous path group, the gate name is printed on every
-line it emits, and the un-gated result (`setup_all` fails at any period)
-is in `hw/soc/out/sweep-small-pmp-sec-setup_sync/`. The same net exists
+recorded, not hidden. The decomposition at 20 ns makes the separation
+exact **[fact, `hw/soc/out/small-pmp-sec/slack.rpt`]**:
+
+| corner | setup, all groups | setup, `clk_i` only | hold |
+|---|---:|---:|---:|
+| typ | -9.7619 | +5.7605 | -0.0442 |
+| slow | **-22.7002** | **+2.2971** | +0.0579 |
+| fast | -1.3932 | +7.7818 | -0.1091 |
+
+```
+VERDICT small-pmp-sec period=20 ns NOT_MET: setup(-22.7002,slow) hold(-0.1091,fast)
+```
+
+The synchronous logic has 2.3 ns of margin at 20 ns; the reset-recovery
+path is 22.7 ns short, in one cell. The sweep for that configuration is
+therefore explicitly gated on the synchronous path group, the gate name
+is printed on every line it emits, and the raw per-corner numbers stay
+in `hw/soc/out/sweep-small-pmp-sec-setup_sync/`. The same net exists
 in the non-secure configurations — `rst_ni` drives 1,833 `RESET_B` pins
 in `small-pmp` **[fact]** — where it is driven by an input port with a
 `set_driving_cell` and reaches +0.18 ns of recovery slack at 16.02 ns,
@@ -827,9 +841,42 @@ gaps are visible rather than assumed closed:
    - the 1,447-pin and 1,833-pin reset nets are also a max-fanout
      question, which `docs/34` section 8 shows this flow reports
      unevenly.
-4. **No decision between plain-Ibex-plus-project-TMR and SecureIbex.**
+4. ~~**No decision between plain-Ibex-plus-project-TMR and SecureIbex.**
    Section 8.5 supplies the price and the architectural argument; the
-   choice belongs with the hardening architecture.
+   choice belongs with the hardening architecture.~~
+   **DECIDED 2026-08-31 by the project owner: `small-pmp`** — RV32IMC
+   plus PMP, no lockstep, no shadow register file. The argument section
+   8.5 supplies and this decision accepts: lockstep detects where this
+   project's own voters mask, the two cover disjoint structures so their
+   costs add rather than share, and the one genuine overlap — ECC over
+   the register file — duplicates a SECDED codec this project already
+   owns and has golden-vector tested.
+
+   **What the decision takes on, recorded so it is not discovered
+   later.** Declining `SecureIbex` leaves the core's own sequential
+   logic protected by nothing. This project's TMR covers the NPU and the
+   configuration state and does not reach inside the CPU. The management
+   processor is therefore, as of this decision, the least hardened block
+   in the design, and three obligations follow:
+
+   - **The core needs its own fault-injection campaign** — item 5 below
+     stops being deferred work and becomes a consequence of this choice.
+     An unmeasured block, in a design whose entire claim is *measured*
+     fault tolerance, is the gap a reviewer finds before we do.
+   - **A recovery policy is now required rather than optional.** With
+     neither lockstep detection nor voting, an upset in the core is
+     silent. The watchdog in the `docs/08` map is the only backstop
+     currently planned, and resetting a core is a coarse instrument.
+     Whether it suffices is open and belongs to the hardening
+     architecture.
+   - **The decision is cheap to reverse only before floorplanning.**
+     `SecureIbex` is +112 % area over this configuration and turns every
+     flop into a reset flop (section 8.6). If the campaign finds the
+     core's SDC rate unacceptable, the moment to change course is before
+     the floorplan, not after.
+
+   The bus and memory-map work, and everything downstream of it, build
+   on `small-pmp`.
 5. **No fault injection on the core.** Section 4.4 establishes that the
    nets are nameable, which is the precondition. The campaign itself is
    not run.
