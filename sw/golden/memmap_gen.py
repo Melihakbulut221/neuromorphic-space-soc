@@ -13,7 +13,7 @@ REGIONS = {
     "ROM": (0xC0000000, 0x00002000, "memory", "rx", "implemented", "rom"),
     "QSPI3": (0xD0000000, 0x02000000, "memory", "rx", "reserved", None),
     "QSPI4": (0xD8000000, 0x08000000, "memory", "rx", "reserved", None),
-    "CLINT": (0xE0000000, 0x00010000, "io", "rw", "reserved", None),
+    "CLINT": (0xE0000000, 0x00010000, "io", "rw", "implemented", "clint"),
     "PLIC": (0xF8000000, 0x00400000, "io", "rw", "reserved", None),
     "DEBUG": (0xFE000000, 0x01000000, "io", "rw", "reserved", None),
     "APB": (0xFF900000, 0x00100000, "io", "rw", "implemented", "apb"),
@@ -38,6 +38,7 @@ MASKS = {
 PORTS = {
     "ram": "RAM",
     "rom": "ROM",
+    "clint": "CLINT",
     "apb": "APB",
     "pnp": "PNP",
 }
@@ -51,7 +52,7 @@ APB_SLOTS = {
     "UART0": (0xFF900000, 0x000, 2, "implemented"),
     "UART1": (0xFF901000, 0x001, 3, "reserved"),
     "GPIO": (0xFF902000, 0x002, 4, "reserved"),
-    "TIMER0": (0xFF908000, 0x008, 8, "reserved"),
+    "TIMER0": (0xFF908000, 0x008, 8, "implemented"),
     "TIMER1": (0xFF909000, 0x009, 12, "reserved"),
     "SPW": (0xFF90D000, 0x00D, 16, "reserved"),
     "CAN": (0xFF911000, 0x011, 18, "reserved"),
@@ -64,6 +65,41 @@ APB_SLOTS = {
     "CLKGATE": (0xFF918000, 0x018, 0, "reserved"),
     "NPUCFG": (0xFF919000, 0x019, 24, "reserved"),
     "APBPNP": (0xFF9FF000, 0x0FF, 0, "implemented"),
+}
+
+# Ibex interrupt identifiers, from
+# ext/ibex/doc/03_reference/exception_interrupts.rst.
+FAST_IRQ_BASE = 16
+FAST_IRQ_COUNT = 15
+VECTOR_ENTRIES = 32
+VECTOR_BYTES = 128
+
+# peripheral name -> (source number, fast line, mcause id,
+#                     vector byte offset from mtvec)
+IRQ_SOURCES = {
+    "UART0": (2, 0, 16, 0x40),
+    "UART1": (3, 1, 17, 0x44),
+    "GPIO": (4, 2, 18, 0x48),
+    "TIMER0": (8, 3, 19, 0x4C),
+    "TIMER1": (12, 4, 20, 0x50),
+    "SPW": (16, 5, 21, 0x54),
+    "CAN": (18, 6, 22, 0x58),
+    "SPI": (19, 7, 23, 0x5C),
+    "I2C": (20, 8, 24, 0x60),
+    "QSPICTL": (21, 9, 25, 0x64),
+    "BUSSTAT": (22, 10, 26, 0x68),
+    "SCRUB": (23, 11, 27, 0x6C),
+    "NPUCFG": (24, 12, 28, 0x70),
+}
+
+SPARE_FAST_LINES = [13, 14]
+
+# core input name -> (interrupt id, mcause, vector offset)
+CORE_IRQS = {
+    "MSOFT": (3, 0x80000003, 0x0C),
+    "MTIMER": (7, 0x80000007, 0x1C),
+    "MEXT": (11, 0x8000000B, 0x2C),
+    "NMI": (31, 0x8000001F, 0x7C),
 }
 
 # word index within the device table -> value
@@ -92,7 +128,7 @@ PNP_ROM = {
     0x224: 0xD801F802,
     0x228: 0x09003020,
     0x229: 0x00010000,
-    0x22A: 0x00000000,
+    0x22A: 0x00000001,
     0x22C: 0xE000FFF3,
     0x230: 0x09004020,
     0x231: 0x00400000,

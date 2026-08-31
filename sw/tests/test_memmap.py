@@ -381,3 +381,159 @@ def test_top_level_decodes_the_implemented_apb_slots():
     assert named == implemented, (
         f"soc_top.v decodes slots {sorted(named)} but the map marks "
         f"{sorted(implemented)} implemented")
+
+
+# ----------------------------------------------------------------------
+# 6. The interrupt map
+#
+# Added with docs/40-interrupts-timers-watchdog.md. Two namespaces --
+# plug-and-play SOURCE NUMBERS and Ibex fast local interrupt WIRE INDICES
+# -- and the whole point of these tests is that they are not the same
+# namespace and must not be allowed to drift into each other.
+# ----------------------------------------------------------------------
+
+
+def test_source_numbers_and_wire_indices_are_separate_namespaces():
+    """Every source has both, both are unique, and neither is the other.
+
+    A source number is a five-bit plug-and-play field that a controller
+    would key on; a line is one of Ibex's fifteen fast local interrupt
+    inputs. They happen to be small integers and are therefore easy to
+    conflate, which is the only reason this test exists.
+    """
+    from golden.memmap_gen import APB_SLOTS, FAST_IRQ_COUNT, IRQ_SOURCES
+
+    irqs = [v[0] for v in IRQ_SOURCES.values()]
+    lines = [v[1] for v in IRQ_SOURCES.values()]
+    assert len(irqs) == len(set(irqs)), f"duplicate source numbers: {sorted(irqs)}"
+    assert len(lines) == len(set(lines)), f"duplicate wire indices: {sorted(lines)}"
+    for name, (irq, line, _cause, _off) in IRQ_SOURCES.items():
+        assert 0 < irq < 32, f"{name}: source number {irq} is not a 5-bit field"
+        assert 0 <= line < FAST_IRQ_COUNT, (
+            f"{name}: wire index {line} is outside irq_fast_i"
+            f"[{FAST_IRQ_COUNT - 1}:0]")
+        assert APB_SLOTS[name][2] == irq, (
+            f"{name}: IRQ_SOURCES and APB_SLOTS disagree about the source "
+            "number")
+
+    # A slot with no source number must have no wire, and the converse.
+    with_line = set(IRQ_SOURCES)
+    with_irq = {n for n, s in APB_SLOTS.items() if s[2]}
+    assert with_line == with_irq, (
+        f"slots with a wire index {sorted(with_line)} differ from slots with "
+        f"a source number {sorted(with_irq)}")
+
+
+def test_vectors_are_ibex_arithmetic_and_nothing_else():
+    """mcause and the vector offset are 4*id, computed the same way twice.
+
+    Ibex enters an interrupt at mtvec + 4*id with id = 16 + line for a
+    fast local interrupt, and every synchronous exception at mtvec + 0.
+    The generator computes both; this recomputes them from the raw line
+    numbers so that a change to the arithmetic in one place fails here.
+    """
+    from golden.memmap_gen import (CORE_IRQS, FAST_IRQ_BASE, IRQ_SOURCES,
+                                   VECTOR_BYTES, VECTOR_ENTRIES)
+
+    assert VECTOR_BYTES == VECTOR_ENTRIES * 4
+    for name, (_irq, line, cause, off) in IRQ_SOURCES.items():
+        assert cause == FAST_IRQ_BASE + line, f"{name}: mcause id"
+        assert off == 4 * cause, f"{name}: vector offset"
+        assert off < VECTOR_BYTES, f"{name}: vector outside the table"
+    for name, (ident, mcause, off) in CORE_IRQS.items():
+        assert mcause == 0x80000000 | ident, f"{name}: mcause word"
+        assert off == 4 * ident, f"{name}: vector offset"
+        assert off < VECTOR_BYTES, f"{name}: vector outside the table"
+
+
+def test_the_vector_table_fits_the_alignment_the_map_forces():
+    """128 bytes of vectors inside a 256-byte-aligned region base.
+
+    docs/38 section 7.5 defect 3: Ibex forces mtvec[7:2] to zero, so the
+    table can only start on a 256-byte boundary. Every region base in
+    this map is required to be 256-byte aligned for that reason, and the
+    table has to fit inside that grid or a trap vector placed at a region
+    base would run into whatever follows it.
+    """
+    from golden.memmap_gen import BASE_ALIGNMENT, REGIONS, VECTOR_BYTES
+
+    assert VECTOR_BYTES <= BASE_ALIGNMENT
+    for name, (base, _size, _t, _a, _s, _p) in REGIONS.items():
+        assert base % BASE_ALIGNMENT == 0, name
+
+
+def test_the_core_inputs_do_not_collide_with_the_fast_range():
+    """MSOFT, MTIMER, MEXT and NMI own ids outside 16..30.
+
+    The fast range belongs to the `line` field. An architectural input
+    that landed inside it would put two different sources on one vector,
+    and the failure would be a handler running for the wrong reason.
+    """
+    from golden.memmap_gen import CORE_IRQS, FAST_IRQ_BASE, FAST_IRQ_COUNT
+
+    lo, hi = FAST_IRQ_BASE, FAST_IRQ_BASE + FAST_IRQ_COUNT - 1
+    for name, (ident, _mcause, _off) in CORE_IRQS.items():
+        assert not (lo <= ident <= hi), (
+            f"core input {name} has id {ident}, inside the fast range "
+            f"{lo}..{hi}")
+    assert CORE_IRQS["NMI"][0] == 31, "the NMI is interrupt 31 in Ibex"
+
+
+def test_spare_lines_are_the_headroom_the_plic_decision_rests_on():
+    """The count of unassigned fast lines is derived, not asserted.
+
+    docs/40-interrupts-timers-watchdog.md section 3 declines to build a
+    platform interrupt controller and names the condition that would
+    change the answer: a peripheral interrupt source with no fast line
+    left to put it on. This test is what makes that condition mechanical
+    -- the generator refuses a line outside the range, and the number
+    below is recomputed from the map rather than written down.
+    """
+    from golden.memmap_gen import (FAST_IRQ_COUNT, IRQ_SOURCES,
+                                   SPARE_FAST_LINES)
+
+    used = {v[1] for v in IRQ_SOURCES.values()}
+    assert SPARE_FAST_LINES == [i for i in range(FAST_IRQ_COUNT)
+                                if i not in used]
+    assert len(used) + len(SPARE_FAST_LINES) == FAST_IRQ_COUNT
+
+
+def test_the_c_header_and_the_python_map_agree_about_interrupts():
+    """The vector table in crt0.S and the tests read the same numbers.
+
+    The assembler's table, the C tests' expectations and the RTL's wire
+    indices all come from this one source; that they agree is what stops
+    a handler from being installed at one vector and entered at another.
+    """
+    from golden.memmap_gen import CORE_IRQS, IRQ_SOURCES
+
+    header = (SOC_SW / "soc_memmap.h").read_text()
+    vh = (SOC_RTL / "soc_memmap.vh").read_text()
+    for name, (irq, line, cause, off) in IRQ_SOURCES.items():
+        assert f"#define SOC_IRQLINE_{name:<8s} {line}u" in header, name
+        assert f"#define SOC_IRQ_{name:<8s} 0x{0x80000000 | cause:08X}u" in header, name
+        assert f"#define SOC_VEC_{name:<8s} 0x{off:02X}u" in header, name
+        assert f"localparam integer SOC_IRQLINE_{name:<8s} = {line};" in vh, name
+        assert f"localparam [4:0] SOC_IRQNUM_{name:<8s} = 5'd{irq};" in vh, name
+    for name, (_ident, mcause, off) in CORE_IRQS.items():
+        assert f"#define SOC_IRQ_{name:<8s} 0x{mcause:08X}u" in header, name
+        assert f"#define SOC_VEC_{name:<8s} 0x{off:02X}u" in header, name
+
+
+def test_the_top_level_wires_every_implemented_source_to_its_own_line():
+    """Textual, and the same shape as the fabric-decode test above.
+
+    soc_top.v builds irq_fast_i from the generated SOC_IRQLINE_
+    constants. A source the map marks implemented and that raises an
+    interrupt must appear there; nothing else may. A formal job cannot
+    enumerate the map and this test cannot read logic, which is the same
+    complementary pair section 5 describes.
+    """
+    from golden.memmap_gen import APB_SLOTS, IRQ_SOURCES
+
+    src = (SOC_RTL / "soc_top.v").read_text()
+    wired = set(re.findall(r"irq_fast\[SOC_IRQLINE_(\w+)\]", src))
+    expect = {n for n in IRQ_SOURCES if APB_SLOTS[n][3] == "implemented"}
+    assert wired == expect, (
+        f"soc_top.v wires {sorted(wired)} onto fast lines, but the map marks "
+        f"{sorted(expect)} implemented and interrupt-bearing")

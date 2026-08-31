@@ -33,7 +33,7 @@ implemented, and refuses any region base that is not
 | `0xC0000000` | `0xC0001FFF` | 8 KiB | ROM | memory | rx | implemented | rom | On-chip boot ROM, 8 KiB. Holds the reset vector and .text |
 | `0xD0000000` | `0xD1FFFFFF` | 32 MiB | QSPI3 | memory | rx | reserved | - | QSPI flash execute-in-place window, 3-byte addressing |
 | `0xD8000000` | `0xDFFFFFFF` | 128 MiB | QSPI4 | memory | rx | reserved | - | QSPI flash execute-in-place window, 4-byte addressing |
-| `0xE0000000` | `0xE000FFFF` | 64 KiB | CLINT | io | rw | reserved | - | RISC-V core-local interruptor (msip, mtimecmp, mtime) |
+| `0xE0000000` | `0xE000FFFF` | 64 KiB | CLINT | io | rw | implemented | clint | RISC-V core-local interruptor (msip, mtimecmp, mtime) |
 | `0xF8000000` | `0xF83FFFFF` | 4 MiB | PLIC | io | rw | reserved | - | RISC-V platform interrupt controller, single hart, single context |
 | `0xFE000000` | `0xFEFFFFFF` | 16 MiB | DEBUG | io | rw | reserved | - | RISC-V debug module |
 | `0xFF900000` | `0xFF9FFFFF` | 1 MiB | APB | io | rw | implemented | apb | Peripheral bus bridge window, 1 MiB, 4 KiB slots |
@@ -68,24 +68,76 @@ Interrupt numbers are frozen here so the device table, the future
 interrupt controller and the drivers cannot disagree
 (`docs/08-gr801-datasheet-notes.md` section 4 item 7).
 
-| Address | Slot | Name | IRQ | Status | Description |
-|---|---|---|---|---|---|
-| `0xFF900000` | `0x000` | UART0 | 2 | implemented | Console UART, GRLIB APBUART register map, transmit only |
-| `0xFF901000` | `0x001` | UART1 | 3 | reserved | Second UART |
-| `0xFF902000` | `0x002` | GPIO | 4 | reserved | GRGPIO-style general purpose I/O, 16 pins |
-| `0xFF908000` | `0x008` | TIMER0 | 8 | reserved | GPTIMER, last timer is the watchdog and is armed at reset |
-| `0xFF909000` | `0x009` | TIMER1 | 12 | reserved | Second GPTIMER |
-| `0xFF90D000` | `0x00D` | SPW | 16 | reserved | SpaceWire codec, GRSPW2-shaped registers, one DMA channel |
-| `0xFF911000` | `0x011` | CAN | 18 | reserved | CAN 2.0B, SJA1000-shaped; documented divergence from GRCANFD |
-| `0xFF912000` | `0x012` | SPI | 19 | reserved | SPICTRL-shaped SPI master |
-| `0xFF913000` | `0x013` | I2C | 20 | reserved | I2CMST, the OpenCores I2C master register map |
-| `0xFF914000` | `0x014` | QSPICTL | 21 | reserved | QSPI flash controller registers behind the XIP windows |
-| `0xFF915000` | `0x015` | BUSSTAT | 22 | reserved | System-bus error latch and ECC counters; AHBSTAT in spirit, not in name |
-| `0xFF916000` | `0x016` | SCRUB | 23 | reserved | Memory scrubber control, MEMSCRUB-like |
-| `0xFF917000` | `0x017` | BOOTREG | - | reserved | Bootstrap pin readback and boot report register, GRGPREG-like |
-| `0xFF918000` | `0x018` | CLKGATE | - | reserved | Clock gate enable and status for NPU nodes and heavy peripherals |
-| `0xFF919000` | `0x019` | NPUCFG | 24 | reserved | NPU fabric-level global configuration and status |
-| `0xFF9FF000` | `0x0FF` | APBPNP | - | implemented | Peripheral bus device table, two words per slot |
+| Address | Slot | Name | IRQ | Line | Status | Description |
+|---|---|---|---|---|---|---|
+| `0xFF900000` | `0x000` | UART0 | 2 | 0 | implemented | Console UART, GRLIB APBUART register map, transmit only |
+| `0xFF901000` | `0x001` | UART1 | 3 | 1 | reserved | Second UART |
+| `0xFF902000` | `0x002` | GPIO | 4 | 2 | reserved | GRGPIO-style general purpose I/O, 16 pins |
+| `0xFF908000` | `0x008` | TIMER0 | 8 | 3 | implemented | GPTIMER, last timer is the watchdog and is armed at reset |
+| `0xFF909000` | `0x009` | TIMER1 | 12 | 4 | reserved | Second GPTIMER |
+| `0xFF90D000` | `0x00D` | SPW | 16 | 5 | reserved | SpaceWire codec, GRSPW2-shaped registers, one DMA channel |
+| `0xFF911000` | `0x011` | CAN | 18 | 6 | reserved | CAN 2.0B, SJA1000-shaped; documented divergence from GRCANFD |
+| `0xFF912000` | `0x012` | SPI | 19 | 7 | reserved | SPICTRL-shaped SPI master |
+| `0xFF913000` | `0x013` | I2C | 20 | 8 | reserved | I2CMST, the OpenCores I2C master register map |
+| `0xFF914000` | `0x014` | QSPICTL | 21 | 9 | reserved | QSPI flash controller registers behind the XIP windows |
+| `0xFF915000` | `0x015` | BUSSTAT | 22 | 10 | reserved | System-bus error latch and ECC counters; AHBSTAT in spirit, not in name |
+| `0xFF916000` | `0x016` | SCRUB | 23 | 11 | reserved | Memory scrubber control, MEMSCRUB-like |
+| `0xFF917000` | `0x017` | BOOTREG | - | - | reserved | Bootstrap pin readback and boot report register, GRGPREG-like |
+| `0xFF918000` | `0x018` | CLKGATE | - | - | reserved | Clock gate enable and status for NPU nodes and heavy peripherals |
+| `0xFF919000` | `0x019` | NPUCFG | 24 | 12 | reserved | NPU fabric-level global configuration and status |
+| `0xFF9FF000` | `0x0FF` | APBPNP | - | - | implemented | Peripheral bus device table, two words per slot |
+
+## 3a. Interrupts
+
+Two namespaces, deliberately separate. **IRQ** is the GRLIB
+plug-and-play source number carried in the identification word and
+is what a platform interrupt controller would key on. **Line** is
+the index of the Ibex fast local interrupt input the source is
+physically wired to. Ibex gives each fast line a dedicated vector
+and a fixed priority, so no controller is needed for the 13
+sources this map defines.
+
+`mcause` is the value software reads in the handler; `vector` is
+the byte offset from `mtvec` at which the core enters. Both are
+Ibex's, not this project's: a fast line *n* is interrupt ID
+16+*n* and the core enters at `mtvec` + 4*ID.
+
+| Source | IRQ | Line | `mcause` | Vector |
+|---|---|---|---|---|
+| UART0 | 2 | 0 | `0x80000010` | `mtvec+0x40` |
+| UART1 | 3 | 1 | `0x80000011` | `mtvec+0x44` |
+| GPIO | 4 | 2 | `0x80000012` | `mtvec+0x48` |
+| TIMER0 | 8 | 3 | `0x80000013` | `mtvec+0x4C` |
+| TIMER1 | 12 | 4 | `0x80000014` | `mtvec+0x50` |
+| SPW | 16 | 5 | `0x80000015` | `mtvec+0x54` |
+| CAN | 18 | 6 | `0x80000016` | `mtvec+0x58` |
+| SPI | 19 | 7 | `0x80000017` | `mtvec+0x5C` |
+| I2C | 20 | 8 | `0x80000018` | `mtvec+0x60` |
+| QSPICTL | 21 | 9 | `0x80000019` | `mtvec+0x64` |
+| BUSSTAT | 22 | 10 | `0x8000001A` | `mtvec+0x68` |
+| SCRUB | 23 | 11 | `0x8000001B` | `mtvec+0x6C` |
+| NPUCFG | 24 | 12 | `0x8000001C` | `mtvec+0x70` |
+
+Core inputs that are not per-peripheral:
+
+| Input | ID | `mcause` | Vector | Driven by |
+|---|---|---|---|---|
+| MSOFT | 3 | `0x80000003` | `mtvec+0x0C` | CLINT msip |
+| MTIMER | 7 | `0x80000007` | `mtvec+0x1C` | CLINT mtime >= mtimecmp |
+| MEXT | 11 | `0x8000000B` | `mtvec+0x2C` | unconnected; reserved for a PLIC |
+| NMI | 31 | `0x8000001F` | `mtvec+0x7C` | watchdog stage 1 |
+
+**2 of Ibex's 15 fast lines are unassigned** (13, 14). That number is the headroom the
+platform-interrupt-controller decision is measured against:
+`docs/40-interrupts-timers-watchdog.md` section 3 argues that a PLIC
+buys nothing until it reaches zero, and the generator refuses a
+`line` outside 0..14 so that exhausting it
+is a build failure rather than a discovery.
+
+The vector table is 32 entries of 4 bytes = 128 bytes at a 256-byte-aligned
+base. Every synchronous exception enters at offset 0; only
+interrupts are vectored. Ibex has no direct mode
+(`docs/38-ibex-bringup.md` section 7.5 defect 3).
 
 ## 4. Device table
 

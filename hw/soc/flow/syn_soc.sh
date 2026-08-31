@@ -9,6 +9,9 @@
 #       flow/syn_soc.sh soc_uart
 #       flow/syn_soc.sh soc_pnp
 #       flow/syn_soc.sh soc_apb_pnp
+#       flow/syn_soc.sh soc_clint
+#       flow/syn_soc.sh soc_gptimer          (includes soc_wdog)
+#       flow/syn_soc.sh soc_wdog
 #       flow/syn_soc.sh soc_fabric_meas      (see below)
 #
 # The recipe is deliberately identical to flow/syn_probe.sh's, which is
@@ -71,12 +74,12 @@ module soc_fabric_meas (
     input  wire [31:0] md_addr_i, md_wdata_i,
     output wire        md_gnt_o, md_rvalid_o, md_err_o,
     output wire [31:0] md_rdata_o,
-    output wire [2:0]  s_req_o,
+    output wire [3:0]  s_req_o,
     output wire [31:0] s_addr_o, s_wdata_o,
     output wire        s_we_o,
     output wire [3:0]  s_be_o,
-    input  wire [2:0]  s_gnt_i, s_rvalid_i, s_err_i,
-    input  wire [31:0] s_rdata_0_i, s_rdata_1_i, s_rdata_3_i,
+    input  wire [3:0]  s_gnt_i, s_rvalid_i, s_err_i,
+    input  wire [31:0] s_rdata_0_i, s_rdata_1_i, s_rdata_3_i, s_rdata_4_i,
     output wire        psel_o, penable_o, pwrite_o,
     output wire [19:0] paddr_o,
     output wire [31:0] pwdata_o,
@@ -84,14 +87,17 @@ module soc_fabric_meas (
     input  wire [31:0] prdata_i,
     input  wire        pready_i, pslverr_i
 );
-  wire [3:0] req, gnt, rvalid, err;
+  wire [4:0] req, gnt, rvalid, err;
   wire [31:0] rdata_apb;
   wire abr_gnt, abr_rvalid, abr_err;
 
-  assign s_req_o = {req[3], req[1], req[0]};
-  assign gnt     = {s_gnt_i[2],    abr_gnt,    s_gnt_i[1],    s_gnt_i[0]};
-  assign rvalid  = {s_rvalid_i[2], abr_rvalid, s_rvalid_i[1], s_rvalid_i[0]};
-  assign err     = {s_err_i[2],    abr_err,    s_err_i[1],    s_err_i[0]};
+  assign s_req_o = {req[4], req[3], req[1], req[0]};
+  assign gnt     = {s_gnt_i[3],    s_gnt_i[2],    abr_gnt,
+                    s_gnt_i[1],    s_gnt_i[0]};
+  assign rvalid  = {s_rvalid_i[3], s_rvalid_i[2], abr_rvalid,
+                    s_rvalid_i[1], s_rvalid_i[0]};
+  assign err     = {s_err_i[3],    s_err_i[2],    abr_err,
+                    s_err_i[1],    s_err_i[0]};
 
   soc_bus u_bus (
       .clk_i(clk_i), .rst_ni(rst_ni),
@@ -104,6 +110,7 @@ module soc_fabric_meas (
       .s_wdata_o(s_wdata_o), .s_gnt_i(gnt), .s_rvalid_i(rvalid),
       .s_rdata_0_i(s_rdata_0_i), .s_rdata_1_i(s_rdata_1_i),
       .s_rdata_2_i(rdata_apb),   .s_rdata_3_i(s_rdata_3_i),
+      .s_rdata_4_i(s_rdata_4_i),
       .s_err_i(err)
   );
 
@@ -129,6 +136,7 @@ read_liberty -lib $SG13G2_TYP
 
 read_verilog -I$RTL -defer $RTL/soc_bus.v $RTL/soc_apb_bridge.v \
                           $RTL/soc_uart.v $RTL/soc_pnp.v $RTL/soc_apb_pnp.v \
+                          $RTL/soc_clint.v $RTL/soc_gptimer.v $RTL/soc_wdog.v \
                           $OUT/soc_fabric_meas.v
 
 hierarchy -check -top $TOP

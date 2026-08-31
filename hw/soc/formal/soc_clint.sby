@@ -1,0 +1,38 @@
+# SymbiYosys job for the core-local interruptor.
+#
+#   sby -f soc_clint.sby prove    k-induction proof of C1-C4 and P1-P3
+#   sby -f soc_clint.sby bmc      bounded check, depth 20
+#   sby -f soc_clint.sby cover    reachability of every proven behaviour
+#
+# Properties live in soc_clint_props.v, textually included at the end of
+# the soc_clint module body under `ifdef FORMAL. They are clauses of the
+# RISC-V privileged specification's machine timer and of the fabric slave
+# contract in hw/soc/rtl/soc_bus.v, with the architectural state
+# reconstructed from the ports rather than read out of the design.
+#
+# TICK_DIV is 1, which is how soc_top.v instantiates it. Nothing here
+# proves anything about a divided time base.
+
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 20
+prove: mode prove
+prove: depth 10
+cover: mode cover
+cover: depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_clint.v
+prep -top soc_clint
+
+[files]
+../rtl/soc_clint.v
+soc_clint_props.v

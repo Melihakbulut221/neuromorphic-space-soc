@@ -2,6 +2,12 @@
 # Elaborate and run the whole SoC in Icarus Verilog.
 #
 #   sim_soc.sh [out_dir]
+#   SW_DEFINES=-DWDOG_RESET_DEMO sim_soc.sh out/sim-soc-wdog
+#
+# The second form builds the same image with one behaviour changed --
+# the NMI handler does not acknowledge -- and runs the watchdog's whole
+# escalation ladder, three boots of the SoC in one simulation. See
+# wdog_demo() in hw/soc/tb/sw/test_ibex.c.
 #
 # Sources: hw/soc/rtl/soc_*.v (this project's), hw/soc/gen/*.v (the
 # sv2v-converted Ibex, exactly as sim_ibex.sh reads it) and
@@ -35,7 +41,9 @@ eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 
 mkdir -p "$OUT"
 
-"$SOC_DIR/flow/build_sw_soc.sh" "$OUT" "-DUART_SCALER_VAL=${UART_SCALER}u"
+SW_DEFINES=${SW_DEFINES:-}
+# shellcheck disable=SC2086
+"$SOC_DIR/flow/build_sw_soc.sh" "$OUT" "-DUART_SCALER_VAL=${UART_SCALER}u" $SW_DEFINES
 
 # Symbol addresses come out of the ELF that was just built rather than
 # being written down here, so neither file carries a constant that goes
@@ -71,6 +79,9 @@ sym () {
   "$SOC_DIR/rtl/soc_pnp.v" \
   "$SOC_DIR/rtl/soc_apb_pnp.v" \
   "$SOC_DIR/rtl/soc_uart.v" \
+  "$SOC_DIR/rtl/soc_clint.v" \
+  "$SOC_DIR/rtl/soc_gptimer.v" \
+  "$SOC_DIR/rtl/soc_wdog.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \
   "$SOC_DIR"/gen/*.v \
   2>&1 | tee "$OUT/iverilog.log"

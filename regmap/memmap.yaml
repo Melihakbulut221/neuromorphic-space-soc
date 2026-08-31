@@ -61,6 +61,43 @@
 # status: implemented = RTL exists in hw/soc/rtl/ and is instantiated in
 #         soc_top.v; reserved = the address is frozen and nothing decodes
 #         it yet, so an access lands on the error slave.
+#
+# ---------------------------------------------------------------------
+# The interrupt namespace, and why there are two of them
+# ---------------------------------------------------------------------
+#
+# `irq` on a peripheral slot is a GRLIB plug-and-play interrupt SOURCE
+# NUMBER. It is five bits wide because that is the width of the irq field
+# in the identification word (grlib.pdf 5.3), it is what a PLIC would use
+# as its source ID, and docs/08 section 4 item 7 required it to be frozen
+# so that the device table, the controller and the drivers cannot
+# disagree. It is NOT a wire index.
+#
+# `line` is the wire index: which of Ibex's fifteen fast local interrupt
+# inputs, irq_fast_i[14:0], the source is physically connected to. Ibex
+# gives each of those a dedicated vector at mtvec + 4*(16+line) and a
+# fixed hardware priority (lowest index wins), so no controller is needed
+# to use them -- see docs/40-interrupts-timers-watchdog.md section 3.
+#
+# The two namespaces are different sizes and must not be conflated: the
+# source numbers in use here run to 24 and the wire indices run to 14.
+# Writing them down separately is what stops a future PLIC (which keys on
+# `irq`) and today's direct wiring (which keys on `line`) from
+# contradicting each other. Every source with a non-zero `irq` carries a
+# `line`, the generator checks that both are unique and in range, and
+# `sw/tests/test_memmap.py` re-checks it independently.
+#
+# Three Ibex inputs are NOT part of `line` and are assigned here in prose
+# because they are architectural rather than per-peripheral:
+#
+#   irq_software_i  (ID 3)  <- CLINT msip
+#   irq_timer_i     (ID 7)  <- CLINT mtime/mtimecmp, and nothing else
+#   irq_external_i  (ID 11) <- reserved for a platform interrupt
+#                              controller in the PLIC region. Tied low
+#                              today, and deliberately left free so that
+#                              adding a PLIC later needs no rewiring.
+#   irq_nm_i        (ID 31) <- watchdog stage 1. Non-maskable on purpose;
+#                              docs/40 section 5 is the argument.
 
 meta:
   name: neuromorphic_space_soc
@@ -149,11 +186,20 @@ regions:
     size: 0x00010000
     type: io
     attr: rw
-    status: reserved
+    port: clint
+    status: implemented
     device_id: 0x003
     desc: RISC-V core-local interruptor (msip, mtimecmp, mtime)
     source: CLINT at 0xE0000000 (NOELVSYS)
 
+  # Reserved FOR a platform interrupt controller, not reserved and
+  # forgotten. docs/40-interrupts-timers-watchdog.md section 3 argues that
+  # this SoC does not need one yet -- Ibex's fifteen fast local interrupts
+  # cover the thirteen sources this map defines, with two spare -- and
+  # names the condition under which that stops being true: a fourteenth
+  # peripheral interrupt source, or a third-party OS BSP that expects a
+  # PLIC. Until then irq_external_i is tied low and this region reaches
+  # the error slave, which is a fault rather than a silent zero.
   - name: PLIC
     base: 0xF8000000
     size: 0x00400000
@@ -206,41 +252,73 @@ regions:
 # The bridge decodes PADDR[19:12], which is why the slot index is what
 # this file records.
 #
-# irq is the interrupt source number the future PLIC will carry; 0 means
-# "no interrupt". The numbers are frozen here so that the PnP records,
-# the PLIC and the drivers cannot disagree -- docs/08 section 4 item 7.
+# irq is the plug-and-play interrupt SOURCE NUMBER; 0 means "no
+# interrupt". The numbers are frozen here so that the PnP records, a
+# future PLIC and the drivers cannot disagree -- docs/08 section 4 item 7.
+#
+# line is the Ibex fast local interrupt INDEX, 0..14, that the source is
+# wired to today. See the interrupt-namespace note at the top of this
+# file for why these are two fields and not one. Assigned in ascending
+# source-number order, so the assignment is reconstructible; lines 13 and
+# 14 are unassigned and are the headroom docs/40 section 3 measures the
+# PLIC decision against.
 
 apb_slots:
-  - {name: UART0,   slot: 0x000, irq: 2,  status: implemented, device_id: 0x00C,
+  - {name: UART0,   slot: 0x000, irq: 2,  line: 0,  status: implemented, device_id: 0x00C,
      desc: "Console UART, GRLIB APBUART register map, transmit only",
      source: "APBUART0 0xFF900000 (GR740, NOELVSYS console)"}
-  - {name: UART1,   slot: 0x001, irq: 3,  status: reserved, device_id: 0x00C,
+  - {name: UART1,   slot: 0x001, irq: 3,  line: 1,  status: reserved, device_id: 0x00C,
      desc: "Second UART", source: "APBUART1 0xFF901000 (GR740)"}
-  - {name: GPIO,    slot: 0x002, irq: 4,  status: reserved, device_id: 0x01A,
+  - {name: GPIO,    slot: 0x002, irq: 4,  line: 2,  status: reserved, device_id: 0x01A,
      desc: "GRGPIO-style general purpose I/O, 16 pins", source: "GRGPIO0 0xFF902000 (GR740)"}
-  - {name: TIMER0,  slot: 0x008, irq: 8,  status: reserved, device_id: 0x011,
+  - {name: TIMER0,  slot: 0x008, irq: 8,  line: 3,  status: implemented, device_id: 0x011,
      desc: "GPTIMER, last timer is the watchdog and is armed at reset", source: "GPTIMER0 0xFF908000 (GR740, NOELVSYS)"}
-  - {name: TIMER1,  slot: 0x009, irq: 12, status: reserved, device_id: 0x011,
+  - {name: TIMER1,  slot: 0x009, irq: 12, line: 4,  status: reserved, device_id: 0x011,
      desc: "Second GPTIMER", source: "GPTIMER1 0xFF909000 (GR740)"}
-  - {name: SPW,     slot: 0x00D, irq: 16, status: reserved, device_id: 0x01F,
+  - {name: SPW,     slot: 0x00D, irq: 16, line: 5,  status: reserved, device_id: 0x01F,
      desc: "SpaceWire codec, GRSPW2-shaped registers, one DMA channel", source: "GR740 SpW AMBA interface slot 0xFF90D000"}
-  - {name: CAN,     slot: 0x011, irq: 18, status: reserved, device_id: 0x0FE,
+  - {name: CAN,     slot: 0x011, irq: 18, line: 6,  status: reserved, device_id: 0x0FE,
      desc: "CAN 2.0B, SJA1000-shaped; documented divergence from GRCANFD", source: "slot only (docs/08 section 3 row 14)"}
-  - {name: SPI,     slot: 0x012, irq: 19, status: reserved, device_id: 0x02D,
+  - {name: SPI,     slot: 0x012, irq: 19, line: 7,  status: reserved, device_id: 0x02D,
      desc: "SPICTRL-shaped SPI master", source: "SPICTRL (GR740 bridge 1) remapped"}
-  - {name: I2C,     slot: 0x013, irq: 20, status: reserved, device_id: 0x028,
+  - {name: I2C,     slot: 0x013, irq: 20, line: 8,  status: reserved, device_id: 0x028,
      desc: "I2CMST, the OpenCores I2C master register map", source: "family style"}
-  - {name: QSPICTL, slot: 0x014, irq: 21, status: reserved, device_id: 0x045,
+  - {name: QSPICTL, slot: 0x014, irq: 21, line: 9,  status: reserved, device_id: 0x045,
      desc: "QSPI flash controller registers behind the XIP windows", source: "family style"}
-  - {name: BUSSTAT, slot: 0x015, irq: 22, status: reserved, device_id: 0x052,
+  - {name: BUSSTAT, slot: 0x015, irq: 22, line: 10, status: reserved, device_id: 0x052,
      desc: "System-bus error latch and ECC counters; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
-  - {name: SCRUB,   slot: 0x016, irq: 23, status: reserved, device_id: 0x057,
+  - {name: SCRUB,   slot: 0x016, irq: 23, line: 11, status: reserved, device_id: 0x057,
      desc: "Memory scrubber control, MEMSCRUB-like", source: "MEMSCRUB (GR740) remapped"}
   - {name: BOOTREG, slot: 0x017, irq: 0,  status: reserved, device_id: 0x087,
      desc: "Bootstrap pin readback and boot report register, GRGPREG-like", source: "GRGPREG 0xFFA09000 (GR740)"}
   - {name: CLKGATE, slot: 0x018, irq: 0,  status: reserved, device_id: 0x02C,
      desc: "Clock gate enable and status for NPU nodes and heavy peripherals", source: "GRCLKGATE (GR740, GR716B)"}
-  - {name: NPUCFG,  slot: 0x019, irq: 24, status: reserved, device_id: 0x013,
+  - {name: NPUCFG,  slot: 0x019, irq: 24, line: 12, status: reserved, device_id: 0x013,
      desc: "NPU fabric-level global configuration and status", source: "project-specific"}
   - {name: APBPNP,  slot: 0x0FF, irq: 0,  status: implemented, device_id: 0x000,
      desc: "Peripheral bus device table, two words per slot", source: "APB PnP at bridge base + 0xFF000 (GRLIB grlib.pdf 5.3), layout only"}
+
+# ---------------------------------------------------------------------
+# Core interrupt inputs that are not per-peripheral
+# ---------------------------------------------------------------------
+#
+# Ibex's IDs, from ext/ibex/doc/03_reference/exception_interrupts.rst.
+# Recorded here rather than in a comment in the RTL because the vector
+# table in the boot software, the RTL wiring and the tests all have to
+# agree about them, and this file is the only thing all three read.
+#
+# `vector` is the byte offset from mtvec at which the core enters, which
+# is 4*id for an interrupt and 0 for every synchronous exception. Ibex is
+# vectored-only and forces mtvec[7:2] to zero (docs/38 section 7.5 defect
+# 3), so the table is 128 bytes at a 256-byte-aligned base and nothing
+# software writes can change that.
+
+core_irqs:
+  - {name: MSOFT,    id: 3,   source: "CLINT msip",
+     desc: "Machine software interrupt, mcause 0x80000003"}
+  - {name: MTIMER,   id: 7,   source: "CLINT mtime >= mtimecmp",
+     desc: "Machine timer interrupt, mcause 0x80000007"}
+  - {name: MEXT,     id: 11, source: "unconnected; reserved for a PLIC",
+     desc: "Machine external interrupt, mcause 0x8000000B. Tied low"}
+  - {name: NMI,      id: 31, source: "watchdog stage 1",
+     desc: "Non-maskable interrupt, mcause 0x8000001F. Ignores mstatus.MIE and mie"}

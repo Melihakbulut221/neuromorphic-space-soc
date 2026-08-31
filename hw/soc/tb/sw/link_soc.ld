@@ -93,8 +93,10 @@ SECTIONS {
    is the one that actually happened once. */
 ASSERT(_start == __soc_reset_vector,
        "_start must sit on Ibex's reset vector, {boot_addr_i[31:8], 8'h80}")
-ASSERT((trap_entry & 0xff) == 0,
-       "trap_entry must be 256-byte aligned: Ibex forces mtvec[7:2] to 0")
+ASSERT((trap_vectors & 0xff) == 0,
+       "trap_vectors must be 256-byte aligned: Ibex forces mtvec[7:2] to 0")
+ASSERT(trap_vectors_end - trap_vectors == 128,
+       "the 32-entry vector table must be exactly 128 bytes: one entry assembled compressed would put every later vector at the wrong offset")
 ASSERT((__pmp_buf & 63) == 0,
        "__pmp_buf must be 64-byte aligned or the NAPOT encoding silently covers more")
 ASSERT(__stack_bottom <= __stack_top,

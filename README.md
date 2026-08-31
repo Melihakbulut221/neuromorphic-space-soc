@@ -43,17 +43,44 @@ setup and hold clean on three corners with a real 5 percent derate, and
 the Tiny Tapeout precheck at 10 of 10. No silicon exists and the hosted
 GDS action has not run.
 
-*Does not exist.* No management CPU, no spacecraft interfaces, no SRAM
-macro in any hardened design, no radiation test data, no licence, no
-funding. The pilot is a slice of the architecture and a proof of the
-flow, not the SoC.
+*Exists, and is unhardened.* A management subsystem, begun after the
+pilot froze and kept strictly separate from it. Ibex (`small-pmp`:
+RV32IMC, PMP, no lockstep) is brought up through sv2v on the pinned
+toolchain and runs a self-checking bare-metal program; a memory map
+frozen as a single generated source; and a fabric that speaks Ibex's own
+protocol internally with real AMBA 3 APB at the peripheral boundary,
+proved compliant by k-induction. The bring-up program runs end to end
+out of boot ROM through that fabric with the console decoded off a real
+serial line. `docs/38` and `docs/39` are the records.
 
-The next block is the management CPU. Bring-up is in progress against
-the candidate named in `docs/03-cpu-and-ip-survey.md`, and the first
-question it has to answer is not whether the core is good but whether
-the SystemVerilog-to-Verilog step the open flow depends on carries it
-intact — the survey named that as a single-point dependency and it has
-never been exercised on a core this size.
+It now also has interrupts, timers and a watchdog: a RISC-V CLINT on the
+system bus, a GRLIB-style GPTIMER on the peripheral bus, and a watchdog
+that escalates through a non-maskable interrupt to a system reset to an
+external pin, cannot be disabled or slowed by the software it watches,
+and keeps its record through the reset it causes. A timer interrupt is
+taken and returned from on the real fabric; the whole escalation ladder
+runs end to end across three boots of the SoC in one simulation.
+`docs/40` is the record, and it argues the decision *not* to build a
+platform interrupt controller rather than assuming it.
+
+It has **no fault tolerance of any kind** — no ECC, no scrubbing, no
+TMR, no bus error latch, and no protection on the watchdog's own state.
+That is a deliberate ordering, not an oversight: the fabric is being
+made correct before it is made survivable. Note what it means in
+combination with the `small-pmp` choice, which declined Ibex's lockstep:
+the management processor is currently the least protected block in the
+design, `docs/38` section 10 item 4 records what that obliges, and the
+watchdog that is now its only backstop is itself unprotected.
+
+*Does not exist.* No silicon. No spacecraft interfaces. No SRAM macro in
+any hardened design. No radiation test data. No bus error latch or
+scrubber. No place-and-route, timing or gate-level result for anything
+under `hw/soc/`. No licence. No funding.
+
+The next block is the management core's own fault-injection campaign —
+which `docs/38` made a consequence of declining lockstep rather than
+deferred work, and which can now measure not only the core's silent-error
+rate but how much of it the watchdog actually catches.
 
 ## Documents
 

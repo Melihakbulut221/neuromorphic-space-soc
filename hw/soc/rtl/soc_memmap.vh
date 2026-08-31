@@ -69,3 +69,40 @@ localparam [7:0] SOC_APBSLOT_CLKGATE  = 8'h18;
 localparam [7:0] SOC_APBSLOT_NPUCFG   = 8'h19;
 localparam [7:0] SOC_APBSLOT_APBPNP   = 8'hFF;
 
+// Ibex fast local interrupt index per source. This is the WIRE
+// INDEX into irq_fast_i[14:0], not the plug-and-play source
+// number: soc_top.v uses these to build the vector, and nothing
+// in the RTL should ever write one down.
+localparam integer SOC_IRQLINE_UART0    = 0;
+localparam integer SOC_IRQLINE_UART1    = 1;
+localparam integer SOC_IRQLINE_GPIO     = 2;
+localparam integer SOC_IRQLINE_TIMER0   = 3;
+localparam integer SOC_IRQLINE_TIMER1   = 4;
+localparam integer SOC_IRQLINE_SPW      = 5;
+localparam integer SOC_IRQLINE_CAN      = 6;
+localparam integer SOC_IRQLINE_SPI      = 7;
+localparam integer SOC_IRQLINE_I2C      = 8;
+localparam integer SOC_IRQLINE_QSPICTL  = 9;
+localparam integer SOC_IRQLINE_BUSSTAT  = 10;
+localparam integer SOC_IRQLINE_SCRUB    = 11;
+localparam integer SOC_IRQLINE_NPUCFG   = 12;
+
+// Plug-and-play interrupt SOURCE NUMBER per peripheral. A block
+// whose register map reports its own interrupt number -- GRLIB's
+// GPTIMER configuration register does -- takes it from here, so
+// the number a driver reads out of the peripheral and the number
+// in the device table are the same number.
+localparam [4:0] SOC_IRQNUM_UART0    = 5'd2;
+localparam [4:0] SOC_IRQNUM_UART1    = 5'd3;
+localparam [4:0] SOC_IRQNUM_GPIO     = 5'd4;
+localparam [4:0] SOC_IRQNUM_TIMER0   = 5'd8;
+localparam [4:0] SOC_IRQNUM_TIMER1   = 5'd12;
+localparam [4:0] SOC_IRQNUM_SPW      = 5'd16;
+localparam [4:0] SOC_IRQNUM_CAN      = 5'd18;
+localparam [4:0] SOC_IRQNUM_SPI      = 5'd19;
+localparam [4:0] SOC_IRQNUM_I2C      = 5'd20;
+localparam [4:0] SOC_IRQNUM_QSPICTL  = 5'd21;
+localparam [4:0] SOC_IRQNUM_BUSSTAT  = 5'd22;
+localparam [4:0] SOC_IRQNUM_SCRUB    = 5'd23;
+localparam [4:0] SOC_IRQNUM_NPUCFG   = 5'd24;
+

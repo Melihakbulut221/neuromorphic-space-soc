@@ -21,7 +21,12 @@
 // THE PASS CRITERION, and what it does not cover. A run passes only if
 // ALL of these hold:
 //
-//   1. the core reached WFI before the timeout;
+//   1. the core reached WFI, with the exit magic already posted in RAM,
+//      before the timeout. The magic is part of the TERMINATION
+//      condition and not only of the checks afterwards, because the SoC
+//      can now reset its own core and Ibex reports core_sleep_o high
+//      while it is held in reset -- so "awake, then asleep" alone goes
+//      true in the middle of a watchdog reset;
 //   2. the magic word beside the exit code says the exit code is
 //      meaningful, so a WFI reached some other way is not mistaken for a
 //      completed run;
@@ -90,14 +95,27 @@ module tb_soc;
   always #CLK_HALF clk = ~clk;
 
   wire uart_tx, uart_irq;
+  wire wdog_n, wdog_rst, nmi, irq_timer, irq_soft, gptimer_irq;
   wire alert_minor, alert_major_internal, alert_major_bus;
   wire double_fault_seen, core_sleep;
 
+  // The watchdog bootstrap pin is held LOW, which is the armed state.
+  // A run with it high would have no watchdog at all and every watchdog
+  // check in the program would pass vacuously, so it is a constant here
+  // and hw/soc/tb/cocotb/test_soc_wdog.py is where the disabled case is
+  // driven.
   soc_top #(.ROM_INIT(`ROM_HEX)) dut (
       .clk_i  (clk),
       .rst_ni (rst_n),
+      .wdog_dis_i (1'b0),
       .uart_tx_o  (uart_tx),
       .uart_irq_o (uart_irq),
+      .wdog_no       (wdog_n),
+      .wdog_rst_o    (wdog_rst),
+      .nmi_o         (nmi),
+      .irq_timer_o   (irq_timer),
+      .irq_soft_o    (irq_soft),
+      .gptimer_irq_o (gptimer_irq),
       .alert_minor_o          (alert_minor),
       .alert_major_internal_o (alert_major_internal),
       .alert_major_bus_o      (alert_major_bus),
@@ -136,10 +154,52 @@ module tb_soc;
   // awake first is the whole fix.
   reg saw_awake = 1'b0;
   always @(posedge clk) if (rst_n && !core_sleep) saw_awake <= 1'b1;
-  wire finished = saw_awake && core_sleep;
+
+  // AND the exit magic must already be in RAM.
+  //
+  // That third term was added when the watchdog arrived and it is not
+  // belt and braces. The SoC can now reset its own core (soc_top.v's
+  // reset section), and a core held in reset reports core_sleep_o high
+  // -- so "awake, then asleep" becomes true in the middle of a watchdog
+  // reset, tens of thousands of cycles before the program has finished.
+  // The first watchdog run ended with the testbench reporting a timeout
+  // at a cycle count that meant nothing, for exactly that reason.
+  // Requiring the magic word makes the criterion "the program posted its
+  // result and then slept", which is what was always meant.
+  wire finished = saw_awake && core_sleep &&
+                  (dut.u_ram.mem[EXIT_MAGIC_ADDR[31:2]] == EXIT_MAGIC);
 
   integer cycles = 0;
   always @(posedge clk) if (rst_n) cycles = cycles + 1;
+
+  // -------------------------------------------------------------------
+  // Watchdog escalation, reported as it happens.
+  //
+  // Not part of any pass criterion. It is here because every one of
+  // these three events is invisible from the console -- stage 2 in
+  // particular restarts the program, and without this line the symptom
+  // is a log that simply begins again with no explanation. The first
+  // watchdog bring-up run produced exactly that.
+  // -------------------------------------------------------------------
+  reg nmi_q = 1'b0, wdog_rst_q = 1'b0, wdog_n_q = 1'b1;
+  integer wdog_stage1 = 0, wdog_stage2 = 0, wdog_stage3 = 0;
+  always @(posedge clk) if (rst_n) begin
+    if (nmi && !nmi_q) begin
+      wdog_stage1 = wdog_stage1 + 1;
+      $display("[TB] watchdog stage 1 (NMI) at cycle %0d", cycles);
+    end
+    if (wdog_rst && !wdog_rst_q) begin
+      wdog_stage2 = wdog_stage2 + 1;
+      $display("[TB] watchdog stage 2 (system reset) at cycle %0d", cycles);
+    end
+    if (!wdog_n && wdog_n_q) begin
+      wdog_stage3 = wdog_stage3 + 1;
+      $display("[TB] watchdog stage 3 (WDOGN pin) at cycle %0d", cycles);
+    end
+    nmi_q      <= nmi;
+    wdog_rst_q <= wdog_rst;
+    wdog_n_q   <= wdog_n;
+  end
 
   // Last addresses seen on each master port, so a timeout can say WHERE
   // it stopped. A hang here is always "the program counter or a pointer
@@ -270,6 +330,8 @@ module tb_soc;
 
     $display("[TB] console: %0d characters decoded, %0d framing errors",
              rx_chars, rx_framing_errors);
+    $display("[TB] watchdog: stage1 %0d, stage2 %0d, stage3 %0d",
+             wdog_stage1, wdog_stage2, wdog_stage3);
     if (rx_chars == 0) begin
       $display("[TB] FAIL: nothing came out of the UART");
       errors = errors + 1;

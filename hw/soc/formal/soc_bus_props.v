@@ -51,7 +51,8 @@
 //     map and this file cannot.
 //   * Reset behaviour beyond the initial state.
 
-localparam integer F_ERRSLV = 4;
+localparam integer F_ERRSLV = 5;
+localparam integer F_NS     = 6;   // five ports plus the error slave
 
 reg f_past_valid;
 initial f_past_valid = 1'b0;
@@ -66,14 +67,16 @@ wire        f_gnt     = mi_gnt_o || md_gnt_o;
 wire [2:0]  f_tgt_idx = s_req_o[0] ? 3'd0 :
                         s_req_o[1] ? 3'd1 :
                         s_req_o[2] ? 3'd2 :
-                        s_req_o[3] ? 3'd3 : F_ERRSLV[2:0];
+                        s_req_o[3] ? 3'd3 :
+                        s_req_o[4] ? 3'd4 : F_ERRSLV[2:0];
 
-wire [4:0] f_push = {f_gnt && (s_req_o == 4'b0000),
+wire [5:0] f_push = {f_gnt && (s_req_o == 5'b00000),
+                     f_gnt && s_req_o[4],
                      f_gnt && s_req_o[3],
                      f_gnt && s_req_o[2],
                      f_gnt && s_req_o[1],
                      f_gnt && s_req_o[0]};
-wire [4:0] f_pop  = {err_rvalid, s_rvalid_i};
+wire [5:0] f_pop  = {err_rvalid, s_rvalid_i};
 
 // ---------------------------------------------------------------------
 // Environment: legal masters and legal slaves
@@ -101,7 +104,7 @@ localparam integer F_QD = 4;      // 2 masters x MAX_OUT
 
 reg [2:0] f_out_i, f_out_d;       // wide enough to SEE an overflow
 reg [2:0] f_lock_i, f_lock_d;
-reg [3:0] f_occ [0:4];            // per-slave occupancy, ditto
+reg [3:0] f_occ [0:F_NS-1];       // per-slave occupancy, ditto
 
 integer f_s;
 always @(posedge clk_i or negedge rst_ni) begin
@@ -110,7 +113,7 @@ always @(posedge clk_i or negedge rst_ni) begin
         f_out_d  <= 3'd0;
         f_lock_i <= 3'd0;
         f_lock_d <= 3'd0;
-        for (f_s = 0; f_s < 5; f_s = f_s + 1) f_occ[f_s] <= 4'd0;
+        for (f_s = 0; f_s < F_NS; f_s = f_s + 1) f_occ[f_s] <= 4'd0;
     end else begin
         if (mi_gnt_o && !mi_rvalid_o) f_out_i <= f_out_i + 3'd1;
         if (!mi_gnt_o && mi_rvalid_o) f_out_i <= f_out_i - 3'd1;
@@ -118,7 +121,7 @@ always @(posedge clk_i or negedge rst_ni) begin
         if (!md_gnt_o && md_rvalid_o) f_out_d <= f_out_d - 3'd1;
         if (mi_gnt_o) f_lock_i <= f_tgt_idx;
         if (md_gnt_o) f_lock_d <= f_tgt_idx;
-        for (f_s = 0; f_s < 5; f_s = f_s + 1) begin
+        for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
             if (f_push[f_s] && !f_pop[f_s]) f_occ[f_s] <= f_occ[f_s] + 4'd1;
             if (!f_push[f_s] && f_pop[f_s]) f_occ[f_s] <= f_occ[f_s] - 4'd1;
         end
@@ -130,17 +133,17 @@ end
 // that. A master's response always retires an entry at the slave it is
 // locked to, which is what makes these countable from the ports alone
 // without reading the design's ownership queues.
-reg [2:0] f_occ_i [0:4];
-reg [2:0] f_occ_d [0:4];
+reg [2:0] f_occ_i [0:F_NS-1];
+reg [2:0] f_occ_d [0:F_NS-1];
 
 always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-        for (f_s = 0; f_s < 5; f_s = f_s + 1) begin
+        for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
             f_occ_i[f_s] <= 3'd0;
             f_occ_d[f_s] <= 3'd0;
         end
     end else begin
-        for (f_s = 0; f_s < 5; f_s = f_s + 1) begin
+        for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
             case ({mi_gnt_o && (f_tgt_idx == f_s[2:0]),
                    mi_rvalid_o && (f_lock_i == f_s[2:0])})
                 2'b10:   f_occ_i[f_s] <= f_occ_i[f_s] + 3'd1;
@@ -165,6 +168,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (s_rvalid_i[1]) assume (f_occ[1] != 4'd0);
     if (s_rvalid_i[2]) assume (f_occ[2] != 4'd0);
     if (s_rvalid_i[3]) assume (f_occ[3] != 4'd0);
+    if (s_rvalid_i[4]) assume (f_occ[4] != 4'd0);
 end
 
 // ---------------------------------------------------------------------
@@ -196,7 +200,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (f_out_i != 3'd0) assert (f_lock_i == lock_i);
     if (f_out_d != 3'd0) assert (f_lock_d == lock_d);
 
-    for (f_s = 0; f_s < 5; f_s = f_s + 1) begin
+    for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
         // I3. Total occupancy is the sum of the two masters' shares.
         assert (f_occ[f_s] == {1'b0, f_occ_i[f_s]} + {1'b0, f_occ_d[f_s]});
 
@@ -237,9 +241,13 @@ always @(posedge clk_i) if (rst_ni) begin
     assert (!(s_req_o[0] && s_req_o[1]));
     assert (!(s_req_o[0] && s_req_o[2]));
     assert (!(s_req_o[0] && s_req_o[3]));
+    assert (!(s_req_o[0] && s_req_o[4]));
     assert (!(s_req_o[1] && s_req_o[2]));
     assert (!(s_req_o[1] && s_req_o[3]));
+    assert (!(s_req_o[1] && s_req_o[4]));
     assert (!(s_req_o[2] && s_req_o[3]));
+    assert (!(s_req_o[2] && s_req_o[4]));
+    assert (!(s_req_o[3] && s_req_o[4]));
 
     // F2a. A selected slave is the one the frozen map puts the broadcast
     //      address in. Soundness: nothing is routed to the wrong place.
@@ -247,6 +255,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (s_req_o[1]) assert ((s_addr_o & SOC_MASK_ROM) == SOC_BASE_ROM);
     if (s_req_o[2]) assert ((s_addr_o & SOC_MASK_APB) == SOC_BASE_APB);
     if (s_req_o[3]) assert ((s_addr_o & SOC_MASK_PNP) == SOC_BASE_PNP);
+    if (s_req_o[4]) assert ((s_addr_o & SOC_MASK_CLINT) == SOC_BASE_CLINT);
 
     // F2b. The converse. Completeness: an address the map covers is
     //      never sent to the error slave, and never dropped. Without
@@ -256,6 +265,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (f_gnt && (s_addr_o & SOC_MASK_ROM) == SOC_BASE_ROM) assert (s_req_o[1]);
     if (f_gnt && (s_addr_o & SOC_MASK_APB) == SOC_BASE_APB) assert (s_req_o[2]);
     if (f_gnt && (s_addr_o & SOC_MASK_PNP) == SOC_BASE_PNP) assert (s_req_o[3]);
+    if (f_gnt && (s_addr_o & SOC_MASK_CLINT) == SOC_BASE_CLINT) assert (s_req_o[4]);
 end
 
 // ---------------------------------------------------------------------
@@ -277,6 +287,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (f_gnt && s_req_o[1]) assert (s_gnt_i[1]);
     if (f_gnt && s_req_o[2]) assert (s_gnt_i[2]);
     if (f_gnt && s_req_o[3]) assert (s_gnt_i[3]);
+    if (f_gnt && s_req_o[4]) assert (s_gnt_i[4]);
 
     // F3d. The broadcast payload is the granted master's, and the
     //      instruction port -- which has no write signals at all -- must
@@ -319,7 +330,7 @@ always @(posedge clk_i) if (rst_ni) begin
     //     never given. The same statement is an ASSUMPTION for the four
     //     external slaves and an ASSERTION here, because here it is this
     //     module's own behaviour.
-    if (err_rvalid) assert (f_occ[4] != 4'd0);
+    if (err_rvalid) assert (f_occ[F_ERRSLV] != 4'd0);
 
     // F6. No queue overflows. The design's own q_fill is two bits and
     //     therefore cannot show this; the ghost counter is four bits so
@@ -330,6 +341,7 @@ always @(posedge clk_i) if (rst_ni) begin
     assert (f_occ[2] <= F_QD[3:0]);
     assert (f_occ[3] <= F_QD[3:0]);
     assert (f_occ[4] <= F_QD[3:0]);
+    assert (f_occ[5] <= F_QD[3:0]);
 
     // No response to a master that has nothing outstanding.
     assert (!mi_rvalid_o || f_out_i != 3'd0);
@@ -347,7 +359,8 @@ end
 // invariant F8 below is what closes that gap -- it ties each master's
 // outstanding count to the occupancy of the slave it is locked to.
 wire [2:0] f_resp_in  = {2'b0, f_pop[0]} + {2'b0, f_pop[1]} + {2'b0, f_pop[2]}
-                      + {2'b0, f_pop[3]} + {2'b0, f_pop[4]};
+                      + {2'b0, f_pop[3]} + {2'b0, f_pop[4]}
+                      + {2'b0, f_pop[5]};
 wire [2:0] f_resp_out = {2'b0, mi_rvalid_o} + {2'b0, md_rvalid_o};
 
 always @(posedge clk_i) if (rst_ni) begin
@@ -363,7 +376,8 @@ end
 // slave it is locked to. Together these say a request cannot be sitting
 // at one slave while its master believes it is at another, which is the
 // misdelivery F7 alone cannot see.
-wire [3:0] f_occ_total = f_occ[0] + f_occ[1] + f_occ[2] + f_occ[3] + f_occ[4];
+wire [3:0] f_occ_total = f_occ[0] + f_occ[1] + f_occ[2] + f_occ[3] + f_occ[4]
+                       + f_occ[5];
 
 always @(posedge clk_i) if (rst_ni) begin
     assert (f_occ_total == ({1'b0, f_out_i} + {1'b0, f_out_d}));
@@ -414,7 +428,8 @@ always @(posedge clk_i) if (f_past_valid && rst_ni) begin
     cover (f_gnt && s_req_o[1]);
     cover (f_gnt && s_req_o[2]);
     cover (f_gnt && s_req_o[3]);
-    cover (f_gnt && s_req_o == 4'b0000);    // and to the error slave
+    cover (f_gnt && s_req_o[4]);
+    cover (f_gnt && s_req_o == 5'b00000);   // and to the error slave
     cover (mi_rvalid_o && mi_err_o);        // a bus error reaching a master
     cover (f_out_i == 3'd2);                // both masters at the limit
     cover (f_out_d == 3'd2);

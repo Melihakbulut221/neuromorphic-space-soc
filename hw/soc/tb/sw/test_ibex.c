@@ -53,6 +53,7 @@
 
 #ifdef SOC_PLATFORM
 #include "soc_memmap.h"
+#include "soc_timers.h"
 
 // GRLIB APBUART register offsets and bits (grip.pdf table 126, adopted
 // by docs/08 section 3 row 9 and implemented as a subset in
@@ -92,7 +93,22 @@ static void putc_(char c) { *(volatile uint32_t *)PUTC_ADDR = (uint32_t)c; }
 #endif
 
 extern uint32_t trap_mcause, trap_mepc, trap_count, trap_saw_rvc;
+/* Written by the vector stubs in crt0.S. irq_marker says which VECTOR
+   the core entered at; irq_mcause says which interrupt the core believes
+   it took. Comparing them is what makes a wrong vector visible.
+
+   VOLATILE, and that word is load-bearing. These are written by a
+   handler the compiler cannot see, so a wait loop spinning on one of
+   them is a loop on a value the compiler is entitled to cache in a
+   register -- and it does, at -Os. The first version of this file
+   declared them plain and every wait loop below ran to its iteration
+   limit before the check that follows read the true value: three tests
+   failed on their timeout bound while reporting exactly the right cause
+   and vector, and one of them spun long enough for the watchdog's stage
+   2 to reset the SoC underneath it. */
+extern volatile uint32_t irq_marker, irq_mcause, irq_count, nmi_count;
 extern char __pmp_buf[];
+extern char trap_vectors[];
 
 static void puts_(const char *s) { while (*s) putc_(*s++); }
 
@@ -180,6 +196,120 @@ static uint32_t do_load(volatile uint32_t *p) {
 
 #define CSRR(name)      ({ uint32_t v_; __asm__ volatile ("csrr %0, " #name : "=r"(v_)); v_; })
 #define CSRW(name, v)   __asm__ volatile ("csrw " #name ", %0" :: "r"(v))
+#define CSRS(name, v)   __asm__ volatile ("csrs " #name ", %0" :: "r"(v) : "memory")
+#define CSRC(name, v)   __asm__ volatile ("csrc " #name ", %0" :: "r"(v) : "memory")
+
+#ifdef SOC_PLATFORM
+/* ---- CLINT access helpers ------------------------------------------
+   Both sequences are the ones soc_clint.v's header states, and both
+   exist because a 64-bit register on a 32-bit bus passes through an
+   intermediate value that is neither the old one nor the new one. */
+
+/* Read: high, low, high again, and retry while the two highs differ, so
+   the pair never straddles a carry out of bit 31. Bounded, because an
+   unbounded retry against a broken CLINT is a hang and a hang says
+   nothing. */
+static uint64_t clint_mtime(void) {
+  for (int i = 0; i < 8; i++) {
+    uint32_t hi = *(volatile uint32_t *)CLINT_MTIMEH;
+    uint32_t lo = *(volatile uint32_t *)CLINT_MTIMEL;
+    uint32_t hi2 = *(volatile uint32_t *)CLINT_MTIMEH;
+    if (hi == hi2) return ((uint64_t)hi << 32) | lo;
+  }
+  return 0;   /* caller's monotonicity check turns this into a failure */
+}
+
+/* Write: an unreachable low half first, so no intermediate value of the
+   pair is a deadline that is already met and no spurious timer interrupt
+   can appear between the stores. */
+static void clint_set_mtimecmp(uint64_t v) {
+  *(volatile uint32_t *)CLINT_MTIMECMPL = 0xFFFFFFFFu;
+  *(volatile uint32_t *)CLINT_MTIMECMPH = (uint32_t)(v >> 32);
+  *(volatile uint32_t *)CLINT_MTIMECMPL = (uint32_t)v;
+}
+
+static void csr_set_mie(uint32_t m)     { CSRS(mie, m); }
+static uint32_t csr_read_mie(void)      { return CSRR(mie); }
+static uint32_t csr_read_mip(void)      { return CSRR(mip); }
+static void csr_set_mstatus(uint32_t m) { CSRS(mstatus, m); }
+static void csr_clr_mstatus(uint32_t m) { CSRC(mstatus, m); }
+static uint32_t csr_read_mstatus(void)  { return CSRR(mstatus); }
+static uint32_t csr_read_mtvec(void)    { return CSRR(mtvec); }
+#endif
+
+#if defined(SOC_PLATFORM) && defined(WDOG_RESET_DEMO)
+extern volatile uint32_t nmi_no_ack;
+
+/* The watchdog escalation ladder, end to end on the real SoC.
+ *
+ * Stage 1 is reachable from an ordinary program and test 21 above takes
+ * it. Stages 2 and 3 are not: they only happen when software has SEEN
+ * the stage-1 warning and failed to act on it, which is exactly the
+ * condition a working program cannot produce. So this build has one
+ * extra behaviour -- the NMI handler is told not to acknowledge -- and
+ * everything else about the SoC is identical.
+ *
+ * The run is THREE BOOTS of the same image, and the thing that carries
+ * information between them is the watchdog's own status register, which
+ * is in the power-on reset domain and therefore survives the resets the
+ * watchdog causes (soc_wdog.v W4). RAM does not carry it: crt0.S zeroes
+ * .bss on every boot, so every variable this program has is gone. If
+ * WDOGSTAT were reset by the reset it generates, this program could not
+ * tell a watchdog reset from a power cycle and would loop forever --
+ * which is precisely the operator-facing failure W4 exists to prevent.
+ *
+ *   boot 1  RSTCNT 0: arm short, refuse to acknowledge, hang.
+ *           -> stage 1 (NMI), then stage 2 (system reset).
+ *   boot 2  RSTCNT 1, WDOGRST set, ESCALATED clear: same again.
+ *           -> stage 1, stage 2, and RSTCNT reaches ESCALATE = 2.
+ *   boot 3  RSTCNT 2, WDOGRST set, ESCALATED set: report and stop.
+ */
+static int wdog_demo(void) {
+  uint32_t st = *(volatile uint32_t *)WDOG_STAT;
+  uint32_t n  = WDOG_ST_RSTCNT(st);
+  uint32_t bad = 0;
+
+  puts_("wdog demo: boot with WDOGSTAT ");
+  puthex(st);
+  putc_('\n');
+
+  if (n == 0) {
+    /* First boot. Nothing may claim a watchdog reset happened. */
+    if (st & (WDOG_ST_WDOGRST | WDOG_ST_ESCALATED | WDOG_ST_NMI)) bad |= 1u;
+  } else {
+    /* Every later boot was caused by the watchdog and must say so. */
+    if (!(st & WDOG_ST_WDOGRST)) bad |= 2u;
+    /* Stage 2 clears the pending NMI on its way out -- it has to, see
+       the note in soc_wdog.v about boot_addr + 0x7C. */
+    if (st & WDOG_ST_NMI) bad |= 4u;
+    /* The external pin follows the count and nothing else. */
+    if ((n >= 2u) != ((st & WDOG_ST_ESCALATED) != 0u)) bad |= 8u;
+    /* The reload was restored to the maximum by the reset, so this boot
+       has the full budget however short the last one set it. */
+    if (*(volatile uint32_t *)WDOG_RLD != 0xFFFFu) bad |= 16u;
+  }
+
+  if (bad) {
+    puts_("wdog demo: FAIL mask "); puthex(bad); putc_('\n');
+    puts_("RESULT FAIL\n");
+    return (int)(0xD0000000u | bad);
+  }
+
+  if (n >= 2u) {
+    puts_("wdog demo: three stages seen, rstcnt ");
+    puthex(n);
+    putc_('\n');
+    puts_("RESULT PASS\n");
+    return 0;
+  }
+
+  puts_("wdog demo: arming and refusing to acknowledge\n");
+  nmi_no_ack = 1u;
+  *(volatile uint32_t *)WDOG_RLD  = WDOG_W(200u);
+  *(volatile uint32_t *)WDOG_CTRL = WDOG_W(GPT_LD);
+  for (;;) { }        /* the hung core this whole block exists for */
+}
+#endif
 
 int main(void) {
 #ifdef SOC_PLATFORM
@@ -189,6 +319,10 @@ int main(void) {
   // is silent and shows up as a testbench timeout with a fetch address.
   uart_init();
 #endif
+#if defined(SOC_PLATFORM) && defined(WDOG_RESET_DEMO)
+  return wdog_demo();
+#endif
+
   puts_("ibex bring-up self-test\n");
 
   // 1 ----------------------------------------------------------------
@@ -359,13 +493,21 @@ int main(void) {
   // map it was generated from, and the boot ROM must refuse a write.
 #ifdef SOC_PLATFORM
   {
-    /* 12: a reserved region reaches the error slave. SOC_CLINT_BASE is
+    /* 12: a reserved region reaches the error slave. SOC_PLIC_BASE is
        frozen in the map and nothing decodes it, so the load must come
        back with err and become a load access fault, mcause 5. A fabric
        whose default was "return zero" would pass every other check in
-       this program and fail here. */
+       this program and fail here.
+
+       It used to be SOC_CLINT_BASE, until docs/40 implemented the CLINT
+       and the check quietly started reading a real register instead of
+       faulting. The PLIC region is the right successor for a specific
+       reason and not merely because it is the next reserved thing: it is
+       the region docs/40 section 3 decided to leave reserved, and this
+       is the check that the decision has teeth -- irq_external_i is tied
+       low AND the address space that would drive it faults. */
     uint32_t before = trap_count;
-    (void)do_load((volatile uint32_t *)(uintptr_t)SOC_CLINT_BASE);
+    (void)do_load((volatile uint32_t *)(uintptr_t)SOC_PLIC_BASE);
     int ok = (trap_count == before + 1) && (trap_mcause == 5u);
     if (!ok) { puts_("  unmapped mcause="); puthex(trap_mcause);
                puts_(" cnt="); puthex(trap_count); putc_('\n'); }
@@ -401,6 +543,278 @@ int main(void) {
     if (!ok) { puts_("  rom-write mcause="); puthex(trap_mcause);
                puts_(" cnt="); puthex(trap_count); putc_('\n'); }
     check(14, ok);
+  }
+#endif
+
+  // 15..22 ---------------------------------------------------------
+  //
+  // The interrupt and timing subsystem. Every one of these is the first
+  // time the thing it touches has ever run: docs/39 section 9 item 2
+  // recorded that every Ibex interrupt input was tied off, so until now
+  // the vectored-only mtvec of docs/38 section 7.5 defect 3 had never
+  // been exercised at all.
+#ifdef SOC_PLATFORM
+  {
+    /* 15: mtime runs, and the 64-bit read sequence is stable.
+       The read is high, low, high again, repeated while the two highs
+       differ -- the standard answer to reading a 64-bit counter over a
+       32-bit bus, and the same shape as the write sequence in test 16.
+       A CLINT whose halves were not coherent would show up here as a
+       loop that never terminates, so the retry count is bounded and
+       failing it is a failure rather than a hang. */
+    int ok = 1;
+    uint64_t a_ = clint_mtime();
+    for (volatile int i = 0; i < 20; i++) { }
+    uint64_t b_ = clint_mtime();
+    ok &= (b_ > a_);
+    ok &= ((uint32_t)(b_ - a_) < 10000u);   /* advancing, not jumping */
+
+    /* An offset the CLINT does not implement is a bus error, not a
+       register that reads zero. soc_clint.v's header argues that choice;
+       this is the check that it was actually made. */
+    uint32_t before = trap_count;
+    (void)do_load((volatile uint32_t *)(uintptr_t)CLINT_UNMAPPED);
+    ok &= (trap_count == before + 1) && (trap_mcause == 5u);
+    if (!ok) { puts_("  mtime a="); puthex((uint32_t)a_);
+               puts_(" b="); puthex((uint32_t)b_);
+               puts_(" mcause="); puthex(trap_mcause); putc_('\n'); }
+    check(15, ok);
+  }
+
+  {
+    /* 16: THE MACHINE TIMER INTERRUPT IS TAKEN AND RETURNED FROM.
+       This is the end-to-end demonstration the whole block exists for:
+       a deadline programmed into the CLINT over the system fabric, an
+       interrupt raised on a wire, the core vectoring to mtvec + 4*7,
+       a handler running, and the interrupted code resuming.
+
+       Four independent facts are checked, and the third is the one that
+       has never been checked before in this project:
+         - the handler ran exactly once;
+         - mcause is the machine timer interrupt;
+         - the core entered at the MTIMER vector and not at any other,
+           which the marker written by that vector's own stub reports;
+         - control came back here, which is only observable by this line
+           executing at all. */
+    uint32_t before = irq_count;
+    irq_marker = 0;
+    irq_mcause = 0;
+
+    /* Deadline. The three-store sequence of soc_clint.v's header: an
+       unreachable low half first, so the intermediate 64-bit value can
+       never be a deadline that is already met. */
+    uint64_t now = clint_mtime();
+    clint_set_mtimecmp(now + 200u);
+
+    csr_set_mie(MIE_MTIE);
+    csr_set_mstatus(MSTATUS_MIE);
+
+    int spun = 0;
+    while (irq_count == before && spun < 20000) spun++;
+
+    csr_clr_mstatus(MSTATUS_MIE);
+
+    int ok = 1;
+    ok &= (irq_count == before + 1);
+    ok &= (irq_mcause == SOC_IRQ_MTIMER);
+    ok &= (irq_marker == SOC_IRQID_MTIMER);
+    ok &= (spun < 20000);
+    /* The handler masked the source rather than clearing it, so MTIE
+       must now be clear. If it were not, the level-sensitive line would
+       have re-entered the handler and irq_count would be far above
+       before+1 -- which the first check would have caught, but this one
+       names the mechanism. */
+    ok &= ((csr_read_mie() & MIE_MTIE) == 0u);
+    if (!ok) { puts_("  mtimer cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker);
+               puts_(" n="); puthex(irq_count - before);
+               puts_(" spun="); puthex((uint32_t)spun); putc_('\n'); }
+    check(16, ok);
+
+    /* Disarm and confirm the level really went away: with mtimecmp at
+       the top of the range, mip.MTIP must read zero. A pulse-based timer
+       would pass every check above and fail this one. */
+    clint_set_mtimecmp(~(uint64_t)0);
+    ok = ((csr_read_mip() & MIE_MTIE) == 0u);
+    if (!ok) { puts_("  mip still pending\n"); }
+    check(17, ok);
+  }
+
+  {
+    /* 18: the machine software interrupt, through the CLINT's msip.
+       A different vector, a different mcause, the same fabric. It is
+       here because it is the cheapest possible check that the vector
+       table is a TABLE: if the core were entering at BASE for interrupts
+       as well as exceptions, tests 16 and 18 would report the same
+       marker. */
+    uint32_t before = irq_count;
+    irq_marker = 0;
+    *(volatile uint32_t *)CLINT_MSIP = 1u;
+    csr_set_mie(MIE_MSIE);
+    csr_set_mstatus(MSTATUS_MIE);
+    int spun = 0;
+    while (irq_count == before && spun < 2000) spun++;
+    csr_clr_mstatus(MSTATUS_MIE);
+    *(volatile uint32_t *)CLINT_MSIP = 0u;
+
+    int ok = (irq_count == before + 1)
+          && (irq_mcause == SOC_IRQ_MSOFT)
+          && (irq_marker == SOC_IRQID_MSOFT)
+          && (spun < 2000);
+    if (!ok) { puts_("  msoft cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker); putc_('\n'); }
+    check(18, ok);
+  }
+
+  {
+    /* 19: the GPTIMER on a FAST LOCAL interrupt line.
+       This is the path a peripheral takes and the one that would need a
+       PLIC if Ibex did not have fifteen of these -- docs/40 section 3.
+       The vector is mtvec + 4*(16+line) and the line comes from the
+       generated map, so if regmap/memmap.yaml moved GPTIMER0 to another
+       line this test would demand the other vector.
+
+       The configuration register is checked too: it must report three
+       timers (two general plus the watchdog) and the plug-and-play
+       source number the map assigns, because that number reaching the
+       block from the map rather than from a constant in its RTL is the
+       whole point of generating it. */
+    uint32_t cfg = *(volatile uint32_t *)GPT_CONFIG;
+    int ok = ((cfg & 7u) == 3u);
+    ok &= (((cfg >> 3) & 0x1Fu) == 8u);   /* IRQ field, map's source 8 */
+    ok &= (((cfg >> 8) & 1u) == 0u);      /* SI = 0, one shared line   */
+
+    uint32_t before = irq_count;
+    irq_marker = 0;
+    *(volatile uint32_t *)GPT_SCRELOAD = 3u;      /* prescaler         */
+    *(volatile uint32_t *)GPT_RLD(1)   = 40u;
+    *(volatile uint32_t *)GPT_CTRL(1)  = GPT_EN | GPT_RS | GPT_LD | GPT_IE;
+
+    csr_set_mie(MIE_FAST(SOC_IRQLINE_TIMER0));
+    csr_set_mstatus(MSTATUS_MIE);
+    int spun = 0;
+    while (irq_count == before && spun < 20000) spun++;
+    csr_clr_mstatus(MSTATUS_MIE);
+
+    ok &= (irq_count == before + 1);
+    ok &= (irq_mcause == SOC_IRQ_TIMER0);
+    ok &= (irq_marker == (SOC_FAST_IRQ_BASE + SOC_IRQLINE_TIMER0));
+    ok &= (spun < 20000);
+
+    /* Stop it and clear the pending bit, so nothing left running here
+       can disturb a later test. IP is write-one-to-clear. */
+    *(volatile uint32_t *)GPT_CTRL(1) = GPT_IP;
+    ok &= ((*(volatile uint32_t *)GPT_CTRL(1) & GPT_IP) == 0u);
+    if (!ok) { puts_("  gptimer cfg="); puthex(cfg);
+               puts_(" cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker); putc_('\n'); }
+    check(19, ok);
+  }
+
+  {
+    /* 20: the watchdog cannot be switched off by the software it
+       watches, and cannot be written at all without the key.
+       hw/soc/rtl/soc_wdog.v W1 and W5 stated as a program. */
+    int ok = 1;
+    uint32_t rld0 = *(volatile uint32_t *)WDOG_RLD;
+
+    /* Unkeyed write: no effect anywhere. */
+    *(volatile uint32_t *)WDOG_RLD = 0x1234u;
+    ok &= (*(volatile uint32_t *)WDOG_RLD == rld0);
+
+    /* Keyed write to clear EN, RS and IE: accepted by the bus, ignored
+       by the block, and the read-back says so rather than lying. */
+    *(volatile uint32_t *)WDOG_CTRL = WDOG_W(0u);
+    uint32_t ctrl = *(volatile uint32_t *)WDOG_CTRL;
+    ok &= ((ctrl & GPT_EN) != 0u);
+    ok &= ((ctrl & GPT_RS) != 0u);
+    ok &= ((ctrl & GPT_IE) != 0u);
+
+    /* Boot status: this run was not started by the watchdog. */
+    uint32_t st = *(volatile uint32_t *)WDOG_STAT;
+    ok &= ((st & WDOG_ST_WDOGRST) == 0u);
+    ok &= ((st & WDOG_ST_DISABLED) == 0u);
+    ok &= (WDOG_ST_RSTCNT(st) == 0u);
+    if (!ok) { puts_("  wdog ctrl="); puthex(ctrl);
+               puts_(" stat="); puthex(st);
+               puts_(" rld="); puthex(rld0); putc_('\n'); }
+    check(20, ok);
+  }
+
+  {
+    /* 21: the watchdog's stage 1 is a NON-MASKABLE interrupt, and it
+       arrives with interrupts globally disabled.
+       mstatus.MIE is left at zero for the whole of this test on purpose.
+       That is the state the watchdog exists to fire in -- a core stuck
+       inside a trap handler has MIE clear, because the hardware cleared
+       it on entry -- and a maskable line would be invisible there.
+
+       The timeout is shortened with a keyed write, the program then
+       stops kicking, and the NMI must arrive at mtvec + 0x7C. */
+    uint32_t before = nmi_count;
+    irq_marker = 0;
+    irq_mcause = 0;
+
+    *(volatile uint32_t *)WDOG_RLD  = WDOG_W(200u);
+    *(volatile uint32_t *)WDOG_CTRL = WDOG_W(GPT_LD);   /* kick, short */
+
+    int spun = 0;
+    while (nmi_count == before && spun < 40000) spun++;
+
+    int ok = (nmi_count == before + 1);
+    /* Interrupts were never globally enabled anywhere in this test, and
+       that is the property being demonstrated: this one arrived anyway. */
+    ok &= ((csr_read_mstatus() & MSTATUS_MIE) == 0u);
+    ok &= (irq_mcause == SOC_IRQ_NMI);
+    ok &= (irq_marker == SOC_IRQID_NMI);
+    ok &= (spun < 40000);
+    /* The handler acknowledged, so the pending bit is gone; had it not
+       been, mret would have re-entered the handler immediately. */
+    uint32_t st = *(volatile uint32_t *)WDOG_STAT;
+    ok &= ((st & WDOG_ST_NMI) == 0u);
+    ok &= ((st & WDOG_ST_WDOGRST) == 0u);   /* stage 2 has not fired   */
+
+    /* Back to the longest timeout and kick, so the rest of the run is
+       not racing stage 2. */
+    *(volatile uint32_t *)WDOG_RLD  = WDOG_W(0xFFFFu);
+    *(volatile uint32_t *)WDOG_CTRL = WDOG_W(GPT_LD);
+    if (!ok) { puts_("  nmi cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker);
+               puts_(" stat="); puthex(st);
+               puts_(" spun="); puthex((uint32_t)spun); putc_('\n'); }
+    check(21, ok);
+  }
+
+  {
+    /* 22: the mtvec constraint itself, exercised rather than commented.
+       docs/38 section 7.5 defect 3 says mtvec[7:2] reads as zero
+       whatever is written and MODE is hardwired to vectored. Nothing has
+       ever tested it, because until this document nothing could take an
+       interrupt. Write a base four bytes off the 256-byte grid, with
+       MODE bits that ask for direct mode, and require the read-back to
+       be the enclosing 256-byte boundary with MODE still vectored.
+
+       The old value is restored immediately. If this test failed by
+       actually MOVING the vector table, every later trap would go
+       somewhere else, so the restore is unconditional and comes before
+       the comparison. */
+    uint32_t good = (uint32_t)(uintptr_t)trap_vectors;
+    uint32_t back;
+    __asm__ volatile("csrw mtvec, %1\n csrr %0, mtvec\n csrw mtvec, %2\n"
+                     : "=&r"(back) : "r"(good + 4u), "r"(good) : "memory");
+    int ok = ((back & ~0xFFu) == (good & ~0xFFu));
+    ok &= ((back & 0xFCu) == 0u);      /* BASE[7:2] forced to zero      */
+    ok &= ((back & 0x3u) == 1u);       /* MODE is vectored and read-only*/
+    /* mtvec NEVER reads back what was written: MODE is hardwired to
+       2'b01, so the restored value reads as good|1. Checking for `good`
+       here was this test's own first failure, which is a small
+       demonstration of the same point -- a CSR whose write and read
+       differ is exactly the shape of thing a handler address gets
+       silently wrong on. */
+    ok &= (csr_read_mtvec() == (good | 1u));
+    if (!ok) { puts_("  mtvec back="); puthex(back);
+               puts_(" good="); puthex(good); putc_('\n'); }
+    check(22, ok);
   }
 #endif
 

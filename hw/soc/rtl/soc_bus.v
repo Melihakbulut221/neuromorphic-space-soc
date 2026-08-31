@@ -118,31 +118,40 @@ module soc_bus (
 
     // ---- slave ports. Address and write data are broadcast (S2). ----
     // Index order is fixed and is the order the decode below assigns:
-    //   0 RAM, 1 ROM, 2 APB, 3 PNP. Index 4 is the internal error slave
-    //   and has no port.
-    output wire [3:0]  s_req_o,
+    //   0 RAM, 1 ROM, 2 APB, 3 PNP, 4 CLINT. Index 5 is the internal
+    //   error slave and has no port.
+    output wire [4:0]  s_req_o,
     output wire [31:0] s_addr_o,
     output wire        s_we_o,
     output wire [3:0]  s_be_o,
     output wire [31:0] s_wdata_o,
-    input  wire [3:0]  s_gnt_i,
-    input  wire [3:0]  s_rvalid_i,
+    input  wire [4:0]  s_gnt_i,
+    input  wire [4:0]  s_rvalid_i,
     input  wire [31:0] s_rdata_0_i,
     input  wire [31:0] s_rdata_1_i,
     input  wire [31:0] s_rdata_2_i,
     input  wire [31:0] s_rdata_3_i,
-    input  wire [3:0]  s_err_i
+    input  wire [31:0] s_rdata_4_i,
+    input  wire [4:0]  s_err_i
 );
 
 `include "soc_memmap.vh"
 
-  // Five targets: four ports plus the error slave. NS is not a parameter
+  // Six targets: five ports plus the error slave. NS is not a parameter
   // because the decode below names the regions individually; adding a
   // region means editing both, and hw/soc/tb/cocotb/test_soc_bus.py
   // checks the decode against the generated map rather than against this
   // file, so the two cannot silently disagree.
-  localparam integer NS      = 5;
-  localparam integer ERRSLV  = 4;
+  //
+  // Port 4 (CLINT) is the one added by
+  // docs/40-interrupts-timers-watchdog.md. It is a system-bus slave and
+  // not a peripheral behind the APB bridge, because the frozen map puts
+  // it at 0xE0000000 as a region in its own right -- and because mtime
+  // is read on every scheduler tick, so paying the bridge's three-cycle
+  // minimum for it would be the wrong trade for the one register in this
+  // SoC that software polls in a loop.
+  localparam integer NS      = 6;
+  localparam integer ERRSLV  = 5;
   localparam integer MAX_OUT = 2;
 
   // -------------------------------------------------------------------
@@ -160,6 +169,8 @@ module soc_bus (
       else if ((a & SOC_MASK_ROM) == SOC_BASE_ROM) decode = 3'd1;
       else if ((a & SOC_MASK_APB) == SOC_BASE_APB) decode = 3'd2;
       else if ((a & SOC_MASK_PNP) == SOC_BASE_PNP) decode = 3'd3;
+      else if ((a & SOC_MASK_CLINT) == SOC_BASE_CLINT)
+                                                   decode = 3'd4;
       else                                         decode = ERRSLV[2:0];
     end
   endfunction
@@ -202,7 +213,7 @@ module soc_bus (
 
   // The error slave is inside this module and is always ready. A real
   // slave port answers with its own gnt.
-  wire target_ready = (tgt == ERRSLV[2:0]) ? 1'b1 : s_gnt_i[tgt[1:0]];
+  wire target_ready = (tgt == ERRSLV[2:0]) ? 1'b1 : s_gnt_i[tgt];
   wire accepted     = any_win && target_ready;
 
   assign mi_gnt_o = i_wins && target_ready;
@@ -218,6 +229,7 @@ module soc_bus (
   assign s_req_o[1] = any_win && (tgt == 3'd1);
   assign s_req_o[2] = any_win && (tgt == 3'd2);
   assign s_req_o[3] = any_win && (tgt == 3'd3);
+  assign s_req_o[4] = any_win && (tgt == 3'd4);
 
   always @(posedge clk_i or negedge rst_ni)
     if (!rst_ni)      last_was_d <= 1'b0;
@@ -279,7 +291,8 @@ module soc_bus (
   assign push[1] = accepted && (tgt == 3'd1);
   assign push[2] = accepted && (tgt == 3'd2);
   assign push[3] = accepted && (tgt == 3'd3);
-  assign push[4] = accepted && (tgt == ERRSLV[2:0]);
+  assign push[4] = accepted && (tgt == 3'd4);
+  assign push[5] = accepted && (tgt == ERRSLV[2:0]);
 
   integer s;
   always @(posedge clk_i or negedge rst_ni) begin
@@ -329,7 +342,8 @@ module soc_bus (
   assign slv_rdata[1] = s_rdata_1_i;
   assign slv_rdata[2] = s_rdata_2_i;
   assign slv_rdata[3] = s_rdata_3_i;
-  assign slv_rdata[4] = 32'h0;      // error slave returns no data
+  assign slv_rdata[4] = s_rdata_4_i;
+  assign slv_rdata[5] = 32'h0;      // error slave returns no data
 
   genvar g;
   generate
@@ -346,12 +360,14 @@ module soc_bus (
                     | ({32{resp_to_d[1]}} & slv_rdata[1])
                     | ({32{resp_to_d[2]}} & slv_rdata[2])
                     | ({32{resp_to_d[3]}} & slv_rdata[3])
-                    | ({32{resp_to_d[4]}} & slv_rdata[4]);
+                    | ({32{resp_to_d[4]}} & slv_rdata[4])
+                    | ({32{resp_to_d[5]}} & slv_rdata[5]);
   assign mi_rdata_o = ({32{resp_to_i[0]}} & slv_rdata[0])
                     | ({32{resp_to_i[1]}} & slv_rdata[1])
                     | ({32{resp_to_i[2]}} & slv_rdata[2])
                     | ({32{resp_to_i[3]}} & slv_rdata[3])
-                    | ({32{resp_to_i[4]}} & slv_rdata[4]);
+                    | ({32{resp_to_i[4]}} & slv_rdata[4])
+                    | ({32{resp_to_i[5]}} & slv_rdata[5]);
 
   assign md_err_o = |(resp_to_d & slv_err);
   assign mi_err_o = |(resp_to_i & slv_err);

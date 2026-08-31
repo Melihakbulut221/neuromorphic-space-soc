@@ -3,6 +3,8 @@
 #   cd hw/soc/formal && make            every task of every job
 #   cd hw/soc/formal && make bus        soc_bus: bmc, prove, cover
 #   cd hw/soc/formal && make apb        soc_apb_bridge: bmc, prove, cover
+#   cd hw/soc/formal && make clint      soc_clint: bmc, prove, cover
+#   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, cover
 #   cd hw/soc/formal && make clean
 #
 # sby is resolved through the repository's tools.mk, not off PATH. That
@@ -22,9 +24,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clean
+.PHONY: all bus apb clint wdog clean
 .DEFAULT_GOAL := all
-all: bus apb
+all: bus apb clint wdog
 
 include $(REPO)/tools.mk
 
@@ -42,7 +44,21 @@ apb:
 	  $(SBY) -f soc_apb_bridge.sby $$t || exit 1; \
 	done
 
+clint:
+	@for t in $(TASKS); do \
+	  echo "== soc_clint $$t"; \
+	  $(SBY) -f soc_clint.sby $$t || exit 1; \
+	done
+
+wdog:
+	@for t in $(TASKS); do \
+	  echo "== soc_wdog $$t"; \
+	  $(SBY) -f soc_wdog.sby $$t || exit 1; \
+	done
+
 clean:
 	rm -rf soc_bus soc_bus_bmc soc_bus_prove soc_bus_cover \
 	       soc_apb_bridge soc_apb_bridge_bmc soc_apb_bridge_prove \
-	       soc_apb_bridge_cover
+	       soc_apb_bridge_cover \
+	       soc_clint soc_clint_bmc soc_clint_prove soc_clint_cover \
+	       soc_wdog soc_wdog_bmc soc_wdog_prove soc_wdog_cover

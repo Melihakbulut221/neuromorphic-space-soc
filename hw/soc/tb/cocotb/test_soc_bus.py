@@ -86,9 +86,10 @@ from golden.memmap_gen import MASKS, PORTS, REGIONS  # noqa: E402
 MAX_OUT = 2
 
 # soc_bus.v header, slave port list: "Index order is fixed [...] 0 RAM,
-# 1 ROM, 2 APB, 3 PNP. Index 4 is the internal error slave and has no port."
-SLAVE_INDEX = {"RAM": 0, "ROM": 1, "APB": 2, "PNP": 3}
-N_SLAVES = 4
+# 1 ROM, 2 APB, 3 PNP, 4 CLINT. Index 5 is the internal error slave and has
+# no port."
+SLAVE_INDEX = {"RAM": 0, "ROM": 1, "APB": 2, "PNP": 3, "CLINT": 4}
+N_SLAVES = 5
 
 WORD = 4
 ADDR_BITS = 32
@@ -232,7 +233,7 @@ class Slave:
 class SlaveArray:
     """Drives the four slave-side input buses as one vector each."""
 
-    def __init__(self, dut, latencies=(1, 1, 1, 1)):
+    def __init__(self, dut, latencies=(1, 1, 1, 1, 1)):
         self.dut = dut
         self.slaves = [Slave(i, latencies[i]) for i in range(N_SLAVES)]
 
@@ -442,15 +443,15 @@ class BusMonitor:
             self.cycle += 1
             req = val(dut.s_req_o)
             assert popcount(req) <= 1, (
-                "s_req_o = 0b{:04b} at cycle {}: more than one slave "
+                "s_req_o = 0b{:05b} at cycle {}: more than one slave "
                 "selected, but there is a single broadcast payload bus (S2)"
                 .format(req, self.cycle)
             )
             if self.allowed_req is not None:
                 assert req in self.allowed_req, (
-                    "s_req_o = 0b{:04b} at cycle {}, only {} permitted here"
+                    "s_req_o = 0b{:05b} at cycle {}, only {} permitted here"
                     .format(req, self.cycle,
-                            ["0b{:04b}".format(v) for v in sorted(self.allowed_req)])
+                            ["0b{:05b}".format(v) for v in sorted(self.allowed_req)])
                 )
 
             mi = val(dut.mi_req_i) and val(dut.mi_gnt_o)
@@ -495,7 +496,7 @@ class BusMonitor:
 
 
 class Env:
-    def __init__(self, dut, latencies=(1, 1, 1, 1)):
+    def __init__(self, dut, latencies=(1, 1, 1, 1, 1)):
         self.dut = dut
         self.slaves = SlaveArray(dut, latencies)
         self.mi = Master(dut, "mi", read_only=True)
@@ -522,7 +523,7 @@ class Env:
         )
 
 
-async def setup(dut, latencies=(1, 1, 1, 1), start=True):
+async def setup(dut, latencies=(1, 1, 1, 1, 1), start=True):
     cocotb.start_soon(Clock(dut.clk_i, CLK_NS, unit="ns").start())
     dut.rst_ni.value = 0
     dut.mi_req_i.value = 0
@@ -623,7 +624,7 @@ async def test_idle_masters_produce_no_slave_traffic(dut):
     dut.md_we_i.value = 1
     dut.md_be_i.value = 0xF
     dut.md_wdata_i.value = 0xDEADBEEF
-    dut.s_gnt_i.value = 0xF
+    dut.s_gnt_i.value = (1 << N_SLAVES) - 1
     dut.s_rvalid_i.value = 0
     dut.s_err_i.value = 0
     for i in range(N_SLAVES):
@@ -636,7 +637,7 @@ async def test_idle_masters_produce_no_slave_traffic(dut):
         await RisingEdge(dut.clk_i)
         await Timer(T_SAMPLE, unit="ns")
         assert val(dut.s_req_o) == 0, (
-            "s_req_o = 0b{:04b} in cycle {} with neither master requesting"
+            "s_req_o = 0b{:05b} in cycle {} with neither master requesting"
             .format(val(dut.s_req_o), cycle)
         )
         assert val(dut.mi_rvalid_o) == 0, (
@@ -750,7 +751,7 @@ async def test_one_rvalid_per_grant(dut):
     flight at once.
     """
     rng = random.Random(4)
-    env = await setup(dut, latencies=(1, 2, 5, 3))
+    env = await setup(dut, latencies=(1, 2, 5, 3, 2))
     env.mi.idle_randomize = True
     env.md.idle_randomize = True
 
@@ -790,7 +791,7 @@ async def test_in_order_slow_then_fast(dut):
     rng = random.Random(5)
     slow = SLAVE_INDEX["APB"]
     fast = SLAVE_INDEX["RAM"]
-    lat = [1, 1, 1, 1]
+    lat = [1] * N_SLAVES
     lat[slow] = 9
     env = await setup(dut, latencies=tuple(lat))
 
@@ -828,7 +829,7 @@ async def test_response_routing(dut):
     issued and the agent's ordered comparison fails on it.
     """
     rng = random.Random(6)
-    lat = [1, 1, 1, 1]
+    lat = [1] * N_SLAVES
     lat[SLAVE_INDEX["ROM"]] = 7
     lat[SLAVE_INDEX["RAM"]] = 1
     env = await setup(dut, latencies=tuple(lat))
@@ -953,7 +954,7 @@ async def test_payload_broadcast(dut):
     what the masters actually issued.
     """
     rng = random.Random(8)
-    env = await setup(dut, latencies=(1, 2, 3, 1))
+    env = await setup(dut, latencies=(1, 2, 3, 1, 4))
     regions = list(port_regions().items())
     expect = {i: [] for i in range(N_SLAVES)}
 
@@ -999,7 +1000,7 @@ async def test_max_outstanding(dut):
     actually touched, otherwise the assertion above it would be vacuous.
     """
     rng = random.Random(9)
-    env = await setup(dut, latencies=(6, 6, 6, 6))
+    env = await setup(dut, latencies=(6, 6, 6, 6, 6))
     base, size = port_regions()["RAM"]
     ram = SLAVE_INDEX["RAM"]
     for m in (env.mi, env.md):
@@ -1026,7 +1027,7 @@ async def test_slave_error_propagates(dut):
     accesses concurrently.
     """
     rng = random.Random(10)
-    env = await setup(dut, latencies=(1, 4, 2, 3))
+    env = await setup(dut, latencies=(1, 4, 2, 3, 5))
 
     def bad(addr):
         return 1 if (addr >> 4) & 1 else 0

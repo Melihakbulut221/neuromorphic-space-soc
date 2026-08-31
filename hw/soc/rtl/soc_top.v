@@ -14,11 +14,19 @@
 //   IS NOT hardened. No ECC, no scrubbing, no TMR, no bus error latch.
 //        soc_mem.v is a behavioural array; the BUSSTAT and SCRUB slots
 //        in the map are reserved and empty.
-//   IS NOT interruptible. There is no CLINT and no PLIC; their addresses
-//        are frozen in the map and nothing decodes them. Every Ibex
-//        interrupt input is tied off, which is also why the UART's
-//        interrupt is brought to a port rather than connected.
-//   IS NOT the whole map. Six regions and thirteen peripheral slots are
+//   IS   interruptible, and the interrupts are real. soc_clint.v drives
+//        irq_timer_i and irq_software_i, soc_gptimer.v and soc_uart.v
+//        drive fast local interrupt lines the generated map assigns, and
+//        the watchdog drives irq_nm_i. There is still no PLIC and
+//        irq_external_i is tied low; docs/40 section 3 is the argument
+//        for why that is a decision and not an omission, and the PLIC
+//        region stays reserved and faulting.
+//   IS   resettable BY ITSELF. rst_ni is now the POWER-ON reset. The
+//        system reset the rest of this file runs on is derived from it
+//        and from the watchdog's stage-2 request, so the SoC can reset
+//        its own core while the watchdog keeps the evidence. See the
+//        reset section below.
+//   IS NOT the whole map. Five regions and twelve peripheral slots are
 //        reserved and unimplemented. An access to any of them takes a
 //        bus error, on purpose: docs/39-soc-bus-and-memory-map.md
 //        section 8 lists them.
@@ -48,10 +56,24 @@ module soc_top #(
     parameter ROM_INIT = ""
 ) (
     input  wire        clk_i,
+    // POWER-ON reset. Asynchronously asserted, and the only reset the
+    // watchdog obeys.
     input  wire        rst_ni,
+
+    // Watchdog bootstrap pin. Held low in this SoC; a board that ties it
+    // high has no watchdog and WDOGSTAT.DISABLED says so.
+    input  wire        wdog_dis_i,
 
     output wire        uart_tx_o,
     output wire        uart_irq_o,
+
+    // ---- observation, for the testbench and for pins later ----
+    output wire        wdog_no,        // watchdog stage 3, active low
+    output wire        wdog_rst_o,     // watchdog stage 2 is asserting
+    output wire        nmi_o,          // watchdog stage 1 is pending
+    output wire        irq_timer_o,    // CLINT mtime >= mtimecmp
+    output wire        irq_soft_o,     // CLINT msip
+    output wire        gptimer_irq_o,  // GPTIMER shared timer interrupt
 
     output wire        alert_minor_o,
     output wire        alert_major_internal_o,
@@ -61,6 +83,31 @@ module soc_top #(
 );
 
 `include "soc_memmap.vh"
+
+  // -------------------------------------------------------------------
+  // Reset
+  // -------------------------------------------------------------------
+  //
+  // Two domains. rst_ni is the power-on reset and reaches only the
+  // watchdog. Everything else runs on rst_sys_n, which the watchdog can
+  // pull -- that is its stage 2, and it is the reason its own state has
+  // to be outside this domain (soc_wdog.v W4).
+  //
+  // The synchroniser is not decoration. rst_req is a registered signal
+  // in this clock domain, so rst_sys_n would otherwise DEASSERT on a
+  // clock edge, which is a recovery-time violation at every flop in the
+  // SoC. Asynchronous assert, synchronous deassert, two stages.
+  wire wdog_rst_req;
+  wire rst_raw_n = rst_ni && !wdog_rst_req;
+
+  reg [1:0] rst_sync;
+  always @(posedge clk_i or negedge rst_raw_n)
+    if (!rst_raw_n) rst_sync <= 2'b00;
+    else            rst_sync <= {rst_sync[0], 1'b1};
+
+  wire rst_sys_n = rst_sync[1];
+
+  assign wdog_rst_o = wdog_rst_req;
 
   localparam integer RAM_WORDS = SOC_SIZE_RAM / 4;
   localparam integer ROM_WORDS = SOC_SIZE_ROM / 4;
@@ -73,6 +120,37 @@ module soc_top #(
   // -------------------------------------------------------------------
   wire        instr_req, instr_gnt, instr_rvalid, instr_err;
   wire [31:0] instr_addr, instr_rdata;
+
+  // Interrupt sources, declared here because the core below consumes
+  // them and the blocks that drive them are instantiated further down.
+  wire        clint_irq_timer, clint_irq_soft;
+  wire        gptimer_irq, uart_irq, wdog_nmi;
+
+  // -------------------------------------------------------------------
+  // The fast local interrupt vector
+  //
+  // Every index below is a generated constant from regmap/memmap.yaml,
+  // so the wire a peripheral lands on, the mie bit a driver sets, the
+  // mcause it reads and the vector-table slot crt0.S fills all come from
+  // one source. An unassigned line is driven low: Ibex's inputs are
+  // level-sensitive, and a floating one would be an interrupt whose
+  // source does not exist.
+  //
+  // The UART's line is connected here for the first time. Note what its
+  // interrupt MEANS: soc_uart.v raises it whenever the transmit holding
+  // register is empty and CTRL.TI is set, which is GRLIB's
+  // transmitter-ready semantics -- a LEVEL that is high almost always.
+  // Software that sets TI without a handler that clears it gets an
+  // interrupt storm, and the bring-up program deliberately never sets
+  // it.
+  // -------------------------------------------------------------------
+  reg [14:0] irq_fast;
+  always @(*) begin
+    irq_fast = 15'h0;
+    irq_fast[SOC_IRQLINE_UART0]  = uart_irq;
+    irq_fast[SOC_IRQLINE_TIMER0] = gptimer_irq;
+  end
+
 
   wire        data_req, data_gnt, data_rvalid, data_err, data_we;
   wire [3:0]  data_be;
@@ -107,7 +185,7 @@ module soc_top #(
       .ICacheScramble  (0)
   ) u_ibex (
       .clk_i  (clk_i),
-      .rst_ni (rst_ni),
+      .rst_ni (rst_sys_n),
       .test_en_i(1'b0),
 
       .ram_cfg_icache_tag_i  (24'h0),
@@ -153,12 +231,15 @@ module soc_top #(
       .trvk_revbm_rdata_intg_i (7'h0),
       .trvk_revbm_err_i        (1'b0),
 
-      // No interrupt controller in this build; see the header.
-      .irq_software_i (1'b0),
-      .irq_timer_i    (1'b0),
+      // Interrupts. irq_external_i is the one that is still tied low:
+      // it is the PLIC's input and there is no PLIC (docs/40 section 3).
+      // Leaving it unconnected rather than repurposing it is what makes
+      // adding one later a wiring change and not a rework.
+      .irq_software_i (clint_irq_soft),
+      .irq_timer_i    (clint_irq_timer),
       .irq_external_i (1'b0),
-      .irq_fast_i     (15'h0),
-      .irq_nm_i       (1'b0),
+      .irq_fast_i     (irq_fast),
+      .irq_nm_i       (wdog_nmi),
 
       .scramble_key_valid_i (1'b0),
       .scramble_key_i       (128'h0),
@@ -194,16 +275,17 @@ module soc_top #(
   // -------------------------------------------------------------------
   // Fabric
   // -------------------------------------------------------------------
-  wire [3:0]  s_req;
+  wire [4:0]  s_req;
   wire [31:0] s_addr, s_wdata;
   wire        s_we;
   wire [3:0]  s_be;
-  wire [3:0]  s_gnt, s_rvalid, s_err;
-  wire [31:0] s_rdata_ram, s_rdata_rom, s_rdata_apb, s_rdata_pnp;
+  wire [4:0]  s_gnt, s_rvalid, s_err;
+  wire [31:0] s_rdata_ram, s_rdata_rom, s_rdata_apb, s_rdata_pnp,
+              s_rdata_clint;
 
   soc_bus u_bus (
       .clk_i  (clk_i),
-      .rst_ni (rst_ni),
+      .rst_ni (rst_sys_n),
 
       .mi_req_i    (instr_req),
       .mi_addr_i   (instr_addr),
@@ -233,6 +315,7 @@ module soc_top #(
       .s_rdata_1_i (s_rdata_rom),
       .s_rdata_2_i (s_rdata_apb),
       .s_rdata_3_i (s_rdata_pnp),
+      .s_rdata_4_i (s_rdata_clint),
       .s_err_i     (s_err)
   );
 
@@ -240,7 +323,7 @@ module soc_top #(
   // Slave 0: RAM.  Slave 1: boot ROM.
   // -------------------------------------------------------------------
   soc_mem #(.WORDS(RAM_WORDS), .RO(1'b0)) u_ram (
-      .clk_i (clk_i), .rst_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[0]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[0]), .rvalid_o (s_rvalid[0]),
@@ -249,7 +332,7 @@ module soc_top #(
 
   soc_mem #(.WORDS(ROM_WORDS), .RO(1'b1),
             .INIT_FILE(ROM_INIT), .INIT_WORD(ROM_INIT_WORD)) u_rom (
-      .clk_i (clk_i), .rst_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[1]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[1]), .rvalid_o (s_rvalid[1]),
@@ -267,7 +350,7 @@ module soc_top #(
   wire        pready, pslverr;
 
   soc_apb_bridge u_apb (
-      .clk_i (clk_i), .rst_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[2]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[2]), .rvalid_o (s_rvalid[2]),
@@ -287,25 +370,56 @@ module soc_top #(
   //
   // The slot constants come from the generated map. This is the only
   // place in the RTL that knows which slot a peripheral occupies, and
-  // hw/soc/tb/cocotb/test_soc_apb.py checks it against the generated
-  // Python map rather than against this file.
+  // sw/tests/test_memmap.py's
+  // test_top_level_decodes_the_implemented_apb_slots checks it against
+  // the generated Python map rather than against this file.
   wire [7:0] slot = paddr[19:12];
 
-  wire sel_uart0 = psel && (slot == SOC_APBSLOT_UART0);
+  wire sel_uart0  = psel && (slot == SOC_APBSLOT_UART0);
+  wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
-  wire sel_none  = psel && !sel_uart0 && !sel_apbpnp;
+  wire sel_none   = psel && !sel_uart0 && !sel_timer0 && !sel_apbpnp;
 
-  wire [31:0] prdata_uart0, prdata_apbpnp;
-  wire        pready_uart0, pready_apbpnp;
-  wire        pslverr_uart0, pslverr_apbpnp;
+  wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp;
+  wire        pready_uart0, pready_timer0, pready_apbpnp;
+  wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp;
 
   soc_uart u_uart0 (
-      .clk_i (clk_i), .rst_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
       .psel_i (sel_uart0), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
       .prdata_o (prdata_uart0), .pready_o (pready_uart0),
       .pslverr_o (pslverr_uart0),
-      .tx_o (uart_tx_o), .irq_o (uart_irq_o)
+      .tx_o (uart_tx_o), .irq_o (uart_irq)
+  );
+
+  // GRLIB GPTIMER register map, two general timers, and the watchdog as
+  // the last timer -- docs/08 section 3 row 8. IRQ_NUM comes from the
+  // generated map so the number this block reports in its configuration
+  // register is the same number the device table carries.
+  //
+  // WDOG_PRESCALE and WDOG_WIDTH together fix the longest timeout the
+  // watchdog can ever be programmed to, which is the property soc_wdog.v
+  // W2 requires to be a constant of the netlist rather than a register:
+  //   (2^16) * 16 = 1,048,576 clocks, about 10.5 ms at 100 MHz.
+  soc_gptimer #(
+      .NGEN            (2),
+      .TWIDTH          (32),
+      .SWIDTH          (16),
+      .IRQ_NUM         (SOC_IRQNUM_TIMER0),
+      .WDOG_WIDTH      (16),
+      .WDOG_PRESCALE   (16),
+      .WDOG_RST_CYCLES (16),
+      .WDOG_ESCALATE   (2)
+  ) u_timer0 (
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .psel_i (sel_timer0), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_timer0), .pready_o (pready_timer0),
+      .pslverr_o (pslverr_timer0),
+      .wdog_dis_i (wdog_dis_i),
+      .irq_o (gptimer_irq), .nmi_o (wdog_nmi),
+      .rst_req_o (wdog_rst_req), .wdog_no (wdog_no)
   );
 
   soc_apb_pnp u_apbpnp (
@@ -320,12 +434,15 @@ module soc_top #(
   // reserved peripheral slot is a bus error at the core rather than a
   // read of zero that looks like a working register.
   assign prdata  = sel_uart0  ? prdata_uart0
+                 : sel_timer0 ? prdata_timer0
                  : sel_apbpnp ? prdata_apbpnp
                  : 32'h0;
   assign pready  = sel_uart0  ? pready_uart0
+                 : sel_timer0 ? pready_timer0
                  : sel_apbpnp ? pready_apbpnp
                  : 1'b1;
   assign pslverr = sel_uart0  ? pslverr_uart0
+                 : sel_timer0 ? pslverr_timer0
                  : sel_apbpnp ? pslverr_apbpnp
                  : sel_none;
 
@@ -333,11 +450,38 @@ module soc_top #(
   // Slave 3: system-bus device table
   // -------------------------------------------------------------------
   soc_pnp u_pnp (
-      .clk_i (clk_i), .rst_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[3]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[3]), .rvalid_o (s_rvalid[3]),
       .rdata_o (s_rdata_pnp), .err_o (s_err[3])
   );
+
+  // -------------------------------------------------------------------
+  // Slave 4: core-local interruptor
+  //
+  // On the system bus and not behind the APB bridge, because the frozen
+  // map makes it a region of its own at 0xE0000000 and because mtime is
+  // the one register in this SoC that software reads in a loop.
+  //
+  // TICK_DIV = 1 makes mtime count CPU cycles, which is what lets the
+  // bring-up program compute an exact deadline. A real part needs an
+  // always-on time base; soc_clint.v says so.
+  // -------------------------------------------------------------------
+  soc_clint #(.TICK_DIV(1)) u_clint (
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
+      .req_i (s_req[4]), .addr_i (s_addr), .we_i (s_we),
+      .be_i (s_be), .wdata_i (s_wdata),
+      .gnt_o (s_gnt[4]), .rvalid_o (s_rvalid[4]),
+      .rdata_o (s_rdata_clint), .err_o (s_err[4]),
+      .irq_timer_o (clint_irq_timer),
+      .irq_software_o (clint_irq_soft)
+  );
+
+  assign uart_irq_o     = uart_irq;
+  assign gptimer_irq_o  = gptimer_irq;
+  assign nmi_o          = wdog_nmi;
+  assign irq_timer_o    = clint_irq_timer;
+  assign irq_soft_o     = clint_irq_soft;
 
 endmodule

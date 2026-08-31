@@ -58,6 +58,17 @@ BAR_TYPE_IO = 0b0011
 BAR_GRANULARITY = 1 << 20
 APB_BAR_GRANULARITY = 1 << 8
 
+# Ibex's interrupt identifiers, from
+# ext/ibex/doc/03_reference/exception_interrupts.rst: fifteen fast local
+# interrupts occupy IDs 16..30, and the core enters at mtvec + 4*id. The
+# vector table is therefore 32 entries of 4 bytes = 128 bytes, at a
+# 256-byte-aligned base, and every synchronous exception enters at
+# offset 0. None of that is configurable.
+IBEX_FAST_IRQ_BASE = 16
+IBEX_FAST_IRQ_COUNT = 15
+IBEX_VECTOR_ENTRIES = 32
+IBEX_VECTOR_BYTES = IBEX_VECTOR_ENTRIES * 4
+
 PNP_WORDS = 1024  # 4 KiB window / 4
 PNP_MASTER_RECORDS = 64
 PNP_SLAVE_BASE_WORD = 0x800 // 4
@@ -196,6 +207,56 @@ def validate(spec):
     if len(irqs) != len(set(irqs)):
         die(f"interrupt source numbers are not unique: {sorted(irqs)}")
 
+    # ---- the wire index, which is a different namespace ----
+    #
+    # A source number is a five-bit plug-and-play field; a line is one of
+    # Ibex's fifteen fast local interrupt inputs. Conflating them is the
+    # specific failure this pair of checks exists to prevent.
+    lines = []
+    for s in spec["apb_slots"]:
+        has_line = "line" in s
+        if bool(s["irq"]) != has_line:
+            die(f"{s['name']}: irq {s['irq']} and "
+                f"{'a' if has_line else 'no'} line. A source with an "
+                "interrupt number must name the core input it is wired to, "
+                "and a source without one must not")
+        if has_line:
+            if not 0 <= s["line"] < IBEX_FAST_IRQ_COUNT:
+                die(f"{s['name']}: line {s['line']} is outside "
+                    f"irq_fast_i[{IBEX_FAST_IRQ_COUNT - 1}:0]. Ibex has "
+                    f"{IBEX_FAST_IRQ_COUNT} fast local interrupts and no "
+                    "more; a fourteenth source needs a controller, which is "
+                    "the PLIC decision in docs/40")
+            lines.append(s["line"])
+    if len(lines) != len(set(lines)):
+        die(f"fast interrupt lines are not unique: {sorted(lines)}. Two "
+            "sources on one wire cannot be told apart by the core")
+
+    # ---- the core's own interrupt inputs ----
+    seen_ids = set()
+    for c in spec["core_irqs"]:
+        if not NAME_RE.match(str(c["name"])):
+            die(f"core_irqs name {c['name']!r} must be upper-case identifier-shaped")
+        if c["id"] in seen_ids:
+            die(f"core_irqs: duplicate interrupt id {c['id']}")
+        seen_ids.add(c["id"])
+        if not 0 <= c["id"] < IBEX_VECTOR_ENTRIES:
+            die(f"core_irqs {c['name']}: id {c['id']} is outside the "
+                f"{IBEX_VECTOR_ENTRIES}-entry vector table")
+        lo = IBEX_FAST_IRQ_BASE
+        hi = IBEX_FAST_IRQ_BASE + IBEX_FAST_IRQ_COUNT - 1
+        if lo <= c["id"] <= hi:
+            die(f"core_irqs {c['name']}: id {c['id']} collides with the fast "
+                f"local interrupt range {lo}..{hi}, which the `line` field "
+                "owns")
+
+    # The vector table must fit inside the alignment the map already
+    # forces on every region base, or a trap vector placed at a region
+    # base would run into whatever follows it.
+    if IBEX_VECTOR_BYTES > align:
+        die(f"the {IBEX_VECTOR_BYTES}-byte vector table does not fit in the "
+            f"0x{align:X}-byte alignment grid")
+
     for r in regions:
         seen_dev.setdefault(r["device_id"], r["name"])
 
@@ -249,6 +310,23 @@ def bar_word(base, size, bar_type, granularity, prefetch=0, cacheable=0):
 
 def bar_is_exact(size, granularity):
     return size >= granularity
+
+
+def irq_sources(spec):
+    """(name, source number, line, mcause id, vector byte offset) per slot
+    that raises an interrupt, in line order."""
+    out = []
+    for s in sorted(spec["apb_slots"], key=lambda x: x.get("line", 99)):
+        if "line" not in s:
+            continue
+        cause = IBEX_FAST_IRQ_BASE + s["line"]
+        out.append((s["name"], s["irq"], s["line"], cause, 4 * cause))
+    return out
+
+
+def spare_lines(spec):
+    used = {s["line"] for s in spec["apb_slots"] if "line" in s}
+    return [i for i in range(IBEX_FAST_IRQ_COUNT) if i not in used]
 
 
 # ---------------------------------------------------------------------
@@ -389,13 +467,68 @@ def gen_markdown(spec):
         "interrupt controller and the drivers cannot disagree",
         "(`docs/08-gr801-datasheet-notes.md` section 4 item 7).",
         "",
-        "| Address | Slot | Name | IRQ | Status | Description |",
-        "|---|---|---|---|---|---|",
+        "| Address | Slot | Name | IRQ | Line | Status | Description |",
+        "|---|---|---|---|---|---|---|",
     ]
     for s in sorted(spec["apb_slots"], key=lambda x: x["slot"]):
         lines.append(
             f"| `0x{apb_addr(spec, s):08X}` | `0x{s['slot']:03X}` | {s['name']} "
-            f"| {s['irq'] or '-'} | {s['status']} | {s['desc']} |")
+            f"| {s['irq'] or '-'} | {s['line'] if 'line' in s else '-'} "
+            f"| {s['status']} | {s['desc']} |")
+
+    srcs = irq_sources(spec)
+    spare = spare_lines(spec)
+    lines += [
+        "",
+        "## 3a. Interrupts",
+        "",
+        "Two namespaces, deliberately separate. **IRQ** is the GRLIB",
+        "plug-and-play source number carried in the identification word and",
+        "is what a platform interrupt controller would key on. **Line** is",
+        "the index of the Ibex fast local interrupt input the source is",
+        "physically wired to. Ibex gives each fast line a dedicated vector",
+        f"and a fixed priority, so no controller is needed for the {len(srcs)}",
+        "sources this map defines.",
+        "",
+        "`mcause` is the value software reads in the handler; `vector` is",
+        "the byte offset from `mtvec` at which the core enters. Both are",
+        f"Ibex's, not this project's: a fast line *n* is interrupt ID",
+        f"{IBEX_FAST_IRQ_BASE}+*n* and the core enters at `mtvec` + 4*ID.",
+        "",
+        "| Source | IRQ | Line | `mcause` | Vector |",
+        "|---|---|---|---|---|",
+    ]
+    for name, irq, line, cause, off in srcs:
+        lines.append(f"| {name} | {irq} | {line} | `0x{0x80000000 | cause:08X}` "
+                     f"| `mtvec+0x{off:02X}` |")
+    lines += [
+        "",
+        "Core inputs that are not per-peripheral:",
+        "",
+        "| Input | ID | `mcause` | Vector | Driven by |",
+        "|---|---|---|---|---|",
+    ]
+    for c in spec["core_irqs"]:
+        lines.append(f"| {c['name']} | {c['id']} "
+                     f"| `0x{0x80000000 | c['id']:08X}` "
+                     f"| `mtvec+0x{4 * c['id']:02X}` | {c['source']} |")
+    lines += [
+        "",
+        f"**{len(spare)} of Ibex's {IBEX_FAST_IRQ_COUNT} fast lines are "
+        f"unassigned** ({', '.join(str(i) for i in spare) or 'none'}). That "
+        "number is the headroom the",
+        "platform-interrupt-controller decision is measured against:",
+        "`docs/40-interrupts-timers-watchdog.md` section 3 argues that a PLIC",
+        "buys nothing until it reaches zero, and the generator refuses a",
+        f"`line` outside 0..{IBEX_FAST_IRQ_COUNT - 1} so that exhausting it",
+        "is a build failure rather than a discovery.",
+        "",
+        f"The vector table is {IBEX_VECTOR_ENTRIES} entries of 4 bytes = "
+        f"{IBEX_VECTOR_BYTES} bytes at a 256-byte-aligned",
+        "base. Every synchronous exception enters at offset 0; only",
+        "interrupts are vectored. Ibex has no direct mode",
+        "(`docs/38-ibex-bringup.md` section 7.5 defect 3).",
+    ]
 
     inexact = [r for r in spec["regions"]
                if not bar_is_exact(r["size"], BAR_GRANULARITY)]
@@ -484,6 +617,25 @@ def gen_python(spec):
         lines.append(
             f'    "{s["name"]}": (0x{apb_addr(spec, s):08X}, 0x{s["slot"]:03X}, '
             f'{s["irq"]}, "{s["status"]}"),')
+    lines += ["}", "",
+              "# Ibex interrupt identifiers, from",
+              "# ext/ibex/doc/03_reference/exception_interrupts.rst.",
+              f"FAST_IRQ_BASE = {IBEX_FAST_IRQ_BASE}",
+              f"FAST_IRQ_COUNT = {IBEX_FAST_IRQ_COUNT}",
+              f"VECTOR_ENTRIES = {IBEX_VECTOR_ENTRIES}",
+              f"VECTOR_BYTES = {IBEX_VECTOR_BYTES}", "",
+              "# peripheral name -> (source number, fast line, mcause id,",
+              "#                     vector byte offset from mtvec)",
+              "IRQ_SOURCES = {"]
+    for name, irq, line, cause, off in irq_sources(spec):
+        lines.append(f'    "{name}": ({irq}, {line}, {cause}, 0x{off:02X}),')
+    lines += ["}", "",
+              f"SPARE_FAST_LINES = {spare_lines(spec)!r}", "",
+              "# core input name -> (interrupt id, mcause, vector offset)",
+              "CORE_IRQS = {"]
+    for c in spec["core_irqs"]:
+        lines.append(f'    "{c["name"]}": ({c["id"]}, '
+                     f'0x{0x80000000 | c["id"]:08X}, 0x{4 * c["id"]:02X}),')
     lines += ["}", "", "# word index within the device table -> value",
               "PNP_ROM = {"]
     for w, v in sorted(pnp_words(spec).items()):
@@ -534,6 +686,25 @@ def gen_verilog(spec):
               ]
     for s in sorted(spec["apb_slots"], key=lambda x: x["slot"]):
         lines.append(f"localparam [7:0] SOC_APBSLOT_{s['name']:<8s} = 8'h{s['slot'] & 0xFF:02X};")
+    lines += [
+        "",
+        "// Ibex fast local interrupt index per source. This is the WIRE",
+        "// INDEX into irq_fast_i[14:0], not the plug-and-play source",
+        "// number: soc_top.v uses these to build the vector, and nothing",
+        "// in the RTL should ever write one down.",
+    ]
+    for name, _irq, line, _cause, _off in irq_sources(spec):
+        lines.append(f"localparam integer SOC_IRQLINE_{name:<8s} = {line};")
+    lines += [
+        "",
+        "// Plug-and-play interrupt SOURCE NUMBER per peripheral. A block",
+        "// whose register map reports its own interrupt number -- GRLIB's",
+        "// GPTIMER configuration register does -- takes it from here, so",
+        "// the number a driver reads out of the peripheral and the number",
+        "// in the device table are the same number.",
+    ]
+    for name, irq, _line, _cause, _off in irq_sources(spec):
+        lines.append(f"localparam [4:0] SOC_IRQNUM_{name:<8s} = 5'd{irq};")
     lines += ["", ""]
     return "\n".join(lines)
 
@@ -611,6 +782,29 @@ def gen_c_header(spec):
     for s in sorted(spec["apb_slots"], key=lambda x: x["slot"]):
         lines.append(f"#define SOC_{s['name']}_BASE 0x{apb_addr(spec, s):08X}u")
     lines += ["", f"#define SOC_APB_BASE 0x{apb['base']:08X}u", ""]
+    lines += [
+        "/* Interrupts. SOC_IRQ_<NAME> is the mcause value software reads in",
+        "   the handler, SOC_VEC_<NAME> the byte offset from mtvec at which",
+        "   the core enters, and SOC_IRQLINE_<NAME> the bit to set in mie.",
+        "   All three are Ibex's arithmetic on the `line` field of",
+        "   regmap/memmap.yaml, so the vector table in crt0.S, the RTL",
+        "   wiring and the C tests cannot disagree about any of them. */",
+        f"#define SOC_FAST_IRQ_BASE  {IBEX_FAST_IRQ_BASE}u",
+        f"#define SOC_FAST_IRQ_COUNT {IBEX_FAST_IRQ_COUNT}u",
+        f"#define SOC_VECTOR_ENTRIES {IBEX_VECTOR_ENTRIES}u",
+        f"#define SOC_VECTOR_BYTES   {IBEX_VECTOR_BYTES}u",
+        "",
+    ]
+    for name, _irq, line, cause, off in irq_sources(spec):
+        lines.append(f"#define SOC_IRQLINE_{name:<8s} {line}u")
+        lines.append(f"#define SOC_IRQ_{name:<8s} 0x{0x80000000 | cause:08X}u")
+        lines.append(f"#define SOC_VEC_{name:<8s} 0x{off:02X}u")
+    lines.append("")
+    for c in spec["core_irqs"]:
+        lines.append(f"#define SOC_IRQID_{c['name']:<8s} {c['id']}u")
+        lines.append(f"#define SOC_IRQ_{c['name']:<8s} 0x{0x80000000 | c['id']:08X}u")
+        lines.append(f"#define SOC_VEC_{c['name']:<8s} 0x{4 * c['id']:02X}u")
+    lines.append("")
     lines += [
         "/* Device table words the program checks. Both are generated from",
         "   the same source as the ROM contents, so a table that drifts from",

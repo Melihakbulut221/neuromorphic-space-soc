@@ -62,3 +62,7 @@ hw/soc/formal/soc_bus/
 hw/soc/formal/soc_bus_*/
 hw/soc/formal/soc_apb_bridge/
 hw/soc/formal/soc_apb_bridge_*/
+hw/soc/formal/soc_clint/
+hw/soc/formal/soc_clint_*/
+hw/soc/formal/soc_wdog/
+hw/soc/formal/soc_wdog_*/
