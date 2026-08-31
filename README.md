@@ -63,14 +63,30 @@ runs end to end across three boots of the SoC in one simulation.
 `docs/40` is the record, and it argues the decision *not* to build a
 platform interrupt controller rather than assuming it.
 
-It has **no fault tolerance of any kind** — no ECC, no scrubbing, no
-TMR, no bus error latch, and no protection on the watchdog's own state.
-That is a deliberate ordering, not an oversight: the fabric is being
-made correct before it is made survivable. Note what it means in
-combination with the `small-pmp` choice, which declined Ibex's lockstep:
-the management processor is currently the least protected block in the
-design, `docs/38` section 10 item 4 records what that obliges, and the
-watchdog that is now its only backstop is itself unprotected.
+The watchdog's own state is now protected, and `docs/41` is the record.
+The eight fields nothing rewrites — the bootstrap latch, the stage-1
+pending flag, the reset record and count, the reset stretch — are
+bundled into one word and tripled under the pilot's own proved voter,
+because six of them are single bits and three replicas cannot be held
+apart over one bit. The counter, the reload and the prescaler are
+deliberately left as single points, and the price of that is measured
+rather than argued. It costs 1.85 % of the Ibex core, it is counted in
+the mapped netlist rather than assumed to have survived synthesis, and
+162 fault injections into the block's own flip-flops classify every
+upset in the protected word as corrected — against a counterfactual run
+on the unprotected block where two single-bit upsets left the watchdog
+silently disarmed.
+
+The rest of the SoC still has **no fault tolerance of any kind** — no
+ECC, no scrubbing, no TMR outside that one word, no bus error latch, and
+nothing on the CLINT's `mtime`, which `docs/41` section 7.4 ranks as the
+next thing to protect. That is a deliberate ordering, not an oversight:
+the fabric is being made correct before it is made survivable. Note what
+it means in combination with the `small-pmp` choice, which declined
+Ibex's lockstep: the management processor is still the least protected
+block in the design and `docs/38` section 10 item 4 records what that
+obliges — but the backstop it leaves the core is no longer itself
+unprotected.
 
 *Does not exist.* No silicon. No spacecraft interfaces. No SRAM macro in
 any hardened design. No radiation test data. No bus error latch or
