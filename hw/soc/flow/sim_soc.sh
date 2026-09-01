@@ -37,6 +37,14 @@ OUT=${1:-$SOC_DIR/out/sim-soc}
 UART_SCALER=${UART_SCALER:-0}
 UART_BIT_CYCLES=$(( 8 * (UART_SCALER + 1) ))
 
+# The Ibex source list, with the register file selected. IBEX_REGFILE
+# defaults to `secded`: hw/soc/rtl/ibex_regfile_secded.v replaces
+# hw/soc/gen/ibex_register_file_ff.v, and nothing in hw/soc/ext or
+# hw/soc/gen is modified to do it. IBEX_REGFILE=upstream reproduces the
+# design docs/38 to docs/42 measured.
+# shellcheck source=hw/soc/flow/ibex_sources.sh
+. "$SOC_DIR/flow/ibex_sources.sh"
+
 eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 : "${IVERILOG:?}" "${VVP:?}"
 
@@ -89,7 +97,7 @@ sym () {
   "$SOC_DIR/rtl/soc_tmr_bank.v" \
   "$PILOT_RTL/tmr_voter.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \
-  "$SOC_DIR"/gen/*.v \
+  $(ibex_sources "$SOC_DIR") \
   2>&1 | tee "$OUT/iverilog.log"
 
 echo "== elaborated; running"

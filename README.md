@@ -77,26 +77,65 @@ upset in the protected word as corrected — against a counterfactual run
 on the unprotected block where two single-bit upsets left the watchdog
 silently disarmed.
 
+The management core has now been measured, and `docs/42` is the record:
+1,300 stratified single-bit upsets into Ibex running the whole SoC, each
+one run twice — once with the watchdog armed and once with its bootstrap
+pin held high — because "the watchdog escalated" is not a catch rate
+until the same upset on the same machine with no backstop says whether
+the machine was in fact dead. Design-weighted silent corruption is
+2.8 % ± 1.6; the watchdog catches 91.7 % of the upsets that leave the
+core dead, with zero spurious escalations. Two findings decided what to
+do next: 45 % of the core's flip-flops are the architectural register
+file and they carry most of the rate, and a corrupted loop bound leaves
+a machine looping for ever while petting the watchdog on schedule.
+
+Both are now addressed, and `docs/43` is the record — and one of them
+did not work. The register file is SECDED-protected with the codec this
+project already owns and has proved, corrected on read and scrubbed out
+of the storage, substituted into Ibex by a *file list* rather than by
+editing anything, so the pristine checkout and its sv2v output are
+untouched. The campaign was re-run with identical draws — same site,
+same bit, same cycle, a byte-identical workload image — and the
+register-file strata went from 3 silent corruptions and 4 hangs in 100
+to **0 and 0 in 200**, design-weighted silent corruption from 2.8 % to
+1.3 %, and the watchdog's catch rate over the dead set from 33 of 36 to
+28 of 28. It costs +13.8 % of the core's area and 9.3 % of its clock
+frequency, because a decoder on the register read path runs in series
+with the thing it protects where a shadow core would have run in
+parallel.
+
+The windowed watchdog did not deliver, and the document says so.
+`docs/42` recommended it for a machine that loops for ever while petting
+the watchdog on schedule — but a window fires on a kick that arrives too
+*early*, and that machine kicks on time. Replayed verbatim against a
+build with the window armed and nothing else, all four of those records
+come back exactly as they did. What does catch them is a per-phase kick
+budget, built after the window was found not to reach them, which caught
+4 of 4; and the register file removes the class at source in any case.
+The window itself caught 0 of 30 dead machines in the re-run campaign
+and produced 7 escalations on machines that were fine, so the
+zero-spurious-escalation result `docs/41` reported does not survive it.
+It ships disabled.
+
 The rest of the SoC still has **no fault tolerance of any kind** — no
-ECC, no scrubbing, no TMR outside that one word, no bus error latch, and
-nothing on the CLINT's `mtime`, which `docs/41` section 7.4 ranks as the
-next thing to protect. That is a deliberate ordering, not an oversight:
-the fabric is being made correct before it is made survivable. Note what
-it means in combination with the `small-pmp` choice, which declined
-Ibex's lockstep: the management processor is still the least protected
-block in the design and `docs/38` section 10 item 4 records what that
-obliges — but the backstop it leaves the core is no longer itself
-unprotected.
+ECC on the memories, no scrubbing outside the register file, no TMR
+outside the watchdog's protected word, no bus error latch, and nothing
+on the CLINT's `mtime`, which `docs/41` section 7.4 ranks next. That is
+a deliberate ordering, not an oversight: the fabric is being made
+correct before it is made survivable.
 
 *Does not exist.* No silicon. No spacecraft interfaces. No SRAM macro in
 any hardened design. No radiation test data. No bus error latch or
 scrubber. No place-and-route, timing or gate-level result for anything
-under `hw/soc/`. No licence. No funding.
+under `hw/soc/`. No licence. No funding. **And no way for an operator to
+see a corrected upset**: the protected register file has upstream's port
+list, upstream's port list has no error output, and `docs/43` section 12
+ranks fixing that first.
 
-The next block is the management core's own fault-injection campaign —
-which `docs/38` made a consequence of declining lockstep rather than
-deferred work, and which can now measure not only the core's silent-error
-rate but how much of it the watchdog actually catches.
+The next block is a fault line out of the core for the register file's
+correction counter and for the watchdog's mismatch counter, so that the
+corrections this design now performs are observable outside a
+simulator.
 
 ## Documents
 

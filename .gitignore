@@ -66,3 +66,5 @@ hw/soc/formal/soc_clint/
 hw/soc/formal/soc_clint_*/
 hw/soc/formal/soc_wdog/
 hw/soc/formal/soc_wdog_*/
+hw/soc/formal/regfile_secded/
+hw/soc/formal/regfile_secded_*/

@@ -4,7 +4,11 @@
 #   cd hw/soc/formal && make bus        soc_bus: bmc, prove, cover
 #   cd hw/soc/formal && make apb        soc_apb_bridge: bmc, prove, cover
 #   cd hw/soc/formal && make clint      soc_clint: bmc, prove, cover
-#   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, cover
+#   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, prove_w0,
+#                                       cover
+#   cd hw/soc/formal && make regfile    the shortened SECDED code the
+#                                       substituted register file uses:
+#                                       bmc, prove, prove_abc, cover
 #   cd hw/soc/formal && make wdogtmr    the watchdog's protected word:
 #                                       the parameter guard, then eight
 #                                       tasks over three soc_tmr_bank
@@ -28,9 +32,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr
+all: bus apb clint wdog wdogtmr regfile
 
 include $(REPO)/tools.mk
 
@@ -54,10 +58,26 @@ clint:
 	  $(SBY) -f soc_clint.sby $$t || exit 1; \
 	done
 
+WDOG_TASKS := bmc prove prove_w0 cover
+
 wdog:
-	@for t in $(TASKS); do \
+	@for t in $(WDOG_TASKS); do \
 	  echo "== soc_wdog $$t"; \
 	  $(SBY) -f soc_wdog.sby $$t || exit 1; \
+	done
+
+# The shortening of the (72,64) codec to the 40 bits
+# hw/soc/rtl/ibex_regfile_secded.v actually stores.  formal/secded.sby
+# proves the codec at its own width and is not touched by this work;
+# what is new is that tying the upper 32 data bits to zero leaves a code
+# that still corrects one error and detects two, which is an argument
+# about which columns of H survive and which nothing checked.
+REGFILE_TASKS := bmc prove prove_abc cover
+
+regfile:
+	@for t in $(REGFILE_TASKS); do \
+	  echo "== regfile_secded $$t"; \
+	  $(SBY) -f regfile_secded.sby $$t || exit 1; \
 	done
 
 # soc_wdog_tmr.sby rebuilds the composition soc_wdog.v's g_prot_tmr
@@ -104,4 +124,5 @@ clean:
 	       soc_apb_bridge soc_apb_bridge_bmc soc_apb_bridge_prove \
 	       soc_apb_bridge_cover \
 	       soc_clint soc_clint_bmc soc_clint_prove soc_clint_cover \
-	       soc_wdog soc_wdog_bmc soc_wdog_prove soc_wdog_cover
+	       $(addprefix soc_wdog_,$(WDOG_TASKS)) soc_wdog \
+	       $(addprefix regfile_secded_,$(REGFILE_TASKS)) regfile_secded

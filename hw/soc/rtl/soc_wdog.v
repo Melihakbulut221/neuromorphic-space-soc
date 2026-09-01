@@ -194,13 +194,132 @@
 //     sw/tests/test_soc_synthesis_guards.py checks textually.
 //
 // =====================================================================
+// W7. THE KICK HAS A CADENCE AND NOT ONLY A DEADLINE (the window)
+// =====================================================================
+//
+// Added by docs/43-core-hardening.md, from a measurement rather than a
+// preference. docs/42 section 7.2 measured this block catching 91.7 %
+// of the upsets that leave the core dead -- and section 8.1 found the
+// class it is structurally blind to: a machine that keeps executing its
+// own instructions, in order, at full speed, and pets the watchdog on
+// schedule while computing nothing.
+//
+// W1-W5 have no purchase on that, because none of them is about
+// WHETHER THE SOFTWARE SHOULD STILL BE RUNNING. A watchdog that only
+// asks "has a kick arrived within T" accepts any kick, at any moment,
+// including one from a runaway that happens to sweep through the kick
+// site far faster than the program ever would.
+//
+// So the kick now has a WINDOW. After a reload the counter runs from
+// `reload` down to zero; the window is CLOSED while
+//
+//     counter > (reload >> WINS)
+//
+// and a kick that arrives while it is closed is a violation, not a
+// kick. WINS is a four-bit field in the new WDOGWIN register:
+//
+//     WINS = 0   the window is open for the whole period. This is the
+//                reset default and it is EXACTLY the block docs/42
+//                measured: at zero, W7 is not merely disabled, it is
+//                absent from the behaviour.
+//     WINS = s   the window is open for the last 2^-s of the period, so
+//                the minimum permitted interval between two kicks is
+//                    T_min = T * (1 - 2^-s).
+//
+// WHAT THE WINDOW COSTS, STATED AS THE RULE A PROGRAM HAS TO OBEY.
+// Every kick must land in (T_min, T]. Writing i_min and i_max for the
+// shortest and longest interval between consecutive kicks that the
+// software can ever produce, the constraint is
+//
+//     T * (1 - 2^-s)  <  i_min      and      i_max  <  T
+//
+// which forces
+//
+//     i_max / i_min  <  1 / (1 - 2^-s)
+//
+// so s is, exactly, a bound on the JITTER RATIO of the software's kick
+// cadence: s = 1 permits 2:1, s = 2 permits 4:3, s = 3 permits 8:7.
+// That is the whole cost, and it is a cost paid by the program and not
+// by the hardware. A program that kicks from several places at unequal
+// spacing -- which is the ordinary way to use a watchdog, and is how
+// hw/soc/tb/sw/fi_workload.c was written before this -- has an
+// unbounded jitter ratio and CANNOT use any s > 0. docs/43 section 4
+// measures the ratio for that program and says what it had to become.
+//
+// AND WHAT IT DOES NOT BUY, said here because docs/42 section 10
+// expected more of it than it can deliver. A window fires on a kick
+// that is too EARLY. The x23 failure of docs/42 section 8.1 is a
+// corrupted loop BOUND: the loop body is untouched, so the corrupted
+// machine kicks at exactly the cadence the program was written to
+// produce. It is not early. W7 does not catch it and cannot, and
+// docs/43 section 5 measures that rather than asserting it. W8 is the
+// mechanism that does.
+//
+// =====================================================================
+// W8. A PHASE MAY ONLY ISSUE THE KICKS IT SAID IT WOULD (the budget)
+// =====================================================================
+//
+// The generalisation of the x23 finding is that no check on the TIMING
+// of a kick can distinguish "the right loop" from "the right loop, too
+// many times". Only a bound on the amount of work can, and the software
+// is the only thing that knows what that bound is.
+//
+// So a keyed write to WDOGWIN with BUDEN set loads KICKS into an
+// eight-bit down-counter and arms it. Every accepted kick decrements
+// it; a kick that arrives when it is already zero is a violation, in
+// exactly the sense W7's early kick is. The contract is a statement
+// about PROGRESS rather than liveness: "this phase will kick at most N
+// times, and if it kicks more it is not my program any more".
+//
+// It is disarmed at power-on reset and by every stage-2 reset, so it is
+// opt-in per phase, and a program that never writes WDOGWIN gets the
+// block docs/42 measured, bit for bit.
+//
+// WHAT A VIOLATION DOES. Both W7's and W8's violations enter W3's
+// ladder at the point an expiry would: stage 1 raises the NMI, and a
+// second violation or expiry with stage 1 unacknowledged is stage 2.
+// They deliberately do NOT reset immediately -- a spurious early kick
+// from a program whose cadence drifted deserves the same one-timeout
+// warning an ordinary expiry gets. A violating kick also does NOT
+// reload the counter, because a kick the block has rejected must not
+// be able to postpone the deadline it was rejected for.
+//
+// WHAT STOPS SOFTWARE FROM SIMPLY WIDENING IT (W1's question, asked of
+// W7 and W8). Three answers, in increasing order of strength:
+//
+//   * The write is keyed like every other (W5). WINS and the budget are
+//     no more reachable by a runaway storing wild values than `reload`
+//     already is, and `reload` decides the timeout itself.
+//   * Neither field can DISARM the block. WINS = 0 and BUDEN = 0
+//     restore the conventional watchdog of docs/40, which still
+//     expires, still escalates and still resets. That is a loss of the
+//     new check, not of the old one, and it is the reason W7 and W8 are
+//     compatible with W1 while a writable EN bit is not.
+//   * An UPSET cannot widen them either: WINS, the budget's armed flag
+//     and both violation records are fields of W6's protected word.
+//     They are there by W6's own criterion -- software writes them once
+//     per phase, nothing else rewrites them, and their corruption
+//     toward zero is silent. `kick_left` is NOT protected, for the same
+//     reason `counter` is not: the block itself rewrites it, an upset
+//     up costs at most 255 further kicks before the budget still bites,
+//     and an upset down is a spurious ladder, which is loud. docs/43
+//     measures that price rather than asserting it.
+//
+// AND THE FAILURE docs/40 SECTION 7.2 FOUND, WHICH THIS FEATURE CAN
+// REPRODUCE. A window installed before software went wrong would
+// survive the reset that going wrong caused -- W4 puts it in the
+// power-on domain -- and every kick of the fresh boot would be early,
+// so the SoC would reset for ever with the console never reaching its
+// first character. That is precisely the brick docs/40 section 7.2
+// found with `reload`, and the fix is the same line: A STAGE-2 RESET
+// RESTORES WINS TO 0 AND DISARMS THE BUDGET, beside the reload being
+// restored to the maximum. Whatever the last software configured, the
+// next boot gets the whole budget and no cadence contract at all.
+//
+// =====================================================================
 // WHAT THIS BLOCK DOES NOT DO
 // =====================================================================
 //
-//   * No windowed mode. A kick that arrives too EARLY is accepted. A
-//     windowed watchdog rejects those and so catches a fast runaway loop
-//     that happens to include the kick; this one does not, and a runaway
-//     that keeps kicking is invisible to it.
 //   * No independent clock. It counts the system clock. If the clock
 //     stops, the watchdog stops with everything else and nothing fires.
 //   * It cannot tell a hung core from a core doing something slow and
@@ -234,7 +353,19 @@ module soc_wdog #(
     // that sw/tests/test_soc_synthesis_guards.py has a mutation whose
     // flip-flop count differs. Nothing in the design sets it to 0 and
     // that test checks textually that nothing does.
-    parameter integer HARDEN = 1
+    parameter integer HARDEN = 1,
+    // W7 + W8. 1 = the window and the kick budget are built, 0 = neither
+    // exists and this block behaves exactly as docs/40 shipped it.
+    //
+    // It is here for the reason HARDEN is here: so the area cost of W7
+    // and W8 can be measured against the same source file rather than
+    // against a remembered number. docs/41 section 6.5 records what
+    // quoting a delta against the wrong baseline cost once. Nothing in
+    // the design sets it to 0.
+    parameter integer WINDOW = 1,
+    // Width of the W8 kick-budget down-counter, and therefore the
+    // largest number of kicks one phase may declare.
+    parameter integer KICK_W = 8
 ) (
     input  wire        clk_i,
     // POWER-ON reset. The only reset in this file, W4.
@@ -244,8 +375,8 @@ module soc_wdog #(
     input  wire        dis_i,
 
     // ---- register port, decoded by soc_gptimer.v ----
-    // One-hot: bit 0 counter, 1 reload, 2 control, 3 status.
-    input  wire [3:0]  sel_i,
+    // One-hot: bit 0 counter, 1 reload, 2 control, 3 status, 4 window.
+    input  wire [4:0]  sel_i,
     input  wire        we_i,
     input  wire [31:0] wdata_i,
     output reg  [31:0] rdata_o,
@@ -282,8 +413,18 @@ module soc_wdog #(
   // ---- WDOGSTAT bit positions, this project's extension ----
   localparam integer B_STAT_NMI = 0, B_STAT_RST = 1,
                      B_STAT_ESC = 2, B_STAT_DIS = 3,
-                     B_STAT_TMR = 4;              // W6, sticky
+                     B_STAT_TMR = 4,              // W6, sticky
+                     B_STAT_EARLY = 5,            // W7, sticky
+                     B_STAT_BUDGET = 6;           // W8, sticky
   localparam integer B_STAT_TMRCNT = 16;          // W6, TMC_W bits
+
+  // ---- WDOGWIN bit positions, W7 and W8 ----
+  // Write (keyed, W5):  [3:0] WINS, [7] BUDEN, [15:8] KICKS
+  // Read:               [3:0] WINS, [4] BUDARM, [15:8] the kicks left
+  localparam integer B_WIN_WINS  = 0;             // 4 bits
+  localparam integer B_WIN_BUDEN = 7;             // write-only, one shot
+  localparam integer B_WIN_KICKS = 8;             // KICK_W bits
+  localparam integer B_WIN_BUDARM = 4;            // read-only
 
   // -------------------------------------------------------------------
   // The protected word (W6)
@@ -303,7 +444,53 @@ module soc_wdog #(
   localparam integer P_TMRCNT  = 5;                    // TMC_W
   localparam integer P_RSTCNT  = P_TMRCNT + TMC_W;     // CNT_W
   localparam integer P_RSTHOLD = P_RSTCNT + CNT_W;     // RST_W
-  localparam integer PROT_W    = P_RSTHOLD + RST_W;
+  localparam integer P6_W      = P_RSTHOLD + RST_W;    // the W6 word
+
+  // W7 and W8 add four more fields to the same word, by the same
+  // criterion: software writes them once per phase, nothing else
+  // rewrites them, and their corruption toward zero is silent.
+  //
+  //   win_s     to 0 turns the cadence check off, silently.
+  //   bud_arm   to 0 turns the kick budget off, silently. This is a
+  //             dis_q-class bit for W8 and it is the reason W8's armed
+  //             flag is in here while its down-counter is not.
+  //   early_seen, bud_seen  the two records, and they live INSIDE the
+  //             protected word for the reason docs/16 section 5.8
+  //             measured on this repository's own safety nets: a report
+  //             beside the protection is a report an upset can erase.
+  localparam integer P_WINS    = P6_W;                 // 4
+  localparam integer P_EARLY   = P_WINS  + 4;          // 1
+  localparam integer P_BUDARM  = P_EARLY + 1;          // 1
+  localparam integer P_BUDSEEN = P_BUDARM + 1;         // 1
+  localparam integer P7_W      = 7;
+  localparam integer PFULL_W   = P6_W + P7_W;
+
+  // What is actually BANKED. At WINDOW = 0 the four W7/W8 fields are
+  // not stored at all, so the flip-flop count of that configuration is
+  // the docs/41 design and not the docs/41 design with seven dead bits
+  // in it. docs/41 section 6.5 is the reason that distinction is worth
+  // a localparam: a baseline that carries part of the feature
+  // understates the feature's cost.
+  localparam integer PROT_W = (WINDOW != 0) ? PFULL_W : P6_W;
+
+  // Elaboration guards, aer_fifo house style: a build that violates one
+  // references a module that deliberately does not exist, so it fails
+  // at elaboration with the reason in the message rather than producing
+  // a silently different block.
+  generate
+    // W5 puts the key in the upper half word, so the whole of a kick
+    // budget has to fit in wdata_i[15:8].
+    if (KICK_W > 8) begin : g_kick_w_too_wide
+      ERROR_soc_wdog_KICK_W_exceeds_the_keyed_value_field guard ();
+    end
+    // soc_tmr_bank refuses below four bits, and PROT_W is derived, so a
+    // future field-list edit that narrowed it would be caught there
+    // rather than here. This guard is for the other direction: POL and
+    // RST_VAL are 64-bit parameters.
+    if (PROT_W > 64) begin : g_prot_too_wide
+      ERROR_soc_wdog_protected_word_exceeds_64_bits guard ();
+    end
+  endgenerate
 
   // Per-replica storage transform. A is the true image; B and C are
   // mixed, so every stored bit of either is an XOR of two or three
@@ -322,9 +509,17 @@ module soc_wdog #(
   localparam [63:0] POL_B = 64'h5555555555555555;
   localparam [63:0] POL_C = 64'hAAAAAAAAAAAAAAAA;
 
-  wire [PROT_W-1:0] prot;            // the voted word, or the plain one
-  wire              prot_mismatch;   // this cycle a replica disagrees
-  reg  [PROT_W-1:0] prot_n;          // next value, combinational
+  wire [PROT_W-1:0]  prot_store;      // the voted word, or the plain one
+  wire               prot_mismatch;   // this cycle a replica disagrees
+  reg  [PFULL_W-1:0] prot_n;          // next value, combinational
+
+  // `prot` is the full field layout, always PFULL_W wide so that every
+  // part-select below is in range whatever WINDOW is. At WINDOW = 0 the
+  // top P7_W bits are constants that never enter a bank, which is what
+  // makes that configuration the docs/41 design exactly rather than the
+  // docs/41 design carrying seven bits of a feature it does not have.
+  wire [PFULL_W-1:0] prot;
+  assign prot = prot_store;          // zero-extended when WINDOW = 0
 
   // Named views. Everything below this line reads these and never the
   // storage, so this file's register reads and the invariants in
@@ -338,6 +533,10 @@ module soc_wdog #(
   wire [TMC_W-1:0] tmr_count = prot[P_TMRCNT  +: TMC_W];
   wire [CNT_W-1:0] rst_count = prot[P_RSTCNT  +: CNT_W];
   wire [RST_W-1:0] rst_hold  = prot[P_RSTHOLD +: RST_W];
+  wire [3:0]       win_s     = prot[P_WINS +: 4];   // W7
+  wire             early_seen = prot[P_EARLY];      // W7, sticky
+  wire             bud_arm    = prot[P_BUDARM];     // W8
+  wire             bud_seen   = prot[P_BUDSEEN];    // W8, sticky
 
   generate
   if (HARDEN != 0) begin : g_prot_tmr
@@ -349,11 +548,14 @@ module soc_wdog #(
     // a bank that held its value would accumulate corruption instead of
     // shedding it. See soc_tmr_bank.v difference 1.
     soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_A), .MIX(0))
-      u_prot_a (.clk_i(clk_i), .rst_ni(rst_por_ni), .d_i(prot_n), .q_o(qa));
+      u_prot_a (.clk_i(clk_i), .rst_ni(rst_por_ni),
+                .d_i(prot_n[PROT_W-1:0]), .q_o(qa));
     soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_B), .MIX(1))
-      u_prot_b (.clk_i(clk_i), .rst_ni(rst_por_ni), .d_i(prot_n), .q_o(qb));
+      u_prot_b (.clk_i(clk_i), .rst_ni(rst_por_ni),
+                .d_i(prot_n[PROT_W-1:0]), .q_o(qb));
     soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_C), .MIX(1))
-      u_prot_c (.clk_i(clk_i), .rst_ni(rst_por_ni), .d_i(prot_n), .q_o(qc));
+      u_prot_c (.clk_i(clk_i), .rst_ni(rst_por_ni),
+                .d_i(prot_n[PROT_W-1:0]), .q_o(qc));
 
     // hw/rtl/tmr_voter.v, read in place and not copied. It is a
     // standalone file with no includes, proven exhaustively in
@@ -364,7 +566,7 @@ module soc_wdog #(
         .in_a     (qa),
         .in_b     (qb),
         .in_c     (qc),
-        .out      (prot),
+        .out      (prot_store),
         .mismatch (prot_mismatch)
     );
   end else begin : g_prot_plain
@@ -372,9 +574,9 @@ module soc_wdog #(
     reg [PROT_W-1:0] plain;
     always @(posedge clk_i or negedge rst_por_ni) begin
       if (!rst_por_ni) plain <= {PROT_W{1'b0}};
-      else             plain <= prot_n;
+      else             plain <= prot_n[PROT_W-1:0];
     end
-    assign prot          = plain;
+    assign prot_store    = plain;
     assign prot_mismatch = 1'b0;
   end
   endgenerate
@@ -394,6 +596,10 @@ module soc_wdog #(
   wire wr_rld  = sel_i[1] && keyed;
   wire wr_ctrl = sel_i[2] && keyed;
   wire wr_stat = sel_i[3] && keyed;
+  // W7 and W8's register. Keyed like the rest, and inert at WINDOW = 0
+  // so that configuration has no path from the bus into state it does
+  // not have.
+  wire wr_win  = sel_i[4] && keyed && (WINDOW != 0);
 
   // The value field of every register is wdata_i[15:0]; the upper half
   // is the key (W5) and never reaches a register. Bits above WIDTH are
@@ -413,24 +619,29 @@ module soc_wdog #(
   //   rst_hold   stage-2 stretch
   //   dis_q / dis_seen  the bootstrap latch
   //   tmr_err / tmr_count  the W6 report
+  //   win_s / bud_arm      the W7 and W8 contract
+  //   early_seen / bud_seen  the W7 and W8 records
   //
-  // The three below are deliberately NOT protected, and the argument is
+  // The FOUR below are deliberately NOT protected, and the argument is
   // W6's second list: each of them is rewritten by the block itself, so
   // an upset in it is bounded in time rather than permanent.
   reg [WIDTH-1:0] reload;
   reg [WIDTH-1:0] counter;
   reg [PRE_W-1:0] pre;
 
+  // W8's down-counter, and it is deliberately NOT in the protected word.
+  // The criterion is W6's and it is the one `counter` already passes:
+  // the block itself rewrites it every kick, so nothing accumulates; an
+  // upset upward buys the runaway at most 2^KICK_W - 1 further kicks
+  // before the budget bites anyway, and an upset downward is a spurious
+  // escalation, which is loud and which the protected record captures
+  // correctly while it happens. Its ARMED flag is a different question
+  // and is protected: that bit is silent in the direction that matters.
+  reg [KICK_W-1:0] kick_left;
+
   wire in_reset = (rst_hold != 0);
   wire tick     = (PRESCALE <= 1) || (pre == 0);
   wire expire   = armed && !in_reset && tick && (counter == 0);
-
-  // Stage 2 is the SECOND expiry with stage 1 still unacknowledged.
-  wire stage2   = expire && nmi_pend;
-
-  assign nmi_o     = nmi_pend;
-  assign rst_req_o = in_reset;
-  assign wdog_no   = !(rst_count >= ESC_AT);
 
   // ---- a kick ----
   //
@@ -439,7 +650,63 @@ module soc_wdog #(
   // the warning" are different statements and collapsing them would let
   // a periodic kicker that never looks at the status register mask a
   // stage-1 event forever.
-  wire kick = wr_ctrl && wval[B_LD];
+  wire kick_req = wr_ctrl && wval[B_LD];
+
+  // -------------------------------------------------------------------
+  // W7: is the window open?
+  // -------------------------------------------------------------------
+  //
+  // The counter runs down from `reload`, so the elapsed part of the
+  // period is (reload - counter) and the remaining part is `counter`.
+  // The window is open for the last 2^-win_s of the period:
+  //
+  //     open  <=>  win_s == 0  ||  counter <= (reload >> win_s)
+  //
+  // win_s = 0 makes the right-hand side `counter <= reload`, which is
+  // true for every reachable counter value -- so the zero case is not a
+  // special case in the logic, only in the reading. It is written out
+  // as one anyway, because the shift is a barrel shifter and gating it
+  // is what makes WINDOW = 0 and win_s = 0 cost the same nothing.
+  //
+  // The comparison is against `reload` and not against a second
+  // programmed number on purpose: a window expressed as a FRACTION of
+  // the period cannot be made inconsistent with the period. A separate
+  // absolute open-point register could be set above the reload, which
+  // would close the window for ever and stop every kick -- a way to
+  // brick the part with one store, which W1 exists to prevent.
+  wire [WIDTH-1:0] win_open_at = reload >> win_s;
+  wire win_open = (WINDOW == 0) || (win_s == 4'd0) ||
+                  (counter <= win_open_at);
+
+  // A kick that arrives while the window is closed. Gated by `armed`
+  // and by `!in_reset` for the same reason `expire` is: a block held
+  // off by its bootstrap pin does nothing, and the kicks a core issues
+  // while it is being reset are not the program's.
+  wire early_kick = (WINDOW != 0) && kick_req && armed && !in_reset &&
+                    !win_open;
+
+  // -------------------------------------------------------------------
+  // W8: has this phase run out of kicks?
+  // -------------------------------------------------------------------
+  wire budget_out = (WINDOW != 0) && kick_req && armed && !in_reset &&
+                    bud_arm && (kick_left == {KICK_W{1'b0}});
+
+  // A violation is either of the two, and it enters W3's ladder exactly
+  // where an expiry does. A violating kick is NOT a kick: it does not
+  // reload the counter, because a kick the block has rejected must not
+  // postpone the deadline it was rejected for.
+  wire violate = early_kick || budget_out;
+  wire kick    = kick_req && !violate;
+
+  // Stage 2 is the SECOND fault with stage 1 still unacknowledged, and
+  // `fault` rather than `expire` is what changed here: an early kick or
+  // an exhausted budget counts as one.
+  wire fault    = expire || violate;
+  wire stage2   = fault && nmi_pend;
+
+  assign nmi_o     = nmi_pend;
+  assign rst_req_o = in_reset;
+  assign wdog_no   = !(rst_count >= ESC_AT);
 
   // A write-one-to-clear of the pending stage 1, from either the status
   // register's NMI bit or GRLIB's IP bit in the control register. Both
@@ -475,6 +742,15 @@ module soc_wdog #(
       prot_n[P_DISSEEN] = 1'b1;
     end
 
+    // W7 and W8's configuration. Placed BEFORE the escalation so that
+    // the stage-2 restore below overrides it: if a write and a reset
+    // ever landed in the same cycle, the thing that stops the part
+    // bricking has to be the one that wins.
+    if (wr_win) begin
+      prot_n[P_WINS +: 4] = wval[B_WIN_WINS +: 4];
+      if (wval[B_WIN_BUDEN]) prot_n[P_BUDARM] = 1'b1;
+    end
+
     // The reset stretch, and then the escalation which overrides it.
     if (in_reset) prot_n[P_RSTHOLD +: RST_W] = rst_hold - 1'b1;
 
@@ -485,11 +761,27 @@ module soc_wdog #(
       // Cleared on purpose: see the note in the header about
       // boot_addr + 0x7C.
       prot_n[P_NMI]              = 1'b0;
-    end else if (expire) begin
+      // docs/40 section 7.2's line, extended to W7 and W8 for its own
+      // reason. A window or a budget installed before software went
+      // wrong survives the reset that going wrong caused -- everything
+      // here is in the power-on domain by W4 -- so the fresh boot would
+      // trip the same contract on its first kick and reset again, for
+      // ever, with the console never reaching its first character.
+      // Whatever the last software configured, the next boot gets the
+      // whole budget and no cadence contract.
+      prot_n[P_WINS +: 4] = 4'd0;
+      prot_n[P_BUDARM]    = 1'b0;
+    end else if (fault) begin
       prot_n[P_NMI] = 1'b1;
     end else if (ack) begin
       prot_n[P_NMI] = 1'b0;
     end
+
+    // W7 and W8's records. Sticky and not clearable, for the reason
+    // WDOGRST and RSTCNT are not: a record software can erase is a
+    // record an upset can erase.
+    if (early_kick) prot_n[P_EARLY]   = 1'b1;
+    if (budget_out) prot_n[P_BUDSEEN] = 1'b1;
 
     // The W6 report, and it lives INSIDE the protected word on purpose.
     // docs/16 section 5.8 measured the other arrangement on this
@@ -517,6 +809,7 @@ module soc_wdog #(
       reload    <= {WIDTH{1'b1}};
       counter   <= {WIDTH{1'b1}};
       pre       <= 0;
+      kick_left <= {KICK_W{1'b0}};
     end else begin
       // ---- prescaler ----
       if (PRESCALE > 1) begin
@@ -553,6 +846,20 @@ module soc_wdog #(
       // configured, the next boot gets the whole budget.
       if (stage2)      reload <= {WIDTH{1'b1}};
       else if (wr_rld) reload <= wnum;
+
+      // ---- W8's kick budget ----
+      //
+      // Loaded by a keyed WDOGWIN write with BUDEN, decremented by
+      // every ACCEPTED kick, and saturating at zero -- the zero itself
+      // is the violation, and the counter must stay there so that every
+      // subsequent kick of a runaway is a violation too rather than
+      // only the first one after a wrap.
+      if (WINDOW != 0) begin
+        if (wr_win && wval[B_WIN_BUDEN])
+          kick_left <= wval[B_WIN_KICKS +: KICK_W];
+        else if (kick && bud_arm && (kick_left != {KICK_W{1'b0}}))
+          kick_left <= kick_left - 1'b1;
+      end
     end
   end
 
@@ -590,8 +897,21 @@ module soc_wdog #(
         rdata_o[B_STAT_ESC] = !wdog_no;
         rdata_o[B_STAT_DIS] = dis_q;
         rdata_o[B_STAT_TMR] = tmr_err;
+        rdata_o[B_STAT_EARLY]  = early_seen;    // W7
+        rdata_o[B_STAT_BUDGET] = bud_seen;      // W8
         rdata_o[15:8]       = rst_count;
         rdata_o[B_STAT_TMRCNT +: TMC_W] = tmr_count;
+      end
+      // WDOGWIN, W7 and W8. The configuration reads back so that
+      // software can discover it did not take -- the same reason W1
+      // makes EN read 1 after a write of 0 rather than silently
+      // ignoring it -- and `kick_left` reads back so that a phase can
+      // see how much of its declared budget it has spent.
+      sel_i[4]: begin
+        rdata_o = 32'h0;
+        rdata_o[B_WIN_WINS +: 4]      = win_s;
+        rdata_o[B_WIN_BUDARM]         = bud_arm;
+        rdata_o[B_WIN_KICKS +: KICK_W] = kick_left;
       end
       default:  rdata_o = 32'h0;
     endcase

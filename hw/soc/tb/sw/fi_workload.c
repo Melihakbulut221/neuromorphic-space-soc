@@ -108,6 +108,68 @@
 #define FI_WDOG_RELOAD 127u
 #endif
 
+/* ---- the windowed variant, docs/43 ---------------------------------
+ *
+ * FI_WINDOWED builds the same kernel under soc_wdog.v's W7 cadence
+ * contract and W8 kick budget. It is a SEPARATE BUILD and not a runtime
+ * option because it changes the program, and docs/43 keeps the two
+ * campaigns apart for exactly that reason: campaign A runs this file
+ * with FI_WINDOWED off, which is byte-for-byte the docs/42 workload, so
+ * the register-file result is measured with the software held fixed.
+ *
+ * WHY THE KICKS HAD TO MOVE. Measured on the unmodified program: 25
+ * kicks in the window, shortest interval 30 clocks, longest 1,716 --
+ * a jitter ratio of 57. W7 with WINS = 1 permits 2. The ordinary way to
+ * use a watchdog -- kick wherever the code happens to pass -- cannot
+ * live inside any window at all, and that is a real cost of W7 and not
+ * a defect of this program.
+ *
+ * So the windowed build kicks EXACTLY ONCE PER ROUND, at the top of the
+ * round, and nowhere else. The interval is then one round of the kernel
+ * and its jitter is whatever the kernel's own data-dependent branching
+ * produces -- which is what a program written to live inside a window
+ * has to look like, and which docs/43 section 4 measures.
+ */
+#ifdef FI_WINDOWED
+#define ROUND_KICK() do { } while (0)
+#else
+#define ROUND_KICK() wdog_kick()
+#endif
+
+/* The window bound and the kick budget the windowed build declares.
+ * Both are chosen FROM THE MEASURED cadence of this program, in
+ * docs/43 section 4, and neither is a round number picked to look
+ * tidy. */
+#ifndef FI_WIN_S
+#define FI_WIN_S 1u
+#endif
+#ifndef FI_KICK_BUDGET
+#define FI_KICK_BUDGET (FI_ROUNDS + 2u)
+#endif
+
+/* MEASURED, not assumed: with the in-round kicks removed this program
+ * issues five kicks in the run and the intervals between them are
+ * 4,094 clocks at the shortest and 4,164 at the longest -- a jitter
+ * ratio of 1.017 (docs/43 section 4, from the clean run's own record).
+ *
+ * W7 then bounds the timeout T = (RELOAD + 1) * WDOG_PRESCALE from both
+ * sides:
+ *
+ *     T > g_max                       or a legitimate round expires
+ *     T * (1 - 2^-WINS) < g_min       or a legitimate kick is early
+ *
+ * At WINS = 1 that is 4,164 < T < 8,188, and FI_WDOG_RELOAD = 383 puts
+ * T at 6,144 -- 33 % above the lower bound and 33 % below the upper.
+ * The lower guard is checked here because the build that gets it wrong
+ * does not fail, it resets in a loop, and a program that resets in a
+ * loop is the failure docs/40 section 7.2 spent a section on.
+ */
+#ifdef FI_WINDOWED
+#if ((FI_WDOG_RELOAD + 1u) * 16u) <= 4164u
+#error "windowed build: the watchdog timeout is shorter than this program's longest measured interval between kicks -- raise FI_WDOG_RELOAD"
+#endif
+#endif
+
 // Rounds of the measured kernel, and the depth of the recursion inside
 // one. Sized so the clean run is short enough to multiply by a campaign
 // and long enough that the kernel, and not the boot path or the
@@ -221,7 +283,7 @@ static uint32_t round_once(uint32_t seed, uint32_t *mask) {
     for (i = ARRAY_N; i-- > 0u; )       rev += a[i];
     if (fwd != rev) *mask |= F_SUM;
     sig ^= fwd;
-    wdog_kick();
+    ROUND_KICK();
   }
 
   // 2. The multiplier against a shift-and-add loop.
@@ -230,7 +292,7 @@ static uint32_t round_once(uint32_t seed, uint32_t *mask) {
     uint32_t sw = mul_sw(a[0], a[1]);
     if (hw != sw) *mask |= F_MUL;
     sig = (sig << 1) ^ hw;
-    wdog_kick();
+    ROUND_KICK();
   }
 
   // 3. The divider against its own definition. d is forced nonzero, so
@@ -244,7 +306,7 @@ static uint32_t round_once(uint32_t seed, uint32_t *mask) {
     if ((q * d + r) != n) *mask |= F_DIV;
     if (r >= d)           *mask |= F_DIV;
     sig += q ^ r;
-    wdog_kick();
+    ROUND_KICK();
   }
 
   // 4. Recursion against iteration. The recursive side is 67 calls at
@@ -255,7 +317,7 @@ static uint32_t round_once(uint32_t seed, uint32_t *mask) {
     uint32_t fi = fib_iter(FI_FIB_N);
     if (fr != fi) *mask |= F_FIB;
     sig ^= fr * 3u;
-    wdog_kick();
+    ROUND_KICK();
   }
 
   // 5. Memory at three widths. The buffer is written as bytes with a
@@ -293,7 +355,7 @@ static uint32_t round_once(uint32_t seed, uint32_t *mask) {
       if (rw != wr) *mask |= F_MEM;
     }
     sig ^= wr;
-    wdog_kick();
+    ROUND_KICK();
   }
 
   // 6. A machine CSR round trip. mscratch has no architectural side
@@ -325,6 +387,24 @@ int main(void) {
 
   uart_init();
 
+#ifdef FI_WINDOWED
+  // The cadence contract, declared before the phase it applies to and
+  // after the kick above, so the first kick inside the contract is a
+  // full round away. W7's window is a fraction of the period, so
+  // arming it mid-period cannot close it retrospectively.
+  //
+  // The budget is FI_ROUNDS + 2: this phase kicks once per round and
+  // that is FI_ROUNDS kicks, with two spare so that the contract is a
+  // statement about the loop bound and not a hair-trigger on the exact
+  // count. Under docs/42 section 8.1's corrupted `x23` the loop does
+  // not terminate, so the kicks do not stop, so the budget is spent and
+  // the block escalates -- which is the whole reason W8 exists and is
+  // measured rather than asserted in docs/43 section 5.
+  *(volatile uint32_t *)WDOG_WIN =
+      WDOG_W(WDOG_WIN_WINS(FI_WIN_S) | WDOG_WIN_BUDEN |
+             WDOG_WIN_KICKS(FI_KICK_BUDGET));
+#endif
+
   // The measured window opens here.
   fi_phase = 1u;
 
@@ -332,6 +412,13 @@ int main(void) {
     sig = round_once(sig + r, &mask);
     fi_sig = sig;
     fi_rounds_done = r + 1u;
+    // The one kick the windowed build keeps, and the sixth of six the
+    // unwindowed build has. It stays exactly here in both, so that the
+    // FI_WINDOWED-off build is the program docs/42 measured down to the
+    // instruction order -- campaign A of docs/43 compares against that
+    // campaign draw by draw and would not be entitled to if the
+    // software had moved. Verified rather than argued: the two builds
+    // produce a byte-identical ROM image when FI_WINDOWED is off.
     wdog_kick();
   }
 

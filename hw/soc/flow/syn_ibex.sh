@@ -30,6 +30,25 @@ SOC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 OUT_ROOT=${3:-$SOC_DIR/out}
 OUT=$OUT_ROOT/$CFG
 
+# THIS SCRIPT DEFAULTS TO `upstream` AND THE SOC FLOWS DEFAULT TO
+# `secded`, and the difference is deliberate.
+#
+# The configuration names below -- small, small-pmp, small-pmp-sec --
+# are docs/38's, and every area and timing number in that document is
+# quoted against them. A tool that silently measured a register file
+# this project substituted would make those names describe something
+# they do not, and docs/38 section 8.4's 275,682.6198 um2 would stop
+# reproducing without anything saying so.
+#
+# The hardened core is measured by asking for it:
+#     IBEX_REGFILE=secded flow/syn_ibex.sh small-pmp 20 out/h43-secded
+# which is what docs/43 section 7.1 runs, beside the upstream row, in
+# the same session.
+IBEX_REGFILE=${IBEX_REGFILE:-upstream}
+export IBEX_REGFILE
+# shellcheck source=hw/soc/flow/ibex_sources.sh
+. "$SOC_DIR/flow/ibex_sources.sh"
+
 eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 : "${YOSYS:?}" "${SG13G2_TYP:?}"
 
@@ -72,7 +91,10 @@ set_driving_cell sg13g2_buf_4
 set_load 0.005
 EOF
 
-sed -e "s|@GEN@|$SOC_DIR/gen|g" \
+IBEX_SRCS=$(ibex_sources "$SOC_DIR" | tr '\n' ' ')
+
+sed -e "s|@IBEX_SRCS@|$IBEX_SRCS|g" \
+    -e "s|@GEN@|$SOC_DIR/gen|g" \
     -e "s|@RTL@|$SOC_DIR/rtl|g" \
     -e "s|@LIB@|$SG13G2_TYP|g" \
     -e "s|@OUT@|$OUT|g" \

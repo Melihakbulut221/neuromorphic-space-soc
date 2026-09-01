@@ -31,6 +31,13 @@ set -euo pipefail
 SOC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 OUT=${1:-$SOC_DIR/out/fi-core}
 
+# The same source list the campaign elaborates, with the register file
+# selected by IBEX_REGFILE. A census of the upstream core against a site
+# list written for the hardened one would report 248 uncovered
+# flip-flops that do not exist, or none that do.
+# shellcheck source=hw/soc/flow/ibex_sources.sh
+. "$SOC_DIR/flow/ibex_sources.sh"
+
 eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 : "${YOSYS:?}" "${SG13G2_TYP:?}"
 
@@ -44,7 +51,7 @@ mkdir -p "$OUT"
 cat > "$OUT/fi_flops.ys" <<EOF
 read_liberty -lib $SG13G2_TYP
 read_verilog -defer $SOC_DIR/rtl/prim_clock_gating.v
-read_verilog -defer $SOC_DIR/gen/*.v
+read_verilog -defer $(ibex_sources "$SOC_DIR" | tr '\n' ' ')
 
 chparam -set BaseIsa          0   ibex_top
 chparam -set RV32E            0   ibex_top
@@ -80,4 +87,6 @@ EOF
 "$YOSYS" -q -s "$OUT/fi_flops.ys" > "$OUT/fi_flops.log" 2>&1 || {
   echo "yosys failed; see $OUT/fi_flops.log" >&2; exit 1; }
 
-python3 "$SOC_DIR/fi/coverage.py" "$OUT/fi_flops.il" | tee "$OUT/fi_coverage.txt"
+FI_REGFILE=${IBEX_REGFILE:-secded} \
+  python3 "$SOC_DIR/fi/coverage.py" "$OUT/fi_flops.il" \
+  | tee "$OUT/fi_coverage.txt"

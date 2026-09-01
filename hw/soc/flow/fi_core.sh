@@ -26,6 +26,14 @@ OUT=${1:-$SOC_DIR/out/fi-core}
 UART_SCALER=${UART_SCALER:-0}
 UART_BIT_CYCLES=$(( 8 * (UART_SCALER + 1) ))
 
+# The Ibex source list, with the register file selected. IBEX_REGFILE
+# defaults to `secded`: hw/soc/rtl/ibex_regfile_secded.v replaces
+# hw/soc/gen/ibex_register_file_ff.v, and nothing in hw/soc/ext or
+# hw/soc/gen is modified to do it. IBEX_REGFILE=upstream reproduces the
+# design docs/38 to docs/42 measured.
+# shellcheck source=hw/soc/flow/ibex_sources.sh
+. "$SOC_DIR/flow/ibex_sources.sh"
+
 eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 : "${IVERILOG:?}" "${VVP:?}"
 
@@ -42,7 +50,16 @@ SW_DEFINES=${SW_DEFINES:-}
 # source tree: it is derived from hw/soc/fi/targets.py the way
 # hw/soc/gen is derived from ext/ibex, and the repository's rule for
 # both is fetched-or-generated, never vendored.
-python3 "$SOC_DIR/fi/targets.py" "$OUT/fi_targets.vh" > "$OUT/fi_targets.txt"
+FI_REGFILE=${IBEX_REGFILE:-secded} \
+  python3 "$SOC_DIR/fi/targets.py" "$OUT/fi_targets.vh" > "$OUT/fi_targets.txt"
+
+# The testbench reads the substituted register file's correction
+# counters hierarchically, and those names exist only in the hardened
+# build.  A define rather than a `defparam` because a hierarchical
+# reference to a name that does not exist is an elaboration error in
+# Icarus, not a warning.
+RF_DEFINE=()
+[ "${IBEX_REGFILE:-secded}" = "secded" ] && RF_DEFINE=(-DFI_REGFILE_SECDED)
 
 NM=$SOC_DIR/tools/rvgcc/bin/riscv-none-elf-nm
 sym () {
@@ -67,6 +84,7 @@ sym () {
   -DFI_SIG_ADDR="$(sym fi_sig)" \
   -DFI_MASK_ADDR="$(sym fi_mask)" \
   -DFI_ROUNDS_ADDR="$(sym fi_rounds_done)" \
+  "${RF_DEFINE[@]}" \
   -s tb_soc_fi \
   "$SOC_DIR/tb/tb_soc_fi.v" \
   "$SOC_DIR/rtl/soc_top.v" \
@@ -82,7 +100,7 @@ sym () {
   "$SOC_DIR/rtl/soc_tmr_bank.v" \
   "$PILOT_RTL/tmr_voter.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \
-  "$SOC_DIR"/gen/*.v \
+  $(ibex_sources "$SOC_DIR") \
   2>&1 | tee "$OUT/iverilog.log"
 
 echo "== elaborated $OUT/tb_soc_fi.vvp"

@@ -1,0 +1,88 @@
+# cocotb + Icarus suite for soc_wdog.v W7 and W8, docs/43.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_wdog        run the suite
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_wdog lint   Verilator lint
+#
+# The expectations in test_soc_wdog.py come from the five requirements
+# W1-W5 stated in the header of hw/soc/rtl/soc_wdog.v and argued in
+# docs/40-interrupts-timers-watchdog.md section 5. They are a
+# specification written before the RTL, not a description of it.
+#
+# Standalone by design, same structure as hw/tb/Makefile.regbank. Same
+# rootless tool discovery as that file: iverilog from PATH, cocotb from the
+# project venv hw/.venv -- if cocotb-config is not already on PATH the
+# recipe re-invokes make with the venv prepended, because make < 4.4 does
+# not pass an exported PATH into $(shell ...), which the cocotb makefiles
+# rely on. The venv is three directories up from here (hw/.venv), not in
+# hw/soc.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+# hw/rtl/tmr_voter.v is READ, never modified: it is the proved,
+# golden-vector-tested majority primitive the W6 protection votes with,
+# and docs/34 freezes the directory it lives in.
+PILOT_RTL = $(PWD)/../../../rtl
+
+# SOC_WDOG_SRC exists so a mutation run can point the same suite at a
+# modified copy of the RTL without editing the tree
+# (make -f Makefile.soc_wdog SOC_WDOG_SRC=/path/to/mutant.v SIM_BUILD=... ).
+SOC_WDOG_SRC ?= $(RTL)/soc_wdog.v
+
+VERILOG_SOURCES = $(SOC_WDOG_SRC) $(RTL)/soc_tmr_bank.v \
+                  $(PILOT_RTL)/tmr_voter.v
+TOPLEVEL = soc_wdog
+
+# Small parameters, so a full timeout is a few thousand clocks instead of
+# a million. soc_top.v instantiates WIDTH 16 and PRESCALE 16; the values
+# below are the ones test_soc_wdog.py derives every expectation from, and
+# the two are kept in step by this being the only place either is written.
+COMPILE_ARGS += -Psoc_wdog.WIDTH=8
+COMPILE_ARGS += -Psoc_wdog.PRESCALE=4
+COMPILE_ARGS += -Psoc_wdog.RST_CYCLES=8
+COMPILE_ARGS += -Psoc_wdog.ESCALATE=2
+MODULE = test_soc_wdog_win
+
+# Per-block build and results paths so this suite can run alongside the
+# others without clobbering their artifacts.
+SIM_BUILD ?= sim_build_soc_wdog_win
+COCOTB_RESULTS_FILE ?= results_soc_wdog_win.xml
+export COCOTB_RESULTS_FILE
+
+# This block includes nothing, but -I$(RTL) keeps the invocation identical
+# to the sibling fabric suite and to the flow scripts.
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# Default-flag Verilator lint. The three-state machine is small enough that
+# any warning here is a real one.
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) --top-module soc_wdog \
+		$(SOC_WDOG_SRC) $(RTL)/soc_tmr_bank.v $(PILOT_RTL)/tmr_voter.v
+
+endif

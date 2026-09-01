@@ -187,10 +187,19 @@ module soc_gptimer #(
   // The watchdog
   // -------------------------------------------------------------------
   //
-  // sel is one-hot over {status, control, reload, counter} and is
-  // asserted only in the ACCESS phase, so the block sees exactly one
+  // sel is one-hot over {window, status, control, reload, counter} and
+  // is asserted only in the ACCESS phase, so the block sees exactly one
   // register event per APB transfer.
-  wire [3:0] wd_sel = {access && (paddr_i == REG_WDOGSTAT),
+  //
+  // Bit 4 is WDOGWIN -- soc_wdog.v W7 and W8 -- and it sits at the
+  // watchdog's own +0xC. In GRLIB that offset is a general timer's
+  // LATCH register (grip.pdf table 463), which this block reports as
+  // not implemented for every general timer and has never decoded at
+  // all for the watchdog. Putting the cadence contract there rather
+  // than at a new base costs no address space and keeps every watchdog
+  // register inside the watchdog's own sixteen bytes.
+  wire [4:0] wd_sel = {access && is_wdog && (tsel_reg == 2'd3),
+                       access && (paddr_i == REG_WDOGSTAT),
                        access && is_wdog && (tsel_reg == 2'd2),
                        access && is_wdog && (tsel_reg == 2'd1),
                        access && is_wdog && (tsel_reg == 2'd0)};

@@ -119,6 +119,7 @@ def _geometry():
 
     # The protected word, W6: everything whose corruption is permanent
     # or silent.
+    kick_w = 8  # W8's kick-budget down-counter
     prot_w = (1     # dis_q
               + 1   # dis_seen
               + 1   # nmi_pend
@@ -126,7 +127,15 @@ def _geometry():
               + 1   # tmr_err
               + tmc_w
               + cnt_w
-              + rst_w)
+              + rst_w
+              # docs/43, W7 and W8. Four more fields in the same word,
+              # by the same criterion: software writes them once per
+              # phase, nothing else rewrites them, and their corruption
+              # toward zero is silent.
+              + 4   # win_s
+              + 1   # early_seen
+              + 1   # bud_arm
+              + 1)  # bud_seen
 
     # The W6 report: the sticky mismatch flag and the saturating
     # mismatch counter. Counted separately because it is the part of
@@ -136,7 +145,9 @@ def _geometry():
     report = 1 + tmc_w
 
     # Deliberately unprotected, W6's second list.
-    unprot = width + width + pre_w   # reload, counter, pre
+    # Deliberately unprotected, W6's second list plus W8's down-counter.
+    unprot = width + width + pre_w + kick_w  # reload, counter, pre,
+                                             # kick_left
 
     return prot_w, report, unprot
 
@@ -485,17 +496,30 @@ def test_removing_the_mix_transform_from_one_replica_collapses_half_of_it(
         "with replica A and be merged away, giving {} flip-flops; found "
         "{}".format(collided, PROT_W, intact - collided, census.total))
 
-    # And with the mixing off on BOTH mixed replicas the loss doubles,
-    # which is the pigeonhole stated as a measurement: polarity offers
-    # exactly two storage functions per bit and there are three
-    # replicas, so on every bit one of the three has to collide.
+    # And with the mixing off on BOTH mixed replicas exactly ONE
+    # FLIP-FLOP PER PROTECTED BIT is lost, which is the pigeonhole
+    # stated as a measurement: polarity offers exactly two storage
+    # functions per bit and there are three replicas, so on every bit
+    # one of the three has to collide. On the bits where POL_C is zero
+    # replica C collides with A; on the others it collides with B.
+    #
+    # This used to be written as `2 * collided` and it was wrong in a
+    # way that could only show up when the width changed. At PROT_W =
+    # 22 the two expressions are equal, because POL_C is zero on
+    # exactly half of an even number of bits. docs/43 widened the
+    # protected word to 29 for W7 and W8, and 2 * 15 is 30 where the
+    # answer is 29. The design was right and the arithmetic was wrong,
+    # and the comment above it had said the right thing all along.
     both = _mutated(
         workdir, "nomix_bc",
         [(".POL(POL_B), .MIX(1))", ".POL(POL_B), .MIX(0))"),
          (".POL(POL_C), .MIX(1))", ".POL(POL_C), .MIX(0))")],
         strip_attributes=True)
     census2 = _census(_asic_script(both, force_flatten=True), workdir)
-    assert census2.total == intact - 2 * collided
+    assert census2.total == intact - PROT_W, (
+        "with MIX off on both mixed replicas exactly one flip-flop per "
+        "protected bit should be merged away, giving {}; found {}"
+        .format(intact - PROT_W, census2.total))
 
 
 @needs_yosys

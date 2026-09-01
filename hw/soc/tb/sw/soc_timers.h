@@ -54,6 +54,10 @@
 #define WDOG_RLD      GPT_RLD(WDOG_TIMER)
 #define WDOG_CTRL     GPT_CTRL(WDOG_TIMER)
 #define WDOG_STAT     (SOC_TIMER0_BASE + 0x10u * (WDOG_TIMER + 1))
+/* WDOGWIN, soc_wdog.v W7 and W8. It sits at the watchdog's own +0xC,
+ * which is a general timer's LATCH register in GRLIB (grip.pdf table
+ * 463) and which this block has never decoded for the watchdog. */
+#define WDOG_WIN      (GPT_TIMER(WDOG_TIMER) + 0xCu)
 
 /* Every write to a watchdog register carries this in bits 31:16 or has
  * no effect at all (soc_wdog.v W5). */
@@ -65,7 +69,34 @@
 #define WDOG_ST_WDOGRST   (1u << 1)
 #define WDOG_ST_ESCALATED (1u << 2)
 #define WDOG_ST_DISABLED  (1u << 3)
+#define WDOG_ST_TMRERR    (1u << 4)
+#define WDOG_ST_EARLY     (1u << 5)   /* W7: a kick arrived too early */
+#define WDOG_ST_BUDGET    (1u << 6)   /* W8: a phase ran out of kicks */
 #define WDOG_ST_RSTCNT(v) (((v) >> 8) & 0xFFu)
+
+/* WDOGWIN fields, soc_wdog.v W7 and W8.
+ *
+ * WINS is the number of halvings: the window is open for the last
+ * 2^-WINS of the period, so the shortest interval between two kicks the
+ * block will accept is T * (1 - 2^-WINS). WINS = 0, the reset default
+ * and the value a stage-2 reset restores, opens the window for the
+ * whole period and is exactly the watchdog docs/40 and docs/42
+ * describe.
+ *
+ * A program choosing WINS is declaring a bound on the JITTER of its own
+ * kick cadence: with i_min and i_max the shortest and longest interval
+ * it can produce, WINS is usable only if i_max / i_min < 1/(1 - 2^-WINS)
+ * -- 2:1 at WINS = 1, 4:3 at WINS = 2, 8:7 at WINS = 3. That is a
+ * property of the software and it has to be measured, not assumed.
+ *
+ * BUDEN loads KICKS into the kick budget and arms it. Every accepted
+ * kick spends one; a kick with none left is a violation. It is disarmed
+ * by every stage-2 reset. */
+#define WDOG_WIN_WINS(s)   ((s) & 0xFu)
+#define WDOG_WIN_BUDEN     (1u << 7)
+#define WDOG_WIN_KICKS(n)  (((n) & 0xFFu) << 8)
+#define WDOG_WIN_BUDARM    (1u << 4)      /* read-back */
+#define WDOG_WIN_LEFT(v)   (((v) >> 8) & 0xFFu)
 
 /* ---- machine CSR bits ----------------------------------------------- */
 #define MSTATUS_MIE (1u << 3)

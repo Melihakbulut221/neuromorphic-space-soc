@@ -1,0 +1,76 @@
+# cocotb + Icarus suite for hw/soc/rtl/ibex_regfile_secded.v, the
+# SECDED-protected architectural register file docs/43 substitutes into
+# Ibex.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.ibex_regfile_secded
+#   REGFILE_SCRUB=0 make -f Makefile.ibex_regfile_secded \
+#       EXTRA_COMPILE_ARGS=-Pibex_register_file_ff.SCRUB=0 \
+#       SIM_BUILD=sim_build_regfile_s0 \
+#       COCOTB_RESULTS_FILE=results_regfile_s0.xml
+#
+# The second form is the counterfactual: the same campaign against the
+# same file with the walking write-back removed, because "the scrub
+# helps" is not a measurement unless the design without it produces a
+# different number. docs/41 section 8.3 makes the same move.
+#
+# hw/rtl/secded_enc.v and hw/rtl/secded_dec.v are READ from the pilot's
+# directory and never modified, exactly as hw/rtl/tmr_voter.v is by the
+# watchdog. docs/34 pins that directory by blob hash and nothing here
+# touches it.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+PILOT_RTL = $(PWD)/../../../rtl
+
+REGFILE_SRC ?= $(RTL)/ibex_regfile_secded.v
+
+VERILOG_SOURCES = $(REGFILE_SRC) \
+                  $(PILOT_RTL)/secded_enc.v $(PILOT_RTL)/secded_dec.v
+TOPLEVEL = ibex_register_file_ff
+
+# soc_top.v's configuration, in the integer encodings of
+# ext/ibex/rtl/ibex_pkg.sv. The module refuses anything else at
+# elaboration, so these are not decoration.
+COMPILE_ARGS += -Pibex_register_file_ff.BaseIsa=0
+COMPILE_ARGS += -Pibex_register_file_ff.RV32E=0
+COMPILE_ARGS += -Pibex_register_file_ff.DataWidth=32
+COMPILE_ARGS += -Pibex_register_file_ff.DummyInstructions=0
+MODULE = test_ibex_regfile_secded
+
+SIM_BUILD ?= sim_build_regfile_secded
+COCOTB_RESULTS_FILE ?= results_regfile_secded.xml
+export COCOTB_RESULTS_FILE
+export REGFILE_SCRUB
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) --top-module ibex_register_file_ff \
+		$(REGFILE_SRC) $(PILOT_RTL)/secded_enc.v $(PILOT_RTL)/secded_dec.v
+
+endif

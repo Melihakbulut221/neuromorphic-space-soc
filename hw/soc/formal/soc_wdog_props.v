@@ -41,6 +41,13 @@
 //   * Anything about what the core does with nmi_o, or about the system
 //     reset rst_req_o drives. Both are outside this module.
 //   * Reset behaviour beyond the initial state.
+//
+// W7 AND W8, added by docs/43-core-hardening.md, are stated at the end
+// of this file. The most important of them is W7b: at the reset
+// configuration -- WINS = 0 and the kick budget disarmed -- neither
+// mechanism can fire, so the block IS the watchdog docs/40 built and
+// docs/42 measured. Everything above continues to hold unchanged, and
+// that is the regression statement rather than a new claim.
 
 reg f_past_valid;
 initial f_past_valid = 1'b0;
@@ -56,7 +63,7 @@ initial assume (!rst_por_ni);
 // be asking this block to service two registers in one cycle, which is
 // not something its interface can express.
 always @(*)
-    assume ((sel_i & (sel_i - 4'd1)) == 4'd0);
+    assume ((sel_i & (sel_i - 5'd1)) == 5'd0);
 
 // ---------------------------------------------------------------------
 // Ghost state, reconstructed from the PORTS
@@ -122,8 +129,8 @@ always @(posedge clk_i or negedge rst_por_ni)
     else if (~&f_held)   f_held <= f_held + 1'b1;
 
 // A keyed write, as W5 defines one.
-wire f_keyed   = we_i && (sel_i != 4'd0) && (wdata_i[31:16] == KEY);
-wire f_unkeyed = we_i && (sel_i != 4'd0) && (wdata_i[31:16] != KEY);
+wire f_keyed   = we_i && (sel_i != 5'd0) && (wdata_i[31:16] == KEY);
+wire f_unkeyed = we_i && (sel_i != 5'd0) && (wdata_i[31:16] != KEY);
 
 // ---------------------------------------------------------------------
 // I1-I2: strengthening invariants, needed for induction and nothing else
@@ -301,4 +308,123 @@ always @(posedge clk_i) if (f_past_valid && rst_por_ni) begin
     cover (f_resets_now == 2);
     cover (f_unkeyed);                          // unkeyed writes happen
     cover (!f_armed);                           // the pin can hold it off
+end
+
+// =====================================================================
+// W7: the kick has a cadence, and W8: a phase has a kick budget
+// =====================================================================
+//
+// docs/43-core-hardening.md. Stated the same way as W1-W5: over the
+// escalation outputs and the register the software reads back, with one
+// exception that is called out where it happens.
+
+// ---------------------------------------------------------------------
+// W7a: the contract reads back, so a driver can discover it did not take
+// ---------------------------------------------------------------------
+always @(posedge clk_i) if (rst_por_ni && f_armed_valid) begin
+    if (sel_i[4]) begin
+        assert (rdata_o[3:0] == win_s);
+        assert (rdata_o[4]   == bud_arm);
+        assert (rdata_o[8 +: KICK_W] == kick_left);
+    end
+    // The two records are in WDOGSTAT beside WDOGRST, because they are
+    // the same kind of thing: what happened, not what is configured.
+    if (sel_i[3]) begin
+        assert (rdata_o[5] == early_seen);
+        assert (rdata_o[6] == bud_seen);
+    end
+end
+
+// ---------------------------------------------------------------------
+// W7b: at the reset configuration this is docs/40's watchdog
+// ---------------------------------------------------------------------
+//
+// THE MOST IMPORTANT PROPERTY OF THE TWO NEW REQUIREMENTS, and the one
+// that makes the rest of this file a regression rather than a rewrite.
+// WINS = 0 with the budget disarmed is the state the block powers up in
+// and the state every stage-2 reset restores, and in it neither
+// mechanism can produce a fault. A program that never writes WDOGWIN
+// therefore gets exactly the block docs/42 measured -- which is what
+// entitles docs/43 to compare the two campaigns at all.
+always @(posedge clk_i) if (rst_por_ni) begin
+    if ((win_s == 4'd0) && !bud_arm) begin
+        assert (!early_kick);
+        assert (!budget_out);
+    end
+end
+
+// ---------------------------------------------------------------------
+// W7c: a violation is not a kick
+// ---------------------------------------------------------------------
+//
+// A kick the block has rejected must not postpone the deadline it was
+// rejected for. Without this, a runaway kicking too fast would be told
+// off once a period and reloaded anyway, and W7 would be a counter of
+// complaints rather than a backstop.
+always @(*) if (rst_por_ni) begin
+    if (early_kick || budget_out) assert (!kick);
+    // And a violation escalates, exactly where an expiry does.
+    if (early_kick || budget_out) assert (fault);
+end
+
+// ---------------------------------------------------------------------
+// W7d/W8d: the records are sticky and not clearable
+// ---------------------------------------------------------------------
+//
+// The same rule WDOGRST and RSTCNT follow, for the same reason: a
+// record software can erase is a record an upset can erase.
+always @(posedge clk_i)
+    if (f_past_valid && $past(rst_por_ni) && rst_por_ni) begin
+        if ($past(early_seen)) assert (early_seen);
+        if ($past(bud_seen))   assert (bud_seen);
+    end
+
+// ---------------------------------------------------------------------
+// W7e/W8e: a stage-2 reset restores the contract to nothing
+// ---------------------------------------------------------------------
+//
+// This is docs/40 section 7.2's line, and it is here because W7 and W8
+// can reproduce that document's brick exactly. A window installed before
+// software went wrong survives the reset that going wrong caused --
+// everything in this block is in the power-on domain by W4 -- so the
+// fresh boot would trip the same contract on its first kick, reset
+// again, and never reach its first console character. Whatever the last
+// software configured, the next boot gets the whole period and no
+// budget.
+//
+// Asserted at the RISING edge of rst_req_o rather than throughout the
+// pulse: a keyed write during the pulse is not something the core can
+// do -- it is being held in reset -- but it is something this
+// environment is free to do, and forbidding it here would be assuming
+// away a case rather than proving one.
+always @(posedge clk_i) if (rst_por_ni && f_rst_rise) begin
+    assert (win_s == 4'd0);
+    assert (!bud_arm);
+end
+
+// ---------------------------------------------------------------------
+// W8a: the budget only ever goes down, except when a keyed write loads it
+// ---------------------------------------------------------------------
+always @(posedge clk_i)
+    if (f_past_valid && $past(rst_por_ni) && rst_por_ni)
+        if (!($past(f_keyed) && $past(sel_i[4]) &&
+              $past(wdata_i[B_WIN_BUDEN])))
+            assert (kick_left <= $past(kick_left));
+
+// ---------------------------------------------------------------------
+// Cover: every new behaviour reachable, docs/09 B.1
+// ---------------------------------------------------------------------
+//
+// W7 and W8 are safety properties like the rest, so a block in which
+// neither could ever fire would satisfy all of them. These are what say
+// otherwise.
+always @(posedge clk_i) if (f_past_valid && rst_por_ni) begin
+    cover (early_kick);                          // W7 can reject a kick
+    cover (budget_out);                          // W8 can run a phase out
+    cover (early_seen);                          // ...and it is recorded
+    cover (bud_seen);
+    cover (bud_arm && (kick_left == {KICK_W{1'b0}}));
+    cover (win_s != 4'd0);                       // the contract is armable
+    cover (early_kick && nmi_o);                 // a violation escalates
+    cover (f_rst_rise && $past(early_kick));     // ...to stage 2
 end

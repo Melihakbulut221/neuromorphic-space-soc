@@ -21,6 +21,13 @@
 # stage 3 is reachable is a claim about ESCALATE = 2. The behaviour is
 # parameterised; the proof is at one point.
 #
+# W7 and W8, added by docs/43-core-hardening.md, are proved here too,
+# and the `prove_w0` task proves the same file with WINDOW = 0 -- the
+# configuration in which neither exists. Nothing in W1-W5 changed; the
+# load-bearing new property is W7b, which says that at the reset
+# configuration the two mechanisms cannot fire at all, so a program that
+# never writes WDOGWIN gets the block docs/42 measured.
+#
 # W6, the protection added by docs/41-watchdog-hardening.md, is present
 # in this job's model -- the three soc_tmr_bank replicas and the voter
 # are elaborated, so every property below is proved over the VOTED state
@@ -35,6 +42,7 @@
 [tasks]
 bmc
 prove
+prove_w0
 cover
 
 [options]
@@ -42,6 +50,14 @@ bmc: mode bmc
 bmc: depth 40
 prove: mode prove
 prove: depth 15
+# WINDOW = 0 removes W7 and W8 entirely. Proving the same properties
+# there is the regression statement in its strongest form: the file
+# without the new requirements still satisfies W1-W5, and W7b holds
+# vacuously, so nothing about the two configurations differs except the
+# feature. There is no cover task at WINDOW = 0 because the new covers
+# are unreachable by construction in it -- which is the point.
+prove_w0: mode prove
+prove_w0: depth 15
 cover: mode cover
 cover: depth 60
 
@@ -53,6 +69,7 @@ read_verilog -formal soc_wdog.v
 read_verilog -formal soc_tmr_bank.v
 read_verilog -formal tmr_voter.v
 chparam -set WIDTH 8 -set PRESCALE 4 -set RST_CYCLES 4 -set ESCALATE 2 soc_wdog
+prove_w0: chparam -set WINDOW 0 soc_wdog
 prep -top soc_wdog
 
 [files]

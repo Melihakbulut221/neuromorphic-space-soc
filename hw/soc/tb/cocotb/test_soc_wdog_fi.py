@@ -103,13 +103,16 @@ ESCALATE = 2
 KEY = 0xA51F
 
 # PROT_W as soc_wdog.v computes it: dis_q, dis_seen, nmi_pend, rst_seen,
-# tmr_err (5 x 1 bit), tmr_count (4), rst_count (8), rst_hold (RST_W).
+# tmr_err (5 x 1 bit), tmr_count (4), rst_count (8), rst_hold (RST_W),
+# and -- added by docs/43 -- win_s (4), early_seen, bud_arm, bud_seen.
 RST_W = max(1, (RST_CYCLES + 1 - 1).bit_length())
-PROT_W = 5 + 4 + 8 + RST_W
+KICK_W = 8
+P6_W = 5 + 4 + 8 + RST_W
+PROT_W = P6_W + 4 + 3
 PRE_W = max(1, (PRESCALE - 1).bit_length())
 
 # One-hot register select, as soc_gptimer.v drives it.
-SEL_CNT, SEL_RLD, SEL_CTRL, SEL_STAT = 1, 2, 4, 8
+SEL_CNT, SEL_RLD, SEL_CTRL, SEL_STAT, SEL_WIN = 1, 2, 4, 8, 16
 
 # GRLIB timer control bits (grip.pdf table 463).
 B_EN, B_RS, B_LD, B_IE, B_IP = 1, 2, 4, 8, 16
@@ -239,6 +242,16 @@ UNPROTECTED = [
     ("counter", "counter", tuple(range(WIDTH))),
     ("reload", "reload", tuple(range(WIDTH))),
     ("pre", "pre", tuple(range(PRE_W))),
+    # docs/43. W8's kick budget down-counter is left unprotected by the
+    # same criterion `counter` is -- the block rewrites it, an upset
+    # upward buys a runaway at most 255 further kicks before the budget
+    # bites anyway, and an upset downward is a spurious ladder, which is
+    # loud. That is a decision, so it is measured here rather than
+    # asserted. This workload never arms the budget, so what these
+    # injections show is that an upset in a disarmed counter changes
+    # nothing at the ports -- which is a weaker statement than the one
+    # docs/43 section 10 would like and it says so.
+    ("kick_left", "kick_left", tuple(range(KICK_W))),
 ]
 
 # The W6 report fields inside the protected word: the sticky mismatch

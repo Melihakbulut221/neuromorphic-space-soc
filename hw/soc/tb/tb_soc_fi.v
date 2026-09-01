@@ -265,15 +265,81 @@ module tb_soc_fi;
   // watchdog reset re-enters phase 1, and the window of record is the
   // clean run's.
   // ------------------------------------------------------------------
+  // The watchdog's programmed timeout, read out of the block at the
+  // moment the measured window opens rather than written down in the
+  // campaign.  campaign.py derives its simulation budget and its
+  // escalation-ladder length from this, so a change to the workload's
+  // FI_WDOG_RELOAD moves the budget with it instead of silently making
+  // "the watchdog did not fire" mean "the watchdog had not got there
+  // yet".
+  integer wdog_rld_at_open = -1;
+
   integer win_open = -1, win_close = -1;
   reg [31:0] phase_q = 32'hffff_ffff;
   always @(posedge clk) if (rst_n) begin
     if (dut.u_ram.mem[FI_PHASE_ADDR[31:2]] !== phase_q) begin
       phase_q = dut.u_ram.mem[FI_PHASE_ADDR[31:2]];
-      if (phase_q == 32'd1 && win_open  < 0) win_open  = cycles;
+      if (phase_q == 32'd1 && win_open  < 0) begin
+        win_open = cycles;
+        wdog_rld_at_open = dut.u_timer0.u_wdog.reload;
+      end
       if (phase_q == 32'd2 && win_close < 0) win_close = cycles;
     end
   end
+
+  // ------------------------------------------------------------------
+  // The kick cadence, measured rather than assumed.
+  //
+  // soc_wdog.v W7 makes a kick that arrives too EARLY a violation, and
+  // the bound it is checked against is a fraction of the period. What
+  // fraction a given program can live inside is a property OF THAT
+  // PROGRAM -- the ratio of its longest to its shortest interval
+  // between kicks -- and it is not something a designer should guess.
+  // So the instrument measures it: every kick request the block sees,
+  // the interval since the previous one, and the smallest and largest
+  // of those intervals over the run.
+  //
+  // `kick_req` and not `kick`: the quantity of interest is when the
+  // SOFTWARE asked, including the asks the block rejected.
+  // ------------------------------------------------------------------
+  integer kicks = 0;
+  integer kick_last = -1;
+  integer kick_gap_min = -1;
+  integer kick_gap_max = -1;
+  integer gap;
+  integer wdog_early = 0, wdog_budget = 0;
+  always @(posedge clk) if (rst_n) begin
+    if (dut.u_timer0.u_wdog.kick_req) begin
+      kicks = kicks + 1;
+      if (kick_last >= 0) begin
+        gap = cycles - kick_last;
+        if (kick_gap_min < 0 || gap < kick_gap_min) kick_gap_min = gap;
+        if (gap > kick_gap_max)                     kick_gap_max = gap;
+      end
+      kick_last = cycles;
+    end
+    if (dut.u_timer0.u_wdog.early_kick) wdog_early  = wdog_early + 1;
+    if (dut.u_timer0.u_wdog.budget_out) wdog_budget = wdog_budget + 1;
+  end
+
+`ifdef FI_REGFILE_SECDED
+  // ------------------------------------------------------------------
+  // The register file's correction report.
+  //
+  // These four registers are INSIDE the substituted register file and
+  // drive no port of it, because `ibex_register_file_ff` has upstream's
+  // port list and upstream's port list has no error output. In the
+  // netlist opt_clean deletes them; here they are readable because this
+  // is a simulation, exactly as `dut.u_ram.mem[...]` is readable and
+  // for the same reason.
+  //
+  // THIS IS A BENCH OBSERVATION AND NOT AN OPERATOR CHANNEL, and the
+  // campaign's report says so where it uses them. In silicon a
+  // corrected upset is indistinguishable from no upset at all, which is
+  // the price hw/soc/rtl/ibex_regfile_secded.v pays for changing
+  // nothing in Ibex.
+  `define FI_RF_PATH dut.u_ibex.gen_regfile_ff.register_file_i.g_plain_rf.g_secded
+`endif
 
   // ------------------------------------------------------------------
   // Console.  Start bit, eight data bits LSB first, one stop bit, no
@@ -459,6 +525,18 @@ module tb_soc_fi;
              saw_alert_minor, saw_alert_major_int,
              saw_alert_major_bus, saw_double_fault);
     $display("RECORD win_open=%0d win_close=%0d", win_open, win_close);
+    $display("RECORD wdog_rld=%0d wdog_pre=%0d kicks=%0d kick_min=%0d kick_max=%0d",
+             wdog_rld_at_open, dut.u_timer0.WDOG_PRESCALE,
+             kicks, kick_gap_min, kick_gap_max);
+    $display("RECORD wdog_early=%0d wdog_budget=%0d wdog_win=%08x",
+             wdog_early, wdog_budget, dut.u_timer0.u_wdog.prot);
+`ifdef FI_REGFILE_SECDED
+    $display("RECORD rf_sec=%0d rf_ded=%0d rf_sec_seen=%0d rf_ded_seen=%0d",
+             `FI_RF_PATH.sec_cycles, `FI_RF_PATH.ded_cycles,
+             `FI_RF_PATH.sec_seen,   `FI_RF_PATH.ded_seen);
+`else
+    $display("RECORD rf_sec=0 rf_ded=0 rf_sec_seen=0 rf_ded_seen=0");
+`endif
     $display("RECORD end");
 
     $finish;

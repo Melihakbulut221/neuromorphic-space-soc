@@ -1,0 +1,66 @@
+# SymbiYosys job for the shortened SECDED code the register file uses.
+#
+#   sby -f regfile_secded.sby prove      k-induction (the harness is
+#                                        combinational, so this is an
+#                                        exhaustive check of the cone)
+#   sby -f regfile_secded.sby prove_abc  the same on a different engine
+#                                        family, docs/09 C.4 item 7
+#   sby -f regfile_secded.sby bmc        bounded, depth 4
+#   sby -f regfile_secded.sby cover      every case the properties
+#                                        distinguish is reachable
+#
+# WHY THIS JOB EXISTS SEPARATELY FROM formal/secded.sby
+#
+# formal/secded.sby proves the (72,64) codec at its own width and it is
+# not touched by this work -- docs/34 pins hw/rtl and formal/ for the
+# TTIHP26b shuttle and neither is modified. What is NOT proved anywhere
+# is the SHORTENING: that tying the codec's upper 32 data bits to zero
+# leaves a code which still corrects one error and still detects two
+# over the 40 bits that remain. That is an argument about which columns
+# of H survive, it is made in a comment in
+# hw/soc/rtl/ibex_regfile_secded.v, and a comment is not a check.
+#
+# It also proves the fact the netlist census depends on: that the eighth
+# check bit is identically zero over a 32-bit word, which is why the
+# shortened code costs seven check flip-flops per register and not
+# eight. docs/43 section 7 quotes the flip-flop count; this is what
+# makes it a consequence.
+#
+# WHAT IT DOES NOT COVER. The harness is the CODE and not the register
+# file: no storage, no read multiplexer, no scrub, no addresses. Those
+# are hw/soc/tb/cocotb/test_ibex_regfile_secded.py, which injects into
+# the storage and watches the ports, and the campaign of docs/43
+# section 8. Neither substitutes for the other, and the fault model here
+# is one error vector over the stored bits -- nothing about transients
+# in the codec's own gates.
+
+[tasks]
+bmc
+prove
+prove_abc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 4
+prove: mode prove
+prove: depth 4
+prove_abc: mode prove
+prove_abc: depth 4
+cover: mode cover
+cover: depth 4
+
+[engines]
+prove_abc: abc pdr
+~prove_abc: smtbmc yices
+
+[script]
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
+read_verilog -formal regfile_secded_props.v
+prep -top regfile_secded_props
+
+[files]
+../../rtl/secded_enc.v
+../../rtl/secded_dec.v
+regfile_secded_props.v

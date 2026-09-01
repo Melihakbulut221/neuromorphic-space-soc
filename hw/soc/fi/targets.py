@@ -55,8 +55,19 @@ WHAT IS DELIBERATELY NOT HERE
 """
 
 import collections
+import os
 
 Site = collections.namedtuple("Site", "stratum name path width")
+
+# Which register file the build under test contains.  The default
+# matches hw/soc/flow/ibex_sources.sh's default, and the campaign's
+# control 1 -- which compares every site's path and $bits against the
+# elaborated design -- is what stops the two from disagreeing silently:
+# a `secded` site list against an `upstream` build fails before any
+# data point, naming the site.
+REGFILE = os.environ.get("FI_REGFILE", "secded")
+if REGFILE not in ("secded", "upstream"):
+    raise SystemExit("FI_REGFILE must be 'secded' or 'upstream'")
 
 # Everything below hangs off the Ibex instance in soc_top.v.  The
 # testbench supplies `dut.u_ibex.` in front of TOP paths and
@@ -78,6 +89,7 @@ _STRATA_DOC = {
     "csr_cnt": "the mcycle and minstret performance counters",
     "csr_debug": "the debug-mode CSRs, which nothing in this SoC can reach",
     "top_ctrl": "ibex_top's own core-busy state, outside ibex_core",
+    "regfile_ecc": "the SECDED check bits over x1..x31 and the scrub pointer",
 }
 
 
@@ -222,6 +234,30 @@ def _sites():
                        ("dscratch0", "u_dscratch0_csr"),
                        ("dscratch1", "u_dscratch1_csr")):
         s.append(Site("csr_debug", name, cs + inst + ".rdata_q", 32))
+
+    # ---- regfile_ecc -----------------------------------------------
+    # The check bits docs/43 adds, and the scrub pointer that walks
+    # them.  They are a stratum of their own rather than part of
+    # `regfile` for two reasons that are both about not hiding
+    # something.  They are new flip-flops the design did not have, so
+    # folding them into `regfile` would change that stratum's measured
+    # rate for two unrelated reasons at once -- the protection and the
+    # extra area -- and neither would be separable afterwards.  And
+    # they are 248 bits that an upset can land in exactly as it can
+    # land in the data, so a campaign that protected the data and did
+    # not measure the protection would be reporting on a design it had
+    # not finished looking at.
+    if REGFILE == "secded":
+        for i in range(1, 32):
+            s.append(Site(
+                "regfile_ecc", "x%d_chk" % i,
+                "gen_regfile_ff.register_file_i.g_plain_rf."
+                "g_rf_flops[%d].g_chk.rf_chk_q" % i,
+                8))
+        s.append(Site(
+            "regfile_ecc", "scrub_ptr",
+            "gen_regfile_ff.register_file_i.g_plain_rf.g_secded."
+            "g_scrub.ptr_q", 5))
 
     # ---- top_ctrl --------------------------------------------------
     # Outside ibex_core: the multi-bit-encoded busy state ibex_top holds

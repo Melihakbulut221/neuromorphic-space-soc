@@ -79,13 +79,18 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import targets                                        # noqa: E402
 
-# soc_top.v instantiates the watchdog at WDOG_PRESCALE = 16, and
-# fi_workload.c arms FI_WDOG_RELOAD = 127.  One timeout is therefore
-# (127 + 1) * 16 = 2,048 clocks and a full ladder -- stage 1 then stage
-# 2 -- is two of them.  Both numbers are asserted against the measured
-# golden run rather than trusted.
-WDOG_TIMEOUT_CLK = (127 + 1) * 16
-WDOG_LADDER_CLK = 2 * WDOG_TIMEOUT_CLK
+# The escalation ladder, MEASURED off the golden run rather than
+# written down.
+#
+# It used to be the constant (127 + 1) * 16, from fi_workload.c's
+# FI_WDOG_RELOAD and soc_top.v's WDOG_PRESCALE.  docs/43 gave the
+# workload a second build with a different reload -- the windowed one,
+# whose kick cadence forces a longer timeout -- and a campaign whose
+# budget came from a remembered number would then have computed "the
+# watchdog had four ladders in which to fire" from the wrong ladder.
+# The testbench now reports the reload the program armed and the
+# block's prescaler, and the two numbers below come from that record.
+DEFAULT_TIMEOUT_CLK = (127 + 1) * 16
 
 SEED = 0x42F12026
 
@@ -206,6 +211,34 @@ def trap_seen(rec, golden):
     return i(rec, "traps") > i(golden, "traps")
 
 
+def corrected(rec):
+    """A correction mechanism inside the core moved.
+
+    docs/43's substituted register file corrects a single-bit upset on
+    the way out and scrubs it out of the storage, and it counts the
+    cycles in which it did.  That counter is the ONLY thing in this
+    design that can make docs/16's CORRECTED class reachable -- docs/42
+    reported it at 0 of 1,300 and said so explicitly, because
+    `small-pmp` had no correction mechanism at all.
+
+    IT IS READ HIERARCHICALLY OUT OF THE SIMULATION AND IT IS NOT A
+    PIN.  `ibex_register_file_ff` carries upstream's port list, which
+    has no error output, so in silicon a corrected upset is
+    indistinguishable from no upset.  This function therefore measures
+    what the mechanism DID; it does not claim an operator could see it.
+    docs/43 section 9 states that separation where it reports the
+    column, and section 12 ranks closing it.
+    """
+    return i(rec, "rf_sec") > 0
+
+
+def uncorrectable(rec):
+    """The codec saw a syndrome it could not correct: two bits in one
+    register between two scrubs, or three.  Detected and not repaired,
+    and with nowhere to report it to."""
+    return i(rec, "rf_ded") > 0
+
+
 def alert_seen(rec):
     """One of Ibex's own alert pins fired.
 
@@ -234,10 +267,14 @@ def classify(rec, golden):
         cls = "DETECTED"
     elif not out_ok:
         cls = "SDC"
+    elif corrected(rec):
+        # Reachable for the first time in this repository's core
+        # campaigns.  docs/42 reported this column at 0 of 1,300 and
+        # kept it in the table rather than dropping it, precisely so
+        # that a later design which could reach it would be visibly
+        # different.  This is that design.
+        cls = "CORRECTED"
     else:
-        # CORRECTED would go here.  Nothing in `small-pmp` can reach it:
-        # there is no correction mechanism inside the core, so no
-        # counter can move on a masked upset.  See the module docstring.
         cls = "MASKED"
     return cls, {
         "out_ok": out_ok,
@@ -249,6 +286,10 @@ def classify(rec, golden):
         "wdog_stage": wdog_stage(rec),
         "wdog_first": i(rec, "wdog_first"),
         "cycles": i(rec, "cycles"),
+        "rf_sec": i(rec, "rf_sec"),
+        "rf_ded": i(rec, "rf_ded"),
+        "wdog_early": i(rec, "wdog_early"),
+        "wdog_budget": i(rec, "wdog_budget"),
     }
 
 
@@ -352,6 +393,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", required=True,
                     help="directory hw/soc/flow/fi_core.sh wrote")
+    ap.add_argument("--directed", default=None,
+                    help="a records.csv (or any CSV with site, bit and "
+                         "cycle columns) whose injections are re-run "
+                         "VERBATIM against this build, so that a named "
+                         "set from an earlier campaign -- docs/42's "
+                         "three uncaught x23 draws, or its whole DEAD "
+                         "set -- can be asked of a hardened design")
+    ap.add_argument("--directed-filter", default=None,
+                    help="only rows whose `truth` column equals this, "
+                         "e.g. DEAD")
     ap.add_argument("--replay", default=None,
                     help="re-print the report from an existing records.csv "
                          "without re-running 2,600 simulations")
@@ -397,8 +448,11 @@ def main():
             rows = []
             for r in csv.DictReader(f):
                 for k in ("bit", "cycle", "wdog_stage", "wdog_first",
-                          "wdog_latency", "armed_cycles", "disarmed_cycles"):
-                    r[k] = int(r[k])
+                          "wdog_latency", "armed_cycles", "disarmed_cycles",
+                          "armed_rf_sec", "armed_rf_ded", "disarmed_rf_sec",
+                          "wdog_early", "wdog_budget", "timeout_clk"):
+                    if k in r:
+                        r[k] = int(r[k])
                 for k in ("armed_out_ok", "disarmed_out_ok", "armed_done",
                           "disarmed_done", "ann_sw", "ann_trap", "ann_alert",
                           "ann_wdog"):
@@ -456,6 +510,11 @@ def main():
     if i(golden, "console_framing"):
         sys.exit("the clean run has console framing errors")
 
+    # The escalation ladder, from the block and the program rather than
+    # from a constant.  See DEFAULT_TIMEOUT_CLK.
+    timeout_clk = (i(golden, "wdog_rld") + 1) * i(golden, "wdog_pre")
+    ladder_clk = 2 * timeout_clk
+
     win_open, win_close = i(golden, "win_open"), i(golden, "win_close")
     if not (0 < win_open < win_close <= i(golden, "cycles")):
         sys.exit("the measured injection window is not sane: %d..%d of %d"
@@ -466,6 +525,30 @@ def main():
     say("           measured injection window %d..%d (%d cycles, %.0f %% "
         "of the run)", win_open, win_close, win_close - win_open,
         100.0 * (win_close - win_open) / i(golden, "cycles"))
+
+    # THE KICK CADENCE, MEASURED.  soc_wdog.v W7 rejects a kick that
+    # arrives too early, and the bound it is checked against is a
+    # fraction of the period -- so what a given program can live inside
+    # is the ratio of its longest interval between kicks to its
+    # shortest.  That is a property of the software and it is measured
+    # here rather than assumed, because docs/43 section 4 found the
+    # unmodified workload at a ratio of 57 where WINS = 1 permits 2.
+    kmin, kmax = i(golden, "kick_min"), i(golden, "kick_max")
+    say("           kick cadence: %d kicks, interval %d..%d clocks, "
+        "jitter ratio %.3f; timeout %d clocks (reload %d, prescale %d)",
+        i(golden, "kicks"), kmin, kmax,
+        (kmax / float(kmin)) if kmin > 0 else float("inf"),
+        timeout_clk, i(golden, "wdog_rld"), i(golden, "wdog_pre"))
+    if i(golden, "wdog_early") or i(golden, "wdog_budget"):
+        sys.exit("the clean run violated the cadence contract "
+                 "(%d early kicks, %d budget overruns).  The campaign "
+                 "cannot attribute an escalation to an injection if the "
+                 "workload produces one on its own."
+                 % (i(golden, "wdog_early"), i(golden, "wdog_budget")))
+    if corrected(golden) or uncorrectable(golden):
+        sys.exit("the clean run corrected or detected a register-file "
+                 "error with nothing injected; the correction counter "
+                 "cannot then attribute anything to an injection")
 
     # =================================================================
     # CONTROL 3: it reproduces, and the watchdog is invisible when it
@@ -484,8 +567,8 @@ def main():
     # =================================================================
     # The budget, and why it is this
     # =================================================================
-    budget = 2 * i(golden, "cycles") + 6 * WDOG_LADDER_CLK
-    need = win_close + 4 * WDOG_LADDER_CLK + i(golden, "cycles")
+    budget = 2 * i(golden, "cycles") + 6 * ladder_clk
+    need = win_close + 4 * ladder_clk + i(golden, "cycles")
     if budget < need:
         budget = need
     runner = Runner(vvp, image, budget)
@@ -493,8 +576,8 @@ def main():
         "be drawn at is %d, a full escalation ladder is %d clocks, so "
         "every run that does not escalate had at least %.1f ladders in "
         "which to do so",
-        budget, win_close, WDOG_LADDER_CLK,
-        (budget - win_close) / float(WDOG_LADDER_CLK))
+        budget, win_close, ladder_clk,
+        (budget - win_close) / float(ladder_clk))
 
     # =================================================================
     # CONTROL 4: the injector reaches the design, in both directions
@@ -527,6 +610,103 @@ def main():
     ncls, _ = classify(neg, golden)
     say("control 4b: bit 40 of mcycle, which this program never reads, "
         "classifies %s", ncls)
+
+    # =================================================================
+    # Directed replay: somebody else's injections, against this build
+    # =================================================================
+    #
+    # The point of this mode is that a delta between two designs is only
+    # a delta if the two were asked the same question.  The stratified
+    # draw already gives the same (site, bit) pairs across builds -- the
+    # seed is derived per (stratum, index) -- but the CYCLE is drawn
+    # inside the MEASURED window, so a build whose workload changed
+    # draws different cycles.  Replaying an explicit list removes that
+    # last degree of freedom: same site, same bit, same cycle, different
+    # design.
+    if args.directed:
+        with open(args.directed, newline="") as f:
+            want = []
+            for r in csv.DictReader(f):
+                if (args.directed_filter and
+                        r.get("truth") != args.directed_filter):
+                    continue
+                want.append((r["site"], r["path"], int(r["bit"]),
+                             int(r["cycle"]),
+                             r.get("truth", ""), r.get("armed_cls", "")))
+        # KEYED ON THE PATH AND NOT ON THE NAME, and that is a defect
+        # this mode had rather than a design choice.  Site NAMES are not
+        # unique across strata -- `rdata_q` is the fetch FIFO's 96-bit
+        # instruction queue in one stratum and the load/store unit's
+        # 24-bit data register in another -- so a name lookup silently
+        # replayed one into the other.  Bit 87 of a 24-bit register XORs
+        # a mask entirely outside the register: the testbench reports
+        # hit = 1, the value does not change, and the run comes back
+        # MASKED.  Two of docs/42's DEAD records were replayed that way
+        # and looked exactly like a hardening that had fixed them.  The
+        # path is unique, it is already in the records, and the deposit
+        # is verified below the way the campaign verifies it.
+        by_path = {s.path: k for k, s in enumerate(targets.SITES)}
+        say("")
+        say("directed replay of %d injections from %s", len(want),
+            args.directed)
+        say("%-10s %5s %8s  %-10s %-10s  %-10s %-10s %-8s %s"
+            % ("site", "bit", "cycle", "was(armed)", "was(truth)",
+               "now(armed)", "now(dis)", "now(truth)", "escalated"))
+        out_rows = []
+        for name, path, bit, cycle, was_truth, was_cls in want:
+            if path not in by_path:
+                sys.exit("path %s is not in this build's site list" % path)
+            idx = by_path[path]
+            a = runner.run(site=idx, bit=bit, cycle=cycle, armed=True)
+            d = runner.run(site=idx, bit=bit, cycle=cycle, armed=False)
+            # The same verification the campaign does, for the same
+            # reason: a deposit that missed has to be a hard failure and
+            # never a quiet MASKED.
+            for rec in (a, d):
+                if i(rec, "hit") != 1:
+                    sys.exit("a directed deposit missed: %s bit %d"
+                             % (path, bit))
+                if i(rec, "width") <= bit:
+                    sys.exit("bit %d is outside %s's %d bits"
+                             % (bit, path, i(rec, "width")))
+                before = int(rec["before"], 16)
+                after = int(rec["after"], 16)
+                if after != before ^ (1 << bit):
+                    sys.exit("a directed deposit did not flip exactly the "
+                             "requested bit: %s bit %d" % (path, bit))
+            acls, af = classify(a, golden)
+            dcls, df = classify(d, golden)
+            t = "OK" if df["out_ok"] else ("WRONG" if df["done"] else "DEAD")
+            how = []
+            if af["wdog_early"]:
+                how.append("W7 early")
+            if af["wdog_budget"]:
+                how.append("W8 budget")
+            if af["ann_wdog"] and not how:
+                how.append("expiry")
+            if af["rf_sec"]:
+                how.append("regfile corrected %d" % af["rf_sec"])
+            say("%-10s %5d %8d  %-10s %-10s  %-10s %-10s %-8s %s"
+                % (name, bit, cycle, was_cls, was_truth, acls, dcls, t,
+                   ", ".join(how) if how else "-"))
+            out_rows.append({"site": name, "bit": bit, "cycle": cycle,
+                             "was_armed_cls": was_cls, "was_truth": was_truth,
+                             "armed_cls": acls, "disarmed_cls": dcls,
+                             "truth": t,
+                             "armed_out_ok": af["out_ok"],
+                             "ann_wdog": af["ann_wdog"],
+                             "wdog_stage": af["wdog_stage"],
+                             "rf_sec": af["rf_sec"], "rf_ded": af["rf_ded"],
+                             "wdog_early": af["wdog_early"],
+                             "wdog_budget": af["wdog_budget"]})
+        dpath = os.path.join(out_dir, "directed.csv")
+        with open(dpath, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(out_rows[0].keys()))
+            w.writeheader()
+            w.writerows(out_rows)
+        say("directed records: %s", dpath)
+        log.close()
+        return
 
     # =================================================================
     # The campaign
@@ -597,6 +777,17 @@ def main():
             "ann_wdog": afacts["ann_wdog"],
             "armed_cycles": afacts["cycles"],
             "disarmed_cycles": dfacts["cycles"],
+            # docs/43.  The register file's correction counter and the
+            # watchdog's two new violation counters, per record, so
+            # that "the escalation happened" can be attributed to an
+            # ordinary expiry, to W7's window or to W8's budget rather
+            # than lumped together.
+            "armed_rf_sec": afacts["rf_sec"],
+            "armed_rf_ded": afacts["rf_ded"],
+            "disarmed_rf_sec": dfacts["rf_sec"],
+            "wdog_early": afacts["wdog_early"],
+            "wdog_budget": afacts["wdog_budget"],
+            "timeout_clk": timeout_clk,
         })
 
     csv_path = os.path.join(out_dir, "records.csv")
@@ -794,7 +985,8 @@ def report(say, rows):
             lats.sort()
             say("  cycles from the deposit to the first escalation: "
                 "min %d, median %d, max %d (one timeout is %d clocks)",
-                lats[0], lats[len(lats) // 2], lats[-1], WDOG_TIMEOUT_CLK)
+                lats[0], lats[len(lats) // 2], lats[-1],
+                rows[0].get("timeout_clk", DEFAULT_TIMEOUT_CLK))
     if wrong:
         k = sum(1 for r in wrong if r["ann_wdog"])
         say("")
@@ -835,7 +1027,36 @@ def report(say, rows):
 
     say("")
     say("=" * 74)
-    say("6. THE WORST SITES (watchdog held off), by SDC plus HANG")
+    say("6. WHAT THE HARDENING DID, PER MECHANISM (docs/43)")
+    say("=" * 74)
+    have = [r for r in rows if "armed_rf_sec" in r]
+    if not have:
+        say("  this records.csv predates docs/43 and carries none of "
+            "these columns")
+    else:
+        rf = [r for r in have if r["armed_rf_sec"] > 0]
+        rfd = [r for r in have if r["armed_rf_ded"] > 0]
+        ew = [r for r in have if r["wdog_early"] > 0]
+        bd = [r for r in have if r["wdog_budget"] > 0]
+        say("register file, single-bit corrected  %6d of %d injections"
+            % (len(rf), len(have)))
+        say("register file, UNCORRECTABLE seen    %6d" % len(rfd))
+        say("W7, a kick rejected as too early     %6d" % len(ew))
+        say("W8, a phase out of kicks             %6d" % len(bd))
+        say("")
+        say("  of the %d the register file corrected, %d ended with the "
+            "golden answer" % (len(rf), sum(1 for r in rf
+                                            if r["armed_out_ok"])))
+        # The mechanism that escalated, for every record that escalated.
+        esc = [r for r in have if r["ann_wdog"]]
+        say("  of the %d escalations, %d involved an early kick and %d a "
+            "spent budget; the rest are ordinary expiries"
+            % (len(esc), sum(1 for r in esc if r["wdog_early"] > 0),
+               sum(1 for r in esc if r["wdog_budget"] > 0)))
+
+    say("")
+    say("=" * 74)
+    say("7. THE WORST SITES (watchdog held off), by SDC plus HANG")
     say("=" * 74)
     per = {}
     for r in rows:
