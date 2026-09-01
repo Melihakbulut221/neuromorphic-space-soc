@@ -44,7 +44,12 @@ GATE=${5:-setup_all}
 case "$GATE" in setup_all|setup_sync) ;; *) echo "bad gate: $GATE" >&2; exit 2;; esac
 
 SOC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-SWEEP_ROOT=$SOC_DIR/out/sweep-$CFG-$GATE
+# SWEEP_TAG distinguishes sweeps of the same configuration that differ
+# in something syn_ibex.sh reads from the environment -- IBEX_REGFILE,
+# IBEX_RF_FASTCORR -- so that three of them can run at once without
+# writing into each other's directory. Empty by default, which leaves
+# docs/38's and docs/43's directory names exactly as they were.
+SWEEP_ROOT=$SOC_DIR/out/sweep-$CFG-$GATE${SWEEP_TAG:+-$SWEEP_TAG}
 mkdir -p "$SWEEP_ROOT"
 SUMMARY=$SWEEP_ROOT/sweep.txt
 : > "$SUMMARY"

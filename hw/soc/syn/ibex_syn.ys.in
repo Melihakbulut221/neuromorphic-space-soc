@@ -15,6 +15,11 @@
 #   @ABC_D@     ABC delay target, in liberty time units (ns)
 #   @P_*@       Ibex parameters (see flow/syn_ibex.sh for the values and
 #               ext/ibex/rtl/ibex_pkg.sv for the enum encodings)
+#   RF_CHPARAM  the substituted register file's own parameters, and
+#               EMPTY at IBEX_REGFILE=upstream, because upstream's file
+#               does not declare them and `chparam` on a parameter a
+#               module does not have is an error rather than a no-op.
+#               docs/44 section 5 measures FASTCORR = 0 against 1 here.
 #
 # Mapping is done against the TYPICAL corner, matching what the pilot's
 # LibreLane runs do (synthesis maps at one corner; sign-off checks all
@@ -48,6 +53,7 @@ chparam -set PMPGranularity   @P_PMPGRAN@   ibex_top
 chparam -set PMPNumRegions    @P_PMPNUM@    ibex_top
 chparam -set MHPMCounterNum   @P_MHPMNUM@   ibex_top
 chparam -set MHPMCounterWidth @P_MHPMW@     ibex_top
+@RF_CHPARAM@
 
 hierarchy -check -top ibex_top
 

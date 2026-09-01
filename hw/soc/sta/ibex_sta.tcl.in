@@ -33,6 +33,7 @@ read_liberty @LIB@
 read_verilog @NETLIST@
 link_design ibex_top
 read_sdc @SDC@
+@TIEOFFS@
 
 puts "======== corner @CORNER@ ========"
 

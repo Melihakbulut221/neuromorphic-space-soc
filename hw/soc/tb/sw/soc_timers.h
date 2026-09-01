@@ -29,6 +29,47 @@
 /* An offset the block does not implement. soc_clint.v faults it. */
 #define CLINT_UNMAPPED  (SOC_CLINT_BASE + 0x0100u)
 
+/* ---- BUSSTAT, hw/soc/rtl/soc_busstat.v ------------------------------
+ *
+ * The fault counters docs/44 adds, in the slot the frozen map has
+ * reserved for them since docs/39. The base comes from soc_memmap.h;
+ * the offsets are this project's own and are defined in
+ * hw/soc/rtl/soc_busstat.v's header.
+ *
+ * READ THE UNITS OFF THE NAMES, because these two counters are not the
+ * same quantity and one of them is the one a mission telemetry frame
+ * carries:
+ *
+ *   BST_RFSEC   UPSETS. The register file's scrub walks x1..x31 and
+ *               re-encodes what it finds, so a single-bit upset the
+ *               program does not overwrite first is counted exactly
+ *               once. This is the upset-rate counter.
+ *   BST_RFRD    CYCLES in which a read port returned a corrected word.
+ *               One upset read ten times before the scrub reaches it
+ *               counts ten. It is an upper bound on the upset count.
+ *               RFRD much larger than RFSEC means upsets are being read
+ *               before they are scrubbed.
+ *   BST_RFDED   Uncorrectable syndromes: two upsets in one register
+ *               between two scrubs.
+ *   BST_TMRERR  Mismatches the watchdog's voter masked, docs/41 W6.
+ */
+#define BST_STATUS      (SOC_BUSSTAT_BASE + 0x000u)
+#define BST_IRQEN       (SOC_BUSSTAT_BASE + 0x004u)
+#define BST_RFSEC       (SOC_BUSSTAT_BASE + 0x008u)
+#define BST_RFRD        (SOC_BUSSTAT_BASE + 0x00Cu)
+#define BST_RFDED       (SOC_BUSSTAT_BASE + 0x010u)
+#define BST_TMRERR      (SOC_BUSSTAT_BASE + 0x014u)
+#define BST_CLR         (SOC_BUSSTAT_BASE + 0x018u)
+
+/* One bit index per source, shared by STATUS, IRQEN and CLR. */
+#define BST_S_RFSEC     (1u << 0)
+#define BST_S_RFRD      (1u << 1)
+#define BST_S_RFDED     (1u << 2)
+#define BST_S_TMRERR    (1u << 3)
+#define BST_S_ALL       (BST_S_RFSEC | BST_S_RFRD | BST_S_RFDED | BST_S_TMRERR)
+/* STATUS bit 8: any enabled sticky is set, i.e. the line is asserted. */
+#define BST_STATUS_IRQ  (1u << 8)
+
 /* ---- GPTIMER, hw/soc/rtl/soc_gptimer.v ------------------------------ */
 #define GPT_SCALER      (SOC_TIMER0_BASE + 0x000u)
 #define GPT_SCRELOAD    (SOC_TIMER0_BASE + 0x004u)

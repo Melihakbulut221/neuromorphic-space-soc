@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Measure the architectural register file on its own, four ways.
+# Measure the architectural register file on its own, five ways.
 #
 #   syn_regfile.sh [out_dir]
 #
@@ -31,6 +31,14 @@
 # `scrub0` is the third: correction on read with the walking write-back
 # removed, so that what the scrub costs is separable from what the code
 # costs.
+#
+# `slowcorr` is the fifth and it is docs/44's: HARDEN = 1 with
+# FASTCORR = 0, which is the read path docs/43 shipped -- the frozen
+# decoder's own `data_out`, its 64-wide OR, its subtract and its
+# multiplexer. `harden1` is the same file with FASTCORR = 1. The pair is
+# what prices docs/44 section 5's timing recovery in area, and the sign
+# of the difference is not assumed in advance: replacing a multiplexer
+# with thirty-two comparators can cost area as easily as save it.
 #
 # The recipe is syn_soc.sh's, which is syn_ibex.sh's: same liberty, same
 # corner, same abc constraint file, same 20 ns delay target.
@@ -84,6 +92,9 @@ flatten
 setundef -zero
 opt_clean -purge
 write_verilog -noattr $OUT/$tag.netlist.v
+splitnets
+clean
+write_verilog -noattr -noexpr -nohex -nodec $OUT/$tag.sta.v
 check
 tee -o $OUT/$tag.area.rpt stat -liberty $SG13G2_TYP
 EOF
@@ -105,6 +116,14 @@ run upstream "$SOC_DIR/gen/ibex_register_file_ff.v" ""
 run harden0  "$SEC_SRCS" "chparam -set HARDEN 0 ibex_register_file_ff"
 run scrub0   "$SEC_SRCS" "chparam -set HARDEN 1 ibex_register_file_ff
 chparam -set SCRUB 0 ibex_register_file_ff"
+run slowcorr "$SEC_SRCS" "chparam -set HARDEN 1 ibex_register_file_ff
+chparam -set FASTCORR 0 ibex_register_file_ff"
 run harden1  "$SEC_SRCS" "chparam -set HARDEN 1 ibex_register_file_ff"
+# docs/44 section 5.5's alternative, measured rather than argued: the
+# syndrome's XOR tree hoisted to the other side of the read multiplexer,
+# at the cost of one parity tree per register. NOTHING BUILDS THIS; the
+# row exists so that the trade is a pair of numbers.
+run synpre   "$SEC_SRCS" "chparam -set HARDEN 1 ibex_register_file_ff
+chparam -set SYNPRE 1 ibex_register_file_ff"
 
 echo "  reports in $OUT"

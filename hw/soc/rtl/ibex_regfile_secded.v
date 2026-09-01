@@ -156,32 +156,129 @@
 // this work leaves unbounded rather than closed.
 //
 // =====================================================================
-// THE REPORT HAS NOWHERE TO GO, AND THAT IS THE PRICE OF ZERO PATCHES
+// THE CORRECTION IS IN SERIES WITH THE ALU, SO ITS DEPTH IS THE PRICE
 // =====================================================================
 //
-// The counters below record what the codec did. NOTHING READS THEM. The
-// substituted module has upstream's port list, upstream's port list has
-// no error output, and adding one would be a patch to ibex_top.sv --
-// which is the thing this whole arrangement exists to avoid. So the
-// correction is SILENT: in silicon, a corrected upset is
-// indistinguishable from no upset at all.
+// The decoder is on the register read path and the register read path
+// feeds the ALU, so unlike a shadow core -- which runs in PARALLEL with
+// what it checks -- this runs in SERIES with it. Every gate level of the
+// decoder is a gate level the whole design pays for.
 //
-// That is a real cost and it is stated here rather than discovered
-// later. It has two consequences worth naming:
+// HOW MUCH, MEASURED. docs/43 section 7.4 priced this by subtracting two
+// whole-core setup slacks, and docs/44 section 5.1 shows why that
+// subtraction could not carry the attribution: the path it measured
+// starts at a configuration input soc_top.v ties to a constant. The
+// number that does carry it comes from hw/soc/flow/sta_regfile.sh, which
+// times this module alone, where nothing else can move: at the slow
+// corner the arrival at rdata_a_o goes from 5.5282 ns at HARDEN = 0 to
+// 8.3210 ns with docs/43's read path. THE CODEC COSTS 2.7928 ns.
 //
-//   * `opt_clean` deletes these counters, because they drive nothing.
-//     The census in sw/tests/test_soc_regfile_guards.py expects the
-//     netlist NOT to contain them, and the fact that a report costs
-//     zero area is exactly the symptom of a report nobody can read.
-//   * In simulation they are readable hierarchically, and
-//     hw/soc/tb/tb_soc_fi.v reads them the way it already reads words
-//     out of RAM. That is a BENCH observation and not an operator
-//     channel, and docs/43 section 8 says so where it reports the
-//     CORRECTED column.
+// FASTCORR = 1 removes the levels that are on that path FOR NO REASON,
+// and MEASURED, it recovers 0.2593 ns of the 2.7928 -- 9.3 % -- for
+// +1,201.5486 um2 and +128 cells on this module. That is a small
+// recovery and it is quoted here rather than rounded up, because the
+// alternative that recovers 66.9 % is SYNPRE below and it costs
+// twenty-six times as much area. hw/rtl/secded_dec.v computes
 //
-// The fix is a port on ibex_top and therefore a patch to Ibex, or a
-// fault line reaching the SoC by some other route. Neither is built.
-// docs/43 section 12 ranks it.
+//     data_out = sec ? (data_raw ^ corr_mask) : data_raw
+//
+// and `sec` is `syn_nonzero && syn_odd && (data_hit || check_hit)`,
+// where `data_hit` is a 64-wide OR of the column comparisons and
+// `check_hit` contains an eight-bit subtract. That qualification is
+// correct and it is also, on the DATA path, redundant:
+//
+//     corr_mask[j] = 1  =>  syndrome equals H column j
+//                    =>  syndrome is nonzero (no column is zero)
+//                    and syndrome has odd parity (every column has odd
+//                        weight, which is what makes this code SECDED)
+//                    and data_hit = 1
+//                    =>  sec = 1.
+//
+// So `sec` is 1 whenever the mask is nonzero, and when the mask is zero
+// both arms of the multiplexer are `data_raw`. `data_raw ^ corr_mask` is
+// therefore BIT-FOR-BIT the same function as `data_out`, for every input
+// -- and it does not wait for the 64-wide OR, the subtract, the AND that
+// joins them or the multiplexer they select. hw/soc/formal/
+// regfile_secded.sby task `prove_fast` states that equality over a free
+// codeword and refuses to be believed on the strength of the paragraph
+// above.
+//
+// WHY THE MASK IS DERIVED AND NOT WRITTEN DOWN. Computing the mask here
+// needs the H columns, and hw/rtl/secded_dec.v does not export them.
+// Writing the matrix into this file a second time is exactly the
+// duplication docs/38 section 8.5 refused and docs/43 section 6.1
+// promised not to commit, and it would be the worst kind: two copies of
+// a constant that must agree and that no build step compares. So the
+// columns are DERIVED, from the pilot's own encoder, using its
+// definition: the H column of data bit j is the check word of the unit
+// vector 1<<j. Thirty-two `secded_enc` instances on constant inputs are
+// a compile-time table; the synthesiser folds every one of them and
+// sw/tests/test_soc_regfile_guards.py asserts that the mapped netlist is
+// not one cell larger for them. If hw/rtl/secded_enc.v ever changed, the
+// columns here would change with it, which is the property a written-out
+// copy cannot have.
+//
+// WHAT FASTCORR DOES NOT TOUCH. The scrub still writes back
+// `u_dec_s.data_out`, unaltered, because the scrub is not on the read
+// path and the write-back is the one place where being literally the
+// frozen decoder's output is worth more than the levels it costs.
+// `sec`, `ded` and the syndrome still come from the frozen decoder for all
+// three ports; what FASTCORR replaces is the DATA output of the two read
+// ports and nothing else.
+//
+// FASTCORR = 0 builds the read path docs/43 measured, so the recovery
+// is priced against the same file with one parameter moved -- the
+// discipline docs/41 section 6.5 records the cost of not keeping.
+//
+// =====================================================================
+// THE REPORT NOW HAS SOMEWHERE TO GO, AND WHAT THAT COST
+// =====================================================================
+//
+// As docs/43 shipped this file, the counters below recorded what the
+// codec did and NOTHING READ THEM: the substituted module carried
+// upstream's port list, upstream's port list has no error output, and
+// adding one is a patch to ibex_top. docs/43 section 6.5 stated the
+// consequence plainly -- the correction was SILENT, and in silicon a
+// corrected upset and no upset were the same event.
+//
+// docs/44 closes that, because an unobservable correction is
+// indistinguishable from an absent one at any distance greater than a
+// simulator. `rf_ecc_err_o` is this project's own port, appended AFTER
+// upstream's list, and it is carried out of `ibex_top` by the smallest
+// patch that reaches the SoC: three hunks in ONE generated file, applied
+// mechanically by hw/soc/flow/ibex_fault_port.py, never edited by hand
+// and never committed. docs/44 section 4 states what that costs the
+// pinning story; the two costs that live in this file are that the port
+// list is no longer upstream's exactly -- it is upstream's followed by
+// one port of ours -- and that
+// sw/tests/test_soc_regfile_guards.py's port check has been weakened
+// from equality to "upstream's list is a prefix" to admit it.
+//
+// WHAT THE THREE BITS MEAN, because a counter whose unit is ambiguous
+// is a number that gets quoted wrongly:
+//
+//   [0] SEC_SCRUB  the SCRUB corrected a word, and the corrected word
+//                  is being written back on this cycle. This is the bit
+//                  to count for an upset RATE: the walk reaches every
+//                  register, so a single-bit upset that the program does
+//                  not overwrite first raises this EXACTLY ONCE.
+//   [1] SEC_READ   a read port corrected the word it returned, on this
+//                  cycle. This is a count of CYCLES and not of upsets:
+//                  the same corrupted register read on ten cycles before
+//                  the scrub reaches it raises this ten times, and both
+//                  ports reading it raises it once. It is an upper
+//                  bound on the number of upsets and a lower bound on
+//                  nothing.
+//   [2] DED        a read port or the scrub reported a syndrome it
+//                  cannot correct. Two upsets in one register between
+//                  two scrubs is the case this exists for.
+//
+// The internal counters are KEPT even though the port makes them
+// redundant in silicon: hw/soc/tb/tb_soc_fi.v reads them hierarchically
+// and docs/43's campaign is reported off them, so removing them would
+// break the comparison that makes the campaign delta a delta. They still
+// drive nothing, so `opt_clean` still deletes them and they still cost
+// no area -- what has changed is that the port beside them does not.
 //
 // =====================================================================
 // WHAT THIS DOES NOT PROTECT
@@ -222,7 +319,13 @@ module ibex_register_file_ff (
     waddr_a_i,
     wdata_a_i,
     wcap_a_i,
-    we_a_i
+    we_a_i,
+    // ---- this project's, APPENDED after upstream's list ------------
+    // Everything above this line is upstream's port list in upstream's
+    // order, which is what sw/tests/test_soc_regfile_guards.py checks.
+    // Everything below it is this project's, and it reaches the SoC
+    // only through the ibex_top patch of hw/soc/flow/ibex_fault_port.py.
+    rf_ecc_err_o
 );
 
   // ---- upstream's parameters, in upstream's order and encodings -----
@@ -259,6 +362,32 @@ module ibex_register_file_ff (
   // write-back, so what the scrub costs is separable from what the code
   // costs.
   parameter integer SCRUB = 1;
+  // FASTCORR = 0 restores the read path docs/43 section 7.4 measured:
+  // the frozen decoder's own `data_out`, multiplexer and all. It exists
+  // so the timing recovery is priced against the same source with one
+  // parameter moved, and so docs/43's numbers stay reproducible.
+  parameter integer FASTCORR = 1;
+  // SYNPRE = 1 computes the syndrome of EVERY register beside its own
+  // flip-flops and multiplexes the seven-bit result, instead of
+  // multiplexing the forty-bit codeword and computing one syndrome
+  // after it. The syndrome is a linear function of the stored word and
+  // the multiplexer is a selection, so the two orders compute the same
+  // thing; what changes is that the XOR tree runs IN PARALLEL with the
+  // read multiplexer instead of behind it.
+  //
+  // It costs 31 more encoder instances -- one whole parity tree per
+  // register -- and it is the only structural way to take the tree off
+  // the read path, because hiding k levels of a tree behind a
+  // multiplexer needs 2^k copies of it and the tree is four levels
+  // deep.
+  //
+  // THIS IS A MEASUREMENT CONFIGURATION AND NOTHING BUILDS IT. It is
+  // here so that "the syndrome tree could be hoisted" is a number in
+  // docs/44 section 5.5 rather than a suggestion, and the number is what
+  // keeps the default at 0. Same role as HARDEN = 0 and SCRUB = 0:
+  // hw/soc/flow/syn_regfile.sh measures it, sw/tests checks that no
+  // build sets it, and it is not a feature.
+  parameter integer SYNPRE = 0;
 
   input  wire                  clk_i;
   input  wire                  rst_ni;
@@ -276,11 +405,14 @@ module ibex_register_file_ff (
   input  wire [DataWidth-1:0]  wdata_a_i;
   input  wire [CapWidth-1:0]   wcap_a_i;
   input  wire                  we_a_i;
+  // {DED, SEC_READ, SEC_SCRUB}; see the header for what each one counts.
+  output wire [2:0]            rf_ecc_err_o;
 
   localparam integer NUM_WORDS = 32;
   localparam integer CHK_W     = 8;
 
   genvar gi;
+  genvar gj;
 
   // Elaboration guards, aer_fifo house style: a configuration this file
   // does not implement references a module that deliberately does not
@@ -445,8 +577,61 @@ module ibex_register_file_ff (
           .data_out (out_b), .syndrome (syn_b),
           .sec (sec_b), .ded (ded_b));
 
-      assign rdata_a_o = out_a[31:0];
-      assign rdata_b_o = out_b[31:0];
+      // ---- the correction, and the levels it does not wait for ----
+      //
+      // See the header. `data_raw ^ corr_mask` is bit-for-bit
+      // `data_out`, and it does not wait for the 64-wide OR, the
+      // subtract or the multiplexer that qualify it.
+      //
+      // The columns are the pilot encoder's own, evaluated on the unit
+      // vectors. Nothing here writes H down a second time; if
+      // hw/rtl/secded_enc.v changed, these would change with it.
+      if (FASTCORR != 0) begin : g_fast
+        wire [CHK_W-1:0] h_col [0:31];
+        wire [31:0]      mask_a, mask_b;
+
+        // SYNPRE = 1 moves the syndrome's XOR tree to the OTHER SIDE of
+        // the read multiplexer. See the parameter's own comment: it is a
+        // MEASUREMENT CONFIGURATION and not a shipped one, and
+        // docs/44 section 5.5 gives the number that keeps it at 0.
+        wire [CHK_W-1:0] use_syn_a, use_syn_b;
+        if (SYNPRE != 0) begin : g_synpre
+          wire [CHK_W-1:0] rf_syn [0:NUM_WORDS-1];
+          for (gj = 0; gj < NUM_WORDS; gj = gj + 1) begin : g_pre
+            wire [CHK_W-1:0] chk_calc;
+            wire [71:0]      pre_code_unused;
+            secded_enc u_pre (
+                .data_in   ({32'h0, rf_data[gj]}),
+                .check_out (chk_calc),
+                .code_out  (pre_code_unused));
+            assign rf_syn[gj] = chk_calc ^ rf_chk[gj];
+          end
+          assign use_syn_a = rf_syn[raddr_a_i];
+          assign use_syn_b = rf_syn[raddr_b_i];
+        end else begin : g_synpost
+          assign use_syn_a = syn_a;
+          assign use_syn_b = syn_b;
+        end
+
+        for (gj = 0; gj < 32; gj = gj + 1) begin : g_col
+          wire [71:0] col_code_unused;
+          secded_enc u_col (
+              .data_in   ({32'h0, {{31{1'b0}}, 1'b1} << gj}),
+              .check_out (h_col[gj]),
+              .code_out  (col_code_unused));
+          assign mask_a[gj] = (use_syn_a == h_col[gj]);
+          assign mask_b[gj] = (use_syn_b == h_col[gj]);
+        end
+
+        assign rdata_a_o = raw_a ^ mask_a;
+        assign rdata_b_o = raw_b ^ mask_b;
+      end else begin : g_dec_out
+        // docs/43's read path, kept so the recovery is measured against
+        // the same file rather than against a previous document's
+        // number.
+        assign rdata_a_o = out_a[31:0];
+        assign rdata_b_o = out_b[31:0];
+      end
 
       // ---- the scrub ----------------------------------------------
       if (SCRUB != 0) begin : g_scrub
@@ -480,13 +665,25 @@ module ibex_register_file_ff (
         assign ded_s = 1'b0;
       end
 
-      // ---- the report that nothing reads --------------------------
+      // ---- the report ---------------------------------------------
       //
-      // See the header. These four registers drive no port, so
-      // `opt_clean` deletes them and they cost nothing in the netlist,
-      // which is precisely the symptom of a fault report an operator
-      // cannot see. In simulation hw/soc/tb/tb_soc_fi.v reads them
-      // hierarchically, and that is a bench and not a channel.
+      // `rf_ecc_err_o` is the operator channel and the four registers
+      // below are the bench one. See the header for what each bit
+      // counts and why they are not the same number.
+      //
+      // SEC_SCRUB is gated on `scrub_go` and not on `sec_s` alone, and
+      // that gate is the whole reason this bit is a count of UPSETS
+      // rather than of cycles: `u_dec_s` decodes the register the
+      // pointer names on every cycle, including the cycles the core is
+      // writing and the scrub is stalled, so an ungated `sec_s` would
+      // report the same upset once per stalled cycle. Gated, it reports
+      // once -- on the cycle the corrected word is written back, which
+      // is also the cycle after which the upset is gone.
+      wire sec_scrub_ev = sec_s & scrub_go;
+      wire ded_scrub_ev = ded_s & scrub_go;
+      assign rf_ecc_err_o = {ded_a | ded_b | ded_scrub_ev,
+                             sec_a | sec_b,
+                             sec_scrub_ev};
       //
       // `sec_cycles` counts CYCLES IN WHICH A CORRECTION HAPPENED and
       // not corrections: a cycle in which both read ports and the scrub
@@ -519,7 +716,7 @@ module ibex_register_file_ff (
 
       wire unused_syndromes;
       assign unused_syndromes = ^{syn_a, syn_b, syn_s,
-                                  out_a[63:32], out_b[63:32], out_s[63:32]};
+                                  out_a, out_b, out_s};
 
     end else begin : g_plain
       // HARDEN = 0. Upstream's behaviour, from this file, for the area
@@ -527,11 +724,15 @@ module ibex_register_file_ff (
       // nothing reads them, so the optimiser removes them and the
       // count is upstream's -- which is the point: the same source,
       // measured twice.
-      assign rdata_a_o  = raw_a;
-      assign rdata_b_o  = raw_b;
-      assign scrub_go   = 1'b0;
-      assign scrub_ptr  = 5'd0;
-      assign scrub_data = 32'h0;
+      assign rdata_a_o    = raw_a;
+      assign rdata_b_o    = raw_b;
+      assign scrub_go     = 1'b0;
+      assign scrub_ptr    = 5'd0;
+      assign scrub_data   = 32'h0;
+      // No code, nothing to report. The port stays, so the SoC above
+      // wires the same way at both settings and the BUSSTAT counters
+      // read zero instead of failing to elaborate.
+      assign rf_ecc_err_o = 3'b000;
     end
 
   end

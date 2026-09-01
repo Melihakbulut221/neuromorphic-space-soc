@@ -194,6 +194,25 @@ volatile uint32_t fi_sig;
 volatile uint32_t fi_mask;
 volatile uint32_t fi_rounds_done;
 
+#ifdef FI_BUSSTAT
+/* docs/44 section 8.2. The whole point of BUSSTAT is that SOFTWARE can
+ * see a corrected upset, so the demonstration has to be a load
+ * instruction executed by the core and not a hierarchical read by the
+ * testbench. These four words are what the program saw; tb_soc_fi.v
+ * prints them beside the bench's own hierarchical count of the same
+ * events, and docs/44 section 8.2 is the two columns agreeing.
+ *
+ * It is behind an #ifdef because the unwindowed build's ROM image is
+ * BYTE-IDENTICAL to docs/42's and campaign A's whole claim to being a
+ * paired comparison rests on that. Four more words of .bss and four
+ * more loads would break it.
+ */
+volatile uint32_t fi_bst_sec;
+volatile uint32_t fi_bst_rd;
+volatile uint32_t fi_bst_ded;
+volatile uint32_t fi_bst_tmr;
+#endif
+
 // The buffer the load/store round works in. In .bss, so crt0 zeroes it
 // on every boot and a re-run after a watchdog reset starts from the
 // same memory the first run did.
@@ -432,6 +451,15 @@ int main(void) {
 
   fi_sig = sig;
   fi_mask = mask;
+
+#ifdef FI_BUSSTAT
+  /* Read AFTER fi_phase = 2, so the answer is already fixed and these
+   * loads cannot be mistaken for part of the computation. */
+  fi_bst_sec = *(volatile uint32_t *)BST_RFSEC;
+  fi_bst_rd  = *(volatile uint32_t *)BST_RFRD;
+  fi_bst_ded = *(volatile uint32_t *)BST_RFDED;
+  fi_bst_tmr = *(volatile uint32_t *)BST_TMRERR;
+#endif
 
   puts_("S");
   puthex(sig);

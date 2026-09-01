@@ -105,7 +105,11 @@ module soc_gptimer #(
     output wire        irq_o,        // shared, timers 1..NGEN, maskable
     output wire        nmi_o,        // watchdog stage 1
     output wire        rst_req_o,    // watchdog stage 2
-    output wire        wdog_no       // watchdog stage 3, external pin
+    output wire        wdog_no,      // watchdog stage 3, external pin
+
+    // The watchdog's TMR fault line, passed straight through to
+    // soc_busstat. docs/41 section 10 item 3.
+    output wire        tmr_ev_o
 );
 
   localparam integer NT = NGEN + 1;    // including the watchdog
@@ -221,7 +225,8 @@ module soc_gptimer #(
       .rdata_o    (wd_rdata),
       .nmi_o      (nmi_o),
       .rst_req_o  (rst_req_o),
-      .wdog_no    (wdog_no)
+      .wdog_no    (wdog_no),
+      .tmr_ev_o   (tmr_ev_o)
   );
 
   // -------------------------------------------------------------------

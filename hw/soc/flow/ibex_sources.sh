@@ -40,10 +40,31 @@
 # `ibex_register_file_ff` would be a redeclaration error in Icarus and a
 # silent first-wins in some other front ends, so the exclusion is done
 # by construction rather than relied on.
+#
+# IBEX_FAULT_PORT selects, and it is a SECOND and larger cost:
+#
+#   1  hw/soc/genp/ibex_top.v, written by flow/ibex_fault_port.py from
+#      the sv2v output, with one output port added and driven -- so a
+#      corrected upset in the register file can be counted by
+#      soc_busstat and read by software. hw/soc/gen/ibex_top.v is
+#      EXCLUDED. This is what every flow that builds `soc_top` needs,
+#      because soc_top.v connects the port unconditionally; an unpatched
+#      `ibex_top` fails at elaboration with the port's name in the
+#      message.
+#   0  (default) hw/soc/gen/ibex_top.v, unmodified. This is the design
+#      docs/38 and docs/43 measured, and it stays reachable so their
+#      area and timing numbers reproduce.
+#
+# The two families of flow default differently here for the same reason
+# they do for IBEX_REGFILE, and docs/43 section 3.1 gives that reason:
+# the SoC flows build the design as it would ship, and the standalone
+# measurement flows reproduce a published number unless asked not to.
+# docs/44 section 4 states what the patch costs the pinning story.
 
 ibex_sources () {
   local soc_dir=$1
   local mode=${IBEX_REGFILE:-secded}
+  local port=${IBEX_FAULT_PORT:-0}
   local f
 
   case "$mode" in
@@ -51,14 +72,31 @@ ibex_sources () {
     *) echo "IBEX_REGFILE must be 'secded' or 'upstream', got '$mode'" >&2
        return 2 ;;
   esac
+  case "$port" in
+    0|1) ;;
+    *) echo "IBEX_FAULT_PORT must be 0 or 1, got '$port'" >&2
+       return 2 ;;
+  esac
+
+  if [ "$port" = 1 ]; then
+    python3 "$soc_dir/flow/ibex_fault_port.py" \
+            "$soc_dir/gen" "$soc_dir/genp" "$mode" >&2 || return 2
+  fi
 
   for f in "$soc_dir"/gen/*.v; do
     if [ "$mode" = "secded" ] && \
        [ "$(basename "$f")" = "ibex_register_file_ff.v" ]; then
       continue
     fi
+    if [ "$port" = 1 ] && [ "$(basename "$f")" = "ibex_top.v" ]; then
+      continue
+    fi
     echo "$f"
   done
+
+  if [ "$port" = 1 ]; then
+    echo "$soc_dir/genp/ibex_top.v"
+  fi
 
   if [ "$mode" = "secded" ]; then
     echo "$soc_dir/rtl/ibex_regfile_secded.v"

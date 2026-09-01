@@ -250,23 +250,73 @@ def test_upstreams_own_file_measures_the_data_flip_flops_only(workdir):
 
 
 @needs_yosys
-def test_the_report_costs_nothing_because_nothing_can_read_it(workdir):
-    """The correction counters drive no port, so `opt_clean` deletes
-    them and they do not appear in the count above.
+def test_the_bench_counters_still_cost_nothing_and_the_port_now_exists(workdir):
+    """`docs/43`'s version of this test asserted that the correction
+    report was deleted by `opt_clean`, and said in its own docstring
+    that a future change giving it a port would fail here -- "and that
+    failure would be the good news".
 
-    This is asserted rather than left implicit because it is the SYMPTOM
-    of the thing `docs/43` section 3 names as the price of changing
-    nothing in Ibex: `ibex_register_file_ff` carries upstream's port
-    list, upstream's port list has no error output, and a fault report
-    with nowhere to go is a fault report that costs no area. If a future
-    change gave it a port, this test would fail -- and that failure
-    would be the good news."""
+    `docs/44` is that change. The test is now in two halves:
+
+      * The four INTERNAL counters still drive nothing and are still
+        deleted. They are a bench instrument that
+        `hw/soc/tb/tb_soc_fi.v` reads hierarchically, and `docs/43`'s
+        campaign is reported off them, so they are kept -- and kept
+        free.
+      * `rf_ecc_err_o` EXISTS on the module. That is the operator
+        channel, and the reason the first half is no longer the whole
+        story."""
     ff = _census(workdir, [HARDENED] + CODEC)
     named = [n for n in ff if "sec_cycles" in n or "ded_cycles" in n
              or "sec_seen" in n or "ded_seen" in n]
     assert not named, (
-        "the correction report survives into the netlist, which means "
-        "something now reads it: {}".format(named[:4]))
+        "the BENCH counters survive into the netlist; they drive "
+        "nothing and should cost nothing: {}".format(named[:4]))
+    assert "rf_ecc_err_o" in _ports(HARDENED.read_text(), TOP), (
+        "the register file has no fault port, so a corrected upset is "
+        "again indistinguishable from no upset (docs/43 section 10)")
+
+
+@needs_yosys
+def test_the_correction_masks_columns_are_folded_and_cost_no_cells(workdir):
+    """`docs/44`'s fast correction derives the H columns by
+    instantiating `secded_enc` on the thirty-two unit vectors, rather
+    than writing the matrix into this project's file a second time --
+    which is the duplication `docs/38` section 8.5 refused and
+    `docs/43` section 6.1 promised not to commit.
+
+    That is only free if the synthesiser folds all thirty-two of them.
+    If a front end ever stopped folding them, the register file would
+    grow thirty-two parity trees and nothing else would notice."""
+    lib = _sg13g2_liberty()
+    if lib is None:
+        pytest.skip("sg13g2 liberty not present")
+    cells = {}
+    for tag, chparam in (("fast", "chparam -set FASTCORR 1 {};".format(TOP)),
+                         ("slow", "chparam -set FASTCORR 0 {};".format(TOP))):
+        out = Path(workdir) / ("fold_%s.json" % tag)
+        script = "read_verilog {};".format(
+            " ".join(str(x) for x in [HARDENED] + CODEC))
+        script += " hierarchy -top {};".format(TOP)
+        script += (" chparam -set BaseIsa 0 -set RV32E 0 -set DataWidth 32"
+                   " -set DummyInstructions 0 {};".format(TOP))
+        script += " " + chparam
+        script += " synth -top {} -flatten;".format(TOP)
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+        script += " flatten; opt_clean; write_json {};".format(out)
+        r = subprocess.run([YOSYS, "-p", script], capture_output=True,
+                           text=True, cwd=workdir, timeout=1800)
+        assert r.returncode == 0, r.stdout[-3000:] + r.stderr[-3000:]
+        design = json.loads(out.read_text())
+        cells[tag] = sum(len(m["cells"]) for m in design["modules"].values())
+    # Thirty-two unfolded parity trees would be thousands of cells. The
+    # bound is deliberately loose -- this is a check that the constants
+    # FOLDED, not a re-measurement of the area, which
+    # hw/soc/flow/syn_regfile.sh does exactly.
+    assert cells["fast"] < cells["slow"] + 1500, (
+        "the derived H columns did not fold to constants: FASTCORR = 1 "
+        "is {} cells against FASTCORR = 0's {}".format(
+            cells["fast"], cells["slow"]))
 
 
 def test_the_eighth_check_bit_does_not_exist_over_32_data_bits():
@@ -296,11 +346,20 @@ def test_the_eighth_check_bit_does_not_exist_over_32_data_bits():
 
 
 def _ports(text, module):
-    """The port name list of a non-ANSI Verilog module header."""
+    """The port name list of a non-ANSI Verilog module header.
+
+    Line comments are stripped before the split. Upstream's sv2v output
+    has none inside a port list; this project's substitute does, because
+    the line where its own port begins is the line a reader most needs
+    the reason on. A parser that split a comment containing a comma into
+    two port names would fail with a message about a port that does not
+    exist, which is how this was found.
+    """
     m = re.search(r"\bmodule\s+" + module + r"\s*\((.*?)\);", text,
                   re.S)
     assert m, "no module {} header found".format(module)
-    return [p.strip() for p in m.group(1).split(",") if p.strip()]
+    body = re.sub(r"//[^\n]*", "", m.group(1))
+    return [p.strip() for p in body.split(",") if p.strip()]
 
 
 @needs_gen
@@ -313,10 +372,23 @@ def test_the_substitute_declares_upstreams_ports_in_upstreams_order():
     name of the port that moved."""
     ours = _ports(HARDENED.read_text(), TOP)
     theirs = _ports((SOC_GEN / (TOP + ".v")).read_text(), TOP)
-    assert ours == theirs, (
+    # docs/44 WEAKENED this check from equality to "upstream's list is a
+    # prefix", and that weakening is a cost rather than a tidy-up. The
+    # substitute now declares one port upstream does not have --
+    # `rf_ecc_err_o`, the fault line docs/43 section 10 said did not
+    # exist -- so exact equality is no longer the right statement. What
+    # is still checked, and is what the substitution actually rests on,
+    # is that every upstream port is present, in upstream's order, at
+    # the front; and that the ONLY additions are the ones named here, so
+    # this cannot become a licence to append anything.
+    OURS_OWN = ["rf_ecc_err_o"]
+    assert ours[:len(theirs)] == theirs, (
         "the substituted register file's port list has diverged from "
         "the pinned Ibex.\n  ours:     {}\n  upstream: {}".format(
             ours, theirs))
+    assert ours[len(theirs):] == OURS_OWN, (
+        "the substitute has grown a port this test does not know "
+        "about: {}".format(ours[len(theirs):]))
 
 
 @needs_gen
@@ -402,8 +474,36 @@ def test_nothing_in_the_design_builds_the_register_file_unprotected():
     for path in list(SOC_RTL.glob("*.v")) + \
             list((ROOT / "hw" / "soc" / "flow").glob("*.sh")):
         text = path.read_text()
-        for bad in (".HARDEN(0)", ".SCRUB(0)",
+        for bad in (".HARDEN(0)", ".SCRUB(0)", ".FASTCORR(0)",
                     "ibex_register_file_ff.HARDEN=0",
                     "ibex_register_file_ff.SCRUB=0"):
             assert bad not in text, \
                 "{} builds the register file unprotected".format(path.name)
+
+
+def test_nothing_in_the_design_builds_the_measurement_configurations():
+    """`SYNPRE` is not a feature. `docs/44` section 5.5 measures the
+    syndrome tree hoisted past the read multiplexer -- 1.87 ns of the
+    read path recovered for one parity tree per register -- and then
+    declines it, because the SoC's 20 ns target is met with margin in
+    both and eleven per cent of the core is the wrong thing to spend to
+    widen a margin that is not binding.
+
+    A parameter that ships disabled and is never measured again is the
+    liability `docs/43` section 12 item 5 names. This is the check that
+    it stays a measurement: the only thing allowed to set it is
+    `hw/soc/flow/syn_regfile.sh`, which exists to measure it, and
+    `hw/soc/flow/syn_ibex.sh`, which passes it through from an
+    environment variable that defaults to 0."""
+    allowed = {"syn_regfile.sh", "syn_ibex.sh"}
+    for path in list(SOC_RTL.glob("*.v")) + \
+            list((ROOT / "hw" / "soc" / "flow").glob("*.sh")):
+        if path.name in allowed:
+            continue
+        text = path.read_text()
+        assert "SYNPRE 1" not in text and ".SYNPRE(1)" not in text, \
+            "{} builds the hoisted syndrome, which nothing ships".format(
+                path.name)
+    syn = (ROOT / "hw" / "soc" / "flow" / "syn_ibex.sh").read_text()
+    assert "IBEX_RF_SYNPRE:-0" in syn, \
+        "syn_ibex.sh no longer defaults the hoisted syndrome off"

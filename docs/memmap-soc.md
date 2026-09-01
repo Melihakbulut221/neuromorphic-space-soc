@@ -80,7 +80,7 @@ interrupt controller and the drivers cannot disagree
 | `0xFF912000` | `0x012` | SPI | 19 | 7 | reserved | SPICTRL-shaped SPI master |
 | `0xFF913000` | `0x013` | I2C | 20 | 8 | reserved | I2CMST, the OpenCores I2C master register map |
 | `0xFF914000` | `0x014` | QSPICTL | 21 | 9 | reserved | QSPI flash controller registers behind the XIP windows |
-| `0xFF915000` | `0x015` | BUSSTAT | 22 | 10 | reserved | System-bus error latch and ECC counters; AHBSTAT in spirit, not in name |
+| `0xFF915000` | `0x015` | BUSSTAT | 22 | 10 | implemented | Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name |
 | `0xFF916000` | `0x016` | SCRUB | 23 | 11 | reserved | Memory scrubber control, MEMSCRUB-like |
 | `0xFF917000` | `0x017` | BOOTREG | - | - | reserved | Bootstrap pin readback and boot report register, GRGPREG-like |
 | `0xFF918000` | `0x018` | CLKGATE | - | - | reserved | Clock gate enable and status for NPU nodes and heavy peripherals |

@@ -42,6 +42,14 @@ UART_BIT_CYCLES=$(( 8 * (UART_SCALER + 1) ))
 # hw/soc/gen/ibex_register_file_ff.v, and nothing in hw/soc/ext or
 # hw/soc/gen is modified to do it. IBEX_REGFILE=upstream reproduces the
 # design docs/38 to docs/42 measured.
+#
+# IBEX_FAULT_PORT is forced on here, and this flow cannot run without it:
+# soc_top.v connects `u_ibex.rf_ecc_err_o` unconditionally, so an
+# unpatched ibex_top fails at elaboration with the port's name in the
+# message. That is the coupling, and it is loud rather than silent
+# (docs/44 section 4).
+IBEX_FAULT_PORT=1
+export IBEX_FAULT_PORT
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -94,6 +102,7 @@ sym () {
   "$SOC_DIR/rtl/soc_clint.v" \
   "$SOC_DIR/rtl/soc_gptimer.v" \
   "$SOC_DIR/rtl/soc_wdog.v" \
+  "$SOC_DIR/rtl/soc_busstat.v" \
   "$SOC_DIR/rtl/soc_tmr_bank.v" \
   "$PILOT_RTL/tmr_voter.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \

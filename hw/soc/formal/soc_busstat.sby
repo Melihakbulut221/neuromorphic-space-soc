@@ -1,0 +1,52 @@
+# SymbiYosys job for the fault counters.
+#
+#   sby -f soc_busstat.sby prove   k-induction proof of B1-B6
+#   sby -f soc_busstat.sby bmc     bounded check, depth 20
+#   sby -f soc_busstat.sby cover   reachability of every proven behaviour
+#
+# Properties live in soc_busstat_props.v, textually included at the end
+# of the soc_busstat module body under `ifdef FORMAL -- the arrangement
+# soc_bus, soc_apb_bridge, soc_clint and soc_wdog already use.
+#
+# CNT_W IS 4 HERE AND 16 IN THE DESIGN, and that is deliberate rather
+# than a shortcut. The saturation properties (B2) and the saturation
+# COVER are the point of this job, and a counter that has to be
+# incremented 65,535 times before it saturates cannot be driven to its
+# top in a bounded model check -- the cover would be unreachable and the
+# job would report a green result for a case it never examined, which is
+# this repository's recurring defect (docs/41 section 6.6). At CNT_W = 4
+# the top is fifteen increments away and the engine reaches it.
+#
+# Nothing in the properties mentions 4 or 16: every one is written
+# against CNT_W and CNT_MAX. `prove_w16` runs the whole set again at the
+# width soc_top.v instantiates, WITHOUT the saturation cover, so the
+# shipped width is proved and the unreachable cover is not claimed.
+
+[tasks]
+bmc
+prove
+prove_w16
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 20
+prove: mode prove
+prove: depth 10
+prove_w16: mode prove
+prove_w16: depth 10
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_busstat.v
+~prove_w16: chparam -set CNT_W 4 soc_busstat
+prove_w16: chparam -set CNT_W 16 soc_busstat
+prep -top soc_busstat
+
+[files]
+../rtl/soc_busstat.v
+soc_busstat_props.v

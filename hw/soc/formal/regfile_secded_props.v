@@ -27,6 +27,9 @@
 //                              be reported, not miscorrected into a
 //                              third wrong word
 //   C4  check bit 7 is identically zero over a 32-bit data field
+//   C5  the fast correction is the decoder's correction, for EVERY
+//       codeword and EVERY error vector -- docs/44's timing recovery,
+//       stated as an equality rather than as an argument
 //
 // C4 is the odd one out and it is here because it is a MEASUREMENT this
 // document would otherwise have to take on trust. H_ROW7 is
@@ -38,6 +41,22 @@
 // rather than by design. docs/43 section 7 reports the flip-flop count
 // that follows from it, and this property is why that count is a
 // consequence rather than a coincidence.
+//
+// C5 IS THE ONE THIS DOCUMENT WOULD BE WRONG WITHOUT. docs/44 takes
+// gate levels off the register read path by not using the frozen
+// decoder's `data_out` at all: it XORs the raw word with a correction
+// mask built from the decoder's SYNDROME, skipping the 64-wide OR, the
+// eight-bit subtract, the AND that joins them and the multiplexer they
+// select. The reasoning is that `sec` is 1 whenever the mask is
+// nonzero, so the qualification cannot change the answer -- and that
+// reasoning is a paragraph about a matrix, which is exactly the kind of
+// thing this job exists because comments are not checks. C5 states the
+// equality over a free codeword instead.
+//
+// The mask's columns are DERIVED here the same way the RTL derives
+// them, from the pilot encoder on the unit vectors, so this proof would
+// follow hw/rtl/secded_enc.v if it ever changed rather than certifying
+// a copy of it.
 //
 // THE FAULT MODEL. One error vector, free every cycle, over exactly the
 // 40 bits the register file stores. Nothing here models a fault in the
@@ -94,6 +113,24 @@ module regfile_secded_props (
 
     wire [6:0] w = f_weight(e_i);
 
+    // ---- the fast correction, exactly as the RTL builds it ----------
+    wire [7:0]  h_col [0:31];
+    wire [31:0] mask;
+    genvar gj;
+    generate
+        for (gj = 0; gj < 32; gj = gj + 1) begin : g_col
+            wire [71:0] col_code_unused;
+            secded_enc u_col (
+                .data_in   ({32'h0, {{31{1'b0}}, 1'b1} << gj}),
+                .check_out (h_col[gj]),
+                .code_out  (col_code_unused)
+            );
+            assign mask[gj] = (syn == h_col[gj]);
+        end
+    endgenerate
+
+    wire [31:0] fast_out = stored_data ^ mask;
+
     always @(*) begin
         // C4. The eighth check bit does not exist over a 32-bit word.
         //     Asserted on the ENCODER's output, so it is a statement
@@ -125,6 +162,14 @@ module regfile_secded_props (
             assert (ded);
             assert (!sec);
         end
+
+        // C5. THE FAST CORRECTION IS THE DECODER'S CORRECTION. No
+        //     guard on the weight: this holds for every codeword and
+        //     every error vector, including the ones that are neither
+        //     correctable nor a double error, because that is what
+        //     replacing an output with a different function of the same
+        //     inputs has to mean.
+        assert (fast_out == out[31:0]);
     end
 
     // Vacuity, docs/09 B.1: every branch above has to be reachable, or
@@ -135,6 +180,12 @@ module regfile_secded_props (
         cover (w == 7'd1 && sec && (e_i[39:32] != 8'h0));   // a check bit
         cover (w == 7'd2 && ded);
         cover (w == 7'd3);
+        // C5's two interesting cases: the mask actually does something,
+        // and the decoder reports uncorrectable while the mask is zero.
+        // Without these, C5 could hold vacuously on a harness where the
+        // mask were never nonzero.
+        cover (mask != 32'h0);
+        cover (ded && mask == 32'h0);
     end
 
 endmodule

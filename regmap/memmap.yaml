@@ -285,8 +285,8 @@ apb_slots:
      desc: "I2CMST, the OpenCores I2C master register map", source: "family style"}
   - {name: QSPICTL, slot: 0x014, irq: 21, line: 9,  status: reserved, device_id: 0x045,
      desc: "QSPI flash controller registers behind the XIP windows", source: "family style"}
-  - {name: BUSSTAT, slot: 0x015, irq: 22, line: 10, status: reserved, device_id: 0x052,
-     desc: "System-bus error latch and ECC counters; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
+  - {name: BUSSTAT, slot: 0x015, irq: 22, line: 10, status: implemented, device_id: 0x052,
+     desc: "Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
   - {name: SCRUB,   slot: 0x016, irq: 23, line: 11, status: reserved, device_id: 0x057,
      desc: "Memory scrubber control, MEMSCRUB-like", source: "MEMSCRUB (GR740) remapped"}
   - {name: BOOTREG, slot: 0x017, irq: 0,  status: reserved, device_id: 0x087,

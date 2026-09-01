@@ -115,6 +115,22 @@
 `ifndef FI_ROUNDS_ADDR
   `define FI_ROUNDS_ADDR 32'h0
 `endif
+
+// docs/44 section 8.2's software-visible fault counters. Zero unless
+// the FI_BUSSTAT build defined the symbols, and zero is how the report
+// below decides not to print them.
+`ifndef FI_BST_SEC_ADDR
+  `define FI_BST_SEC_ADDR 32'h0
+`endif
+`ifndef FI_BST_RD_ADDR
+  `define FI_BST_RD_ADDR 32'h0
+`endif
+`ifndef FI_BST_DED_ADDR
+  `define FI_BST_DED_ADDR 32'h0
+`endif
+`ifndef FI_BST_TMR_ADDR
+  `define FI_BST_TMR_ADDR 32'h0
+`endif
 // A ceiling that no legitimate run reaches.  The campaign always passes
 // +budget explicitly; this is only so the file is runnable by hand.
 `ifndef FI_DEFAULT_BUDGET
@@ -136,6 +152,10 @@ module tb_soc_fi;
   localparam [31:0] FI_SIG_ADDR      = `FI_SIG_ADDR;
   localparam [31:0] FI_MASK_ADDR     = `FI_MASK_ADDR;
   localparam [31:0] FI_ROUNDS_ADDR   = `FI_ROUNDS_ADDR;
+  localparam [31:0] FI_BST_SEC_ADDR  = `FI_BST_SEC_ADDR;
+  localparam [31:0] FI_BST_RD_ADDR   = `FI_BST_RD_ADDR;
+  localparam [31:0] FI_BST_DED_ADDR  = `FI_BST_DED_ADDR;
+  localparam [31:0] FI_BST_TMR_ADDR  = `FI_BST_TMR_ADDR;
   localparam [31:0] EXIT_MAGIC       = 32'h600d_c0de;
 
   reg clk   = 1'b0;
@@ -537,6 +557,25 @@ module tb_soc_fi;
 `else
     $display("RECORD rf_sec=0 rf_ded=0 rf_sec_seen=0 rf_ded_seen=0");
 `endif
+
+    // docs/44 section 8.2: the same events, counted by the SoC and read
+    // by a LOAD INSTRUCTION THE CORE EXECUTED, beside the bench's
+    // hierarchical read of the module's own counters. Printed only when
+    // the FI_BUSSTAT build defined the symbols -- the default build's
+    // ROM image is byte-identical to docs/42's and must stay so.
+    //
+    // The ADDRESS is printed with the values on purpose. A counter that
+    // reads zero because the symbol was not found looks exactly like a
+    // counter that never moved, and a report that cannot tell those two
+    // apart is the failure this whole feature exists to remove.
+    if (FI_BST_SEC_ADDR != 32'h0)
+      $display({"RECORD sw_bst_sec=%0d sw_bst_rd=%0d sw_bst_ded=%0d ",
+                "sw_bst_tmr=%0d sw_bst_at=%08x"},
+               dut.u_ram.mem[FI_BST_SEC_ADDR[31:2]],
+               dut.u_ram.mem[FI_BST_RD_ADDR[31:2]],
+               dut.u_ram.mem[FI_BST_DED_ADDR[31:2]],
+               dut.u_ram.mem[FI_BST_TMR_ADDR[31:2]],
+               FI_BST_SEC_ADDR);
     $display("RECORD end");
 
     $finish;

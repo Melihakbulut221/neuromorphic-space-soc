@@ -93,7 +93,36 @@ EOF
 
 IBEX_SRCS=$(ibex_sources "$SOC_DIR" | tr '\n' ' ')
 
+# The substituted register file's own parameters. Empty at
+# IBEX_REGFILE=upstream, because `chparam` on a parameter the module does
+# not declare is an error and upstream's file declares neither.
+#
+#   IBEX_RF_FASTCORR=0        builds the read path docs/43 section 7.4
+#                             measured. Default 1, which is docs/44's.
+#   IBEX_RF_FASTCORR=default  sets nothing, so the source's own default
+#                             applies. This is not decoration: it is what
+#                             lets docs/43's ibex_regfile_secded.v -- a
+#                             file that does not declare FASTCORR at all,
+#                             and on which `chparam` is an error and not
+#                             a no-op -- be synthesised by this flow, and
+#                             docs/44 section 5.2 uses exactly that to
+#                             re-measure docs/43's netlist in this
+#                             session.
+IBEX_RF_FASTCORR=${IBEX_RF_FASTCORR:-1}
+#   IBEX_RF_SYNPRE=1    hoists the syndrome tree past the read
+#                       multiplexer, at one parity tree per register.
+#                       Nothing builds it; docs/44 section 5.5 prices it.
+IBEX_RF_SYNPRE=${IBEX_RF_SYNPRE:-0}
+RF_CHPARAM=""
+if [ "$IBEX_REGFILE" = "secded" ] && [ "$IBEX_RF_FASTCORR" != "default" ]; then
+  RF_CHPARAM="chparam -set FASTCORR $IBEX_RF_FASTCORR ibex_register_file_ff"
+  # `\n` and not a literal newline: this string is the REPLACEMENT half
+  # of a `sed s|||` below, where an unescaped newline ends the command.
+  RF_CHPARAM="$RF_CHPARAM\\nchparam -set SYNPRE $IBEX_RF_SYNPRE ibex_register_file_ff"
+fi
+
 sed -e "s|@IBEX_SRCS@|$IBEX_SRCS|g" \
+    -e "s|@RF_CHPARAM@|$RF_CHPARAM|g" \
     -e "s|@GEN@|$SOC_DIR/gen|g" \
     -e "s|@RTL@|$SOC_DIR/rtl|g" \
     -e "s|@LIB@|$SG13G2_TYP|g" \

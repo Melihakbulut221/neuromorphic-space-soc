@@ -384,7 +384,24 @@ module soc_wdog #(
     // ---- escalation ----
     output wire        nmi_o,        // stage 1, to Ibex irq_nm_i
     output wire        rst_req_o,    // stage 2, drives the system reset
-    output wire        wdog_no       // stage 3, external pin, active low
+    output wire        wdog_no,      // stage 3, external pin, active low
+
+    // ---- the W6 report, on a wire instead of only in a register ----
+    // One pulse per cycle in which the three replicas of the protected
+    // word disagree and the voter masked it. docs/41 section 10 item 3
+    // left this open in exactly these words: "Nothing raises an alarm on
+    // TMRERR. The mismatch is counted and sticky in a register and that
+    // is all. A fault line into BUSSTAT, or a fast interrupt, is the
+    // obvious next step and neither exists." This is that fault line,
+    // and soc_busstat.v is what it reaches.
+    //
+    // It is the per-cycle EVENT and not the sticky bit, because a
+    // consumer that counts a level counts one fault once per cycle
+    // forever. WDOGSTAT's own TMRERR and TMRCNT are unchanged and stay
+    // inside the protected word, where docs/41 section 5 put them: this
+    // adds a second, unprotected observer of the same event and takes
+    // nothing away from the first.
+    output wire        tmr_ev_o
 );
 
   localparam integer PRE_W = (PRESCALE <= 1) ? 1 : $clog2(PRESCALE);
@@ -512,6 +529,12 @@ module soc_wdog #(
   wire [PROT_W-1:0]  prot_store;      // the voted word, or the plain one
   wire               prot_mismatch;   // this cycle a replica disagrees
   reg  [PFULL_W-1:0] prot_n;          // next value, combinational
+
+  // The fault line. At HARDEN = 0 `prot_mismatch` is the constant zero
+  // that line 580 assigns, so this port is a constant too and the
+  // netlist census of sw/tests/test_soc_synthesis_guards.py sees the
+  // same 53 flip-flops it saw before.
+  assign tmr_ev_o = prot_mismatch;
 
   // `prot` is the full field layout, always PFULL_W wide so that every
   // part-select below is in range whatever WINDOW is. At WINDOW = 0 the

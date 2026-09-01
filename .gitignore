@@ -53,6 +53,11 @@ tt/tt/
 hw/soc/ext/
 hw/soc/tools/
 hw/soc/gen/
+# hw/soc/genp/ is gen/ibex_top.v with the register file's fault port
+# added, written by flow/ibex_fault_port.py (docs/44 section 4). Same
+# rule: derived from a pinned input by a tracked script, never
+# vendored and never edited by hand.
+hw/soc/genp/
 hw/soc/out/
 
 # SymbiYosys working directories for the SoC fabric jobs (docs/39). Same
@@ -68,3 +73,5 @@ hw/soc/formal/soc_wdog/
 hw/soc/formal/soc_wdog_*/
 hw/soc/formal/regfile_secded/
 hw/soc/formal/regfile_secded_*/
+hw/soc/formal/soc_busstat/
+hw/soc/formal/soc_busstat_*/

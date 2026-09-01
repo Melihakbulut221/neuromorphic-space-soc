@@ -62,6 +62,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -540,6 +541,103 @@ def test_harden_zero_removes_the_replicas(workdir):
             UNPROT_FF, PROT_W, REPORT_FF, expected, census.total))
     for r in REPLICAS:
         assert census.in_instance(r) == 0
+
+
+# =====================================================================
+# 3b. the fault counters, docs/44
+# =====================================================================
+#
+# soc_busstat has no redundancy for a synthesiser to collapse, so this
+# is not the docs/41 section 9.4 question in its usual form. It is the
+# same question in another one: FOUR SATURATING COUNTERS THAT NOTHING
+# ELSE IN THE DESIGN READS. Every functional test drives the event
+# lines by hand and reads the registers back, and every one of them
+# would pass on a netlist in which a counter had been reduced to its
+# sticky bit -- because the RTL still has the flip-flops whatever the
+# netlist holds. The count here is arithmetic on the block's own
+# parameters, so widening CNT_W moves the expectation with it.
+BUSSTAT = SOC_RTL / "soc_busstat.v"
+BUSSTAT_NSRC = 4
+
+
+def _busstat_cnt_w():
+    """CNT_W read out of the module header, not written down here."""
+    m = re.search(r"parameter\s+integer\s+CNT_W\s*=\s*(\d+)",
+                  BUSSTAT.read_text())
+    assert m, "soc_busstat.v no longer declares CNT_W"
+    return int(m.group(1))
+
+
+@needs_yosys
+def test_the_fault_counters_survive_synthesis(workdir):
+    """docs/44 section 6. An operator's only view of a corrected upset
+    is these flip-flops; a mapper that deleted one would leave a block
+    that still answers every APB read with a plausible number."""
+    cnt_w = _busstat_cnt_w()
+    script = ("read_verilog -I {} {};".format(SOC_RTL, BUSSTAT)
+              + " hierarchy -top soc_busstat;"
+                " synth -top soc_busstat -flatten;")
+    lib = _sg13g2_liberty()
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+    script += " flatten; opt_clean;"
+    census = _census(script, workdir)
+    expected = BUSSTAT_NSRC * cnt_w + BUSSTAT_NSRC + BUSSTAT_NSRC
+    assert census.total == expected, (
+        "expected {} counters x {} bits + {} sticky + {} enable = {} "
+        "flip-flops, found {}".format(
+            BUSSTAT_NSRC, cnt_w, BUSSTAT_NSRC, BUSSTAT_NSRC,
+            expected, census.total))
+
+
+def test_the_fault_lines_are_connected_in_soc_top():
+    """The failure this whole block exists to prevent, in its purest
+    form. `pilot_top.v` records it: four ECC status wires left
+    unconnected, so the codes corrected and nothing on the chip said so,
+    and a campaign measured 84 corrections and had to classify every one
+    MASKED -- with every proof and every test green.
+
+    soc_busstat's own suite drives its inputs by hand, so it would pass
+    on a soc_top that wired them to zero. This is the check that they
+    come from somewhere."""
+    top = (SOC_RTL / "soc_top.v").read_text()
+    for pat in (".rf_ecc_err_o           (rf_ecc_err)",
+                ".rf_ecc_err_i (rf_ecc_err)",
+                ".tmr_ev_o (wdog_tmr_ev)",
+                ".tmr_ev_i (wdog_tmr_ev)"):
+        assert pat in top, (
+            "soc_top.v no longer connects a fault line: {}".format(pat))
+    assert "rf_ecc_err_i (3'b0" not in top and "tmr_ev_i (1'b0" not in top, \
+        "a fault line in soc_top.v has been tied off"
+
+
+def test_the_ibex_top_patch_applies_to_the_pinned_output():
+    """The fault port reaches the SoC through three hunks that
+    hw/soc/flow/ibex_fault_port.py applies to hw/soc/gen/ibex_top.v.
+    Every anchor is asserted to occur exactly once, so a pin that moves
+    the port list stops the build rather than patching the wrong place;
+    this runs that check without building."""
+    gen = ROOT / "hw" / "soc" / "gen" / "ibex_top.v"
+    if not gen.is_file():
+        pytest.skip("hw/soc/gen is empty: run flow/sv2v_ibex.sh first")
+    sys.path.insert(0, str(ROOT / "hw" / "soc" / "flow"))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "ibex_fault_port",
+        ROOT / "hw" / "soc" / "flow" / "ibex_fault_port.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    src = gen.read_text()
+    for mode in ("secded", "upstream"):
+        out = mod.patch(src, mode)
+        assert out != src
+        assert "rf_ecc_err_o" in out
+        # The patch is three hunks and nothing else.
+        added = len(out.splitlines()) - len(src.splitlines())
+        assert added <= 7, (
+            "the ibex_top patch has grown to {} added lines; it is "
+            "supposed to be the smallest thing that reaches the "
+            "SoC".format(added))
 
 
 # =====================================================================

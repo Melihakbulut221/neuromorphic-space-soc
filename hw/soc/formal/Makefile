@@ -4,6 +4,8 @@
 #   cd hw/soc/formal && make bus        soc_bus: bmc, prove, cover
 #   cd hw/soc/formal && make apb        soc_apb_bridge: bmc, prove, cover
 #   cd hw/soc/formal && make clint      soc_clint: bmc, prove, cover
+#   cd hw/soc/formal && make busstat    soc_busstat: bmc, prove,
+#                                       prove_w16, cover
 #   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, prove_w0,
 #                                       cover
 #   cd hw/soc/formal && make regfile    the shortened SECDED code the
@@ -32,9 +34,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile
+all: bus apb clint wdog wdogtmr regfile busstat
 
 include $(REPO)/tools.mk
 
@@ -56,6 +58,17 @@ clint:
 	@for t in $(TASKS); do \
 	  echo "== soc_clint $$t"; \
 	  $(SBY) -f soc_clint.sby $$t || exit 1; \
+	done
+
+# The fault counters docs/44 adds, and the two widths they are proved
+# at: CNT_W = 4 so that saturation is reachable inside a bounded model,
+# and CNT_W = 16 because that is what soc_top.v instantiates.
+BUSSTAT_TASKS := bmc prove prove_w16 cover
+
+busstat:
+	@for t in $(BUSSTAT_TASKS); do \
+	  echo "== soc_busstat $$t"; \
+	  $(SBY) -f soc_busstat.sby $$t || exit 1; \
 	done
 
 WDOG_TASKS := bmc prove prove_w0 cover

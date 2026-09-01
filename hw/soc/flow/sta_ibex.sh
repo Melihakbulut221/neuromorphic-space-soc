@@ -50,6 +50,16 @@ sed -e "s|@PERIOD@|$PERIOD|g" "$SOC_DIR/sta/ibex.sdc.in" > "$OUT/ibex.sdc"
 
 CORNERS="typ slow fast"
 
+# SOC_TIEOFFS=1 applies sta/ibex_tieoffs.sdc, which case-analyses the
+# `cheriot_enable_i` constant soc_top.v drives. Default off, so docs/38's
+# and docs/43's numbers reproduce unchanged; docs/44 section 5.1 says
+# what turning it on is for and what it does not cover.
+if [ "${SOC_TIEOFFS:-0}" = 1 ]; then
+  TIEOFFS="source $SOC_DIR/sta/ibex_tieoffs.sdc"
+else
+  TIEOFFS="# SOC_TIEOFFS=0: ibex_top timed with every input free"
+fi
+
 : > "$OUT/sta.log"
 for corner in $CORNERS; do
   case $corner in
@@ -57,7 +67,8 @@ for corner in $CORNERS; do
     slow) LIB=$SG13G2_SLOW ;;
     fast) LIB=$SG13G2_FAST ;;
   esac
-  sed -e "s|@LIB@|$LIB|g" \
+  sed -e "s|@TIEOFFS@|$TIEOFFS|g" \
+      -e "s|@LIB@|$LIB|g" \
       -e "s|@CORNER@|$corner|g" \
       -e "s|@NETLIST@|$OUT/ibex_top.sta.v|g" \
       -e "s|@SDC@|$OUT/ibex.sdc|g" \

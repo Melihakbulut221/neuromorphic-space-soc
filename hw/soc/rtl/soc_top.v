@@ -124,7 +124,10 @@ module soc_top #(
   // Interrupt sources, declared here because the core below consumes
   // them and the blocks that drive them are instantiated further down.
   wire        clint_irq_timer, clint_irq_soft;
-  wire        gptimer_irq, uart_irq, wdog_nmi;
+  wire        gptimer_irq, uart_irq, wdog_nmi, busstat_irq;
+  // The fault lines soc_busstat counts. docs/44.
+  wire [2:0]  rf_ecc_err;      // from the register file, via ibex_top
+  wire        wdog_tmr_ev;     // from the watchdog's voter
 
   // -------------------------------------------------------------------
   // The fast local interrupt vector
@@ -147,8 +150,14 @@ module soc_top #(
   reg [14:0] irq_fast;
   always @(*) begin
     irq_fast = 15'h0;
-    irq_fast[SOC_IRQLINE_UART0]  = uart_irq;
-    irq_fast[SOC_IRQLINE_TIMER0] = gptimer_irq;
+    irq_fast[SOC_IRQLINE_UART0]   = uart_irq;
+    irq_fast[SOC_IRQLINE_TIMER0]  = gptimer_irq;
+    // BUSSTAT's line, connected here for the first time. It is a LEVEL
+    // driven by soc_busstat's sticky bits AND its enable register,
+    // which resets to zero -- so this wire is low until software asks
+    // for it, and the whole-SoC run of docs/40 and docs/41 is
+    // cycle-identical with this block present.
+    irq_fast[SOC_IRQLINE_BUSSTAT] = busstat_irq;
   end
 
 
@@ -253,6 +262,13 @@ module soc_top #(
       // ibex_pkg::IbexMuBiOn = 4'b0101
       .fetch_enable_i        (4'b0101),
       .mcounteren_writable_i (4'b1010),
+
+      // This project's port, added to ibex_top by
+      // hw/soc/flow/ibex_fault_port.py. It is connected
+      // UNCONDITIONALLY and without an `ifdef: a build that forgot to
+      // ask for the patched top fails here, at elaboration, with the
+      // port's name in the message. docs/44 section 4.
+      .rf_ecc_err_o           (rf_ecc_err),
 
       .alert_minor_o          (alert_minor_o),
       .alert_major_internal_o (alert_major_internal_o),
@@ -377,12 +393,14 @@ module soc_top #(
 
   wire sel_uart0  = psel && (slot == SOC_APBSLOT_UART0);
   wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
+  wire sel_busstat = psel && (slot == SOC_APBSLOT_BUSSTAT);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
-  wire sel_none   = psel && !sel_uart0 && !sel_timer0 && !sel_apbpnp;
+  wire sel_none   = psel && !sel_uart0 && !sel_timer0 && !sel_busstat
+                         && !sel_apbpnp;
 
-  wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp;
-  wire        pready_uart0, pready_timer0, pready_apbpnp;
-  wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp;
+  wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat;
+  wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat;
+  wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat;
 
   soc_uart u_uart0 (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
@@ -419,7 +437,29 @@ module soc_top #(
       .pslverr_o (pslverr_timer0),
       .wdog_dis_i (wdog_dis_i),
       .irq_o (gptimer_irq), .nmi_o (wdog_nmi),
-      .rst_req_o (wdog_rst_req), .wdog_no (wdog_no)
+      .rst_req_o (wdog_rst_req), .wdog_no (wdog_no),
+      .tmr_ev_o (wdog_tmr_ev)
+  );
+
+  // The counters that make a corrected upset observable. docs/43
+  // section 12 item 1 and docs/41 section 10 item 3, in the slot the
+  // frozen map has reserved for them since docs/39.
+  //
+  // Two resets, and they are different on purpose: the RECORD is in the
+  // power-on domain so a watchdog stage-2 reset cannot erase the
+  // evidence of what caused it, and the INTERRUPT ENABLE is in the
+  // system domain so the fresh boot after that reset is not immediately
+  // interrupted by a sticky bit it has not read yet (docs/40 section
+  // 7.2's brick, in a new place).
+  soc_busstat u_busstat (
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .psel_i (sel_busstat), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_busstat), .pready_o (pready_busstat),
+      .pslverr_o (pslverr_busstat),
+      .rf_ecc_err_i (rf_ecc_err),
+      .tmr_ev_i (wdog_tmr_ev),
+      .irq_o (busstat_irq)
   );
 
   soc_apb_pnp u_apbpnp (
@@ -433,17 +473,20 @@ module soc_top #(
   // the core hangs with it. It completes with PSLVERR, so an access to a
   // reserved peripheral slot is a bus error at the core rather than a
   // read of zero that looks like a working register.
-  assign prdata  = sel_uart0  ? prdata_uart0
-                 : sel_timer0 ? prdata_timer0
-                 : sel_apbpnp ? prdata_apbpnp
+  assign prdata  = sel_uart0   ? prdata_uart0
+                 : sel_timer0  ? prdata_timer0
+                 : sel_busstat ? prdata_busstat
+                 : sel_apbpnp  ? prdata_apbpnp
                  : 32'h0;
-  assign pready  = sel_uart0  ? pready_uart0
-                 : sel_timer0 ? pready_timer0
-                 : sel_apbpnp ? pready_apbpnp
+  assign pready  = sel_uart0   ? pready_uart0
+                 : sel_timer0  ? pready_timer0
+                 : sel_busstat ? pready_busstat
+                 : sel_apbpnp  ? pready_apbpnp
                  : 1'b1;
-  assign pslverr = sel_uart0  ? pslverr_uart0
-                 : sel_timer0 ? pslverr_timer0
-                 : sel_apbpnp ? pslverr_apbpnp
+  assign pslverr = sel_uart0   ? pslverr_uart0
+                 : sel_timer0  ? pslverr_timer0
+                 : sel_busstat ? pslverr_busstat
+                 : sel_apbpnp  ? pslverr_apbpnp
                  : sel_none;
 
   // -------------------------------------------------------------------
