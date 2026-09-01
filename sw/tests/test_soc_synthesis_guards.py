@@ -32,8 +32,12 @@ times by that shape:
     parameters of the file. `soc_top.v` instantiates it inside
     `soc_gptimer`; the guard on that composition is
     `test_the_watchdog_inside_the_gptimer_keeps_its_replicas`, which is
-    the same census one level up, and nothing here runs the whole SoC
-    through synthesis.
+    the same census one level up. Section 5 goes one level further and
+    checks that the whole SoC still ELABORATES as one design, which is
+    what `docs/45-soc-top-synthesis.md` made possible; it does not
+    census the replicas there, so the statement "no test in this file
+    counts the watchdog's flip-flops inside a synthesised `soc_top`"
+    is still true.
   * It counts FLIP-FLOPS and nothing else. It deliberately asserts
     nothing about the other cells in each replica: `docs/33` measured
     that `dfflibmap` erases the polarity coding at technology mapping,
@@ -717,3 +721,184 @@ def test_the_watchdog_instantiates_that_voter_and_three_distinct_banks():
     assert len(signatures) == 3, (
         "two replicas carry the same storage transform, so they are one "
         "bank to structural hashing: {}".format(signatures))
+
+
+# =====================================================================
+# 5. the composition, at the top
+#
+# docs/45-soc-top-synthesis.md is the first time `soc_top` was
+# synthesised as one design; docs/41 section 10 item 7, docs/43 section
+# 11 and docs/44 section 10's last line had each recorded that it never
+# had been. The checks below guard the three things that made it
+# possible and would silently stop being true.
+# =====================================================================
+SOC_FLOW = ROOT / "hw" / "soc" / "flow"
+
+
+def _soc_mem_ports():
+    """The port list of hw/soc/rtl/soc_mem.v, as (direction, width, name)
+    triples in declaration order."""
+    text = (SOC_RTL / "soc_mem.v").read_text()
+    body = text.split("(", 1)[1].split(");", 1)[0]
+    ports = []
+    for m in re.finditer(
+            r"\b(input|output)\s+(?:wire|reg)?\s*(\[[^\]]*\])?\s*(\w+)",
+            body):
+        ports.append((m.group(1),
+                      re.sub(r"\s+", "", m.group(2) or ""),
+                      m.group(3)))
+    return ports
+
+
+def _generated_mem_ports(marker):
+    """The same, for one of the two memory boundary models that
+    hw/soc/flow/syn_soc_top.sh writes into its output directory. The
+    models live inside the script as here-documents, so they are read
+    out of the script rather than out of a build."""
+    script = (SOC_FLOW / "syn_soc_top.sh").read_text()
+    start = script.index(marker)
+    block = script[start:script.index("\nEOF", start)]
+    body = block.split("module soc_mem", 1)[1]
+    body = body.split(") (", 1)[1].split(");", 1)[0]
+    ports = []
+    for m in re.finditer(
+            r"\b(input|output)\s+(?:wire|reg)?\s*(\[[^\]]*\])?\s*([\w, ]+)",
+            body):
+        for name in m.group(3).split(","):
+            name = name.strip()
+            if name:
+                ports.append((m.group(1),
+                              re.sub(r"\s+", "", m.group(2) or ""),
+                              name))
+    return ports
+
+
+def test_the_memory_boundary_models_declare_soc_mems_ports():
+    """`soc_top.v` instantiates `soc_mem` twice, and the whole-design
+    synthesis of docs/45 replaces both instances -- by a blackbox for
+    the area measurement and by an SRAM macro stand-in for the timing
+    one. Every path into or out of a memory crosses that boundary, so if
+    `soc_mem.v` grows, loses or renames a port and a model does not
+    follow, the measurement quietly becomes a measurement of a different
+    boundary. Two failure modes, and only the first is loud: a port the
+    model does not declare stops elaboration, and a port whose WIDTH the
+    model gets wrong does not.
+
+    This is deliberately a check on the port list and nothing else. The
+    stand-in is NOT functionally equivalent to soc_mem.v and is not
+    supposed to be -- docs/45 section 3.2 states what it does and does
+    not reproduce, and a test that asserted more than the interface
+    would be asserting something the flow does not claim."""
+    real = _soc_mem_ports()
+    for marker in ("// BLACKBOX DECLARATION",
+                   "// SRAM MACRO STAND-IN"):
+        model = _generated_mem_ports(marker)
+        assert [(d, w, n) for d, w, n in model] == real, (
+            "the {} in hw/soc/flow/syn_soc_top.sh no longer declares "
+            "soc_mem.v's ports.\n  soc_mem.v: {}\n  model:     {}".format(
+                marker.strip("/ "), real, model))
+
+
+def test_the_whole_design_flow_uses_the_block_flows_recipe():
+    """docs/45's whole-design area is compared against the per-block
+    areas of docs/38, docs/39, docs/40, docs/41 and docs/44, and a
+    comparison between two differently measured things is not a
+    comparison. The three scripts have to agree on the mapping
+    constraint; this fails if one of them drifts."""
+    constraint = ("set_driving_cell sg13g2_buf_4\n"
+                  "set_load 0.005\n")
+    for name in ("syn_soc_top.sh", "syn_soc.sh", "syn_ibex.sh"):
+        assert constraint in (SOC_FLOW / name).read_text(), (
+            "hw/soc/flow/{} no longer writes the abc constraint the "
+            "other two write".format(name))
+
+
+def test_the_verdict_rule_is_one_file_and_not_two_copies_of_one():
+    """`flow/sta_ibex.sh`'s header states the rule at length -- every
+    check reported is also judged, the verdict names its own scope,
+    there is no bare pass token -- and docs/45 needed the same rule for
+    a second design. Two copies of a verdict rule that must agree and
+    that nothing compares is the defect docs/44 section 5.4 refused for
+    a parity matrix, one level up. So the rule lives in
+    flow/sta_verdict.awk and both flows call it."""
+    rule = (SOC_FLOW / "sta_verdict.awk").read_text()
+    assert "ALL_CHECKS_MET" in rule and "NOT_MET" in rule
+    for name in ("sta_ibex.sh", "sta_soc_top.sh"):
+        text = (SOC_FLOW / name).read_text()
+        assert "sta_verdict.awk" in text, (
+            "hw/soc/flow/{} does not use the shared verdict "
+            "rule".format(name))
+        assert "ALL_CHECKS_MET" not in text.split("# ---", 1)[-1] or \
+            "-f \"$SOC_DIR/flow/sta_verdict.awk\"" in text, (
+            "hw/soc/flow/{} looks like it has grown its own copy of the "
+            "verdict rule".format(name))
+
+
+@needs_yosys
+def test_the_whole_soc_elaborates_as_one_design(workdir):
+    """The thing that had never been done. `hierarchy -check -top
+    soc_top` over the whole source list -- Ibex, the fabric, both
+    memories, every peripheral -- and it must resolve every reference.
+
+    It runs with the memory BLACKBOXED, which is what makes it a test
+    rather than an overnight job: soc_top.v's two soc_mem instances are
+    16,384 and 2,048 words of behavioural register array, and deriving
+    them is most of the elaboration time. The blackbox has soc_mem's
+    ports, so an unresolved reference anywhere else still fails.
+
+    What this does NOT check: it does not synthesise, so it says nothing
+    about area, timing, or what the optimiser does. docs/45 is the
+    measurement; this is the guard that the design still elaborates as
+    one design."""
+    gen = ROOT / "hw" / "soc" / "gen"
+    if not gen.is_dir() or not list(gen.glob("*.v")):
+        pytest.skip("hw/soc/gen is empty: run flow/sv2v_ibex.sh first")
+    genp = ROOT / "hw" / "soc" / "genp" / "ibex_top.v"
+    if not genp.is_file():
+        pytest.skip("hw/soc/genp/ibex_top.v is absent: run a SoC flow first")
+
+    bb = Path(workdir) / "soc_mem_bb.v"
+    real = _soc_mem_ports()
+    decls = ",\n".join(
+        "  {} wire {} {}".format(d, w, n) for d, w, n in real)
+    bb.write_text(
+        "module soc_mem #(parameter integer WORDS = 4096,\n"
+        "                 parameter RO = 1'b0,\n"
+        "                 parameter INIT_FILE = \"\",\n"
+        "                 parameter integer INIT_WORD = 0) (\n"
+        + decls + "\n);\nendmodule\n")
+
+    ibex = [p for p in sorted(gen.glob("*.v"))
+            if p.name not in ("ibex_register_file_ff.v", "ibex_top.v")]
+    ibex.append(genp)
+    soc = [SOC_RTL / n for n in (
+        "prim_clock_gating.v", "ibex_regfile_secded.v", "soc_bus.v",
+        "soc_apb_bridge.v", "soc_uart.v", "soc_pnp.v", "soc_apb_pnp.v",
+        "soc_clint.v", "soc_gptimer.v", "soc_wdog.v", "soc_busstat.v",
+        "soc_tmr_bank.v")]
+    soc += [PILOT_RTL / n for n in
+            ("tmr_voter.v", "secded_enc.v", "secded_dec.v")]
+
+    # hw/soc/rtl/prim_clock_gating.v binds a real PDK cell, so the
+    # library has to supply sg13g2_lgcp_1's interface exactly as the
+    # flow's `read_liberty -lib` does. When the PDK is not installed a
+    # one-cell declaration stands in, so this check does not silently
+    # skip on a machine without it.
+    lib = _sg13g2_liberty()
+    if lib is not None:
+        prelude = "read_liberty -lib {};".format(lib)
+    else:
+        icg = Path(workdir) / "sg13g2_lgcp_1.v"
+        icg.write_text("module sg13g2_lgcp_1 (input CLK, input GATE,\n"
+                       "                      output GCLK);\nendmodule\n")
+        prelude = "read_verilog -lib {};".format(icg)
+
+    script = (
+        prelude
+        + " read_verilog -lib {};".format(bb)
+        + " read_verilog -defer -I {} {};".format(
+            SOC_RTL,
+            " ".join(str(p) for p in ibex + soc + [SOC_RTL / "soc_top.v"]))
+        + " hierarchy -check -top soc_top;")
+    out = _run_yosys(script, workdir)
+    assert "soc_top" in out

@@ -1,7 +1,16 @@
-# Single-corner STA of the synthesised Ibex netlist. flow/sta_ibex.sh
-# invokes this once per corner and aggregates across corners.
+# Single-corner STA of a synthesised netlist. flow/sta_ibex.sh and
+# flow/sta_soc_top.sh each invoke this once per corner and aggregate
+# across corners.
 #
-# Placeholders: @LIB@ @CORNER@ @NETLIST@ @SDC@ @OUT@
+# Placeholders: @TOP@ @LIB@ @CORNER@ @NETLIST@ @SDC@ @OUT@
+#
+# @TOP@ is `ibex_top` for flow/sta_ibex.sh and `soc_top` for
+# flow/sta_soc_top.sh. It is a placeholder rather than a literal so that
+# the whole-design timing of docs/45 and the per-block timing of docs/38,
+# docs/43 and docs/44 come out of ONE recipe: same corners, same derate,
+# same decomposition, same verdict rule. sta_ibex.sh substitutes
+# `ibex_top`, so the file this template generates for it is byte-identical
+# to the one it generated before the placeholder existed.
 #
 # Why one corner per run rather than OpenSTA's define_corners: the
 # aggregation across corners then happens on OpenSTA's own printed
@@ -31,7 +40,7 @@
 
 read_liberty @LIB@
 read_verilog @NETLIST@
-link_design ibex_top
+link_design @TOP@
 read_sdc @SDC@
 @TIEOFFS@
 

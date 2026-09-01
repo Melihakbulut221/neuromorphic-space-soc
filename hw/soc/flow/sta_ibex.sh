@@ -67,7 +67,8 @@ for corner in $CORNERS; do
     slow) LIB=$SG13G2_SLOW ;;
     fast) LIB=$SG13G2_FAST ;;
   esac
-  sed -e "s|@TIEOFFS@|$TIEOFFS|g" \
+  sed -e "s|@TOP@|ibex_top|g" \
+      -e "s|@TIEOFFS@|$TIEOFFS|g" \
       -e "s|@LIB@|$LIB|g" \
       -e "s|@CORNER@|$corner|g" \
       -e "s|@NETLIST@|$OUT/ibex_top.sta.v|g" \
@@ -102,41 +103,10 @@ group_slack () {  # $1 = report file
 # to be ALL_CHECKS_MET; the per-group numbers are echoed for diagnosis
 # but the verdict is formed from the all-group numbers, so no group can
 # fail behind a green line.
-awk -v cfg="$CFG" -v per="$PERIOD" -v corners="$CORNERS" '
-  FNR==NR {
-    if ($1=="GROUP") g[$2 " " $3] = $4
-    next
-  }
-  /^WORSTSLACK setup/ { su[$3]=$NF; if (ns=="" || $NF+0 < ns+0) { ns=$NF; nc=$3 } }
-  /^WORSTSLACK hold/  { ho[$3]=$NF; if (nh=="" || $NF+0 < nh+0) { nh=$NF; hc=$3 } }
-  END {
-    n = split(corners, cs, " ")
-    printf "  %-5s  %-10s %-10s | %-10s %-10s\n", \
-           "corner", "setup", "hold", "setup_sync", "setup_async"
-    for (i=1; i<=n; i++) {
-      c = cs[i]
-      printf "  %-5s  %-10s %-10s | %-10s %-10s\n", c, su[c], ho[c], \
-             g["setup_sync " c], g["setup_async " c]
-    }
-    # Worst-across-corners per check, for callers that gate on a named
-    # subset. A caller that reads GATE setup_sync is on record as having
-    # gated on setup_sync and nothing else.
-    ss = ""; sc = ""
-    for (i=1; i<=n; i++) {
-      c = cs[i]; v = g["setup_sync " c]
-      if (v != "-" && (ss == "" || v+0 < ss+0)) { ss = v; sc = c }
-    }
-    printf "GATE setup_all  %s %s\n", ns, nc
-    printf "GATE setup_sync %s %s\n", ss, sc
-    printf "GATE hold       %s %s\n", nh, hc
-
-    fails = ""
-    if (ns+0 < 0) fails = fails sprintf("setup(%s,%s) ", ns, nc)
-    if (nh+0 < 0) fails = fails sprintf("hold(%s,%s) ", nh, hc)
-    printf "  worst setup %s at %s, worst hold %s at %s\n", ns, nc, nh, hc
-    if (fails == "")
-      printf "VERDICT %s period=%s ns ALL_CHECKS_MET (setup+hold, %d corners)\n", \
-             cfg, per, n
-    else
-      printf "VERDICT %s period=%s ns NOT_MET: %s\n", cfg, per, fails
-  }' "$OUT/groups.rpt" "$OUT/sta.log" | tee "$OUT/slack.rpt"
+# The verdict rule itself lives in flow/sta_verdict.awk, so that this
+# flow and flow/sta_soc_top.sh judge two designs by one rule rather than
+# by two copies of one. docs/45 section 4.1 records that splitting it out
+# left this script's slack.rpt byte-identical.
+awk -v cfg="$CFG" -v per="$PERIOD" -v corners="$CORNERS" \
+    -f "$SOC_DIR/flow/sta_verdict.awk" \
+    "$OUT/groups.rpt" "$OUT/sta.log" | tee "$OUT/slack.rpt"

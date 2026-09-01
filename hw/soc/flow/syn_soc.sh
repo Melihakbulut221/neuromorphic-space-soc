@@ -35,6 +35,35 @@
 # soc_mem.v is a behavioural array standing in for an SRAM macro, so its
 # area is a property of the model and not of the design; soc_top.v pulls
 # in the whole of Ibex, which flow/syn_ibex.sh already measures.
+#
+# soc_top.v IS now measured, by flow/syn_soc_top.sh, which this script is
+# not a substitute for and which is not a substitute for this one.
+#
+# ---------------------------------------------------------------------
+# WHAT THIS SCRIPT MEASURES IS NOT ONLY THE BLOCK, and docs/45 section
+# 4.3 is the measurement of that rather than a caution about it.
+#
+# Every SoC block is read into the design below and then one of them is
+# selected as the top. Yosys is entitled to map a design differently when
+# the design it was given is different, and it does:
+#
+#   soc_clint       reading soc_busstat.v, soc_tmr_bank.v and
+#                   tmr_voter.v -- three files it does not instantiate --
+#                   makes it 29.3328 um2 and 5 cells BIGGER.
+#   soc_fabric_meas contains exactly soc_bus and soc_apb_bridge, neither
+#                   of which has changed and both of which reproduce
+#                   their own published numbers exactly. Editing
+#                   soc_wdog.v and soc_gptimer.v moved it by 150.7464
+#                   um2, 0.93 %. Restoring docs/40's whole source list
+#                   reproduces docs/40's number to four decimal places.
+#
+# So a per-block area from this script reproduces against THE FILE LIST
+# AS IT STOOD ON THE DAY, and not against the block. Every number in
+# docs/39 section 6, docs/40 section 9, docs/41 section 6.5, docs/43
+# section 7 and docs/44 section 7.2 inherits that. docs/45 section 9
+# item 4 proposes the fix -- derive the list from the top -- and states
+# why doing it is a decision about comparability rather than a tidy-up.
+# ---------------------------------------------------------------------
 
 set -euo pipefail
 
