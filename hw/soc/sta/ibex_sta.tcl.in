@@ -39,6 +39,7 @@
 # examined.
 
 read_liberty @LIB@
+@MACROLIB@
 read_verilog @NETLIST@
 link_design @TOP@
 read_sdc @SDC@

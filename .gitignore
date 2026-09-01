@@ -75,3 +75,10 @@ hw/soc/formal/regfile_secded/
 hw/soc/formal/regfile_secded_*/
 hw/soc/formal/soc_busstat/
 hw/soc/formal/soc_busstat_*/
+
+# docs/47: the place-and-route flow. Generated and fetched, never
+# vendored -- the rule docs/38 section 11 states. The state file names
+# an absolute path to a netlist and is written by flow/pnr_soc_top.sh.
+hw/soc/pnr/runs/
+hw/soc/pnr/config.resolved.json
+hw/soc/pnr/state/

@@ -54,6 +54,17 @@ OUT=${2:-$SOC_DIR/out/soc-top}
 eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 : "${STA:?}" "${SG13G2_TYP:?}" "${SG13G2_SLOW:?}" "${SG13G2_FAST:?}"
 
+# SOC_MEM=sram: the netlist carries six RM_IHPSG13 instances and OpenSTA
+# needs their Liberty or link_design fails with an unresolved reference.
+# It is per corner, and the FAST one is a cross-corner map -- the macros
+# ship fast_1p32V_m55C where the standard cells ship fast_1p32V_m40C, so
+# the macro is characterised 15 C colder than the cells around it.
+# docs/12 section 6.4a; the same map hw/openlane/sram_pilot makes.
+#
+# Default off, so a stub or blackbox netlist is timed exactly as docs/45
+# timed it and its numbers reproduce.
+SOC_MEM=${SOC_MEM:-stub}
+
 sed -e "s|@PERIOD@|$PERIOD|g" "$SOC_DIR/sta/ibex.sdc.in" > "$OUT/soc_top.sdc"
 
 CORNERS="typ slow fast"
@@ -75,8 +86,23 @@ for corner in $CORNERS; do
     slow) LIB=$SG13G2_SLOW ;;
     fast) LIB=$SG13G2_FAST ;;
   esac
+  if [ "$SOC_MEM" = sram ]; then
+    case $corner in
+      typ)  MLIBS=$SRAM_TYP  ;;
+      slow) MLIBS=$SRAM_SLOW ;;
+      fast) MLIBS=$SRAM_FAST ;;
+    esac
+    for l in $MLIBS; do
+      [ -f "$l" ] || { echo "missing macro liberty $l" >&2; exit 1; }
+    done
+    # One line, because the sed substitution that places it is one line.
+    MACROLIB="foreach macro_lib { $MLIBS } { read_liberty \$macro_lib }"
+  else
+    MACROLIB="# SOC_MEM=$SOC_MEM: no macro in this netlist"
+  fi
   sed -e "s|@TOP@|soc_top|g" \
       -e "s|@TIEOFFS@|$RESET_CUT|g" \
+      -e "s|@MACROLIB@|$MACROLIB|g" \
       -e "s|@LIB@|$LIB|g" \
       -e "s|@CORNER@|$corner|g" \
       -e "s|@NETLIST@|$OUT/soc_top.sta.v|g" \

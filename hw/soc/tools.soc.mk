@@ -78,6 +78,20 @@ SG13G2_SLOW ?= $(SG13G2_LIB_DIR)/sg13g2_stdcell_slow_1p08V_125C.lib
 SG13G2_FAST ?= $(SG13G2_LIB_DIR)/sg13g2_stdcell_fast_1p32V_m40C.lib
 SG13G2_VLOG ?= $(PDK_ROOT)/ihp-sg13g2/libs.ref/sg13g2_stdcell/verilog/sg13g2_stdcell.v
 
+# The RM_IHPSG13 SRAM macros, added by docs/47 for SOC_MEM=sram. Note the
+# CORNER-NAME MISMATCH, which is the PDK's and not ours: the standard
+# cells ship fast_1p32V_m40C and the SRAM macros ship fast_1p32V_m55C,
+# so the macro file attached to the `fast` corner here is characterised
+# 15 C colder than the cells around it. docs/12 section 6.4a found this
+# and hw/openlane/sram_pilot/config.json makes the same cross-corner map;
+# it is stated at every place it is done rather than in one of them.
+SG13G2_SRAM_DIR ?= $(PDK_ROOT)/ihp-sg13g2/libs.ref/sg13g2_sram
+SRAM_RAM_MACRO  ?= RM_IHPSG13_1P_2048x64_c2_bm_bist
+SRAM_ROM_MACRO  ?= RM_IHPSG13_1P_1024x32_c2_bm_bist
+SRAM_TYP  ?= $(SG13G2_SRAM_DIR)/lib/$(SRAM_RAM_MACRO)_typ_1p20V_25C.lib $(SG13G2_SRAM_DIR)/lib/$(SRAM_ROM_MACRO)_typ_1p20V_25C.lib
+SRAM_SLOW ?= $(SG13G2_SRAM_DIR)/lib/$(SRAM_RAM_MACRO)_slow_1p08V_125C.lib $(SG13G2_SRAM_DIR)/lib/$(SRAM_ROM_MACRO)_slow_1p08V_125C.lib
+SRAM_FAST ?= $(SG13G2_SRAM_DIR)/lib/$(SRAM_RAM_MACRO)_fast_1p32V_m55C.lib $(SG13G2_SRAM_DIR)/lib/$(SRAM_ROM_MACRO)_fast_1p32V_m55C.lib
+
 # --- Ibex upstream ----------------------------------------------------
 IBEX_URL    ?= https://github.com/lowRISC/ibex.git
 IBEX_COMMIT ?= 34b0705760ef3dfa00e99637432473d2be8f22f3
@@ -118,6 +132,12 @@ printvars:
 	@echo 'SG13G2_SLOW="$(SG13G2_SLOW)"'
 	@echo 'SG13G2_FAST="$(SG13G2_FAST)"'
 	@echo 'SG13G2_VLOG="$(SG13G2_VLOG)"'
+	@echo 'SG13G2_SRAM_DIR="$(SG13G2_SRAM_DIR)"'
+	@echo 'SRAM_RAM_MACRO="$(SRAM_RAM_MACRO)"'
+	@echo 'SRAM_ROM_MACRO="$(SRAM_ROM_MACRO)"'
+	@echo 'SRAM_TYP="$(SRAM_TYP)"'
+	@echo 'SRAM_SLOW="$(SRAM_SLOW)"'
+	@echo 'SRAM_FAST="$(SRAM_FAST)"'
 	@echo 'IBEX_DIR="$(IBEX_DIR)"'
 	@echo 'IBEX_COMMIT="$(IBEX_COMMIT)"'
 

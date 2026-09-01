@@ -69,6 +69,7 @@ for corner in $CORNERS; do
   esac
   sed -e "s|@TOP@|ibex_top|g" \
       -e "s|@TIEOFFS@|$TIEOFFS|g" \
+      -e "s|@MACROLIB@|# ibex_top standalone contains no macro|g" \
       -e "s|@LIB@|$LIB|g" \
       -e "s|@CORNER@|$corner|g" \
       -e "s|@NETLIST@|$OUT/ibex_top.sta.v|g" \

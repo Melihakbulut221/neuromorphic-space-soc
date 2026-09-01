@@ -902,3 +902,260 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
         + " hierarchy -check -top soc_top;")
     out = _run_yosys(script, workdir)
     assert "soc_top" in out
+
+
+# =====================================================================
+# 6. the memories, the reset gate, and the place-and-route flow
+#
+# docs/47-soc-place-and-route.md is the first time anything under
+# hw/soc/ was placed and routed. It brought three things into the tree
+# that can silently stop being true, and each of them is silent in a
+# different way:
+#
+#   * hw/soc/rtl/soc_mem_sram.v is a DROP-IN for soc_mem.v. A port it
+#     gets wrong in WIDTH does not stop elaboration -- the same failure
+#     mode section 5 guards for the two generated boundary models.
+#   * hw/soc/rtl/soc_bus.v's request gate. Reverting it to `rst_ni &&`
+#     costs 2.49 ns and 8.8 MHz pre-layout and NOTHING functional; no
+#     cocotb test, no formal job and no fault-injection campaign in this
+#     repository would notice.
+#   * hw/soc/pnr/config.json's checker keys. Every one of them exists
+#     because a checker in its shipped configuration examines less than
+#     a reader assumes, and a run with them missing looks exactly like a
+#     run with them present and passing. docs/28 4.4 and 4.4a, docs/34
+#     8.5, docs/36, docs/23.
+#
+# WHAT THIS SECTION DOES NOT COVER: it reads files. It does not place,
+# route or time anything, and it is not a substitute for
+# hw/openlane/checker_audit.py, which recomputes from the installed
+# LibreLane's own step classes whether a checker can in fact fail. This
+# section asserts the configuration is present; that script asserts it
+# BINDS.
+# =====================================================================
+SOC_PNR = ROOT / "hw" / "soc" / "pnr"
+
+
+def test_the_sram_memory_declares_soc_mems_ports():
+    """hw/soc/rtl/soc_mem_sram.v declares a module called `soc_mem` and
+    is read INSTEAD OF soc_mem.v by the place-and-route flow and by
+    SOC_MEM=sram. Exactly one of the two files may be in any build, so
+    nothing ever compares them at elaboration; if soc_mem.v grows,
+    loses, renames or re-widens a port and this file does not follow,
+    the layout is of a different design from the simulation.
+
+    Ports only, in name, width, direction and ORDER. The two files are
+    NOT functionally equivalent and soc_mem_sram.v's header says so at
+    length -- no contents, no ECC, different read-during-write -- so a
+    test asserting more than the interface would assert something
+    neither file claims."""
+    real = _soc_mem_ports()
+    text = (SOC_RTL / "soc_mem_sram.v").read_text()
+    body = text.split("module soc_mem", 1)[1]
+    body = body.split(") (", 1)[1].split(");", 1)[0]
+    got = []
+    for m in re.finditer(
+            r"\b(input|output)\s+(?:wire|reg)?\s*(\[[^\]]*\])?\s*(\w+)",
+            body):
+        got.append((m.group(1),
+                    re.sub(r"\s+", "", m.group(2) or ""),
+                    m.group(3)))
+    assert got == real, (
+        "hw/soc/rtl/soc_mem_sram.v no longer declares soc_mem.v's "
+        "ports.\n  soc_mem.v:      {}\n  soc_mem_sram.v: {}".format(
+            real, got))
+
+
+def test_the_fabric_does_not_gate_its_request_path_with_the_reset_net():
+    """The regression guard for docs/47 section 5, and the one thing in
+    this file that would cost frequency rather than correctness.
+
+    docs/45 section 7.2 measured what `wire can_issue_i = rst_ni && ...`
+    does at the top level: it puts rst_sys_n -- 2,766 flip-flop reset
+    pins, the largest net in the SoC -- into a purely COMBINATIONAL
+    datapath, and the worst synchronous setup path became worse
+    (-60.6191 ns at the slow corner) than the worst asynchronous
+    recovery path (-53.3681). Replacing it with a locally registered
+    `issue_en` moved the synchronous group to +4.3006 on the identical
+    memory model and moved the closing period from 18.20 ns to 15.71 ns.
+
+    Nothing functional would catch a revert. The behaviour of
+    `issue_en` is strictly more conservative than `rst_ni` -- the fabric
+    stays closed one extra cycle after reset release -- so every cocotb
+    test, every formal property and every fault-injection campaign
+    passes either way."""
+    text = (SOC_RTL / "soc_bus.v").read_text()
+    body = re.sub(r"//[^\n]*", "", text)
+    for m in re.finditer(r"wire\s+can_issue_[id]\s*=\s*(\w+)", body):
+        assert m.group(1) == "issue_en", (
+            "hw/soc/rtl/soc_bus.v gates its request path with '{}' "
+            "rather than the locally registered issue_en. docs/47 "
+            "section 5 measured what that costs.".format(m.group(1)))
+    assert re.search(r"reg\s+issue_en\b", body), (
+        "hw/soc/rtl/soc_bus.v no longer declares issue_en")
+    assert len(re.findall(r"wire\s+can_issue_[id]\s*=", body)) == 2, (
+        "hw/soc/rtl/soc_bus.v no longer has exactly two can_issue gates; "
+        "this guard needs updating rather than deleting")
+
+
+def _pnr_config():
+    return json.loads((SOC_PNR / "config.json").read_text())
+
+
+def test_the_pnr_flow_binds_every_timing_checker_to_every_corner():
+    """The four keys of docs/28 section 4.4a, docs/34 section 8.5 and
+    docs/36, asserted in the configuration before a run rather than
+    audited after one.
+
+    Two DIFFERENT mechanisms, and the second is the one that catches
+    people out. SETUP_VIOLATION_CORNERS has no default, so unset it
+    falls through to the PDK's TIMING_VIOLATION_CORNERS = ['*typ*'] and
+    the slow corner is gated by nothing. MAX_CAP_VIOLATION_CORNERS and
+    MAX_SLEW_VIOLATION_CORNERS take corner_override = [''] from their
+    step classes, which is truthy, so they NEVER consult
+    TIMING_VIOLATION_CORNERS at all and raising that key is inert; the
+    [''] then filters to an empty wildcard list and the checkers warn
+    instead of failing."""
+    cfg = _pnr_config()
+    for key in ("SETUP_VIOLATION_CORNERS", "HOLD_VIOLATION_CORNERS",
+                "MAX_CAP_VIOLATION_CORNERS", "MAX_SLEW_VIOLATION_CORNERS"):
+        assert cfg.get(key) == ["*"], (
+            "hw/soc/pnr/config.json: {} is {!r}, not ['*']".format(
+                key, cfg.get(key)))
+
+
+def test_the_pnr_flow_writes_the_derate_as_a_float():
+    """docs/28 section 4.4: the PDK ships TIME_DERATING_CONSTRAINT as
+    the integer 5 and LibreLane's base.sdc computes the derate with Tcl
+    integer division, so `expr 5 / 100` is 0 and the flow applies NO
+    derate while logging '5%'. The written SDC then contains no
+    set_timing_derate line at all, and the cost measured on the pilot
+    was 0.9910 ns of slack.
+
+    `5` and `5.0` are the same number in JSON's data model and not in
+    this flow's, so the test is on the TYPE."""
+    cfg = _pnr_config()
+    v = cfg.get("TIME_DERATING_CONSTRAINT")
+    assert isinstance(v, float) and v == 5.0, (
+        "hw/soc/pnr/config.json: TIME_DERATING_CONSTRAINT is {!r} of "
+        "type {}; it must be the float 5.0".format(v, type(v).__name__))
+    raw = (SOC_PNR / "config.json").read_text()
+    assert re.search(r'"TIME_DERATING_CONSTRAINT"\s*:\s*5\.0', raw), (
+        "the JSON text does not spell the derate 5.0, so a reader "
+        "auditing the file cannot see the thing that matters")
+
+
+def test_every_macro_instance_the_pnr_config_places_exists_in_the_rtl():
+    """hw/soc/pnr/config.json names each of the six SRAM macro
+    instances by its full hierarchical path and gives it a location and
+    an orientation. OpenROAD.CheckMacroInstances catches a name that is
+    absent, but only after synthesis, and a name that is PRESENT and
+    wrong -- the ROM's two macros swapped, say -- is caught by nothing
+    at all.
+
+    The instance paths are a property of soc_mem_sram.v: `u_ram` and
+    `u_rom` are soc_top.v's instance names, the middle component is the
+    generate block label, and the leaf is the macro instance. That is
+    why the generate branches in soc_mem_sram.v are three independent
+    `if`s and not an if/else-if chain -- an `else if` would nest the
+    ROM inside an anonymous `genblk1` whose name the tool invents."""
+    cfg = _pnr_config()
+    sram = (SOC_RTL / "soc_mem_sram.v").read_text()
+    top = (SOC_RTL / "soc_top.v").read_text()
+
+    placed = {}
+    for macro, spec in cfg["MACROS"].items():
+        for inst in spec["instances"]:
+            placed[inst] = macro
+    assert len(placed) == 6, "expected six macro instances, got {}".format(
+        sorted(placed))
+
+    for inst, macro in placed.items():
+        parts = inst.split(".")
+        assert len(parts) == 3, (
+            "{!r} is not <soc_top instance>.<generate label>.<macro "
+            "instance>".format(inst))
+        outer, block, leaf = parts
+        assert re.search(r"\bsoc_mem\b[^;]*?\b" + re.escape(outer) + r"\b",
+                         top, re.S), (
+            "soc_top.v has no soc_mem instance called {!r}".format(outer))
+        assert "begin : " + block in sram, (
+            "soc_mem_sram.v has no generate block labelled "
+            "{!r}".format(block))
+        body = sram.split("begin : " + block, 1)[1].split("\n  end", 1)[0]
+        assert re.search(re.escape(macro) + r"\s+" + re.escape(leaf) + r"\b",
+                         body), (
+            "soc_mem_sram.v's {} block does not instantiate {} as "
+            "{}".format(block, macro, leaf))
+
+
+def test_the_macro_blackboxes_declare_the_pdk_models_ports():
+    """The two _bb.v files in hw/soc/pnr/ exist because Verilator.Lint
+    runs before synthesis and cannot find a module it has no source
+    for, and because the PDK's own behavioural model instantiates a
+    core module from a second file. They are transcribed from the PDK
+    models by machine.
+
+    This test SKIPS without the PDK rather than passing, because a
+    check that cannot see the thing it compares against is not a check.
+    Same rule the rest of this file follows for yosys."""
+    pdk = Path(os.environ.get("PDK_ROOT", Path.home() / ".ciel")) / \
+        "ihp-sg13g2" / "libs.ref" / "sg13g2_sram" / "verilog"
+    if not pdk.is_dir():
+        pytest.skip("the ihp-sg13g2 PDK is not installed")
+
+    cfg = _pnr_config()
+    for macro in cfg["MACROS"]:
+        bb = SOC_PNR / "{}_bb.v".format(macro)
+        assert bb.is_file(), "missing blackbox {}".format(bb)
+        model = pdk / "{}.v".format(macro)
+        assert model.is_file(), "missing PDK model {}".format(model)
+
+        def decls(text):
+            head = text.split("module " + macro, 1)[1]
+            head = head.split("`ifdef", 1)[0].split("endmodule", 1)[0]
+            return re.findall(
+                r"\b(input|output)\s*(\[[^\]]*\])?\s*(\w+)\s*;", head)
+
+        want = [(d, re.sub(r"\s+", "", w or ""), n)
+                for d, w, n in decls(model.read_text())]
+        got = [(d, re.sub(r"\s+", "", w or ""), n)
+               for d, w, n in decls(bb.read_text())]
+        assert want and got == want, (
+            "hw/soc/pnr/{}_bb.v does not declare the PDK model's "
+            "ports.\n  pdk: {}\n  bb:  {}".format(macro, want, got))
+
+
+def test_the_pnr_flow_cannot_write_into_the_frozen_pilot():
+    """docs/34 pins the TTIHP26b submission by blob hash and the
+    shuttle closes 2026-09-21. This is a check on the SCRIPT rather
+    than on a run: pnr_soc_top.sh must keep its config and its run
+    directories outside hw/openlane/, and must say so in a way that
+    fails rather than in a comment."""
+    text = (SOC_FLOW / "pnr_soc_top.sh").read_text()
+    assert "hw/openlane" in text and "refusing" in text, (
+        "hw/soc/flow/pnr_soc_top.sh no longer refuses to run inside "
+        "the frozen hw/openlane/")
+    assert 'PNR=$SOC_DIR/pnr' in text, (
+        "hw/soc/flow/pnr_soc_top.sh no longer keeps its config under "
+        "hw/soc/pnr/")
+    cfg_dir = str(SOC_PNR.resolve())
+    assert "hw/openlane" not in cfg_dir
+
+
+def test_the_pnr_flow_supplies_only_the_source_list():
+    """pnr_soc_top.sh merges VERILOG_FILES into a resolved copy of
+    config.json, because flow/ibex_sources.sh is the one place that
+    knows which of hw/soc/gen/ibex_register_file_ff.v and
+    hw/soc/rtl/ibex_regfile_secded.v belongs in a build. docs/34
+    section 8.5's trap was a generator that silently deleted a
+    hand-added fix from a config, so the generator here asserts that
+    VERILOG_FILES is the only key it touches -- and this test asserts
+    the assertion is still in the script."""
+    text = (SOC_FLOW / "pnr_soc_top.sh").read_text()
+    assert 'assert added == {"VERILOG_FILES"}' in text, (
+        "pnr_soc_top.sh no longer asserts it added only VERILOG_FILES")
+    assert "assert not changed" in text, (
+        "pnr_soc_top.sh no longer asserts it changed no existing key")
+    assert "VERILOG_FILES" not in _pnr_config(), (
+        "hw/soc/pnr/config.json carries VERILOG_FILES; the script "
+        "supplies it and would now be overriding a hand-written list")

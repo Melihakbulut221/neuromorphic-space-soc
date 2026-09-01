@@ -61,6 +61,28 @@
 #              mode is used for. No area or timing number in docs/45
 #              comes from it.
 #
+#   sram       THE REAL MEMORIES, added by docs/47. hw/soc/rtl/
+#              soc_mem_sram.v declares a module called `soc_mem` built
+#              on six RM_IHPSG13 SRAM macros -- four
+#              RM_IHPSG13_1P_2048x64_c2_bm_bist for the 64 KiB RAM and
+#              two RM_IHPSG13_1P_1024x32_c2_bm_bist for the 8 KiB boot
+#              ROM. The macros are read as blackbox DECLARATIONS out of
+#              hw/soc/pnr/, so `stat -liberty` reports the SoC's
+#              standard-cell logic and the macro area is added from the
+#              LEF separately; docs/47 section 4 does that addition in
+#              public rather than folding it into one number.
+#
+#              UNLIKE `stub`, THIS ONE CAN BE TIMED PROPERLY. The PDK
+#              ships Liberty for these macros at all three corners, so
+#              flow/sta_soc_top.sh reads them when SOC_MEM=sram and the
+#              read arc it charges -- 9.2941 ns at slow_1p08V_125C on
+#              the 2048x64 part -- is the quantity docs/45 section 8
+#              named as the thing the stub could not bound.
+#
+#              It is the netlist hw/soc/pnr/ hardens, and it MUST NOT BE
+#              SIMULATED: the macros are blackboxes here and the ROM has
+#              no contents.
+#
 # In `stub` mode the stand-in is held as a hierarchy boundary across
 # synthesis so `stat -liberty` reports its area separately and the SoC's
 # logic area can be had by subtraction, in the same run that produced the
@@ -88,8 +110,8 @@ PILOT_RTL=$(cd "$SOC_DIR/../rtl" && pwd)
 
 SOC_MEM=${SOC_MEM:-stub}
 case "$SOC_MEM" in
-  stub|blackbox|array) ;;
-  *) echo "SOC_MEM must be stub, blackbox or array, got '$SOC_MEM'" >&2
+  stub|blackbox|array|sram) ;;
+  *) echo "SOC_MEM must be stub, blackbox, array or sram, got '$SOC_MEM'" >&2
      exit 2 ;;
 esac
 
@@ -121,9 +143,20 @@ $PILOT_RTL/tmr_voter.v"
 MEM_READ=""
 MEM_ANCHOR="# SOC_MEM=$SOC_MEM: no memory hierarchy anchor"
 MEM_RELEASE=""
+PNR=$SOC_DIR/pnr
 case "$SOC_MEM" in
   array)
     MEM_READ="read_verilog -I$RTL -defer $RTL/soc_mem.v"
+    ;;
+  sram)
+    # The macro DECLARATIONS first, with -lib, so `soc_mem` resolves
+    # against them and synthesis leaves the six instances alone. Nothing
+    # downstream of a blackbox output is deleted and nothing driving a
+    # blackbox input is either, so the fabric logic around the memories
+    # and the bank multiplexers inside soc_mem_sram.v are all measured.
+    MEM_READ="read_verilog -lib $PNR/RM_IHPSG13_1P_2048x64_c2_bm_bist_bb.v
+read_verilog -lib $PNR/RM_IHPSG13_1P_1024x32_c2_bm_bist_bb.v
+read_verilog -I$RTL -defer $RTL/soc_mem_sram.v"
     ;;
   blackbox)
     # A port declaration and nothing else. read_verilog -lib makes it a

@@ -184,20 +184,48 @@ module soc_bus (
   reg  [1:0] cnt_i, cnt_d;      // 0..MAX_OUT
   reg  [2:0] lock_i, lock_d;    // slave the outstanding requests went to
 
-  // rst_ni gates both. Without it the request and grant paths, which are
-  // purely combinational, stay live while the design is held in reset:
-  // a master driving req during reset would have a transaction ACCEPTED
-  // by a slave, while the response queues and counters are held at zero.
-  // The slave's response would then arrive after reset release and pop a
-  // queue that never recorded the request, underflowing the accounting.
-  // Ibex holds its request ports low in reset so this cannot happen in
-  // this SoC, but "cannot happen because of the master we happen to have"
-  // is not a property of this file. It was found by the cocotb suite
-  // driving requests during reset, which is why that test exists.
-  wire can_issue_i = rst_ni && mi_req_i &&
+  // The request path has to be dead while the design is held in reset.
+  // Without a gate the request and grant paths, which are purely
+  // combinational, stay live: a master driving req during reset would
+  // have a transaction ACCEPTED by a slave, while the response queues
+  // and counters are held at zero. The slave's response would then
+  // arrive after reset release and pop a queue that never recorded the
+  // request, underflowing the accounting. Ibex holds its request ports
+  // low in reset so this cannot happen in this SoC, but "cannot happen
+  // because of the master we happen to have" is not a property of this
+  // file. It was found by the cocotb suite driving requests during
+  // reset, which is why that test exists.
+  //
+  // THE GATE IS A LOCAL FLIP-FLOP AND NOT rst_ni ITSELF, and the reason
+  // is measured rather than stylistic. Until docs/47 this read
+  // `rst_ni && ...`, and docs/45 section 7.2 found what that costs at
+  // the top level: it puts the SoC's LARGEST net -- rst_sys_n, 2,766
+  // flip-flop reset pins in the whole-design netlist -- into a purely
+  // COMBINATIONAL datapath. These two gates were its only two data
+  // sinks, and they were enough to make the worst SYNCHRONOUS setup
+  // path (-60.6191 ns at the slow corner) worse than the worst
+  // asynchronous recovery path (-53.3681). Building the reset tree is
+  // place-and-route's obligation; putting a data path through it is
+  // this file's decision, and it is reversed here.
+  //
+  // `issue_en` is cleared asynchronously by rst_ni exactly as every
+  // other register in this file is, and set on the first clock edge
+  // after release. Its fanout is two. The behaviour is strictly more
+  // conservative than gating with rst_ni directly: the fabric stays
+  // closed for one ADDITIONAL cycle after reset deassertion, during
+  // which the counters and queues this gate exists to protect are
+  // already released. The cost is one flip-flop and one cycle of
+  // latency on the first transaction after a reset, once, at boot.
+  // docs/47 section 5.
+  reg issue_en;
+  always @(posedge clk_i or negedge rst_ni)
+    if (!rst_ni) issue_en <= 1'b0;
+    else         issue_en <= 1'b1;
+
+  wire can_issue_i = issue_en && mi_req_i &&
                      ((cnt_i == 2'd0) ||
                       ((lock_i == tgt_i) && (cnt_i < MAX_OUT[1:0])));
-  wire can_issue_d = rst_ni && md_req_i &&
+  wire can_issue_d = issue_en && md_req_i &&
                      ((cnt_d == 2'd0) ||
                       ((lock_d == tgt_d) && (cnt_d < MAX_OUT[1:0])));
 
