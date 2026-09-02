@@ -23,7 +23,7 @@ that is realistic for an open PDK and a small team.
 
 **The pilot is frozen and signed off; the SoC around it is not built.**
 Read `docs/00-index.md` for the full what-exists-and-what-does-not, and
-`ROADMAP.md` for the plan. In short, as of 2026-08-31:
+`ROADMAP.md` for the plan. In short, as of 2026-09-03:
 
 *Exists, and is verified.* An event-driven LIF inference core, its AER
 event queues, a register bank generated from a single-source map, a
@@ -117,25 +117,73 @@ and produced 7 escalations on machines that were fine, so the
 zero-spurious-escalation result `docs/41` reported does not survive it.
 It ships disabled.
 
-The rest of the SoC still has **no fault tolerance of any kind** — no
-ECC on the memories, no scrubbing outside the register file, no TMR
-outside the watchdog's protected word, no bus error latch, and nothing
-on the CLINT's `mtime`, which `docs/41` section 7.4 ranks next. That is
-a deliberate ordering, not an oversight: the fabric is being made
-correct before it is made survivable.
+The rest of the SoC is still **almost entirely unhardened** — no ECC on
+the 72 KiB of memory, no scrubbing outside the register file, no TMR
+outside the watchdog's protected word, and nothing on the CLINT's
+`mtime`, which `docs/41` section 7.4 ranked next and which two documents
+have since deferred with the reason written down each time. That is a
+deliberate ordering, not an oversight: the fabric is being made correct
+before it is made survivable.
 
-*Does not exist.* No silicon. No spacecraft interfaces. No SRAM macro in
-any hardened design. No radiation test data. No bus error latch or
-scrubber. No place-and-route, timing or gate-level result for anything
-under `hw/soc/`. No licence. No funding. **And no way for an operator to
-see a corrected upset**: the protected register file has upstream's port
-list, upstream's port list has no error output, and `docs/43` section 12
-ranks fixing that first.
+**The subsystem has been laid out, and it does not close timing.**
+`docs/45` synthesised `soc_top` whole for the first time — it elaborated
+at the first attempt with no RTL edit, which is worth saying because the
+reason it had never been done was not that it was hard. `docs/47` then
+placed and routed it with six real RM_IHPSG13 SRAM macros: it routes
+clean, and it closes at **43.10 MHz against a 50 MHz target**. The
+memory is **4.29 times the standard-cell logic** and 46.9 % of the die.
 
-The next block is a fault line out of the core for the register file's
-correction counter and for the watchdog's mismatch counter, so that the
-corrections this design now performs are observable outside a
-simulator.
+Four things were tried against that gap and `docs/48` through `docs/50`
+measured all four. A second floorplan is worse, and the existing one is
+already optimal for these macro pins. Two flow settings worth 18 ns had
+already been spent before the number existed, which nobody had checked.
+`SYNPRE` acts on a cone disjoint from the binding path — the correction
+to that attribution is the result, not the run. Registering the RAM read
+does close 0.78 ns, the first claimable improvement in four documents,
+and makes the part **21 % slower in wall-clock**, because a higher clock
+that spends more cycles per load is not a faster part. Break-even is
+53.97 MHz and the layout reaches 44.59.
+
+So the remaining lever is the 50 MHz target itself, whose provenance is
+a Tiny Tapeout tile with no SRAM in it, and none of `docs/05`'s four
+mission profiles is specified in cycles. The obligation is to size the
+workload rather than defend the number.
+
+Operators can now see a corrected upset: `docs/44` routed the register
+file's fault line out through a real patch to Ibex and landed **BUSSTAT
+at `0xFF915000`**, the slot the map has reserved since `docs/39`, with
+four saturating counters and stickies that survive a reset. It also
+found that `docs/43`'s timing attribution was wrong — every worst path
+started at an input tied to a constant, and the binding constraint was
+an unbuffered 2,328-fanout reset net.
+
+*Does not exist.* No silicon. No spacecraft interfaces. No radiation
+test data. No gate-level result for anything under `hw/soc/`. No DRC,
+LVS or XOR on the laid-out SoC, and that one is a PDK property rather
+than a schedule: `docs/12` measured 1,106,478 Magic errors inside a
+single RM_IHPSG13 macro's own footprint and recorded it a no-go for this
+PDK version. No licence. No funding.
+
+**The NPU is connected, and `docs/51` is the record.** Until it, this
+repository held a RISC-V SoC and a separate neuromorphic accelerator
+that had never been in the same simulation. `hw/rtl/pilot_top.v` — the
+frozen TTIHP26b submission, instantiated and not copied — is now inside
+`soc_top.v`, reached over the same four serial pins the die will have,
+and a program on Ibex out of the boot ROM configures it, loads its
+weights, feeds it a six-frame event stream and reads the spikes back
+**against an answer `sw/golden/lif_core.py` computed at build time**.
+27 checks, fail mask 0, 213,971 cycles. The transport is serial because
+that is what the die has: it costs 176 clock cycles per register access,
+and what it buys is that there is exactly one implementation of the
+die's host protocol and it is the one in the SoC's own regression.
+Nothing in it is hardened beyond the two event queues, which are the
+pilot's own proved `aer_fifo`.
+
+The next block is the fault-injection campaign through that connection.
+It sits between two blocks whose upset behaviour has been measured —
+the die in `docs/16`, the core in `docs/42` — and is itself unmeasured,
+and hardening it before measuring it is the mistake `docs/38` section 10
+item 4 names.
 
 ## Documents
 

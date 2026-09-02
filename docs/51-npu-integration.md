@@ -28,7 +28,7 @@ and the shuttle closes 2026-09-21. Nothing in `hw/rtl/`, `hw/tb/`,
 `tt/`, `formal/` or `hw/openlane/` was modified; seven files in
 `hw/rtl/` are **read and instantiated** and
 `sw/tests/test_soc_npu_guards.py` fails if any of them has been touched.
-Section 15 lists every file.
+Section 16 lists every file.
 
 ---
 
@@ -44,8 +44,8 @@ Section 15 lists every file.
 | What does a register access cost? | **176 clock cycles**, measured, of which 171 is the serial frame **[fact]**. Section 8 |
 | What does the whole program cost? | **185,443 → 213,971 cycles, +28,528, +15.4 %** — of which about **13,840 is console output** and the rest is the work **[fact for the counts, estimate for the split]**. Section 8.3 |
 | What does the interrupt cost? | **Nothing that was spare.** `docs/40` assigned NPUCFG source 24 on fast line 12 before this block existed; lines 13 and 14 are still unassigned and a test derives that **[fact]**. Section 9 |
-| Is it verified? | cocotb: **21 tests on `soc_npu` with the frozen pilot inside it, 21 pass**, with **14 mutations, of which four survived and one of those was a real gap** **[fact]**. Formal: **4 tasks on the transport, all PASS, 5 of 5 covers reached** **[fact]**. Section 10 |
-| Is any of it hardened? | **The queues are, because they are `aer_fifo`. Nothing else is.** Section 13 |
+| Is it verified? | cocotb: **21 tests on `soc_npu` with the frozen pilot inside it, 21 pass**, with **14 mutations, of which four survived and one of those was a real gap** **[fact]**. Formal: **4 tasks on the transport, all PASS, 5 of 5 covers reached**, and **the fabric's own proof extended to six ports, 17 of 17 covers** **[fact]**. Section 10 |
+| Is any of it hardened? | **The queues are, because they are `aer_fifo`. Nothing else is.** Section 14 |
 | Is a descriptor ring built? | **No, and section 12 prices it rather than deferring it.** |
 
 ---
@@ -58,6 +58,7 @@ Section 15 lists every file.
 | `hw/soc/rtl/soc_npu.v` | The NPU subsystem. Two bus faces — the node register window on the system bus, the event port on the peripheral bus — an AER event engine between them, and the frozen `pilot_top` instantiated inside |
 | `hw/soc/rtl/soc_npu_regs.vh` | Generated. The node register map for the SoC, from the same `regmap/regmap.yaml` that produces the die's own header |
 | `hw/soc/rtl/soc_bus.v` | Extended from five slave ports to six |
+| `hw/soc/formal/soc_bus_props.v` | The same extension, in the proof. Section 10.2 |
 | `hw/soc/rtl/soc_top.v` | The subsystem, the sixth port, the NPUCFG slot decode, the interrupt line, and the die's pins brought out for observation |
 | `hw/soc/flow/gen_npu_vectors.py` | The golden model's answer, computed at build time into two headers the program compiles against |
 | `hw/soc/tb/sw/soc_npucfg.h` | The NPUCFG block's own register map, hand-written, as `soc_timers.h` is for the GPTIMER |
@@ -90,8 +91,7 @@ being fabricated.
 
 **(c) Something else.**
 
-### 3.2 The argument that is usually made for (a), and why it is not
-enough on its own
+### 3.2 The usual argument for (a), and why it is not enough alone
 
 The obvious case is: **the shuttle silicon will have the serial port and
 nothing else.** If a TTIHP26b die arrives in 2027 and the SoC was built
@@ -180,8 +180,7 @@ is what it carries.
 
 ---
 
-## 4. The die's two ports are not symmetric, and that is in the pin
-contract
+## 4. The die's two ports are not symmetric, and the pin contract says so
 
 The second question the brief posed is whether register access and event
 flow are the same problem. They are not, and **the pilot's own pinout
@@ -564,7 +563,7 @@ Fourteen mutations against scratch copies; the Makefile exposes
 | **the select setup H2 is shortened** | **not caught by anything, and it is not a violation** |
 | **a drained word is captured without checking VALID** | **not caught; the condition is unreachable in this SoC** |
 
-**[fact, section 16 reproduces it]**
+**[fact, section 17 reproduces it]**
 
 #### 10.1a The gap, which is the most useful result in this section
 
@@ -625,11 +624,32 @@ be a hole if `aer_out_ack` were ever connected.
 
 ### 10.2 Formal
 
-| Job | bmc, depth 30 | prove, k-induction | cover, depth 220 | prove at `HALF = 3` |
+| Job | bmc | prove, k-induction | cover | prove at `HALF = 3` |
 |---|---|---|---|---|
-| `soc_npu_ser` | **PASS** | **PASS** | **PASS, 5 of 5 reached** | **PASS** |
+| `soc_npu_ser` | **PASS**, depth 30 | **PASS**, depth 16 | **PASS, 5 of 5 reached**, depth 220 | **PASS** |
 
 **[fact, `hw/soc/formal/soc_npu_ser_*/PASS`]**
+
+**AND `soc_bus`'s PROOF WAS EXTENDED, BECAUSE THIS WORK CHANGED A PROVED
+BLOCK.** `docs/50` section 8.1 found `hw/soc/formal/soc_bus.sby` failing
+since `docs/47` — that document changed `soc_bus.v` and did not re-run
+the proof — and the lesson is one document old. Adding a sixth slave
+port breaks the property set immediately and loudly: the ghost
+occupancy arrays, the one-hot decode, the response-balance count and the
+error-slave index are all written per port, and `bmc` fails at step 2 on
+"no response to a master that has nothing outstanding". Every one of
+them is extended, F2a and F2b gain the NPU region's decode in both
+directions against the generated map constants, and **the cover set
+gains a witness for the new port** — without it the sixth slave would be
+covered by every assertion and witnessed by none, which is the vacuity
+`docs/09` section B.1 makes a red result.
+
+| `soc_bus` | bmc, depth 24 | prove, k-induction | cover, depth 24 |
+|---|---|---|---|
+| before | PASS | PASS | PASS, 16 of 16 |
+| **six ports** | **PASS** | **PASS** | **PASS, 17 of 17** |
+
+**[fact]**
 
 The property set is `pilot_top.v` section 2 expressed over this module's
 PORTS: the frame format (P1, P2, P3), the three host obligations (H1,
@@ -758,7 +778,74 @@ other reason, at which point the fabric cost is already paid.
 
 ---
 
-## 13. What is not built
+## 13. Defects found, all four in this work
+
+Recorded because each is a trap the next block would otherwise walk into,
+and because three of the four are the same mistake in three places.
+
+**1. A state that both starts a transaction and waits for it starts a
+second one on the way out.** `soc_npu_ser.v` drops `busy_o` and raises
+`done_o` at the SAME edge, which is correct and is what a caller wants.
+Both FSMs above it were written with one state that issued the start and
+watched for the completion, so in the completion cycle the start
+condition — "not busy, transport free" — is true again and fires.
+
+The two symptoms looked nothing alike. On the **event engine** the
+spurious frame is a read of `EVQ_OUT`, which POPS, and its result reaches
+an engine that has moved on: **one barrier echo was duplicated in a
+twelve-event stream** and a stray pop was left in flight behind it. On
+the **node window** the spurious frame is a repeat of the same access
+with the same captured payload — harmless in itself — but it is still
+owned by the window, so its completion is mistaken for the response to
+the NEXT access: **a read immediately after a write to the same register
+returned zero**, which is what a write frame's MISO carries. And it only
+appeared when the two accesses were close together, because anything
+slow in between let the spurious frame drain first. The debug print that
+was supposed to diagnose it did four UART writes and therefore could not
+reproduce it.
+
+Both are fixed by splitting issue and wait into separate states, and both
+files say so where the states are declared.
+
+**2. A test that names the property it checks and does not set it up.**
+Section 10.1a. `gnt_o = req_i` survived all 21 tests because
+`test_gnt_is_withheld_while_a_frame_is_in_flight` dropped the request on
+the first grant.
+
+**3. A cocotb driver that starts looking for the grant on the NEXT
+cycle.** `gnt_o` is combinational on `req_i`, so this slave grants in the
+same cycle when it is idle — rule 1's "the same cycle or any number of
+cycles later". A driver that samples from the following cycle misses it,
+holds `req` high through the whole frame, and is then granted a SECOND
+transaction the moment the first response returns. **Measured: one read
+became two frames and 350 cycles where the design does one and 176.**
+Every symptom of it read as a design defect — a doubled grant count, a
+frame twice as long as the protocol allows, and an inference that came
+out wrong — and all three were one line in the testbench. This is the
+same class as `docs/40` section 7.5's three testbench findings.
+
+**4. A ghost counter that observes a pin through its own registered
+copy sees the change one cycle late.** The first version of
+`soc_npu_ser_props.v` measured "cycles since `SER_SCK` last changed" in a
+register and compared it against `HALF`. At the very cycle a dwell
+property wants the OLD level's dwell it is already reporting the new
+one's, so the bound reads 1 where the design held the level for `HALF`.
+Two further variants of the same mistake followed — a counter parked at
+`0xFFFF` to mean "unbounded" that a property then added one to, wrapping
+to zero and reading as "the pin just changed". **Every dwell property is
+now written over `$past` of the pin at fixed offsets**, which has no lag
+and needs no invariant to tie it to anything, and the single registered
+copy that survives is used only to NAME an edge.
+
+Defects 3 and 4 are worth generalising together: **both were an
+observer, not a design, and both presented as a design defect with a
+plausible mechanism.** The habit that resolved them was the same one
+`docs/38` section 7.5 draws at length — measure the thing directly, in a
+second harness, before believing the first.
+
+---
+
+## 14. What is not built
 
 1. **No hardening of anything this work adds, except what it inherited.**
    The two queues are `aer_fifo` and carry its entry parity, pointer
@@ -789,9 +876,9 @@ other reason, at which point the fabric cost is already paid.
 
 ---
 
-## 14. What the checkers do not cover
+## 15. What the checkers do not cover
 
-Stated separately from section 13, because "not built" and "built but not
+Stated separately from section 14, because "not built" and "built but not
 checked by the thing that looks like it checks it" are different failures
 and `docs/41` section 6.6 now lists eleven instances of the second.
 
@@ -831,7 +918,7 @@ and `docs/41` section 6.6 now lists eleven instances of the second.
 
 ---
 
-## 15. Files touched outside `hw/soc/`
+## 16. Files touched outside `hw/soc/`
 
 `docs/34` section 2 pins the pilot by git blob hash of the files in
 `hw/rtl/` and section 5 lists the flow configs. **None of the following
@@ -861,7 +948,7 @@ submission.
 
 ---
 
-## 16. Reproducing this
+## 17. Reproducing this
 
 ```
 python regmap/generate.py                       # four outputs, one source
@@ -892,7 +979,7 @@ SOC_NPU_SER_SRC=/tmp/mutated_soc_npu_ser.v make -f Makefile.soc_npu
 
 ---
 
-## 17. What the next block should be
+## 18. What the next block should be
 
 Three candidates, and the argument is not close.
 
@@ -906,7 +993,7 @@ between two measured things and is itself unmeasured**, and the campaign
 already exists: `hw/soc/flow/fi_core.sh` and the `docs/16` method need a
 new fault port and a new workload, not a new method.
 
-**Hardening the connection.** Section 13 item 1 is a list of unprotected
+**Hardening the connection.** Section 14 item 1 is a list of unprotected
 state in a part whose whole claim is measured fault tolerance. But
 **hardening before measuring is the mistake `docs/38` section 10 item 4
 names**: the campaign's answer determines what needs protecting, and
