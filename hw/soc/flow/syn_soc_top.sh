@@ -97,6 +97,15 @@
 # measurement flows reproduce a published number unless asked otherwise.
 # soc_top.v connects rf_ecc_err_o unconditionally, so IBEX_FAULT_PORT=0
 # here fails at elaboration with the port's name in the message.
+#
+# IBEX_RF_SYNPRE=1 hoists the register file's syndrome tree past the read
+# multiplexer -- hw/soc/rtl/ibex_regfile_secded.v's SYNPRE, one parity
+# tree per register. It DEFAULTS TO 0 and nothing sets it; the same rule
+# flow/syn_ibex.sh states for the same parameter applies here, and
+# sw/tests/test_soc_regfile_guards.py enforces it. docs/44 section 5.5
+# priced it on the register file alone and docs/49 measures it through
+# place-and-route, which is the only reason this knob exists on the
+# whole-SoC flow at all.
 
 set -euo pipefail
 
@@ -118,6 +127,18 @@ esac
 IBEX_REGFILE=${IBEX_REGFILE:-secded}
 IBEX_FAULT_PORT=${IBEX_FAULT_PORT:-1}
 export IBEX_REGFILE IBEX_FAULT_PORT
+
+# The hoisted syndrome, off by default. `chparam` on a module that does
+# not declare the parameter is an error and not a no-op, so it is only
+# emitted for this project's register file -- upstream's file has no
+# SYNPRE. At 0 NOTHING is emitted, so the script takes the same path it
+# took before this knob existed, and the control in docs/49 section 3 is
+# that the netlist is byte-identical to the one docs/47 hardened.
+IBEX_RF_SYNPRE=${IBEX_RF_SYNPRE:-0}
+RF_CHPARAM="# IBEX_REGFILE=$IBEX_REGFILE: no register file chparam"
+if [ "$IBEX_REGFILE" = "secded" ] && [ "$IBEX_RF_SYNPRE" != 0 ]; then
+  RF_CHPARAM="chparam -set SYNPRE $IBEX_RF_SYNPRE ibex_register_file_ff"
+fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -344,6 +365,8 @@ read_verilog -I$RTL -defer $SOC_SRCS
 $MEM_READ
 read_verilog -I$RTL -defer $RTL/soc_top.v
 
+$RF_CHPARAM
+
 hierarchy -check -top soc_top
 
 # Upstream's redundancy anchors, unconditionally, exactly as
@@ -421,6 +444,6 @@ awk -v top=soc_top -v ge=7.2576 '
   }
 ' "$OUT/$AREA_SUMMARY"
 
-echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  abc -D $PERIOD_NS"
+echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE  abc -D $PERIOD_NS"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"

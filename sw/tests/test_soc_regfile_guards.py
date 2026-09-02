@@ -489,13 +489,21 @@ def test_nothing_in_the_design_builds_the_measurement_configurations():
     both and eleven per cent of the core is the wrong thing to spend to
     widen a margin that is not binding.
 
+    `docs/49` measured it again, through place-and-route, and DID NOT
+    ADOPT IT either: it moves the sign-off worst slack by less than the
+    instrument's own noise, because the path that binds at sign-off does
+    not contain the syndrome tree. So the parameter is still a
+    measurement and this is still the check that it stays one.
+
     A parameter that ships disabled and is never measured again is the
-    liability `docs/43` section 12 item 5 names. This is the check that
-    it stays a measurement: the only thing allowed to set it is
-    `hw/soc/flow/syn_regfile.sh`, which exists to measure it, and
-    `hw/soc/flow/syn_ibex.sh`, which passes it through from an
-    environment variable that defaults to 0."""
-    allowed = {"syn_regfile.sh", "syn_ibex.sh"}
+    liability `docs/43` section 12 item 5 names. Four flows may reach
+    it, each because it exists to measure it and each from an
+    environment variable that defaults to 0:
+    `hw/soc/flow/syn_regfile.sh` and `syn_ibex.sh` (`docs/44`), and
+    `syn_soc_top.sh` and `sim_soc.sh` (`docs/49`). NOTHING ELSE MAY,
+    and none of the four may default it on."""
+    allowed = {"syn_regfile.sh", "syn_ibex.sh",
+               "syn_soc_top.sh", "sim_soc.sh"}
     for path in list(SOC_RTL.glob("*.v")) + \
             list((ROOT / "hw" / "soc" / "flow").glob("*.sh")):
         if path.name in allowed:
@@ -504,6 +512,38 @@ def test_nothing_in_the_design_builds_the_measurement_configurations():
         assert "SYNPRE 1" not in text and ".SYNPRE(1)" not in text, \
             "{} builds the hoisted syndrome, which nothing ships".format(
                 path.name)
-    syn = (ROOT / "hw" / "soc" / "flow" / "syn_ibex.sh").read_text()
-    assert "IBEX_RF_SYNPRE:-0" in syn, \
-        "syn_ibex.sh no longer defaults the hoisted syndrome off"
+    flow = ROOT / "hw" / "soc" / "flow"
+    for script, var in (("syn_ibex.sh", "IBEX_RF_SYNPRE:-0"),
+                        ("syn_soc_top.sh", "IBEX_RF_SYNPRE:-0"),
+                        ("sim_soc.sh", "SOC_RF_SYNPRE:-0")):
+        assert var in (flow / script).read_text(), \
+            "{} no longer defaults the hoisted syndrome off".format(script)
+
+
+def test_the_simulation_checks_that_the_parameter_override_took_effect():
+    """`docs/49` section 8: `iverilog -Ptb_soc.dut.<...>.SYNPRE=1`
+    ELABORATES, EXITS 0, PRINTS NOTHING AND CHANGES NOTHING, because
+    Icarus's `-P` reaches root modules only and a hierarchical path that
+    names no root is discarded in silence. A whole-SoC run built that
+    way is a run of the design WITHOUT the change, reported as a run
+    with it -- which is `docs/41` section 6.6's shape in a simulator.
+
+    `flow/sim_soc.sh` therefore reads the two arms of the SYNPRE
+    generate out of the COMPILED OBJECT and fails if the wrong one is
+    there. This is the check that it keeps doing so."""
+    sim = (ROOT / "hw" / "soc" / "flow" / "sim_soc.sh").read_text()
+    assert "g_synpre" in sim and "g_synpost" in sim, \
+        "sim_soc.sh no longer names both arms of the SYNPRE generate"
+    check = sim.split("the SYNPRE override did not take")
+    assert len(check) == 2, "sim_soc.sh no longer refuses a discarded override"
+    assert 'grep -qa "$want" "$OUT/tb_soc.vvp"'.replace("$want", '\\"$want\\"') \
+        in check[0], "sim_soc.sh no longer greps the compiled object"
+    assert "defparam tb_soc.dut" in sim, \
+        "sim_soc.sh no longer overrides SYNPRE by an absolute defparam; " \
+        "if it went back to -P, the override is silently discarded"
+    # And the two arms are what the RTL actually calls them, so a rename
+    # in the register file breaks this test rather than the check.
+    rf = (SOC_RTL / "ibex_regfile_secded.v").read_text()
+    for arm in ("g_synpre", "g_synpost"):
+        assert ": {}".format(arm) in rf, \
+            "ibex_regfile_secded.v no longer has a {} block".format(arm)

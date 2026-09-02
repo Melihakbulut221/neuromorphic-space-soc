@@ -30,6 +30,11 @@
 //   C5  the fast correction is the decoder's correction, for EVERY
 //       codeword and EVERY error vector -- docs/44's timing recovery,
 //       stated as an equality rather than as an argument
+//   C6  the syndrome computed from the ENCODER beside the storage is
+//       the syndrome the DECODER computes after the read multiplexer --
+//       docs/49's SYNPRE, and the one thing C5 does not cover
+//   C7  and therefore the hoisted read path returns the same word,
+//       stated directly rather than left as a corollary of C5 and C6
 //
 // C4 is the odd one out and it is here because it is a MEASUREMENT this
 // document would otherwise have to take on trust. H_ROW7 is
@@ -57,6 +62,27 @@
 // them, from the pilot encoder on the unit vectors, so this proof would
 // follow hw/rtl/secded_enc.v if it ever changed rather than certifying
 // a copy of it.
+//
+// C6 IS WHAT docs/49 WOULD BE WRONG WITHOUT, AND C5 DOES NOT IMPLY IT.
+// C5 is an equality between two functions of the DECODER's `syndrome`.
+// SYNPRE does not change what is done with the syndrome; it changes
+// WHERE THE SYNDROME COMES FROM. Instead of decoding the multiplexer's
+// output it puts one `secded_enc` beside every register and takes
+// `enc(stored_data).check_out ^ stored_chk`, so the XOR tree runs in
+// parallel with the read multiplexer rather than behind it.
+//
+// That substitution is only sound if the encoder's H and the decoder's
+// H are the same matrix, and THEY ARE TWO SEPARATE COPIES OF IT:
+// hw/rtl/secded_dec.v says so in its own header -- "the H matrix
+// constants are identical to secded_enc.v (each module stays
+// self-contained)". Nothing in this repository compared them until now.
+// formal/secded.sby proves the codec end to end, which is satisfied by
+// any pair of matrices that agree with each other; it would pass on a
+// pair that agreed with each other and disagreed with H. C6 states the
+// bit-level equality of the two syndromes directly, over a free
+// codeword and a free error vector, so the sentence "SYNPRE computes
+// the same syndrome earlier" is a proof obligation rather than a
+// comment. C7 then states the consequence at the port.
 //
 // THE FAULT MODEL. One error vector, free every cycle, over exactly the
 // 40 bits the register file stores. Nothing here models a fault in the
@@ -131,6 +157,31 @@ module regfile_secded_props (
 
     wire [31:0] fast_out = stored_data ^ mask;
 
+    // ---- the hoisted syndrome, exactly as SYNPRE builds it ----------
+    // One encoder beside the storage, over the stored data, and the
+    // stored check bits XORed in. This is g_synpre's `rf_syn[gj]` with
+    // the register index dropped, because the register file's storage
+    // and multiplexer are not in this harness and the substitution is
+    // per-register.
+    wire [7:0]  pre_chk;
+    wire [71:0] pre_code_unused;
+    secded_enc u_pre (
+        .data_in   ({32'h0, stored_data}),
+        .check_out (pre_chk),
+        .code_out  (pre_code_unused)
+    );
+    wire [7:0] pre_syn = pre_chk ^ stored_chk;
+
+    // and the mask the register file would build from it.
+    wire [31:0] pre_mask;
+    generate
+        for (gj = 0; gj < 32; gj = gj + 1) begin : g_pre_col
+            assign pre_mask[gj] = (pre_syn == h_col[gj]);
+        end
+    endgenerate
+
+    wire [31:0] pre_out = stored_data ^ pre_mask;
+
     always @(*) begin
         // C4. The eighth check bit does not exist over a 32-bit word.
         //     Asserted on the ENCODER's output, so it is a statement
@@ -170,6 +221,22 @@ module regfile_secded_props (
         //     replacing an output with a different function of the same
         //     inputs has to mean.
         assert (fast_out == out[31:0]);
+
+        // C6. THE HOISTED SYNDROME IS THE DECODER'S SYNDROME. Two
+        //     independent copies of H -- the encoder's and the
+        //     decoder's -- compared bit for bit, for every codeword and
+        //     every error vector. No guard on the weight, for C5's
+        //     reason: a substitution either is the same function or it
+        //     is not.
+        assert (pre_syn == syn);
+
+        // C7. And therefore the register file's read port returns the
+        //     same word with the tree in front of the multiplexer as it
+        //     does with the tree behind it. This follows from C5 and
+        //     C6, and it is stated anyway because it is the sentence
+        //     docs/49 relies on and a reader should not have to compose
+        //     two properties to find it.
+        assert (pre_out == out[31:0]);
     end
 
     // Vacuity, docs/09 B.1: every branch above has to be reachable, or
@@ -186,6 +253,11 @@ module regfile_secded_props (
         // mask were never nonzero.
         cover (mask != 32'h0);
         cover (ded && mask == 32'h0);
+        // C6 and C7's, for the same reason: an equality between two
+        // syndromes proves nothing if the syndrome is never nonzero,
+        // and C7 proves nothing if the hoisted mask never corrects.
+        cover (pre_syn != 8'h0);
+        cover (pre_mask != 32'h0);
     end
 
 endmodule
