@@ -53,7 +53,24 @@ module soc_top #(
     // Simulation image for the boot ROM. Empty means an all-zero ROM,
     // which the core will fetch as a compressed illegal instruction and
     // trap on, rather than propagate x.
-    parameter ROM_INIT = ""
+    parameter ROM_INIT = "",
+
+    // ---- the memory pipeline, docs/50 ----
+    //
+    // MEM_RDREG puts one register stage on the RAM's and the boot ROM's
+    // read return -- soc_mem's RDREG, and in the SRAM build the only
+    // measured mechanism that splits the macro's 9.5277 ns read arc away
+    // from the 26 standard-cell stages that follow it.
+    //
+    // IT DEFAULTS TO 0, so this file elaborates the SoC docs/47 to
+    // docs/49 measured unless something asks otherwise, and
+    // sw/tests/test_soc_memory_guards.py enforces the default. The
+    // fabric needs NO parameter to go with it: soc_bus.v's protocol
+    // already allows a response one or more cycles after the grant, and
+    // docs/50 section 3 measures that its one conservatism -- refusing a
+    // grant in the cycle a response returns -- is unreachable in this
+    // SoC because Ibex's own NUM_REQS equals the fabric's MAX_OUT.
+    parameter MEM_RDREG = 1'b0
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -338,7 +355,7 @@ module soc_top #(
   // -------------------------------------------------------------------
   // Slave 0: RAM.  Slave 1: boot ROM.
   // -------------------------------------------------------------------
-  soc_mem #(.WORDS(RAM_WORDS), .RO(1'b0)) u_ram (
+  soc_mem #(.WORDS(RAM_WORDS), .RO(1'b0), .RDREG(MEM_RDREG)) u_ram (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[0]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
@@ -346,7 +363,7 @@ module soc_top #(
       .rdata_o (s_rdata_ram), .err_o (s_err[0])
   );
 
-  soc_mem #(.WORDS(ROM_WORDS), .RO(1'b1),
+  soc_mem #(.WORDS(ROM_WORDS), .RO(1'b1), .RDREG(MEM_RDREG),
             .INIT_FILE(ROM_INIT), .INIT_WORD(ROM_INIT_WORD)) u_rom (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[1]), .addr_i (s_addr), .we_i (s_we),

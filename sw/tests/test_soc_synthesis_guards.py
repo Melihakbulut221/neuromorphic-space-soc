@@ -750,6 +750,21 @@ def _soc_mem_ports():
     return ports
 
 
+def _soc_mem_params():
+    """The parameter names of hw/soc/rtl/soc_mem.v, in declaration order.
+
+    Read rather than written down, for the reason the docstring of
+    test_the_memory_boundary_models_declare_soc_mems_ports gives about
+    ports: `soc_top.v` names these on both memory instances, so a copy
+    that goes stale stops an elaboration somewhere and not everywhere.
+    sw/tests/test_soc_memory_guards.py checks the four declarations in the
+    tree against each other; this is the fifth, and it is generated so it
+    cannot disagree."""
+    text = (SOC_RTL / "soc_mem.v").read_text()
+    body = text.split("#(", 1)[1].split(") (", 1)[0]
+    return re.findall(r"parameter\s+(?:integer\s+)?(\w+)\s*=", body)
+
+
 def _generated_mem_ports(marker):
     """The same, for one of the two memory boundary models that
     hw/soc/flow/syn_soc_top.sh writes into its output directory. The
@@ -861,11 +876,19 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
     real = _soc_mem_ports()
     decls = ",\n".join(
         "  {} wire {} {}".format(d, w, n) for d, w, n in real)
+    # THE PARAMETER LIST IS DERIVED FROM soc_mem.v AND NOT WRITTEN HERE.
+    # It used to be four literal lines, and docs/50 found what that costs:
+    # soc_top.v gained `.RDREG(MEM_RDREG)` on both memory instances and
+    # this blackbox did not follow, so the elaboration this test performs
+    # failed with "does not have a parameter named 'RDREG'" -- a stale
+    # fifth copy of a list that four other files already have to agree on.
+    # An empty default of the right shape is enough for a blackbox: the
+    # test elaborates, it does not simulate.
+    params = ",\n".join(
+        "                 parameter {} = 0".format(n)
+        for n in _soc_mem_params())
     bb.write_text(
-        "module soc_mem #(parameter integer WORDS = 4096,\n"
-        "                 parameter RO = 1'b0,\n"
-        "                 parameter INIT_FILE = \"\",\n"
-        "                 parameter integer INIT_WORD = 0) (\n"
+        "module soc_mem #(\n" + params + ") (\n"
         + decls + "\n);\nendmodule\n")
 
     ibex = [p for p in sorted(gen.glob("*.v"))

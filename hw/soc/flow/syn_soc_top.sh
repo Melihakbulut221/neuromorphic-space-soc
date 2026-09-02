@@ -106,6 +106,24 @@
 # priced it on the register file alone and docs/49 measures it through
 # place-and-route, which is the only reason this knob exists on the
 # whole-SoC flow at all.
+#
+# SOC_MEM_RDREG=1 is soc_top.v's MEM_RDREG, docs/50's knob: one register
+# stage on the RAM's and the boot ROM's read return, which in
+# SOC_MEM=sram means one flip-flop bank between the SRAM macros' A_DOUT
+# multiplexer and everything downstream of it. IT DEFAULTS TO 0 and at 0
+# nothing is emitted, so the script takes the path it took before the
+# knob existed; the control is that the netlist is then byte-identical to
+# the one docs/47 hardened, and docs/50 section 2 measures that it is.
+#
+# THE CHPARAM IS ON soc_top AND NOT ON soc_mem, deliberately. In
+# SOC_MEM=stub and SOC_MEM=blackbox the module called `soc_mem` is a
+# generated stand-in, and a chparam on a module that does not declare the
+# parameter is an error rather than a no-op. Going through soc_top's own
+# parameter means the four `soc_mem` implementations -- the behavioural
+# model, the SRAM build, the stand-in and the blackbox -- all have to
+# declare RDREG, which is a compile-time check that they agree on the
+# boundary. sw/tests/test_soc_synthesis_guards.py checks the port lists;
+# this checks the parameter.
 
 set -euo pipefail
 
@@ -138,6 +156,13 @@ IBEX_RF_SYNPRE=${IBEX_RF_SYNPRE:-0}
 RF_CHPARAM="# IBEX_REGFILE=$IBEX_REGFILE: no register file chparam"
 if [ "$IBEX_REGFILE" = "secded" ] && [ "$IBEX_RF_SYNPRE" != 0 ]; then
   RF_CHPARAM="chparam -set SYNPRE $IBEX_RF_SYNPRE ibex_register_file_ff"
+fi
+
+# docs/50's knob, on soc_top's own parameter. See the header.
+SOC_MEM_RDREG=${SOC_MEM_RDREG:-0}
+TOP_CHPARAM="# SOC_MEM_RDREG=0: no soc_top chparam"
+if [ "$SOC_MEM_RDREG" != 0 ]; then
+  TOP_CHPARAM="chparam -set MEM_RDREG $SOC_MEM_RDREG soc_top"
 fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
@@ -192,7 +217,8 @@ module soc_mem #(
     parameter integer WORDS     = 4096,
     parameter         RO        = 1'b0,
     parameter         INIT_FILE = "",
-    parameter integer INIT_WORD = 0
+    parameter integer INIT_WORD = 0,
+    parameter         RDREG     = 1'b0
 ) (
     input  wire        clk_i, rst_ni,
     input  wire        req_i,
@@ -241,7 +267,12 @@ module soc_mem #(
     parameter integer WORDS     = 4096,
     parameter         RO        = 1'b0,
     parameter         INIT_FILE = "",
-    parameter integer INIT_WORD = 0
+    parameter integer INIT_WORD = 0,
+    // docs/50's response register. Reproduced here for the same reason
+    // every other timing property of soc_mem is: at RDREG = 1 a path out
+    // of a memory starts one flip-flop LATER, and a stand-in that did
+    // not follow would time the wrong boundary.
+    parameter         RDREG     = 1'b0
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -251,14 +282,16 @@ module soc_mem #(
     input  wire [3:0]  be_i,
     input  wire [31:0] wdata_i,
     output wire        gnt_o,
-    output reg         rvalid_o,
-    output reg  [31:0] rdata_o,
-    output reg         err_o
+    output wire        rvalid_o,
+    output wire [31:0] rdata_o,
+    output wire        err_o
 );
   reg [31:0] row;
   reg [29:0] a_q;
   reg [3:0]  be_q;
   reg        we_q;
+  reg [31:0] rd0;
+  reg        rv0, er0;
 
   assign gnt_o = req_i;
 
@@ -267,16 +300,16 @@ module soc_mem #(
 
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      rvalid_o <= 1'b0;
-      rdata_o  <= 32'h0;
-      err_o    <= 1'b0;
+      rv0      <= 1'b0;
+      rd0      <= 32'h0;
+      er0      <= 1'b0;
       row      <= 32'h0;
       a_q      <= 30'h0;
       be_q     <= 4'h0;
       we_q     <= 1'b0;
     end else begin
-      rvalid_o <= req_i;
-      err_o    <= write_attempt && RO;
+      rv0      <= req_i;
+      er0      <= write_attempt && RO;
       a_q      <= addr_i[31:2];
       be_q     <= be_i;
       we_q     <= we_i;
@@ -289,9 +322,31 @@ module soc_mem #(
       // A function of the captured inputs, so none of the capture
       // registers is dead and opt_clean cannot delete the endpoints
       // this stand-in exists to provide.
-      rdata_o <= row ^ {a_q[29:28] ^ {2{we_q}}, a_q[27:0], be_q[3:2], be_q[1:0]};
+      rd0 <= row ^ {a_q[29:28] ^ {2{we_q}}, a_q[27:0], be_q[3:2], be_q[1:0]};
     end
   end
+
+  generate
+  if (!RDREG) begin : g_rd1
+    assign rvalid_o = rv0;
+    assign rdata_o  = rd0;
+    assign err_o    = er0;
+  end
+  if (RDREG) begin : g_rd2
+    reg [31:0] rd1;
+    reg        rv1, er1;
+    always @(posedge clk_i or negedge rst_ni)
+      if (!rst_ni) begin
+        rv1 <= 1'b0; rd1 <= 32'h0; er1 <= 1'b0;
+      end else begin
+        rv1 <= rv0; er1 <= er0;
+        if (rv0) rd1 <= rd0;
+      end
+    assign rvalid_o = rv1;
+    assign rdata_o  = rd1;
+    assign err_o    = er1;
+  end
+  endgenerate
 endmodule
 EOF
     MEM_READ="read_verilog -defer $OUT/soc_mem_macro.v"
@@ -366,6 +421,7 @@ $MEM_READ
 read_verilog -I$RTL -defer $RTL/soc_top.v
 
 $RF_CHPARAM
+$TOP_CHPARAM
 
 hierarchy -check -top soc_top
 
@@ -444,6 +500,7 @@ awk -v top=soc_top -v ge=7.2576 '
   }
 ' "$OUT/$AREA_SUMMARY"
 
-echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE  abc -D $PERIOD_NS"
+echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE"
+echo "  mem_rdreg=$SOC_MEM_RDREG  abc -D $PERIOD_NS"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"

@@ -409,15 +409,74 @@ end
 // accepted yet the round-robin flop still favoured the data port. Two
 // cycles of requesting, no grant, and the fabric was behaving correctly
 // -- a slave that refuses a grant is not starvation by the arbiter.
-// Readiness has to be part of the antecedent in BOTH cycles, and the
-// corrected property below says so.
+// Readiness has to be part of the antecedent in BOTH cycles.
+//
+// AND THE SECOND VERSION WAS FALSE TOO, FOR TWO YEARS OF DOCUMENTS'
+// WORTH OF RUNS THAT NOBODY MADE. docs/47 section 5 replaced soc_bus.v's
+// `rst_ni && ...` request gate with `issue_en`, a flop that is low for
+// the FIRST cycle after reset release, and priced it in that file's own
+// comment: "one cycle of latency on the first transaction after a reset,
+// once, at boot". That cycle is inside this property's two-cycle bound,
+// and the property was not re-run. The counterexample is depth 3 and it
+// is exactly the sentence that comment wrote down: cycle 1, the
+// instruction port requests with every slave ready and is refused
+// because issue_en is still 0; cycle 2, issue_en is up but the data port
+// requests too and last_was_d is 0, so round-robin gives that cycle
+// away. Two cycles of requesting, no grant. docs/50 section 7.
+//
+// THE REPAIR IS TO EXTEND, NOT TO RELAX. F9's own header says it is
+// about the ARBITER, so the arbiter's precondition -- that the fabric is
+// open -- belongs in its antecedent, and F9a below adds it. What must
+// not happen is for the boot cycle to fall out of the property set
+// altogether, so F9b asserts the bound that issue_en obeys: from the
+// second cycle in which reset is high, the fabric is open, forever. The
+// two together are strictly stronger than the version that was failing,
+// because the old one said nothing at all about how long the gate may
+// stay shut.
 always @(posedge clk_i) if (f_past_valid && $past(rst_ni) && rst_ni) begin
+    // F9a. Arbiter fairness, once the fabric is open.
     if ($past(mi_req_i) && mi_req_i && $past(f_out_i) == 3'd0
-        && $past(&s_gnt_i) && (&s_gnt_i))
+        && $past(&s_gnt_i) && (&s_gnt_i) && $past(issue_en))
         assert ($past(mi_gnt_o) || mi_gnt_o);
     if ($past(md_req_i) && md_req_i && $past(f_out_d) == 3'd0
-        && $past(&s_gnt_i) && (&s_gnt_i))
+        && $past(&s_gnt_i) && (&s_gnt_i) && $past(issue_en))
         assert ($past(md_gnt_o) || md_gnt_o);
+
+    // F9b. And the fabric is open after exactly one cycle of reset being
+    //      high, so F9a's new antecedent excludes one cycle at boot and
+    //      not an unbounded silence.
+    assert (issue_en);
+end
+
+// ---------------------------------------------------------------------
+// L1-L4: the slave latency regime docs/50 puts the memories into
+// ---------------------------------------------------------------------
+//
+// NO ASSERTION IN THIS FILE CHANGED WHEN hw/soc/rtl/soc_mem.v GREW A
+// SECOND RESPONSE STAGE, AND THAT IS THE RESULT RATHER THAN AN
+// OVERSIGHT. The environment above constrains the slave response inputs
+// with exactly one assumption -- a slave does not answer a request it
+// was never given -- and says nothing whatever about WHEN it answers. So
+// the k-induction proof of F1-F9 already quantified over every slave
+// latency, including the two cycles docs/50 makes the RAM and the boot
+// ROM take, and F4a and F6 were already the statements that the
+// outstanding limit and the queue depth hold under it.
+//
+// What was missing is not a property but a WITNESS. `cover (f_out_i ==
+// 2)` shows a master at the limit, but not that a slave was two cycles
+// late when it got there; an assert set is only as good as the reachable
+// states it is checked on, and docs/09 B.1's vacuity rule applies to a
+// new operating regime as much as to a new property. The ghost below
+// ages the oldest outstanding request at slave 0 -- the RAM -- so that
+// the covers can name the regime instead of hoping it was visited.
+//
+// The ghost is bookkeeping only. Nothing asserts on it.
+reg [2:0] f_age0;
+always @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni)                  f_age0 <= 3'd0;
+    else if (f_occ[0] == 4'd0)    f_age0 <= 3'd0;
+    else if (f_pop[0])            f_age0 <= 3'd0;   // the oldest retires
+    else if (f_age0 != 3'd7)      f_age0 <= f_age0 + 3'd1;
 end
 
 // ---------------------------------------------------------------------
@@ -436,4 +495,25 @@ always @(posedge clk_i) if (f_past_valid && rst_ni) begin
     cover (f_out_i != 3'd0 && f_out_d != 3'd0 && f_lock_i != f_lock_d);
     cover (mi_rvalid_o && md_rvalid_o);     // two responses in one cycle
     cover (f_occ[0] == 4'd4);               // a slave queue completely full
+
+    // L1. THE MEMORY docs/50 BUILDS: slave 0 answers exactly two cycles
+    //     after the grant it is answering. This is the regime the whole
+    //     assert set above is now relied on in, and it is reachable.
+    cover (f_pop[0] && f_age0 == 3'd2);
+
+    // L2. And later than that, so nothing here has quietly fixed the
+    //     latency at the one value the RTL happens to use.
+    cover (f_pop[0] && f_age0 >= 3'd4);
+
+    // L3. TWO REQUESTS IN FLIGHT AT A TWO-CYCLE SLAVE, which is what the
+    //     extra cycle makes routine and what the one-cycle memory never
+    //     produced: the pipeline is full and the older response has not
+    //     come back yet.
+    cover (f_occ[0] == 4'd2 && f_age0 >= 3'd2 && !f_pop[0]);
+
+    // L4. A grant to slave 0 in the same cycle as a response from it,
+    //     with a request still outstanding -- the push-and-pop case of
+    //     the ownership queue, at a latency where it is not the same
+    //     request being pushed and popped.
+    cover (f_gnt && s_req_o[0] && f_pop[0] && f_occ[0] >= 4'd2);
 end

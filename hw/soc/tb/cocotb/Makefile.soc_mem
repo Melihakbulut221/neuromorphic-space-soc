@@ -1,0 +1,87 @@
+# cocotb + Icarus suite for hw/soc/rtl/soc_mem.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_mem                 RDREG = 0
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_mem RDREG=1 \
+#       SIM_BUILD=sim_build_soc_mem_rdreg \
+#       COCOTB_RESULTS_FILE=results_soc_mem_rdreg.xml               RDREG = 1
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_mem lint
+#
+# WHY THIS SUITE EXISTS AND WHY IT IS NEW IN docs/50. Until docs/50 the
+# only memory in this project was one always block, and the whole-SoC
+# simulation was proportionate verification of it. docs/50 gives it a
+# second response stage and a parameter that selects between them, which
+# makes it a slave with a protocol obligation -- soc_bus.v's S1 to S4 --
+# that nothing had ever checked directly. The system-level run exercises
+# the memory only through Ibex, so a protocol defect that Ibex happens
+# not to provoke would not show there.
+#
+# THE PARAMETER IS PASSED BY -P AND THE SUITE ASSERTS WHAT IT GOT. soc_mem
+# is the TOP module here, so Icarus's -P does reach it -- docs/49 section
+# 8.1's finding is that -P is dropped in silence on a NON-root instance,
+# which is a different case and is why hw/soc/flow/sim_soc.sh uses a
+# defparam instead. Here the guard is test_soc_mem.py's first test, which
+# measures the latency the design actually has and compares it with the
+# RDREG the Makefile says it built. A dropped override fails the run
+# rather than passing a suite for the other arm.
+#
+# Standalone by design, same structure and the same rootless tool
+# discovery as Makefile.soc_bus.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+SOC_MEM_SRC ?= $(RTL)/soc_mem.v
+
+VERILOG_SOURCES = $(SOC_MEM_SRC)
+TOPLEVEL = soc_mem
+MODULE = test_soc_mem
+
+# Small enough that a test can walk the whole array, large enough that the
+# word index is more than one bit. The suite reads WORDS off the DUT
+# rather than assuming it.
+WORDS ?= 64
+RDREG ?= 0
+
+SIM_BUILD ?= sim_build_soc_mem
+COCOTB_RESULTS_FILE ?= results_soc_mem.xml
+export COCOTB_RESULTS_FILE
+
+# The suite needs to know which arm it is checking, and it must not learn
+# it from the same place the build learns it or the check would be
+# circular in one direction only. The Makefile tells the test what it
+# ASKED for; the test measures what it GOT.
+export SOC_MEM_RDREG = $(RDREG)
+export SOC_MEM_WORDS = $(WORDS)
+
+COMPILE_ARGS += -Psoc_mem.WORDS=$(WORDS) -Psoc_mem.RDREG=$(RDREG)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) $(SOC_MEM_SRC)
+
+endif

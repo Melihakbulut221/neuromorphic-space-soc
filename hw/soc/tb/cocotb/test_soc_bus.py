@@ -1017,6 +1017,73 @@ async def test_max_outstanding(dut):
 
 
 @cocotb.test()
+async def test_two_cycle_memories_at_full_rate(dut):
+    """docs/50's SoC, driven at the fabric: the RAM and the boot ROM answer
+    TWO cycles after the grant and everything else answers in one.
+
+    The suite already proves the fabric correct at arbitrary latency --
+    test_one_rvalid_per_grant runs five different ones and
+    test_max_outstanding runs six. What none of them drives is the
+    configuration the part actually has after docs/50, at the rate the
+    part actually runs it: a request every cycle to a two-cycle memory, so
+    the memory's pipeline is permanently full and the master is at the
+    outstanding limit for most of the run.
+
+    THE VACUITY GUARD IS THE POINT OF THE TEST. `max_outstanding == 2`
+    asserts that two requests really were in flight at a two-cycle slave;
+    without it a fabric that quietly serialised every access would pass
+    every other assertion in this file, because serialising breaks no rule
+    -- it only destroys the throughput docs/50 depends on. The grant count
+    per cycle is checked for the same reason and against the same failure.
+    """
+    rng = random.Random(11)
+    ram = SLAVE_INDEX["RAM"]
+    rom = SLAVE_INDEX["ROM"]
+    lat = [1] * N_SLAVES
+    lat[ram] = 2
+    lat[rom] = 2
+    env = await setup(dut, latencies=tuple(lat))
+
+    rom_base, rom_size = port_regions()["ROM"]
+    ram_base, ram_size = port_regions()["RAM"]
+
+    # PHASE 1: the instruction port alone, fetching linearly out of the
+    # two-cycle boot ROM with the data port idle. This is the fetch stream
+    # of an idle-dominated part and it is the only case in which the
+    # outstanding limit can be reached at this latency: with both masters
+    # asking, round-robin hands each of them every other cycle, and every
+    # other cycle at two cycles of latency is an occupancy of one.
+    n = 40
+    for i in range(n):
+        a = rom_base + WORD * (i % (rom_size // WORD))
+        env.mi.push(Xact(a, exp_rdata=tag_of(rom, a)))
+    await env.drain(limit=4000)
+    assert env.mi.rvalids == n
+    assert env.mi.max_outstanding == MAX_OUT, (
+        "one master alone at a two-cycle slave peaked at {} outstanding, "
+        "not {}. The fabric is serialising, which breaks no rule and costs "
+        "half the fetch bandwidth.".format(env.mi.max_outstanding, MAX_OUT))
+
+    # PHASE 2: both masters, .text in the two-cycle ROM and .data in the
+    # two-cycle RAM, which is what soc_top.v's link map does. Correctness
+    # only: the occupancy assertion above does not apply here, and the
+    # reason it does not is the arbitration and not the latency.
+    for _ in range(n):
+        a = rom_base + WORD * rng.randrange(rom_size // WORD)
+        env.mi.push(Xact(a, exp_rdata=tag_of(rom, a)))
+        b = ram_base + WORD * rng.randrange(ram_size // WORD)
+        env.md.push(Xact(b, we=rng.randrange(2), be=0xF,
+                         wdata=rng.randrange(1 << 32),
+                         exp_rdata=tag_of(ram, b)))
+    await env.drain(limit=4000)
+    assert env.mi.rvalids == 2 * n and env.md.rvalids == n
+    total = env.slaves[rom].grants + env.slaves[ram].grants
+    assert total == 3 * n, (
+        "the two two-cycle memories saw {} requests for {} grants".format(
+            total, 3 * n))
+
+
+@cocotb.test()
 async def test_slave_error_propagates(dut):
     """Rule 3: err belongs to the response it arrives with.
 

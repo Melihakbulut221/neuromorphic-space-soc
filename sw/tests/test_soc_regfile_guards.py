@@ -530,14 +530,23 @@ def test_the_simulation_checks_that_the_parameter_override_took_effect():
 
     `flow/sim_soc.sh` therefore reads the two arms of the SYNPRE
     generate out of the COMPILED OBJECT and fails if the wrong one is
-    there. This is the check that it keeps doing so."""
+    there. This is the check that it keeps doing so.
+
+    `docs/50` generalised the mechanism -- the same refusal now guards
+    the memory response register's two arms -- so what this test demands
+    is that SYNPRE is one of the knobs it is applied to, not that the
+    code is still shaped the way `docs/49` left it. A check that pinned
+    the shape would have to be edited by every later document that reused
+    it, and would then be edited by the one that broke it."""
     sim = (ROOT / "hw" / "soc" / "flow" / "sim_soc.sh").read_text()
     assert "g_synpre" in sim and "g_synpost" in sim, \
         "sim_soc.sh no longer names both arms of the SYNPRE generate"
-    check = sim.split("the SYNPRE override did not take")
-    assert len(check) == 2, "sim_soc.sh no longer refuses a discarded override"
-    assert 'grep -qa "$want" "$OUT/tb_soc.vvp"'.replace("$want", '\\"$want\\"') \
-        in check[0], "sim_soc.sh no longer greps the compiled object"
+    assert re.search(r"check_arm\s+SOC_RF_SYNPRE\b.*g_synpre.*g_synpost", sim), \
+        "sim_soc.sh no longer checks which SYNPRE arm it built"
+    assert "override did not take" in sim, \
+        "sim_soc.sh no longer refuses a discarded override"
+    assert 'grep -qa "\\"$want\\"" "$OUT/tb_soc.vvp"' in sim, \
+        "sim_soc.sh no longer greps the compiled object"
     assert "defparam tb_soc.dut" in sim, \
         "sim_soc.sh no longer overrides SYNPRE by an absolute defparam; " \
         "if it went back to -P, the override is silently discarded"

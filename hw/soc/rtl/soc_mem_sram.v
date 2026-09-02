@@ -93,6 +93,31 @@
 //     difference is not observable through soc_bus's protocol, but it
 //     is a difference and it is why this file must not be substituted
 //     into a simulation.
+//
+// ---------------------------------------------------------------------
+// RDREG -- THE RESPONSE REGISTER. THIS FILE IS WHY IT EXISTS.
+// ---------------------------------------------------------------------
+//
+// The read arc above is not a cost that can be optimised: it is the
+// vendor's Liberty for a hard macro. docs/47's sign-off decomposes its
+// binding path as 1.8834 ns of clock to A_CLK, 9.5277 ns INSIDE the
+// macro, and 13.1261 ns of 26 standard-cell stages from A_DOUT to a
+// register-file SECDED check bit -- 24.5371 ns of arrival against
+// 21.3342 ns required. docs/48 tried floorplan and capacitance, docs/49
+// tried logic restructuring, and docs/49 section 11.1 concluded that ONE
+// FLIP-FLOP in this file is the only measured mechanism that puts both
+// halves inside 20 ns.
+//
+// RDREG = 1 is that flip-flop, 32 of them, and it is placed AFTER the
+// bank and half multiplexers rather than at each macro's A_DOUT. The
+// alternative costs 4 x 64 = 256 flip-flops on the RAM to save the two
+// multiplexer stages, and docs/50 section 4 measures the multiplexers at
+// well inside the 9.9231 ns the first half has spare.
+//
+// The protocol consequence is one extra cycle of response latency, on
+// this slave only, and hw/soc/rtl/soc_mem.v's header states the rest of
+// it. The peripherals are not behind a macro and do not pay: RDREG is a
+// parameter of this module and the fabric has no stage of its own.
 
 `timescale 1ns / 1ps
 
@@ -100,7 +125,9 @@ module soc_mem #(
     parameter integer WORDS     = 4096,
     parameter         RO        = 1'b0,
     parameter         INIT_FILE = "",
-    parameter integer INIT_WORD = 0
+    parameter integer INIT_WORD = 0,
+    // One extra response stage. See the header.
+    parameter         RDREG     = 1'b0
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -111,27 +138,81 @@ module soc_mem #(
     input  wire [3:0]  be_i,
     input  wire [31:0] wdata_i,
     output wire        gnt_o,
-    output reg         rvalid_o,
+    output wire        rvalid_o,
     output wire [31:0] rdata_o,
-    output reg         err_o
+    output wire        err_o
 );
 
   // Protocol, unchanged from soc_mem.v: soc_bus.v rules S1-S4, always
-  // ready, fixed one-cycle response, in order by construction.
+  // ready, fixed response latency, in order by construction. RDREG
+  // changes the latency and nothing else; gnt_o is combinational from
+  // req_i in both arms, so this memory still accepts one request per
+  // cycle.
   assign gnt_o = req_i;
 
   wire write_attempt = req_i && we_i;
   wire do_write      = write_attempt && !RO;
 
+  // The raw read return, driven by whichever generate branch below has a
+  // mapping for WORDS. rv0 and er0 are the one-cycle response this file
+  // had before RDREG existed.
+  wire [31:0] rd_raw;
+
+  reg rv0;
+  reg er0;
+
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      rvalid_o <= 1'b0;
-      err_o    <= 1'b0;
+      rv0 <= 1'b0;
+      er0 <= 1'b0;
     end else begin
-      rvalid_o <= req_i;
-      err_o    <= write_attempt && RO;
+      rv0 <= req_i;
+      er0 <= write_attempt && RO;
     end
   end
+
+  // ---- the response, with or without the extra stage ------------------
+  //
+  // The two arm names are soc_mem.v's, deliberately: the compiled-object
+  // check in hw/soc/flow/sim_soc.sh and the netlist check in docs/50 look
+  // for the same string whichever memory model is in the build.
+  generate
+  if (!RDREG) begin : g_rd1
+
+    assign rvalid_o = rv0;
+    assign rdata_o  = rd_raw;
+    assign err_o    = er0;
+
+  end
+  if (RDREG) begin : g_rd2
+
+    reg        rv1;
+    reg        er1;
+    reg [31:0] rd1;
+
+    always @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        rv1 <= 1'b0;
+        rd1 <= 32'h0;
+        er1 <= 1'b0;
+      end else begin
+        rv1 <= rv0;
+        er1 <= er0;
+        // rv0 is the cycle in which this request's word is on A_DOUT and
+        // the bank and half selects captured with the request are
+        // driving the multiplexers, so this is the edge that has the
+        // word to capture. Gating on it also holds rdata_o between
+        // responses, as the unregistered arm's A_DOUT does.
+        if (rv0) rd1 <= rd_raw;
+      end
+    end
+
+    assign rvalid_o = rv1;
+    assign rdata_o  = rd1;
+    assign err_o    = er1;
+
+  end
+  endgenerate
 
   // Byte enables expanded to the macro's per-BIT mask. A_BM[i] = 1
   // writes bit i (the PDK's SRAM_1P_behavioral_bm_bist declares exactly
@@ -198,7 +279,7 @@ module soc_mem #(
         default: dsel = dout3;
       endcase
     end
-    assign rdata_o = half_q ? dsel[63:32] : dsel[31:0];
+    assign rd_raw = half_q ? dsel[63:32] : dsel[31:0];
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b0 (
         .A_CLK(clk_i), .A_MEN(req_i && (bank == 2'd0)),
@@ -256,7 +337,7 @@ module soc_mem #(
       if (!rst_ni)      bank_q <= 1'b0;
       else if (req_i)   bank_q <= bank;
 
-    assign rdata_o = bank_q ? dout1 : dout0;
+    assign rd_raw = bank_q ? dout1 : dout0;
 
     RM_IHPSG13_1P_1024x32_c2_bm_bist u_b0 (
         .A_CLK(clk_i), .A_MEN(req_i && !bank),
@@ -290,7 +371,7 @@ module soc_mem #(
     end
     // synthesis translate_on
     UNSUPPORTED_SOC_MEM_SRAM_WORDS u_unsupported ();
-    assign rdata_o = 32'h0;
+    assign rd_raw = 32'h0;
 
   end
   endgenerate
