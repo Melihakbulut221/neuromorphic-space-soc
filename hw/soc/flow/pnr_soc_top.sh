@@ -177,8 +177,27 @@ SRCS=$(
   echo "$RTL/soc_top.v"
 )
 
+# The base configuration. PNR_CONFIG selects a FLOORPLAN VARIANT written
+# by hw/soc/pnr/floorplan.py -- docs/48 measures what the floorplan of
+# docs/47 costs, and a second floorplan cannot be expressed on the
+# LibreLane command line: `-c KEY=VALUE` inserts the value as a STRING
+# and re-parses it with permissive typing, so `-c DIE_AREA=[0, 0, ...]`
+# is split on the commas and arrives as the Decimal '[0'. MACROS is a
+# dictionary of Macro objects and cannot be passed at all. So a variant
+# is a whole config file, generated, and it must live under hw/soc/pnr/
+# for the same reason config.json does: the refusal above is what keeps
+# this script out of the frozen hw/openlane/, and an arbitrary config
+# path would walk around it.
+PNR_CONFIG=${PNR_CONFIG:-$PNR/config.json}
+PNR_CONFIG=$(cd "$(dirname "$PNR_CONFIG")" && pwd -P)/$(basename "$PNR_CONFIG")
+case "$PNR_CONFIG" in
+  "$PNR"/*) ;;
+  *) echo "refusing: PNR_CONFIG must be under $PNR" >&2; exit 1 ;;
+esac
+[ -f "$PNR_CONFIG" ] || { echo "no such config: $PNR_CONFIG" >&2; exit 1; }
+
 RESOLVED=$PNR/config.resolved.json
-"$VENV/bin/python" - "$PNR/config.json" "$RESOLVED" <<PY
+"$VENV/bin/python" - "$PNR_CONFIG" "$RESOLVED" <<PY
 import json, sys
 src, dst = sys.argv[1], sys.argv[2]
 base = json.load(open(src))
@@ -224,6 +243,7 @@ else
   echo "           (needed only for the -i form above)"
 fi
 
+echo "config:    $PNR_CONFIG"
 echo "run tag:   $RUN_TAG"
 echo "run dir:   $RUN_DIR/$RUN_TAG"
 echo "sources:   $(echo "$SRCS" | wc -l) verilog files"

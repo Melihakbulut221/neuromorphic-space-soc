@@ -1159,3 +1159,116 @@ def test_the_pnr_flow_supplies_only_the_source_list():
     assert "VERILOG_FILES" not in _pnr_config(), (
         "hw/soc/pnr/config.json carries VERILOG_FILES; the script "
         "supplies it and would now be overriding a hand-written list")
+
+
+# =====================================================================
+# 7. the floorplan generator
+#
+# docs/48-soc-floorplan-and-drive.md measured a second and a third
+# floorplan against docs/47's, and hw/soc/pnr/floorplan.py is what
+# emitted them. It replaces a hand-edited config.json for a reason that
+# is a property of the tool rather than a preference: LibreLane's
+# `-c KEY=VALUE` inserts the value as a STRING and re-parses it with
+# permissive typing, so a list arrives split on its commas and a
+# dictionary cannot be passed at all. A floorplan variant is therefore
+# a whole config file, and a generator that writes whole config files
+# is a generator that can quietly change a key nobody looked at.
+#
+# Three things are guarded and each is silent in its own way:
+#
+#   * THE GENERATOR REPRODUCES docs/47's FLOORPLAN. At --channel 700.08
+#     --density 40 it must emit config.json byte for byte, from the
+#     PDK's LEF rather than from a transcription. If it stops doing
+#     that, every comparison in docs/48 is between two floorplans
+#     rather than between one floorplan and its own variant.
+#   * SITE ALIGNMENT. docs/47 section 6.1 established that the core box
+#     is an integer number of 0.48 um sites and 3.78 um rows and every
+#     macro origin likewise. Losing it does not fail the flow; it makes
+#     OpenROAD.CutRows start off-grid.
+#   * pnr_soc_top.sh's REFUSAL. PNR_CONFIG selects the variant, and an
+#     arbitrary path would walk around the refusal that keeps this
+#     script out of the frozen hw/openlane/.
+#
+# WHAT THIS SECTION DOES NOT COVER: it does not place anything. A
+# floorplan that is site-aligned, halo-clear and inside the core can
+# still be a bad floorplan, and docs/48 measures two that are.
+# =====================================================================
+
+
+def _floorplan_py(*args):
+    """Run hw/soc/pnr/floorplan.py, skipping if the PDK is not
+    installed -- the macro dimensions are READ from the LEF, and a test
+    that cannot see what it reads is not a check."""
+    pdk_root = os.environ.get("PDK_ROOT", os.path.expanduser("~/.ciel"))
+    lef = (Path(pdk_root) / "ihp-sg13g2" / "libs.ref" / "sg13g2_sram" /
+           "lef" / "RM_IHPSG13_1P_2048x64_c2_bm_bist.lef")
+    if not lef.exists():
+        pytest.skip("ihp-sg13g2 PDK not installed at {}".format(pdk_root))
+    env = dict(os.environ, PDK_ROOT=pdk_root)
+    return subprocess.run(
+        [sys.executable, str(SOC_PNR / "floorplan.py"), *args],
+        capture_output=True, text=True, env=env)
+
+
+def test_the_floorplan_generator_reproduces_the_hardened_floorplan():
+    """hw/soc/pnr/floorplan.py --channel 700.08 --density 40 must emit
+    hw/soc/pnr/config.json exactly, apart from the provenance note it
+    adds. That is the whole argument that docs/48's floorplans differ
+    from docs/47's in the floorplan and in nothing else: the generator
+    computes docs/47's die, core box, six macro origins and two
+    orientations from the PDK's LEF SIZE statements, without being told
+    what they should come out as."""
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "cfg.json"
+        r = _floorplan_py("--channel", "700.08", "--density", "40",
+                          "--write", str(out))
+        assert r.returncode == 0, r.stderr
+        got = json.loads(out.read_text())
+    note = got.pop("//floorplan48", None)
+    assert note is not None, "the generator no longer records its provenance"
+    assert got == _pnr_config(), (
+        "hw/soc/pnr/floorplan.py no longer reproduces config.json at "
+        "the channel height docs/47 hardened. Every floorplan "
+        "comparison in docs/48 rests on it doing so.")
+
+
+def test_the_floorplan_generator_keeps_the_core_on_the_site_grid():
+    """docs/47 section 6.1: the core box is an integer number of sites
+    and rows and every macro origin is too. The generator asserts it and
+    this test asserts the assertion fires, by asking for a channel
+    height that is NOT on the admissible 0.78 + 3.78k grid and checking
+    that the tool snaps it and says so rather than emitting an off-grid
+    floorplan."""
+    r = _floorplan_py("--channel", "500.00")
+    assert r.returncode == 0, r.stderr
+    assert "snapped" in r.stdout, (
+        "hw/soc/pnr/floorplan.py accepted an off-grid channel height "
+        "without snapping it")
+    m = re.search(r"channel\s+([\d.]+) um", r.stdout)
+    assert m, r.stdout
+    channel = float(m.group(1))
+    assert abs(((channel - 0.78) / 3.78) - round((channel - 0.78) / 3.78)) < 1e-6, (
+        "hw/soc/pnr/floorplan.py emitted a channel of {} um, which does "
+        "not put the upper macro row on a row boundary".format(channel))
+
+
+def test_the_pnr_flow_refuses_a_config_outside_its_own_directory():
+    """PNR_CONFIG selects a floorplan variant. The refusal that keeps
+    hw/soc/flow/pnr_soc_top.sh out of the frozen hw/openlane/ is a check
+    on the CONFIG DIRECTORY, so a PNR_CONFIG pointing anywhere else
+    would walk around it. The script must refuse."""
+    text = (SOC_FLOW / "pnr_soc_top.sh").read_text()
+    assert "PNR_CONFIG" in text, (
+        "hw/soc/flow/pnr_soc_top.sh no longer accepts PNR_CONFIG")
+    assert 'refusing: PNR_CONFIG must be under' in text, (
+        "hw/soc/flow/pnr_soc_top.sh no longer refuses a PNR_CONFIG "
+        "outside hw/soc/pnr/, which is the refusal that keeps it out "
+        "of the frozen hw/openlane/")
+    r = subprocess.run(
+        ["bash", str(SOC_FLOW / "pnr_soc_top.sh"), "guardtest"],
+        capture_output=True, text=True,
+        env=dict(os.environ, PNR_CONFIG="/etc/hostname"))
+    assert r.returncode != 0, (
+        "hw/soc/flow/pnr_soc_top.sh accepted a PNR_CONFIG outside "
+        "hw/soc/pnr/")
+    assert "refusing" in (r.stderr + r.stdout)

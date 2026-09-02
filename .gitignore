@@ -82,3 +82,9 @@ hw/soc/formal/soc_busstat_*/
 hw/soc/pnr/runs/
 hw/soc/pnr/config.resolved.json
 hw/soc/pnr/state/
+
+# docs/48: the floorplan variants. hw/soc/pnr/floorplan.py writes them
+# from the PDK's own LEF and from config.json, and reproduces docs/47's
+# floorplan exactly at --channel 700.08 --density 40, so committing one
+# would be vendoring a thing the tree can regenerate.
+hw/soc/pnr/config-fp*.json
