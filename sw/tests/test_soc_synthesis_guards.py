@@ -898,9 +898,15 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
         "prim_clock_gating.v", "ibex_regfile_secded.v", "soc_bus.v",
         "soc_apb_bridge.v", "soc_uart.v", "soc_pnp.v", "soc_apb_pnp.v",
         "soc_clint.v", "soc_gptimer.v", "soc_wdog.v", "soc_busstat.v",
-        "soc_tmr_bank.v")]
+        "soc_tmr_bank.v", "soc_npu.v", "soc_npu_ser.v")]
+    # THE FROZEN PILOT IS PART OF THE DESIGN AS OF docs/51. soc_npu.v
+    # instantiates hw/rtl/pilot_top.v unmodified, so this elaboration
+    # reads it and the four blocks it is built from out of the directory
+    # docs/34 pins by blob hash. They are READ here exactly as
+    # hw/soc/flow/sim_soc.sh reads them and are never written.
     soc += [PILOT_RTL / n for n in
-            ("tmr_voter.v", "secded_enc.v", "secded_dec.v")]
+            ("tmr_voter.v", "secded_enc.v", "secded_dec.v",
+             "pilot_top.v", "lif_core.v", "aer_fifo.v", "scrub.v")]
 
     # hw/soc/rtl/prim_clock_gating.v binds a real PDK cell, so the
     # library has to supply sg13g2_lgcp_1's interface exactly as the
@@ -919,8 +925,8 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
     script = (
         prelude
         + " read_verilog -lib {};".format(bb)
-        + " read_verilog -defer -I {} {};".format(
-            SOC_RTL,
+        + " read_verilog -defer -I {} -I {} {};".format(
+            SOC_RTL, PILOT_RTL,
             " ".join(str(p) for p in ibex + soc + [SOC_RTL / "soc_top.v"]))
         + " hierarchy -check -top soc_top;")
     out = _run_yosys(script, workdir)

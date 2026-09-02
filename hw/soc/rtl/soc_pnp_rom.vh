@@ -17,7 +17,7 @@ case (word_addr)
   10'h204: pnp_data = 32'h0001FFF2;
   10'h208: pnp_data = 32'h09010020;
   10'h209: pnp_data = 32'h10000000;
-  10'h20A: pnp_data = 32'h00000000;
+  10'h20A: pnp_data = 32'h00000001;
   10'h20C: pnp_data = 32'h1001F002;
   10'h210: pnp_data = 32'h09002020;
   10'h211: pnp_data = 32'h00002000;

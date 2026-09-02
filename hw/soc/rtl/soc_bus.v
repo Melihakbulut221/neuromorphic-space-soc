@@ -118,21 +118,22 @@ module soc_bus (
 
     // ---- slave ports. Address and write data are broadcast (S2). ----
     // Index order is fixed and is the order the decode below assigns:
-    //   0 RAM, 1 ROM, 2 APB, 3 PNP, 4 CLINT. Index 5 is the internal
-    //   error slave and has no port.
-    output wire [4:0]  s_req_o,
+    //   0 RAM, 1 ROM, 2 APB, 3 PNP, 4 CLINT, 5 NPU. Index 6 is the
+    //   internal error slave and has no port.
+    output wire [5:0]  s_req_o,
     output wire [31:0] s_addr_o,
     output wire        s_we_o,
     output wire [3:0]  s_be_o,
     output wire [31:0] s_wdata_o,
-    input  wire [4:0]  s_gnt_i,
-    input  wire [4:0]  s_rvalid_i,
+    input  wire [5:0]  s_gnt_i,
+    input  wire [5:0]  s_rvalid_i,
     input  wire [31:0] s_rdata_0_i,
     input  wire [31:0] s_rdata_1_i,
     input  wire [31:0] s_rdata_2_i,
     input  wire [31:0] s_rdata_3_i,
     input  wire [31:0] s_rdata_4_i,
-    input  wire [4:0]  s_err_i
+    input  wire [31:0] s_rdata_5_i,
+    input  wire [5:0]  s_err_i
 );
 
 `include "soc_memmap.vh"
@@ -150,8 +151,17 @@ module soc_bus (
   // is read on every scheduler tick, so paying the bridge's three-cycle
   // minimum for it would be the wrong trade for the one register in this
   // SoC that software polls in a loop.
-  localparam integer NS      = 6;
-  localparam integer ERRSLV  = 5;
+  //
+  // Port 5 (NPU) is the one added by docs/51-npu-integration.md. It is a
+  // system-bus slave and not a peripheral behind the APB bridge,
+  // because the frozen map gives the NPU a 256 MiB REGION at
+  // 0x10000000 rather than a 4 KiB peripheral slot -- and a 4 KiB slot
+  // could not hold sixteen per-node register windows in the first
+  // place. It is also, by a wide margin, the SLOWEST slave here: about
+  // 172 cycles, against the peripheral bridge's three. soc_npu.v's
+  // header records what that costs and where.
+  localparam integer NS      = 7;
+  localparam integer ERRSLV  = 6;
   localparam integer MAX_OUT = 2;
 
   // -------------------------------------------------------------------
@@ -171,6 +181,7 @@ module soc_bus (
       else if ((a & SOC_MASK_PNP) == SOC_BASE_PNP) decode = 3'd3;
       else if ((a & SOC_MASK_CLINT) == SOC_BASE_CLINT)
                                                    decode = 3'd4;
+      else if ((a & SOC_MASK_NPU) == SOC_BASE_NPU) decode = 3'd5;
       else                                         decode = ERRSLV[2:0];
     end
   endfunction
@@ -258,6 +269,7 @@ module soc_bus (
   assign s_req_o[2] = any_win && (tgt == 3'd2);
   assign s_req_o[3] = any_win && (tgt == 3'd3);
   assign s_req_o[4] = any_win && (tgt == 3'd4);
+  assign s_req_o[5] = any_win && (tgt == 3'd5);
 
   always @(posedge clk_i or negedge rst_ni)
     if (!rst_ni)      last_was_d <= 1'b0;
@@ -320,7 +332,8 @@ module soc_bus (
   assign push[2] = accepted && (tgt == 3'd2);
   assign push[3] = accepted && (tgt == 3'd3);
   assign push[4] = accepted && (tgt == 3'd4);
-  assign push[5] = accepted && (tgt == ERRSLV[2:0]);
+  assign push[5] = accepted && (tgt == 3'd5);
+  assign push[6] = accepted && (tgt == ERRSLV[2:0]);
 
   integer s;
   always @(posedge clk_i or negedge rst_ni) begin
@@ -371,7 +384,8 @@ module soc_bus (
   assign slv_rdata[2] = s_rdata_2_i;
   assign slv_rdata[3] = s_rdata_3_i;
   assign slv_rdata[4] = s_rdata_4_i;
-  assign slv_rdata[5] = 32'h0;      // error slave returns no data
+  assign slv_rdata[5] = s_rdata_5_i;
+  assign slv_rdata[6] = 32'h0;      // error slave returns no data
 
   genvar g;
   generate
@@ -389,13 +403,15 @@ module soc_bus (
                     | ({32{resp_to_d[2]}} & slv_rdata[2])
                     | ({32{resp_to_d[3]}} & slv_rdata[3])
                     | ({32{resp_to_d[4]}} & slv_rdata[4])
-                    | ({32{resp_to_d[5]}} & slv_rdata[5]);
+                    | ({32{resp_to_d[5]}} & slv_rdata[5])
+                    | ({32{resp_to_d[6]}} & slv_rdata[6]);
   assign mi_rdata_o = ({32{resp_to_i[0]}} & slv_rdata[0])
                     | ({32{resp_to_i[1]}} & slv_rdata[1])
                     | ({32{resp_to_i[2]}} & slv_rdata[2])
                     | ({32{resp_to_i[3]}} & slv_rdata[3])
                     | ({32{resp_to_i[4]}} & slv_rdata[4])
-                    | ({32{resp_to_i[5]}} & slv_rdata[5]);
+                    | ({32{resp_to_i[5]}} & slv_rdata[5])
+                    | ({32{resp_to_i[6]}} & slv_rdata[6]);
 
   assign md_err_o = |(resp_to_d & slv_err);
   assign mi_err_o = |(resp_to_i & slv_err);

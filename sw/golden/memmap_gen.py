@@ -9,7 +9,7 @@ BASE_ALIGNMENT = 0x100
 # name -> (base, size, type, attr, status, port or None)
 REGIONS = {
     "RAM": (0x00000000, 0x00010000, "memory", "rwx", "implemented", "ram"),
-    "NPU": (0x10000000, 0x10000000, "memory", "rw", "reserved", None),
+    "NPU": (0x10000000, 0x10000000, "memory", "rw", "implemented", "npu"),
     "ROM": (0xC0000000, 0x00002000, "memory", "rx", "implemented", "rom"),
     "QSPI3": (0xD0000000, 0x02000000, "memory", "rx", "reserved", None),
     "QSPI4": (0xD8000000, 0x08000000, "memory", "rx", "reserved", None),
@@ -37,6 +37,7 @@ MASKS = {
 # fabric port name -> region name
 PORTS = {
     "ram": "RAM",
+    "npu": "NPU",
     "rom": "ROM",
     "clint": "CLINT",
     "apb": "APB",
@@ -63,7 +64,7 @@ APB_SLOTS = {
     "SCRUB": (0xFF916000, 0x016, 23, "reserved"),
     "BOOTREG": (0xFF917000, 0x017, 0, "reserved"),
     "CLKGATE": (0xFF918000, 0x018, 0, "reserved"),
-    "NPUCFG": (0xFF919000, 0x019, 24, "reserved"),
+    "NPUCFG": (0xFF919000, 0x019, 24, "implemented"),
     "APBPNP": (0xFF9FF000, 0x0FF, 0, "implemented"),
 }
 
@@ -112,7 +113,7 @@ PNP_ROM = {
     0x204: 0x0001FFF2,
     0x208: 0x09010020,
     0x209: 0x10000000,
-    0x20A: 0x00000000,
+    0x20A: 0x00000001,
     0x20C: 0x1001F002,
     0x210: 0x09002020,
     0x211: 0x00002000,

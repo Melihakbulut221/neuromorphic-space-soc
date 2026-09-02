@@ -8,6 +8,8 @@
 #                                       prove_w16, cover
 #   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, prove_w0,
 #                                       cover
+#   cd hw/soc/formal && make npuser     the NPU serial transport: bmc,
+#                                       prove, cover, prove_h3
 #   cd hw/soc/formal && make regfile    the shortened SECDED code the
 #                                       substituted register file uses:
 #                                       bmc, prove, prove_abc, cover
@@ -34,9 +36,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat
+all: bus apb clint wdog wdogtmr regfile busstat npuser
 
 include $(REPO)/tools.mk
 
@@ -46,6 +48,12 @@ bus:
 	@for t in $(TASKS); do \
 	  echo "== soc_bus $$t"; \
 	  $(SBY) -f soc_bus.sby $$t || exit 1; \
+	done
+
+npuser:
+	@for t in $(TASKS) prove_h3; do \
+	  echo "== soc_npu_ser $$t"; \
+	  $(SBY) -f soc_npu_ser.sby $$t || exit 1; \
 	done
 
 apb:

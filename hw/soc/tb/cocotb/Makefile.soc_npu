@@ -1,0 +1,102 @@
+# cocotb + Icarus suite for hw/soc/rtl/soc_npu.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_npu
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_npu SER_HALF=3 \
+#       SIM_BUILD=sim_build_soc_npu_h3 \
+#       COCOTB_RESULTS_FILE=results_soc_npu_h3.xml
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_npu lint
+#
+# THE PILOT IS IN THE DESIGN UNDER TEST AND IS READ, NEVER WRITTEN.
+# hw/rtl/ is pinned by git blob hash in docs/34 section 2.1 for the
+# duration of the TTIHP26b shuttle; soc_npu.v instantiates pilot_top.v
+# out of it and this Makefile compiles it from there. The same rule
+# Makefile.ibex_regfile_secded already applies to secded_enc.v and
+# secded_dec.v, and hw/soc/flow/sim_soc.sh to tmr_voter.v.
+#
+# npu_regs.vh is reached through -I on that directory rather than copied.
+#
+# THE PARAMETERS ARE PASSED BY -P AND THE SUITE ASSERTS WHAT IT GOT.
+# soc_npu is the TOP module here, so Icarus's -P does reach it (docs/49
+# section 8.1's finding is about a NON-root instance, which is why
+# sim_soc.sh uses a defparam instead). The guard is
+# test_npucfg_identity_and_geometry, which reads the geometry back out of
+# the block's own GEOM register and compares it with what the Makefile
+# exported. An override that did not take fails the run.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL   = $(PWD)/../../rtl
+PILOT = $(PWD)/../../../rtl
+
+SOC_NPU_SRC ?= $(RTL)/soc_npu.v
+SOC_NPU_SER_SRC ?= $(RTL)/soc_npu_ser.v
+
+VERILOG_SOURCES = \
+	$(SOC_NPU_SRC) \
+	$(SOC_NPU_SER_SRC) \
+	$(PILOT)/pilot_top.v \
+	$(PILOT)/lif_core.v \
+	$(PILOT)/aer_fifo.v \
+	$(PILOT)/scrub.v \
+	$(PILOT)/secded_enc.v \
+	$(PILOT)/secded_dec.v \
+	$(PILOT)/tmr_voter.v
+
+TOPLEVEL = soc_npu
+MODULE = test_soc_npu
+
+NODES ?= 1
+NEURONS ?= 8
+AXONS ?= 8
+SER_HALF ?= 2
+INJ_DEPTH ?= 8
+CAP_DEPTH ?= 8
+
+SIM_BUILD ?= sim_build_soc_npu
+COCOTB_RESULTS_FILE ?= results_soc_npu.xml
+export COCOTB_RESULTS_FILE
+
+export SOC_NPU_NODES = $(NODES)
+export SOC_NPU_NEURONS = $(NEURONS)
+export SOC_NPU_AXONS = $(AXONS)
+export SOC_NPU_SER_HALF = $(SER_HALF)
+export SOC_NPU_INJ_DEPTH = $(INJ_DEPTH)
+export SOC_NPU_CAP_DEPTH = $(CAP_DEPTH)
+
+COMPILE_ARGS += -I$(RTL) -I$(PILOT)
+COMPILE_ARGS += -Psoc_npu.N_NODES=$(NODES)
+COMPILE_ARGS += -Psoc_npu.N_NEURONS=$(NEURONS)
+COMPILE_ARGS += -Psoc_npu.N_AXONS=$(AXONS)
+COMPILE_ARGS += -Psoc_npu.SER_HALF=$(SER_HALF)
+COMPILE_ARGS += -Psoc_npu.INJ_DEPTH=$(INJ_DEPTH)
+COMPILE_ARGS += -Psoc_npu.CAP_DEPTH=$(CAP_DEPTH)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) -I$(PILOT) --top-module soc_npu_ser \
+		$(SOC_NPU_SER_SRC)
+
+endif

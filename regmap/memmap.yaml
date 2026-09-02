@@ -140,12 +140,20 @@ regions:
     desc: System SRAM, 64 KiB. Data, stack and relocated .data live here
     source: RAM at 0x0 (NOELVSYS grip.pdf table 2293, GR740 UM 2.3)
 
+  # docs/51 reaches this window. The low 64 KiB of it is sixteen 4 KiB
+  # per-node register windows -- one docs/10 section 10 register block
+  # per mesh node, at NODE_ID * 0x1000, which is what docs/10 section 8
+  # item 5 freezes. Only the nodes soc_npu.v instantiates answer; the
+  # rest of the 256 MiB, including the descriptor-ring area docs/08
+  # section 3.1 sketches, is a bus error and is meant to stay one until
+  # something is built there.
   - name: NPU
     base: 0x10000000
     size: 0x10000000
     type: memory
     attr: rw
-    status: reserved
+    port: npu
+    status: implemented
     device_id: 0x010
     desc: NPU fabric window; per-node register windows and descriptor rings
     source: project-specific (docs/08 section 3 row 21)
@@ -293,8 +301,8 @@ apb_slots:
      desc: "Bootstrap pin readback and boot report register, GRGPREG-like", source: "GRGPREG 0xFFA09000 (GR740)"}
   - {name: CLKGATE, slot: 0x018, irq: 0,  status: reserved, device_id: 0x02C,
      desc: "Clock gate enable and status for NPU nodes and heavy peripherals", source: "GRCLKGATE (GR740, GR716B)"}
-  - {name: NPUCFG,  slot: 0x019, irq: 24, line: 12, status: reserved, device_id: 0x013,
-     desc: "NPU fabric-level global configuration and status", source: "project-specific"}
+  - {name: NPUCFG,  slot: 0x019, irq: 24, line: 12, status: implemented, device_id: 0x013,
+     desc: "NPU fabric-level global configuration and status, and the AER event port; docs/51", source: "project-specific"}
   - {name: APBPNP,  slot: 0x0FF, irq: 0,  status: implemented, device_id: 0x000,
      desc: "Peripheral bus device table, two words per slot", source: "APB PnP at bridge base + 0xFF000 (GRLIB grlib.pdf 5.3), layout only"}
 

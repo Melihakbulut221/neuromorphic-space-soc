@@ -17,6 +17,14 @@
 #                        RTL and the tests.
 #   -I $SW               so #include "soc_memmap.h", also generated,
 #                        resolves.
+#   -I $OUT              so the two headers gen_npu_vectors.py emits
+#                        into the build directory resolve: npu_regs.h,
+#                        the node register map from regmap/regmap.yaml,
+#                        and npu_vectors.h, this build's NPU stimulus
+#                        together with the answer sw/golden computes for
+#                        it. They are regenerated on EVERY build, from
+#                        the golden model, so the program cannot be
+#                        checking yesterday's answer.
 #
 # The output binary is the ROM contents: .text, .trapvec, .rodata and the
 # load image of .data, in that order. .bss and the PMP buffer are NOLOAD
@@ -41,12 +49,17 @@ done
 
 mkdir -p "$OUT"
 
+# The golden model computes the NPU demonstration's expected answer here,
+# before the program that will be checked against it is compiled. Nothing
+# in this step reads any RTL or any simulation output.
+python3 "$SOC_DIR/flow/gen_npu_vectors.py" "$OUT"
+
 "$GCC" \
   -march=rv32imc_zicsr_zifencei -mabi=ilp32 -mcmodel=medlow \
   -Os -g -ffreestanding -fno-builtin -nostdlib -nostartfiles \
   -Wall -Wextra -Werror \
   -DSOC_PLATFORM -DHAVE_PMP \
-  -I "$SW" -L "$SW" \
+  -I "$SW" -I "$OUT" -L "$SW" \
   -T "$SW/link_soc.ld" \
   "$@" \
   "$SW/crt0.S" "$SW/test_ibex.c" \

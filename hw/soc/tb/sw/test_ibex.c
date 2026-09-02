@@ -54,6 +54,15 @@
 #ifdef SOC_PLATFORM
 #include "soc_memmap.h"
 #include "soc_timers.h"
+#include "soc_npucfg.h"
+/* Both generated into the build directory by
+   hw/soc/flow/gen_npu_vectors.py, which build_sw_soc.sh runs first:
+   npu_regs.h is the node register map from regmap/regmap.yaml, and
+   npu_vectors.h is this demonstration's stimulus together with the
+   answer sw/golden/lif_core.py computes for it. Checks 23 to 27 compare
+   the hardware against the second and never against itself. */
+#include "npu_regs.h"
+#include "npu_vectors.h"
 
 // GRLIB APBUART register offsets and bits (grip.pdf table 126, adopted
 // by docs/08 section 3 row 9 and implemented as a subset in
@@ -191,6 +200,127 @@ static uint32_t do_load(volatile uint32_t *p) {
                    "lw %0, 0(%1)\n"
                    ".option pop\n" : "=r"(v) : "r"(p) : "memory");
   return v;
+}
+#endif
+
+#ifdef SOC_PLATFORM
+/* ---- NPU access helpers -------------------------------------------
+   The node register window is ORDINARY MEMORY as far as this program is
+   concerned: a load or a store at SOC_NPU_BASE + node*0x1000 + offset.
+   What is behind it is a serial frame into the frozen pilot and about
+   172 clock cycles of it, which is why these are plain accesses and not
+   a poll loop -- the SLAVE holds the response, so the core stalls on
+   the load exactly as it would on a slow memory, and nothing here has
+   to know the transport exists. That is the whole point of the design
+   (hw/soc/rtl/soc_npu.v section 1).
+
+   The one place the cost is visible is the BUSY poll below, which is
+   bounded rather than unbounded for the reason every wait loop in this
+   file is: a hang says nothing. */
+static void npu_wr(uint32_t off, uint32_t v) {
+  *(volatile uint32_t *)NPU_NODE(0, off) = v;
+}
+static uint32_t npu_rd(uint32_t off) {
+  return *(volatile uint32_t *)NPU_NODE(0, off);
+}
+static uint32_t cfg_rd(uint32_t a) { return *(volatile uint32_t *)a; }
+static void cfg_wr(uint32_t a, uint32_t v) { *(volatile uint32_t *)a = v; }
+
+/* Wait for the node to go idle. STATUS.BUSY is bit 0 (regmap/regmap.yaml
+   through the generated header). */
+static int npu_wait_idle(int limit) {
+  for (int i = 0; i < limit; i++)
+    if ((npu_rd(NPU_STATUS) & (1u << NPU_BIT_STATUS_BUSY)) == 0u) return 1;
+  return 0;
+}
+
+/* Bring the node up in the order docs/10 section 11.1 requires: reset,
+   state clear, configure, load weights, enable. Configuration registers
+   are LOCKED while BUSY (docs/10 section 6), so the enable is last and
+   the state clear has to complete before the configuration starts. */
+static int npu_bring_up(void) {
+  int ok = 1;
+  npu_wr(NPU_CTRL, 1u << NPU_BIT_CTRL_STATE_CLR);
+  if (!npu_wait_idle(64)) { ok = 0; puts_("  npu: state clear never ended\n"); }
+
+  npu_wr(NPUV_OFF_CFG_AXON,      NPUV_VAL_CFG_AXON);
+  npu_wr(NPUV_OFF_CFG_THRESH,    NPUV_VAL_CFG_THRESH);
+  npu_wr(NPUV_OFF_CFG_VRESET,    NPUV_VAL_CFG_VRESET);
+  npu_wr(NPUV_OFF_CFG_LEAK,      NPUV_VAL_CFG_LEAK);
+  npu_wr(NPUV_OFF_CFG_SYNSHIFT,  NPUV_VAL_CFG_SYNSHIFT);
+  npu_wr(NPUV_OFF_CFG_REFR,      NPUV_VAL_CFG_REFR);
+  npu_wr(NPUV_OFF_CFG_FLAGS,     NPUV_VAL_CFG_FLAGS);
+  npu_wr(NPUV_OFF_PASS_TILE_OFF, NPUV_VAL_PASS_TILE_OFF);
+
+  /* Read one of them back. A configuration write that was silently
+     refused -- the lock, an out-of-range value, a decode that went to
+     the wrong register -- would otherwise be invisible until the
+     inference produced the wrong answer, and then it would look like an
+     arithmetic bug. */
+  {
+    uint32_t th = npu_rd(NPUV_OFF_CFG_THRESH);
+    if (th != NPUV_VAL_CFG_THRESH) {
+      ok = 0; puts_("  npu: CFG_THRESH reads "); puthex(th); putc_('\n');
+    }
+  }
+
+  /* W_ADDR auto-increments on the W_DATA_HI commit (docs/10 section 10),
+     so it is written once. */
+  npu_wr(NPU_W_ADDR, 0u);
+  for (int w = 0; w < NPUV_N_WWORDS; w++) {
+    npu_wr(NPU_W_DATA_LO, npuv_wlo[w]);
+    npu_wr(NPU_W_DATA_HI, npuv_whi[w]);
+  }
+  {
+    uint32_t wa = npu_rd(NPU_W_ADDR), sec = npu_rd(NPU_CNT_SEC),
+             ded = npu_rd(NPU_CNT_DED);
+    /* W_ADDR auto-increments on the W_DATA_HI commit and its index is
+       exactly wide enough for the array (pilot_top.v deviation D3), so
+       loading the whole array wraps it back to zero. The generator
+       computes the expected value rather than this program assuming
+       one. No ECC event may have happened while loading a clean
+       image. */
+    if (wa != (uint32_t)NPUV_WADDR_AFTER_LOAD || sec != 0u || ded != 0u) {
+      ok = 0;
+      puts_("  npu: after load W_ADDR="); puthex(wa);
+      puts_(" CNT_SEC="); puthex(sec);
+      puts_(" CNT_DED="); puthex(ded); putc_('\n');
+    }
+  }
+
+  npu_wr(NPU_CTRL, (1u << NPU_BIT_CTRL_EN) | (1u << NPU_BIT_CTRL_SCRUB_EN));
+  return ok;
+}
+
+/* Run the whole stimulus and collect the output stream.
+   `got` receives the event words in arrival order. Returns how many
+   were collected, or -1 if a frame's barrier never came back. */
+static int npu_run(uint16_t *got, int cap) {
+  int n = 0, k = 0;
+  for (int f = 0; f < NPUV_N_FRAMES; f++) {
+    for (int i = 0; i < npuv_inj_len[f]; i++)
+      cfg_wr(NPUCFG_EVQ_IN, npuv_inject[k++]);
+
+    /* Read until the barrier this frame injected comes back. docs/10
+       section 7.1: when the node consumes a SYNC, every prior event is
+       fully processed and the barrier is echoed downstream -- so this
+       loop needs no timing knowledge at all, only the echo. The
+       iteration bound is a hang detector and nothing else. */
+    uint16_t barrier = NPU_EV_SYNC(f);
+    int spins = 0;
+    for (;;) {
+      uint32_t w = cfg_rd(NPUCFG_EVQ_OUT);
+      if (w & NPUCFG_EVQ_VALID) {
+        if (n < cap) got[n] = (uint16_t)(w & 0xFFFFu);
+        n++;
+        if ((uint16_t)(w & 0xFFFFu) == barrier) break;
+        spins = 0;
+      } else if (++spins > 20000) {
+        return -1;
+      }
+    }
+  }
+  return n;
 }
 #endif
 
@@ -815,6 +945,256 @@ int main(void) {
     if (!ok) { puts_("  mtvec back="); puthex(back);
                puts_(" good="); puthex(good); putc_('\n'); }
     check(22, ok);
+  }
+
+  {
+    /* 23: the NPU fabric controller answers, and its reserved offsets
+       do not. NPUCFG has been a slot number with nothing behind it in
+       every document since docs/39; this is the first check that
+       anything is there. The identity word is the discovery convention
+       regmap/regmap.yaml uses for the node ("NPU1"); the controller is
+       "NPUC", one letter apart on purpose. */
+    int ok = (cfg_rd(NPUCFG_ID) == NPUCFG_ID_WORD);
+    ok &= (cfg_rd(NPUCFG_VERSION) == 1u);
+    /* The geometry the RTL was elaborated with, reported by the block
+       rather than assumed by this program. */
+    uint32_t geom = cfg_rd(NPUCFG_GEOM);
+    ok &= ((geom & 0xFFu) == 1u);              /* one node             */
+    ok &= (((geom >> 8) & 0xFFu) == 2u);       /* SER_SCK = clk/4      */
+
+    trap_count = 0; trap_mcause = 0;
+    (void)do_load((volatile uint32_t *)NPUCFG_UNIMPL);
+    ok &= (trap_count == 1u && trap_mcause == 5u);
+
+    if (!ok) { puts_("  npucfg id="); puthex(cfg_rd(NPUCFG_ID));
+               puts_(" geom="); puthex(geom);
+               puts_(" mcause="); puthex(trap_mcause); putc_('\n'); }
+    check(23, ok);
+  }
+
+  {
+    /* 24: THE NODE REGISTER WINDOW IS THE docs/10 SECTION 10 REGISTER
+       MAP, reached with ordinary loads and stores.
+
+       Every constant compared here comes from regmap/regmap.yaml
+       through the generated npu_regs.h -- the same file that produces
+       the die's own hw/rtl/npu_regs.vh -- so this is a check that the
+       window presents the ARCHITECTURE's map and not that it presents
+       whatever the transport happened to fetch.
+
+       CFG_NEUR reports the elaborated neuron count rather than its
+       architectural reset value: pilot_top.v deviation D2 makes it
+       read-only and reports N_NEURONS, so the constant to compare
+       against is the geometry, not RST_CFG_NEUR. That divergence is
+       documented at the die and is checked here rather than papered
+       over. */
+    int ok = (npu_rd(NPU_ID) == NPU_RST_ID);
+    ok &= (npu_rd(NPU_VERSION) == NPU_RST_VERSION);
+    ok &= (npu_rd(NPU_CFG_NEUR) == (uint32_t)NPUV_N_NEURONS);
+    ok &= (npu_rd(NPU_CFG_AXON) == (uint32_t)NPUV_N_AXONS);
+
+    /* A write and a read back through the whole transport. SCRATCH is
+       the register the map defines for exactly this and it has no side
+       effects. */
+    npu_wr(NPU_SCRATCH, 0xA5A50F0Fu);
+    uint32_t scr = npu_rd(NPU_SCRATCH);
+    ok &= (scr == 0xA5A50F0Fu);
+    npu_wr(NPU_SCRATCH, NPU_RST_SCRATCH);
+
+    if (!ok) { puts_("  node id="); puthex(npu_rd(NPU_ID));
+               puts_(" ver="); puthex(npu_rd(NPU_VERSION));
+               puts_(" neur="); puthex(npu_rd(NPU_CFG_NEUR));
+               puts_(" axon="); puthex(npu_rd(NPU_CFG_AXON));
+               puts_(" scratch="); puthex(scr);
+               putc_('\n'); }
+    check(24, ok);
+  }
+
+  {
+    /* 25: the reserved parts of the 256 MiB window fault, all three
+       kinds of them.
+
+       This is the check that "reserved" is a property and not a
+       comment. A window that decoded everything to node 0 would pass
+       every other NPU check in this program and fail this one. */
+    int ok = 1;
+    /* static const, not a local initialiser: a local array of
+       structs is copied out of .rodata with memcpy, and this program
+       links no libc. -nostdlib turns that into a link error rather than
+       a silent dependency, which is the wanted behaviour. */
+    static const struct { uint32_t a; const char *what; } bad[] = {
+      { NPU_NODE(1, NPU_ID),          "node 1, not instantiated" },
+      { NPU_NODE(15, NPU_ID),         "node 15, not instantiated" },
+      { SOC_NPU_BASE + 0x00000200u,   "above the die's 7-bit map" },
+      { SOC_NPU_BASE + 0x00010000u,   "above the node windows" },
+      { SOC_NPU_BASE + 0x08000000u,   "the descriptor-ring area" },
+    };
+    for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+      trap_count = 0; trap_mcause = 0;
+      (void)do_load((volatile uint32_t *)bad[i].a);
+      if (trap_count != 1u || trap_mcause != 5u) {
+        ok = 0;
+        puts_("  npu window "); puts_(bad[i].what);
+        puts_(" did not fault: mcause="); puthex(trap_mcause); putc_('\n');
+      }
+    }
+    /* And a sub-word store, which the 32-bit serial frame cannot
+       perform. Silently widening it would corrupt three bytes of a
+       register the program never named. */
+    trap_count = 0; trap_mcause = 0;
+    __asm__ volatile(".option push\n.option norvc\n"
+                     "sb %1, 0(%0)\n"
+                     ".option pop\n"
+                     :: "r"((volatile uint8_t *)NPU_NODE(0, NPU_SCRATCH)),
+                        "r"(0x5Au) : "memory");
+    if (trap_count != 1u || trap_mcause != 7u) {
+      ok = 0;
+      puts_("  npu byte store did not fault: mcause=");
+      puthex(trap_mcause); putc_('\n');
+    }
+    check(25, ok);
+  }
+
+  {
+    /* 26: THE DEMONSTRATION. A program on Ibex, out of the boot ROM,
+       over the real fabric, configures the NPU, feeds it events and
+       reads results back -- and the results are compared against the
+       answer sw/golden/lif_core.py computed at BUILD TIME, not against
+       what the hardware produced.
+
+       Everything is in the loop: the fabric, the APB bridge, the slot
+       decode, the serial transport, the die's frozen register bank, its
+       ECC-checked weight loader, its event queues, its LIF datapath,
+       the parallel AER pins on the way in and the serial EVQ_OUT
+       register on the way out. */
+    static uint16_t got[NPUV_N_EXPECT + 8];
+    int ok = npu_bring_up();
+
+    cfg_wr(NPUCFG_CTRL, NPUCFG_IN_EN | NPUCFG_OUT_EN);
+    int n = npu_run(got, (int)(sizeof(got) / sizeof(got[0])));
+
+    if (n != NPUV_N_EXPECT) {
+      ok = 0;
+      puts_("  npu stream length "); puthex((uint32_t)n);
+      puts_(" want "); puthex((uint32_t)NPUV_N_EXPECT); putc_('\n');
+      /* Print what did come back. A length mismatch with no stream is a
+         report that says nothing about which event was extra or
+         missing, and this program's whole convention is that a failure
+         should be locatable from the log. */
+      puts_("  got ");
+      for (int i = 0; i < n && i < (int)(sizeof(got)/sizeof(got[0])); i++) {
+        puthex(got[i]); putc_(' ');
+      }
+      putc_('\n');
+      puts_("  want ");
+      for (int i = 0; i < NPUV_N_EXPECT; i++) {
+        puthex(npuv_expect[i]); putc_(' ');
+      }
+      putc_('\n');
+    } else {
+      for (int i = 0; i < NPUV_N_EXPECT; i++) {
+        if (got[i] != npuv_expect[i]) {
+          ok = 0;
+          puts_("  npu event "); puthex((uint32_t)i);
+          puts_(" got "); puthex(got[i]);
+          puts_(" want "); puthex(npuv_expect[i]); putc_('\n');
+        }
+      }
+    }
+
+    /* The whole neuron state file afterwards, against the same model.
+       The spike stream says the outputs matched; this says the internal
+       trajectory did too, which is a strictly stronger statement and is
+       the one that catches an error that happened to cancel. */
+    for (int j = 0; j < NPUV_N_NEURONS; j++) {
+      npu_wr(NPU_N_ADDR, (uint32_t)j);
+      uint32_t w = npu_rd(NPU_N_DATA) & 0x000FFFFFu;
+      if (w != npuv_state[j]) {
+        ok = 0;
+        puts_("  npu state "); puthex((uint32_t)j);
+        puts_(" got "); puthex(w);
+        puts_(" want "); puthex(npuv_state[j]); putc_('\n');
+      }
+    }
+
+    /* Nothing may have been lost or faulted on the way. */
+    uint32_t st = cfg_rd(NPUCFG_STATUS);
+    uint32_t cnt = cfg_rd(NPUCFG_CNT);
+    uint32_t cause = cfg_rd(NPUCFG_IRQCAUSE);
+    uint32_t drop = cfg_rd(NPUCFG_CNT_DROP);
+    uint32_t ovf = npu_rd(NPU_CNT_EVQ_OVF);
+    uint32_t oor = npu_rd(NPU_CNT_AXON_OOR);
+    if ((cause & (NPUCFG_C_ERR | NPUCFG_C_DED | NPUCFG_C_INJ_OVF
+                  | NPUCFG_C_FETCH_ER)) || drop || ovf || oor) {
+      ok = 0;
+      puts_("  npu: cause="); puthex(cause);
+      puts_(" drop="); puthex(drop);
+      puts_(" evq_ovf="); puthex(ovf);
+      puts_(" axon_oor="); puthex(oor); putc_('\n');
+    }
+    /* Every injected word reached the node and every expected word came
+       back out of it, counted by the hardware independently of the
+       stream this program collected. */
+    ok &= ((cnt & 0xFFFFu) == (uint32_t)NPUV_N_INJECT);
+    ok &= (((cnt >> 16) & 0xFFFFu) == (uint32_t)NPUV_N_EXPECT);
+
+    puts_("npu: "); puthex((uint32_t)n);
+    puts_(" events, cnt="); puthex(cnt);
+    puts_(" status="); puthex(st); putc_('\n');
+    check(26, ok);
+  }
+
+  {
+    /* 27: the NPU raises its interrupt, on the fast local line the
+       frozen map assigns it, at its own vector.
+
+       Spending line 12 is not a new cost -- docs/40 assigned NPUCFG
+       source 24 and line 12 before this block existed, and lines 13 and
+       14 are still spare -- but a line that is assigned and never taken
+       is indistinguishable from one that is not wired. This takes it.
+
+       The cause bit used is EVT, which is a LEVEL: the capture queue is
+       not empty. So the handler cannot clear it by acknowledging, and
+       the mask is what stops the storm. That is deliberate and it is
+       what the register map says. */
+    int ok = 1;
+    cfg_wr(NPUCFG_CTRL, NPUCFG_IN_EN | NPUCFG_OUT_EN);
+    ok &= ((cfg_rd(NPUCFG_IRQCAUSE) & NPUCFG_C_EVT) == 0u);
+
+    irq_marker = 0; irq_mcause = 0; irq_count = 0;
+    csr_set_mie(1u << (16 + SOC_IRQLINE_NPUCFG));
+    csr_set_mstatus(0x8u);                       /* MIE */
+    cfg_wr(NPUCFG_IRQMASK, NPUCFG_C_EVT);
+
+    /* One TICK produces no spike (docs/10 section 4.2), so a barrier is
+       what makes the queue non-empty. One SYNC, one echo, one
+       interrupt. */
+    cfg_wr(NPUCFG_EVQ_IN, NPU_EV_SYNC(0x3FFu));
+
+    int spun = 0;
+    while (irq_count == 0u && spun < 20000) spun++;
+
+    csr_clr_mstatus(0x8u);
+    cfg_wr(NPUCFG_IRQMASK, 0u);
+
+    ok &= (irq_count == 1u);
+    ok &= (irq_mcause == SOC_IRQ_NPUCFG);
+    ok &= (irq_marker == (SOC_FAST_IRQ_BASE + SOC_IRQLINE_NPUCFG));
+    /* And the event is still there: the handler masked the line, it did
+       not consume the event. */
+    uint32_t w = cfg_rd(NPUCFG_EVQ_OUT);
+    ok &= ((w & NPUCFG_EVQ_VALID) != 0u);
+    ok &= ((w & 0xFFFFu) == NPU_EV_SYNC(0x3FFu));
+    /* Draining it clears the level, which is the whole claim about
+       what kind of bit this is. */
+    ok &= ((cfg_rd(NPUCFG_IRQCAUSE) & NPUCFG_C_EVT) == 0u);
+
+    if (!ok) { puts_("  npu irq cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker);
+               puts_(" n="); puthex(irq_count);
+               puts_(" ev="); puthex(w);
+               puts_(" spun="); puthex((uint32_t)spun); putc_('\n'); }
+    check(27, ok);
   }
 #endif
 

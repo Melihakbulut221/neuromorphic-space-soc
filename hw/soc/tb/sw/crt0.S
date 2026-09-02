@@ -194,7 +194,7 @@ trap_vectors:
   j     vec_spurious      // 25
   j     vec_spurious      // 26
   j     vec_spurious      // 27
-  j     vec_spurious      // 28
+  j     vec_fast12        // 28  fast line 12, NPUCFG
   j     vec_spurious      // 29
   j     vec_spurious      // 30
   j     vec_nmi           // 31  non-maskable: watchdog stage 1
@@ -213,6 +213,7 @@ vec_msoft:    li t0, 3    ; j irq_common
 vec_mtimer:   li t0, 7    ; j irq_common
 vec_fast0:    li t0, 16   ; j irq_common
 vec_fast3:    li t0, 19   ; j irq_common
+vec_fast12:   li t0, 28   ; j irq_common
 
 // ---------------------------------------------------------------------
 // Common maskable-interrupt handler.

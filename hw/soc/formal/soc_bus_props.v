@@ -51,8 +51,8 @@
 //     map and this file cannot.
 //   * Reset behaviour beyond the initial state.
 
-localparam integer F_ERRSLV = 5;
-localparam integer F_NS     = 6;   // five ports plus the error slave
+localparam integer F_ERRSLV = 6;
+localparam integer F_NS     = 7;   // six ports plus the error slave
 
 reg f_past_valid;
 initial f_past_valid = 1'b0;
@@ -68,15 +68,17 @@ wire [2:0]  f_tgt_idx = s_req_o[0] ? 3'd0 :
                         s_req_o[1] ? 3'd1 :
                         s_req_o[2] ? 3'd2 :
                         s_req_o[3] ? 3'd3 :
-                        s_req_o[4] ? 3'd4 : F_ERRSLV[2:0];
+                        s_req_o[4] ? 3'd4 :
+                        s_req_o[5] ? 3'd5 : F_ERRSLV[2:0];
 
-wire [5:0] f_push = {f_gnt && (s_req_o == 5'b00000),
+wire [6:0] f_push = {f_gnt && (s_req_o == 6'b000000),
+                     f_gnt && s_req_o[5],
                      f_gnt && s_req_o[4],
                      f_gnt && s_req_o[3],
                      f_gnt && s_req_o[2],
                      f_gnt && s_req_o[1],
                      f_gnt && s_req_o[0]};
-wire [5:0] f_pop  = {err_rvalid, s_rvalid_i};
+wire [6:0] f_pop  = {err_rvalid, s_rvalid_i};
 
 // ---------------------------------------------------------------------
 // Environment: legal masters and legal slaves
@@ -169,6 +171,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (s_rvalid_i[2]) assume (f_occ[2] != 4'd0);
     if (s_rvalid_i[3]) assume (f_occ[3] != 4'd0);
     if (s_rvalid_i[4]) assume (f_occ[4] != 4'd0);
+    if (s_rvalid_i[5]) assume (f_occ[5] != 4'd0);
 end
 
 // ---------------------------------------------------------------------
@@ -248,6 +251,11 @@ always @(posedge clk_i) if (rst_ni) begin
     assert (!(s_req_o[2] && s_req_o[3]));
     assert (!(s_req_o[2] && s_req_o[4]));
     assert (!(s_req_o[3] && s_req_o[4]));
+    assert (!(s_req_o[0] && s_req_o[5]));
+    assert (!(s_req_o[1] && s_req_o[5]));
+    assert (!(s_req_o[2] && s_req_o[5]));
+    assert (!(s_req_o[3] && s_req_o[5]));
+    assert (!(s_req_o[4] && s_req_o[5]));
 
     // F2a. A selected slave is the one the frozen map puts the broadcast
     //      address in. Soundness: nothing is routed to the wrong place.
@@ -256,6 +264,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (s_req_o[2]) assert ((s_addr_o & SOC_MASK_APB) == SOC_BASE_APB);
     if (s_req_o[3]) assert ((s_addr_o & SOC_MASK_PNP) == SOC_BASE_PNP);
     if (s_req_o[4]) assert ((s_addr_o & SOC_MASK_CLINT) == SOC_BASE_CLINT);
+    if (s_req_o[5]) assert ((s_addr_o & SOC_MASK_NPU) == SOC_BASE_NPU);
 
     // F2b. The converse. Completeness: an address the map covers is
     //      never sent to the error slave, and never dropped. Without
@@ -266,6 +275,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (f_gnt && (s_addr_o & SOC_MASK_APB) == SOC_BASE_APB) assert (s_req_o[2]);
     if (f_gnt && (s_addr_o & SOC_MASK_PNP) == SOC_BASE_PNP) assert (s_req_o[3]);
     if (f_gnt && (s_addr_o & SOC_MASK_CLINT) == SOC_BASE_CLINT) assert (s_req_o[4]);
+    if (f_gnt && (s_addr_o & SOC_MASK_NPU) == SOC_BASE_NPU) assert (s_req_o[5]);
 end
 
 // ---------------------------------------------------------------------
@@ -288,6 +298,7 @@ always @(posedge clk_i) if (rst_ni) begin
     if (f_gnt && s_req_o[2]) assert (s_gnt_i[2]);
     if (f_gnt && s_req_o[3]) assert (s_gnt_i[3]);
     if (f_gnt && s_req_o[4]) assert (s_gnt_i[4]);
+    if (f_gnt && s_req_o[5]) assert (s_gnt_i[5]);
 
     // F3d. The broadcast payload is the granted master's, and the
     //      instruction port -- which has no write signals at all -- must
@@ -342,6 +353,7 @@ always @(posedge clk_i) if (rst_ni) begin
     assert (f_occ[3] <= F_QD[3:0]);
     assert (f_occ[4] <= F_QD[3:0]);
     assert (f_occ[5] <= F_QD[3:0]);
+    assert (f_occ[6] <= F_QD[3:0]);
 
     // No response to a master that has nothing outstanding.
     assert (!mi_rvalid_o || f_out_i != 3'd0);
@@ -360,7 +372,7 @@ end
 // outstanding count to the occupancy of the slave it is locked to.
 wire [2:0] f_resp_in  = {2'b0, f_pop[0]} + {2'b0, f_pop[1]} + {2'b0, f_pop[2]}
                       + {2'b0, f_pop[3]} + {2'b0, f_pop[4]}
-                      + {2'b0, f_pop[5]};
+                      + {2'b0, f_pop[5]} + {2'b0, f_pop[6]};
 wire [2:0] f_resp_out = {2'b0, mi_rvalid_o} + {2'b0, md_rvalid_o};
 
 always @(posedge clk_i) if (rst_ni) begin
@@ -377,7 +389,7 @@ end
 // at one slave while its master believes it is at another, which is the
 // misdelivery F7 alone cannot see.
 wire [3:0] f_occ_total = f_occ[0] + f_occ[1] + f_occ[2] + f_occ[3] + f_occ[4]
-                       + f_occ[5];
+                       + f_occ[5] + f_occ[6];
 
 always @(posedge clk_i) if (rst_ni) begin
     assert (f_occ_total == ({1'b0, f_out_i} + {1'b0, f_out_d}));
@@ -488,7 +500,11 @@ always @(posedge clk_i) if (f_past_valid && rst_ni) begin
     cover (f_gnt && s_req_o[2]);
     cover (f_gnt && s_req_o[3]);
     cover (f_gnt && s_req_o[4]);
-    cover (f_gnt && s_req_o == 5'b00000);   // and to the error slave
+    // docs/51's port. Without this the sixth slave would be covered by
+    // every ASSERTION above and witnessed by none of them, which is the
+    // vacuity docs/09 section B.1 makes a red result.
+    cover (f_gnt && s_req_o[5]);
+    cover (f_gnt && s_req_o == 6'b000000);  // and to the error slave
     cover (mi_rvalid_o && mi_err_o);        // a bus error reaching a master
     cover (f_out_i == 3'd2);                // both masters at the limit
     cover (f_out_d == 3'd2);

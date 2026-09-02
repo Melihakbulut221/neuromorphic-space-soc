@@ -75,6 +75,8 @@ hw/soc/formal/regfile_secded/
 hw/soc/formal/regfile_secded_*/
 hw/soc/formal/soc_busstat/
 hw/soc/formal/soc_busstat_*/
+hw/soc/formal/soc_npu_ser/
+hw/soc/formal/soc_npu_ser_*/
 
 # docs/47: the place-and-route flow. Generated and fetched, never
 # vendored -- the rule docs/38 section 11 states. The state file names

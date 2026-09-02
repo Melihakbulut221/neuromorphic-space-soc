@@ -29,7 +29,7 @@ implemented, and refuses any region base that is not
 | Base | Last | Size | Name | Type | Attr | Status | Port | Description |
 |---|---|---|---|---|---|---|---|---|
 | `0x00000000` | `0x0000FFFF` | 64 KiB | RAM | memory | rwx | implemented | ram | System SRAM, 64 KiB. Data, stack and relocated .data live here |
-| `0x10000000` | `0x1FFFFFFF` | 256 MiB | NPU | memory | rw | reserved | - | NPU fabric window; per-node register windows and descriptor rings |
+| `0x10000000` | `0x1FFFFFFF` | 256 MiB | NPU | memory | rw | implemented | npu | NPU fabric window; per-node register windows and descriptor rings |
 | `0xC0000000` | `0xC0001FFF` | 8 KiB | ROM | memory | rx | implemented | rom | On-chip boot ROM, 8 KiB. Holds the reset vector and .text |
 | `0xD0000000` | `0xD1FFFFFF` | 32 MiB | QSPI3 | memory | rx | reserved | - | QSPI flash execute-in-place window, 3-byte addressing |
 | `0xD8000000` | `0xDFFFFFFF` | 128 MiB | QSPI4 | memory | rx | reserved | - | QSPI flash execute-in-place window, 4-byte addressing |
@@ -84,7 +84,7 @@ interrupt controller and the drivers cannot disagree
 | `0xFF916000` | `0x016` | SCRUB | 23 | 11 | reserved | Memory scrubber control, MEMSCRUB-like |
 | `0xFF917000` | `0x017` | BOOTREG | - | - | reserved | Bootstrap pin readback and boot report register, GRGPREG-like |
 | `0xFF918000` | `0x018` | CLKGATE | - | - | reserved | Clock gate enable and status for NPU nodes and heavy peripherals |
-| `0xFF919000` | `0x019` | NPUCFG | 24 | 12 | reserved | NPU fabric-level global configuration and status |
+| `0xFF919000` | `0x019` | NPUCFG | 24 | 12 | implemented | NPU fabric-level global configuration and status, and the AER event port; docs/51 |
 | `0xFF9FF000` | `0x0FF` | APBPNP | - | - | implemented | Peripheral bus device table, two words per slot |
 
 ## 3a. Interrupts

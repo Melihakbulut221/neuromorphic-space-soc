@@ -134,10 +134,38 @@ def gen_python(spec, regs):
     return "\n".join(lines)
 
 
-def gen_verilog(spec, regs):
+def gen_verilog(spec, regs, guard="NPU_REGS_VH"):
+    """Verilog localparam body, for inclusion inside a module.
+
+    `guard` names the include guard, or is None for an unguarded body.
+    THE SECOND FORM IS NOT A STYLE CHOICE. Verilog macro state is shared
+    across a whole compilation unit, so a guarded body include reaches
+    the FIRST module that includes it and every later one gets an empty
+    file -- silently, with an unbound-name error somewhere else as the
+    only symptom. docs/39 section 8 defect 1 is that failure, found once
+    already in this repository, in soc_memmap.vh.
+
+    hw/rtl/npu_regs.vh keeps its guard because it is frozen (docs/34
+    section 2.1 pins it by blob hash) and because exactly one module in
+    that directory includes it. hw/soc/rtl/soc_npu_regs.vh is the same
+    content for the SoC, where soc_npu.v and the pilot it instantiates
+    are compiled together and a guard would blank whichever came second.
+    """
     ab = spec["meta"]["addr_bits"]
     db = spec["meta"]["data_bits"]
-    lines = [f"// {HEADER}", "`ifndef NPU_REGS_VH", "`define NPU_REGS_VH", ""]
+    lines = [f"// {HEADER}"]
+    if guard:
+        lines += [f"`ifndef {guard}", f"`define {guard}", ""]
+    else:
+        lines += [
+            "//",
+            "// UNGUARDED ON PURPOSE: this is a BODY of localparam",
+            "// declarations included inside a module, and more than one",
+            "// module in this compilation unit includes it. An include",
+            "// guard would give the constants to the first module and an",
+            "// empty file to every later one. docs/39 section 8 defect 1.",
+            "",
+        ]
     for reg in regs:
         lines.append(f"localparam [{ab - 1}:0] ADDR_{reg['name']} = {ab}'h{reg['offset']:03X};")
     lines.append("")
@@ -149,7 +177,10 @@ def gen_verilog(spec, regs):
             lines.append(f"localparam BIT_{reg['name']}_{f['name']} = {f['bit']};")
             if f.get("width", 1) != 1:
                 lines.append(f"localparam WIDTH_{reg['name']}_{f['name']} = {f['width']};")
-    lines += ["", "`endif // NPU_REGS_VH", ""]
+    if guard:
+        lines += ["", f"`endif // {guard}", ""]
+    else:
+        lines += [""]
     return "\n".join(lines)
 
 
@@ -159,6 +190,14 @@ def main():
         ROOT / "docs" / "regmap-npu.md": gen_markdown(spec, regs),
         ROOT / "sw" / "golden" / "regmap_gen.py": gen_python(spec, regs),
         ROOT / "hw" / "rtl" / "npu_regs.vh": gen_verilog(spec, regs),
+        # The SoC's copy of the same constants. Same source, same
+        # values, no guard -- see gen_verilog's docstring. This output
+        # is why docs/39 section 2.1's "two generators with disjoint
+        # output sets" still holds: generate.py's hw/rtl output is
+        # unchanged byte for byte and generate_memmap.py still writes
+        # nothing into hw/rtl at all.
+        ROOT / "hw" / "soc" / "rtl" / "soc_npu_regs.vh":
+            gen_verilog(spec, regs, guard=None),
     }
     check = "--check" in sys.argv
     stale = []

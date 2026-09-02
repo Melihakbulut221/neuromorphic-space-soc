@@ -26,10 +26,17 @@
 //        and from the watchdog's stage-2 request, so the SoC can reset
 //        its own core while the watchdog keeps the evidence. See the
 //        reset section below.
-//   IS NOT the whole map. Five regions and twelve peripheral slots are
+//   IS NOT the whole map. Four regions and eleven peripheral slots are
 //        reserved and unimplemented. An access to any of them takes a
 //        bus error, on purpose: docs/39-soc-bus-and-memory-map.md
 //        section 8 lists them.
+//   IS   a NEUROMORPHIC SoC, as of docs/51-npu-integration.md.
+//        soc_npu.v instantiates hw/rtl/pilot_top.v -- the frozen
+//        TTIHP26b submission, unmodified -- reaches its register bank
+//        over the same four serial pins the die will have, drives its
+//        parallel AER port for events, and answers the 256 MiB NPU
+//        window and the NPUCFG peripheral slot that the map has carried
+//        empty since docs/39.
 //
 // SecureIbex IS FIXED AT 0, which is the owner's decision rather than
 // this file's default: docs/38 section 10 item 4 records `small-pmp`
@@ -91,6 +98,17 @@ module soc_top #(
     output wire        irq_timer_o,    // CLINT mtime >= mtimecmp
     output wire        irq_soft_o,     // CLINT msip
     output wire        gptimer_irq_o,  // GPTIMER shared timer interrupt
+    output wire        npu_irq_o,      // NPUCFG cause AND mask
+
+    // The die's own pins, brought out so a testbench or a scope sees
+    // exactly what an external pilot would see. Nothing in the SoC
+    // reads them back.
+    output wire        npu_ser_sck_o,
+    output wire        npu_ser_cs_n_o,
+    output wire        npu_ser_mosi_o,
+    output wire        npu_ser_miso_o,
+    output wire        npu_aer_in_stb_o,
+    output wire        npu_aer_out_vld_o,
 
     output wire        alert_minor_o,
     output wire        alert_major_internal_o,
@@ -141,7 +159,7 @@ module soc_top #(
   // Interrupt sources, declared here because the core below consumes
   // them and the blocks that drive them are instantiated further down.
   wire        clint_irq_timer, clint_irq_soft;
-  wire        gptimer_irq, uart_irq, wdog_nmi, busstat_irq;
+  wire        gptimer_irq, uart_irq, wdog_nmi, busstat_irq, npu_irq;
   // The fault lines soc_busstat counts. docs/44.
   wire [2:0]  rf_ecc_err;      // from the register file, via ibex_top
   wire        wdog_tmr_ev;     // from the watchdog's voter
@@ -175,6 +193,14 @@ module soc_top #(
     // for it, and the whole-SoC run of docs/40 and docs/41 is
     // cycle-identical with this block present.
     irq_fast[SOC_IRQLINE_BUSSTAT] = busstat_irq;
+    // The NPU's line, connected here for the first time. docs/40 froze
+    // this source number and this wire index before either end existed;
+    // nothing spare is spent, because NPUCFG was one of the thirteen
+    // sources that document assigned. Its level is |(cause & mask) and
+    // the mask resets to zero, so the wire is low until software asks
+    // for it -- the same discipline BUSSTAT follows and the reason the
+    // pre-NPU whole-SoC run is reproducible with this block present.
+    irq_fast[SOC_IRQLINE_NPUCFG]  = npu_irq;
   end
 
 
@@ -308,13 +334,13 @@ module soc_top #(
   // -------------------------------------------------------------------
   // Fabric
   // -------------------------------------------------------------------
-  wire [4:0]  s_req;
+  wire [5:0]  s_req;
   wire [31:0] s_addr, s_wdata;
   wire        s_we;
   wire [3:0]  s_be;
-  wire [4:0]  s_gnt, s_rvalid, s_err;
+  wire [5:0]  s_gnt, s_rvalid, s_err;
   wire [31:0] s_rdata_ram, s_rdata_rom, s_rdata_apb, s_rdata_pnp,
-              s_rdata_clint;
+              s_rdata_clint, s_rdata_npu;
 
   soc_bus u_bus (
       .clk_i  (clk_i),
@@ -349,6 +375,7 @@ module soc_top #(
       .s_rdata_2_i (s_rdata_apb),
       .s_rdata_3_i (s_rdata_pnp),
       .s_rdata_4_i (s_rdata_clint),
+      .s_rdata_5_i (s_rdata_npu),
       .s_err_i     (s_err)
   );
 
@@ -411,13 +438,17 @@ module soc_top #(
   wire sel_uart0  = psel && (slot == SOC_APBSLOT_UART0);
   wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
   wire sel_busstat = psel && (slot == SOC_APBSLOT_BUSSTAT);
+  wire sel_npucfg = psel && (slot == SOC_APBSLOT_NPUCFG);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
   wire sel_none   = psel && !sel_uart0 && !sel_timer0 && !sel_busstat
-                         && !sel_apbpnp;
+                         && !sel_npucfg && !sel_apbpnp;
 
-  wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat;
-  wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat;
-  wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat;
+  wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat,
+              prdata_npucfg;
+  wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat,
+              pready_npucfg;
+  wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat,
+              pslverr_npucfg;
 
   soc_uart u_uart0 (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
@@ -493,16 +524,19 @@ module soc_top #(
   assign prdata  = sel_uart0   ? prdata_uart0
                  : sel_timer0  ? prdata_timer0
                  : sel_busstat ? prdata_busstat
+                 : sel_npucfg  ? prdata_npucfg
                  : sel_apbpnp  ? prdata_apbpnp
                  : 32'h0;
   assign pready  = sel_uart0   ? pready_uart0
                  : sel_timer0  ? pready_timer0
                  : sel_busstat ? pready_busstat
+                 : sel_npucfg  ? pready_npucfg
                  : sel_apbpnp  ? pready_apbpnp
                  : 1'b1;
   assign pslverr = sel_uart0   ? pslverr_uart0
                  : sel_timer0  ? pslverr_timer0
                  : sel_busstat ? pslverr_busstat
+                 : sel_npucfg  ? pslverr_npucfg
                  : sel_apbpnp  ? pslverr_apbpnp
                  : sel_none;
 
@@ -538,7 +572,47 @@ module soc_top #(
       .irq_software_o (clint_irq_soft)
   );
 
+  // -------------------------------------------------------------------
+  // Slave 5, and the NPUCFG peripheral slot: the NPU subsystem
+  //
+  // ONE BLOCK WITH TWO BUS FACES, because configuration and events are
+  // different problems and the frozen map put them in different places.
+  // soc_npu.v's header is the contract; docs/51 is the argument.
+  //
+  // The pilot's geometry is the shuttle's: 8 neurons, 8 axons, the
+  // default hw/rtl/pilot_top.v section 6 records as the configuration
+  // docs/15 measured to fit the tile budget. It is written here rather
+  // than left to the module's macro defaults so that a reader of the
+  // SoC can see what is inside it.
+  // -------------------------------------------------------------------
+  soc_npu #(
+      .N_NODES   (1),
+      .N_NEURONS (8),
+      .N_AXONS   (8),
+      .SER_HALF  (2),
+      .INJ_DEPTH (8),
+      .CAP_DEPTH (8)
+  ) u_npu (
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
+      .req_i (s_req[5]), .addr_i (s_addr), .we_i (s_we),
+      .be_i (s_be), .wdata_i (s_wdata),
+      .gnt_o (s_gnt[5]), .rvalid_o (s_rvalid[5]),
+      .rdata_o (s_rdata_npu), .err_o (s_err[5]),
+      .psel_i (sel_npucfg), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_npucfg), .pready_o (pready_npucfg),
+      .pslverr_o (pslverr_npucfg),
+      .irq_o (npu_irq),
+      .obs_ser_sck_o (npu_ser_sck_o),
+      .obs_ser_cs_n_o (npu_ser_cs_n_o),
+      .obs_ser_mosi_o (npu_ser_mosi_o),
+      .obs_ser_miso_o (npu_ser_miso_o),
+      .obs_aer_in_stb_o (npu_aer_in_stb_o),
+      .obs_aer_out_vld_o (npu_aer_out_vld_o)
+  );
+
   assign uart_irq_o     = uart_irq;
+  assign npu_irq_o      = npu_irq;
   assign gptimer_irq_o  = gptimer_irq;
   assign nmi_o          = wdog_nmi;
   assign irq_timer_o    = clint_irq_timer;

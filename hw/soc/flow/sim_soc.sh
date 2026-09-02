@@ -24,9 +24,12 @@
 set -euo pipefail
 
 SOC_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-# hw/rtl/tmr_voter.v is READ from here and never modified: it is the
+# hw/rtl is READ from here and never modified. docs/34 freezes that
+# directory and this flow reads seven files out of it: tmr_voter.v, the
 # proved majority primitive the watchdog's W6 protection votes with, and
-# docs/34 freezes the directory it lives in.
+# since docs/51 the whole of pilot_top.v and the blocks it is built
+# from, because soc_npu.v instantiates the frozen submission rather than
+# a copy of it. npu_regs.vh is reached through the -I below.
 PILOT_RTL=$(cd "$SOC_DIR/../rtl" && pwd)
 OUT=${1:-$SOC_DIR/out/sim-soc}
 
@@ -52,6 +55,19 @@ IBEX_FAULT_PORT=1
 export IBEX_FAULT_PORT
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
+
+# hw/rtl/secded_enc.v and hw/rtl/secded_dec.v are read by TWO consumers
+# now -- the register-file codec (IBEX_REGFILE=secded) and the pilot's
+# weight-word ECC -- and Icarus refuses a module declared twice in one
+# compilation unit. ibex_sources adds them in the secded configuration,
+# so this list adds them only in the other one. Both consumers get the
+# same two files out of the frozen directory either way, which is the
+# point: there is one SECDED codec in this repository.
+if [ "${IBEX_REGFILE:-secded}" = secded ]; then
+  NPU_SECDED=()
+else
+  NPU_SECDED=("$PILOT_RTL/secded_enc.v" "$PILOT_RTL/secded_dec.v")
+fi
 
 # SOC_RF_SYNPRE=1 builds the register file with the syndrome tree hoisted
 # past the read multiplexer -- ibex_regfile_secded.v's SYNPRE. It
@@ -176,6 +192,7 @@ fi
 
 "$IVERILOG" -g2005-sv -o "$OUT/tb_soc.vvp" \
   -I "$SOC_DIR/rtl" \
+  -I "$PILOT_RTL" \
   -DSG13G2_ICG_BEHAVIOURAL \
   -DROM_HEX="\"$OUT/test_soc.hex\"" \
   -DUART_BIT_CYCLES="$UART_BIT_CYCLES" \
@@ -202,6 +219,13 @@ fi
   "$SOC_DIR/rtl/soc_wdog.v" \
   "$SOC_DIR/rtl/soc_busstat.v" \
   "$SOC_DIR/rtl/soc_tmr_bank.v" \
+  "$SOC_DIR/rtl/soc_npu.v" \
+  "$SOC_DIR/rtl/soc_npu_ser.v" \
+  "$PILOT_RTL/pilot_top.v" \
+  "$PILOT_RTL/lif_core.v" \
+  "$PILOT_RTL/aer_fifo.v" \
+  "$PILOT_RTL/scrub.v" \
+  ${NPU_SECDED+"${NPU_SECDED[@]}"} \
   "$PILOT_RTL/tmr_voter.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \
   $(ibex_sources "$SOC_DIR") \
