@@ -125,29 +125,46 @@ have since deferred with the reason written down each time. That is a
 deliberate ordering, not an oversight: the fabric is being made correct
 before it is made survivable.
 
-**The subsystem has been laid out, and it does not close timing.**
-`docs/45` synthesised `soc_top` whole for the first time — it elaborated
-at the first attempt with no RTL edit, which is worth saying because the
-reason it had never been done was not that it was hard. `docs/47` then
-placed and routed it with six real RM_IHPSG13 SRAM macros: it routes
-clean, and it closes at **43.10 MHz against a 50 MHz target**. The
-memory is **4.29 times the standard-cell logic** and 46.9 % of the die.
+**The subsystem has been laid out, and it fails setup at its 20 ns
+constraint.** `docs/45` synthesised `soc_top` whole for the first time —
+it elaborated at the first attempt with no RTL edit, which is worth
+saying because the reason it had never been done was not that it was
+hard. `docs/47` then placed and routed it with six real RM_IHPSG13 SRAM
+macros: it routes clean, and it does not meet timing. The memory is
+**4.29 times the standard-cell logic** and 46.9 % of the die. No
+frequency is published for this design, per `docs/05` section 4 rule 5:
+a number read off a layout that also fails max slew and max cap and has
+never been through Magic DRC or LVS is not a result to put in a front
+door.
 
-Four things were tried against that gap and `docs/48` through `docs/50`
-measured all four. A second floorplan is worse, and the existing one is
-already optimal for these macro pins. Two flow settings worth 18 ns had
-already been spent before the number existed, which nobody had checked.
+Four remedies were tried and `docs/48` through `docs/50` measured all
+four. A second floorplan is worse, and the existing one is already
+optimal for these macro pins. Two flow settings worth 18 ns had already
+been spent before the shortfall existed, which nobody had checked.
 `SYNPRE` acts on a cone disjoint from the binding path — the correction
 to that attribution is the result, not the run. Registering the RAM read
-does close 0.78 ns, the first claimable improvement in four documents,
-and makes the part **21 % slower in wall-clock**, because a higher clock
-that spends more cycles per load is not a faster part. Break-even is
-53.97 MHz and the layout reaches 44.59.
+is the only measured improvement, and it makes the part **21 % slower in
+wall-clock**, because a higher clock that spends more cycles per load is
+not a faster part.
 
-So the remaining lever is the 50 MHz target itself, whose provenance is
-a Tiny Tapeout tile with no SRAM in it, and none of `docs/05`'s four
-mission profiles is specified in cycles. The obligation is to size the
-workload rather than defend the number.
+**Then `docs/53` asked what the mission needs, and found the question
+had been the wrong one.** The transport, not the clock, is the
+architectural factor: the serial link to the NPU is **93–98 % of every
+workload's cycles**, a 27x term against the clock's 1.16x. Sized against
+Falcon Neuro's flown event rates, the hardest profile uses about **10 %
+of what the part delivers**; the clock would have to fall to 4.4 MHz
+before any profile binds.
+
+And the requirement that `docs/05` actually quantifies is **power**, in
+tens of milliwatts — the only numeral in that section, which five
+documents had read past. `docs/47`'s own sign-off run already carried
+one: **27.8–46.1 mW** across three corners. Energy per inference is
+invariant under the clock to 0.045 %, because it is cycles times
+energy-per-cycle and the period appears in neither. Four documents had
+optimised the one term of that product the stated requirement does not
+contain. So 20 ns stays as the SDC constraint and the setup failure
+stays a defect — but the rank changed: power with real switching
+activity first, the transport second, timing third.
 
 Operators can now see a corrected upset: `docs/44` routed the register
 file's fault line out through a real patch to Ibex and landed **BUSSTAT
