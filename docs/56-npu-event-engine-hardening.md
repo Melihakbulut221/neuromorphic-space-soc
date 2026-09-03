@@ -33,9 +33,11 @@ Section 13 lists every file touched.
 | What did H5 cost? | **No flip-flop at all: +22 cells and 159.0246 um2, at an identical flip-flop count** **[fact]**, measured by removing the gate and re-synthesising. The redundancy it uses was already in the netlist and was not being read. Section 7 |
 | And the whole wave? | **+15 flip-flops and 1,471.3650 um2 on the connection** against the same design at `4b77af1`, same file list, same recipe **[fact]**. 0.53 % of the unprotected Ibex core. Section 7 |
 | Is the whole-SoC invariant still 215,428 cycles? | **Yes, exactly, and this wave is RTL-only so there is no second number** **[fact]**. `docs/55` had to measure three because it changed the program as well; this one changes no software, so the clean run, the measured injection window and the invariant are all unmoved. Section 8.4 |
-| Does the delta survive calibration? | **The part aimed at does; the part not aimed at is refused.** On 1,000 verbatim replayed injections the workload drift is **exactly zero** — `die_ser`'s 100 frozen-silicon records and 400 more in untouched strata come back with **not one changed verdict** — so the engine's movement is real and is reported to the record. Section 8.2 |
+| Did it move the number it was built to move? | **`ev_pin` is 18 silent wrong inferences in 100 to 0, and 17 of the 18 draws into `aer_in_stb` now return the golden inference with a named cause bit** **[fact]**. `oh_req` is 3 of 4 to 0 of 4. Sections 8.2 and 8.3 |
+| Does the delta survive calibration? | **Yes, and for the first time in this block the calibration is exact rather than an argument.** On 1,000 verbatim replayed injections **exactly one record changed its verdict**, and it is in a stratum this work touched: the frozen die's 100 records, 400 more in untouched strata and 200 more inside the split stratum all come back **unchanged, record for record**. `docs/55` had to refuse a 19 % claim because its frozen die moved on 15 of 100; this one moves on none. Section 8.2 |
 | What was left, and why | **`ev_state` (7 of 20), `cap_wr_en` (5 of 8) and `oh_valid` (2 of 4)** — 6 bits, ranked, priced and not built. Section 11 says what each would cost and why none of them is this wave. |
-| Did anything get worse? | **Three new unprotected flip-flops, and for the first time in this block the honest answer is that their corruption is benign** — provably, not by measurement. Section 6.4 |
+| Did anything get worse? | **Yes, in two named places.** H5 masks and does not correct, so an upset in `ev_state` inside a legal strobe now **loses a real event** where it used to pass one — one of the eighteen `aer_in_stb` draws is that case. And it adds three unprotected flip-flops, whose corruption is benign for a reason that is argued rather than measured. Sections 6.2, 6.4 and 8.3 |
+| What did the split cost? | **A whole extra campaign**, and `docs/55`'s "half a day on `npu_targets.py`" was right about the edit and wrong about the work: a stratification that is not re-run is a re-labelling. Sections 8.5 and 12 |
 
 ---
 
@@ -566,6 +568,90 @@ measurement says so at three levels **[fact]**:
 > and section 8.2 does not have to argue it: the same cycle in the two
 > builds is the same instant in the same program, and the calibration
 > strata come back with **not one changed verdict** to prove it.
+
+### 8.2 The delta, on the same draws, and its calibration
+
+**1,000 of the split baseline's 1,100 injections replayed verbatim —
+same site, same bit, same cycle, against the hardened build** **[fact,
+`hw/soc/out/h56-replay/directed.csv`]**. The missing 100 are `cfgreg`:
+the three replicas are 25 bits now and were 21 then, so bit *k* of the
+word is a different field. The **paths still exist**, which is worse than
+their not existing — `npu_campaign.py` would replay them happily — so
+they are removed deliberately, and section 14 records that.
+
+| stratum | n | silent, before | **after** | **records whose verdict changed** |
+|---|---:|---:|---:|---:|
+| **`ev_pin`** | 100 | **18** | **0** | 0 |
+| **`ev_oh`** | 100 | 6 | **3** | **1** |
+| `ev_seq` | 100 | 13 | 13 | **0** |
+| `ev_data` | 100 | 0 | 0 | **0** |
+| `ev_cnt` | 100 | 0 | 0 | **0** |
+| `ser` — untouched | 100 | 6 | 6 | **0** |
+| `window` — untouched | 100 | 2 | 2 | **0** |
+| `evq_data` — untouched | 100 | 0 | 0 | **0** |
+| `evq_ptr` — untouched | 100 | 0 | 0 | **0** |
+| **`die_ser` — FROZEN SILICON** | 100 | 6 | 6 | **0** |
+| **total** | **1000** | **51** | **30** | **1** |
+
+**[fact]**. "Verdict changed" is the armed class or the truth column
+differing on the same draw. The silent counts on both sides are computed
+over the **same** announcement set — `ann_npu` and `ann_wdog`, the two
+`directed.csv` carries — so the two columns are comparable to each other;
+section 8.3's per-stratum figures use the full four-channel set and are
+the ones to quote against another campaign.
+
+> **THE CALIBRATION IS EXACT AND IT IS THE WHOLE REASON THIS DOCUMENT
+> WILL QUOTE ITS DELTA WHERE `docs/55` REFUSED TO.** That document could
+> not: its frozen die's own stratum — silicon `docs/34` committed, which
+> cannot have changed — moved by one **with fifteen of a hundred records
+> changing verdict**, because the workload was 154 cycles longer and the
+> deposits landed at a different instant in the program. Here **`die_ser`
+> comes back with 6 of 100 and NOT ONE CHANGED RECORD**, and so do
+> `ser`, `window`, `evq_data` and `evq_ptr` — **500 calibration records,
+> zero drift** — and so do `ev_data` and `ev_cnt`, 200 more inside the
+> stratum that was split. **Exactly one record in a thousand moved, and
+> it is in a stratum this work touched.**
+
+**51 → 30, and every one of the 21 is in a stratum the work touched:
+18 in `ev_pin` and 3 in `ev_oh`.** Nothing else moved at all.
+
+**`ev_pin` is 18 → 0 and the class did NOT change on any of them**, which
+is worth reading carefully. All 18 were DETECTED before and are DETECTED
+now; what changed is **which channel detected them and whether the answer
+was right**. Before, `fi_mask` was `0x8`, `0xa` or `0xc` — a wrong
+neuron state file, a wrong stream length, a wrong stream — and the
+program's own model check was the only thing that noticed. Now `fi_mask`
+is `0x10` on seventeen of the eighteen: **telemetry only, the inference
+bit-for-bit golden, and `IRQ_CAUSE.AER_MM` set** **[fact]**. The
+eighteenth is section 8.3's.
+
+**`ev_oh` is 6 → 3 and the three that moved are all `oh_req`** **[fact]**.
+Their `fi_mask` was `0x6a` — wrong length, wrong state, the hardware's
+counts disagreeing and **a barrier that never came back** — which is the
+wedge of section 5.1, appearing in the campaign as four bits of one mask
+and never as a class of its own. All three now return the golden
+inference. **The three that did not move are `oh_valid` twice and
+`oh_data` once**, and section 11 item 3 is why: H4 bounds a request that
+never completes and says nothing about a holding register that lies.
+
+**THE ONE CHANGED VERDICT IS AN IMPROVEMENT THAT READS LIKE A REGRESSION,
+AND IT IS SPELLED OUT RATHER THAN LEFT IN THE TABLE.** `oh_req` bit 0 at
+cycle 13,002 was **MASKED / OK** and is now **DETECTED / WRONG**. Its
+deposit lands 770 cycles before the window closes and after the program's
+last collection, so the wedge it caused did nothing and the run finished
+with the golden answer and nothing set. Now the bound fires, `OH_TO` is
+latched, and the record classifies DETECTED — **with `model_wrong` still
+false**. The "WRONG" is `armed_out_ok` comparing the whole published
+result, and the only thing in it that differs is the cause register,
+**which is supposed to move**. That is `docs/55`'s control 4d exactly,
+and `docs/55` section 5's *"what it costs to be told"*: a run that would
+have been MASKED becomes DETECTED because the part learned to speak.
+
+**And the mechanisms fired on the replay as they did on the campaign of
+record**: the AER gate on **23** records, the show-ahead bound on **4**,
+and the longest run of cycles the show-ahead's request stayed outstanding
+over all 1,000 is **5** **[fact]** — against a healthy 2 and a bound of
+4, with nothing anywhere near the thousands a wedge produces.
 
 ### 8.3 The campaign of record
 

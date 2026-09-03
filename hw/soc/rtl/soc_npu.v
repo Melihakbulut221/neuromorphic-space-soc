@@ -327,9 +327,9 @@
 // `oh_data` are single points: an upset that sets `oh_valid` makes the
 // block hand software a stale word and report an event that is not
 // there, and one that clears it loses the word the adapter is holding.
-// docs/56 section 6.2 prices tripling the adapter's bundle against what
-// the campaign measured of it and declines it in this wave, and section
-// 11 is the surviving exposure.
+// docs/56 section 11 item 3 prices tripling the adapter's bundle
+// against what the campaign measured of it and declines it in this wave,
+// and section 10 of that document is the surviving exposure.
 //
 // =====================================================================
 // 9. H5 COSTS NO STATE AT ALL, AND THAT IS WHY IT IS NOT ENOUGH
@@ -364,7 +364,8 @@
 //     (section 7) and tripling the bundle would cost twelve flip-flops
 //     and correct rather than mask. docs/56 section 6.1 prices that
 //     against this and takes this one first because it is free, not
-//     because it is stronger.
+//     because it is stronger; section 11 item 5 is what it would still
+//     buy.
 //
 
 `timescale 1ns / 1ps
@@ -1553,7 +1554,7 @@ module soc_npu #(
   // block -- 126 unprotected flip-flops whose whole job is to be
   // believed -- as the next thing to protect, and a fourth NPU counter
   // would be eighteen more of them for an event whose durable record
-  // nothing yet acts on. docs/56 section 6.3 is the argument and section
+  // nothing yet acts on. docs/56 section 5.2 is the argument and section
   // 10 carries the exposure it leaves: this bit is write-1-to-clear, so
   // software that acknowledges it keeps no record of it anywhere.
   assign sticky_ev[C_OH_TO    - C_STICKY0] = oh_expire;
@@ -1561,8 +1562,9 @@ module soc_npu #(
   // is a DETECTION and not a correction -- the pin was held quiet,
   // which is right when the flag was the corrupted one and is a lost
   // event when `ev_state` was, and this block cannot tell which. The
-  // bit says an upset reached the inbound event path; docs/56 section
-  // 6.1 is why that is worth one bit and not three.
+  // bit says an upset reached the inbound event path; docs/56 sections
+  // 6.2 and 6.3 are why it detects rather than corrects and why it is a
+  // bit of its own.
   assign sticky_ev[C_AER_MM   - C_STICKY0] = aer_stb_mm;
 
   // The clear strobe. Write-1-to-clear, and only the sticky half: a
