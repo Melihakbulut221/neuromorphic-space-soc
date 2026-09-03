@@ -137,6 +137,9 @@ sym () {
   -DFI_OOR_ADDR="$(sym fi_oor)" \
   -DFI_CNT_ADDR="$(sym fi_cnt)" \
   -DFI_SPINS_ADDR="$(sym fi_spins)" \
+  -DFI_BSTCOR_ADDR="$(sym fi_bst_cor)" \
+  -DFI_BSTDET_ADDR="$(sym fi_bst_det)" \
+  -DFI_BSTTMR_ADDR="$(sym fi_bst_tmr)" \
   -s tb_soc_npu_fi \
   "$SOC_DIR/tb/tb_soc_npu_fi.v" \
   "$SOC_DIR/rtl/soc_top.v" \

@@ -168,6 +168,15 @@
 `ifndef FI_SPINS_ADDR
   `define FI_SPINS_ADDR 32'h0
 `endif
+`ifndef FI_BSTCOR_ADDR
+  `define FI_BSTCOR_ADDR 32'h0
+`endif
+`ifndef FI_BSTDET_ADDR
+  `define FI_BSTDET_ADDR 32'h0
+`endif
+`ifndef FI_BSTTMR_ADDR
+  `define FI_BSTTMR_ADDR 32'h0
+`endif
 `ifndef FI_DEFAULT_BUDGET
   `define FI_DEFAULT_BUDGET 400000
 `endif
@@ -195,6 +204,9 @@ module tb_soc_npu_fi;
   localparam [31:0] FI_OOR_ADDR      = `FI_OOR_ADDR;
   localparam [31:0] FI_CNT_ADDR      = `FI_CNT_ADDR;
   localparam [31:0] FI_SPINS_ADDR    = `FI_SPINS_ADDR;
+  localparam [31:0] FI_BSTCOR_ADDR   = `FI_BSTCOR_ADDR;
+  localparam [31:0] FI_BSTDET_ADDR   = `FI_BSTDET_ADDR;
+  localparam [31:0] FI_BSTTMR_ADDR   = `FI_BSTTMR_ADDR;
   localparam [31:0] EXIT_MAGIC       = 32'h600d_c0de;
 
   reg clk   = 1'b0;
@@ -366,6 +378,39 @@ module tb_soc_npu_fi;
   integer fetch_expire_n = 0;
   always @(posedge clk) if (rst_n)
     if (dut.u_npu.fetch_expire) fetch_expire_n = fetch_expire_n + 1;
+
+  // The two bounds docs/55 added, counted at the bench so that a record
+  // can be ATTRIBUTED to a mechanism rather than inferred from a sticky
+  // bit that some later event might also have set.
+  //
+  // Both DO have an operator channel -- IRQ_CAUSE.SER_TO and
+  // IRQ_CAUSE.WIN_TO, and the failed access itself is a bus error at the
+  // core -- so unlike the queue counters above, these are a second view
+  // of something software can see. Both views are printed, which is what
+  // lets docs/55 say whether the two agree.
+  integer ser_to_n = 0;      // frames the transport's own bound aborted
+  integer win_to_n = 0;      // node-window waits that expired
+  integer win_orph_n = 0;    // node-window states no grant put it in
+  always @(posedge clk) if (rst_n) begin
+    if (dut.u_npu.ser_timeout) ser_to_n   = ser_to_n + 1;
+    if (dut.u_npu.win_expire)  win_to_n   = win_to_n + 1;
+    // The window's two recoveries share one cause bit and are counted
+    // apart HERE, because the register is what an operator reads and the
+    // bench is where a record gets attributed to a mechanism.
+    if (dut.u_npu.win_orphan)  win_orph_n = win_orph_n + 1;
+  end
+
+  // The connection's three fault lines into BUSSTAT, counted at the
+  // source. The PROGRAM reads BUSSTAT's counters with a load and
+  // publishes them in fi_bst_*; these are the bench's own count of the
+  // same events, and a disagreement between the two would mean the
+  // counters are not counting what reaches them.
+  integer npu_cor_n = 0, npu_det_n = 0, npu_tmr_n = 0;
+  always @(posedge clk) if (rst_n) begin
+    if (dut.npu_cor_ev) npu_cor_n = npu_cor_n + 1;
+    if (dut.npu_det_ev) npu_det_n = npu_det_n + 1;
+    if (dut.npu_tmr_ev) npu_tmr_n = npu_tmr_n + 1;
+  end
 
   // ------------------------------------------------------------------
   // The measured injection window, and THE EXPOSURE ARITHMETIC.
@@ -710,6 +755,19 @@ module tb_soc_npu_fi;
     // ---- what the BENCH saw, which no operator could ------------------
     $display("RECORD q_ptr_mm=%0d q_par_err=%0d q_rv_mm=%0d fetch_er=%0d",
              q_ptr_mm, q_par_err, q_rv_mm, fetch_expire_n);
+    // docs/55's mechanisms: the two bounds, at the bench, and the three
+    // fault lines counted where they leave soc_npu.
+    $display({"RECORD ser_to=%0d win_to=%0d win_orph=%0d cor_ev=%0d ",
+              "det_ev=%0d tmr_ev=%0d"},
+             ser_to_n, win_to_n, win_orph_n, npu_cor_n, npu_det_n,
+             npu_tmr_n);
+    // ... and what the PROGRAM read out of BUSSTAT with a load. The pair
+    // is docs/44 section 8.2's distinction made measurable: a counter a
+    // testbench reads is not a counter an operator can see.
+    $display("RECORD bst_cor=%08x bst_det=%08x bst_tmr=%08x",
+             dut.u_ram.mem[FI_BSTCOR_ADDR[31:2]],
+             dut.u_ram.mem[FI_BSTDET_ADDR[31:2]],
+             dut.u_ram.mem[FI_BSTTMR_ADDR[31:2]]);
     $display("RECORD sentinel=%0d", sentinel_done);
     $display("RECORD npu_irq=%0d", saw_npu_irq);
 

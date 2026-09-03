@@ -243,26 +243,65 @@ static int npu_bring_up(void) {
   npu_wr(NPU_CTRL, 1u << NPU_BIT_CTRL_STATE_CLR);
   if (!npu_wait_idle(64)) { ok = 0; puts_("  npu: state clear never ended\n"); }
 
-  npu_wr(NPUV_OFF_CFG_AXON,      NPUV_VAL_CFG_AXON);
-  npu_wr(NPUV_OFF_CFG_THRESH,    NPUV_VAL_CFG_THRESH);
-  npu_wr(NPUV_OFF_CFG_VRESET,    NPUV_VAL_CFG_VRESET);
-  npu_wr(NPUV_OFF_CFG_LEAK,      NPUV_VAL_CFG_LEAK);
-  npu_wr(NPUV_OFF_CFG_SYNSHIFT,  NPUV_VAL_CFG_SYNSHIFT);
-  npu_wr(NPUV_OFF_CFG_REFR,      NPUV_VAL_CFG_REFR);
-  npu_wr(NPUV_OFF_CFG_FLAGS,     NPUV_VAL_CFG_FLAGS);
-  npu_wr(NPUV_OFF_PASS_TILE_OFF, NPUV_VAL_PASS_TILE_OFF);
+  for (int c = 0; c < NPUV_N_CFG; c++)
+    npu_wr(npuv_cfg_off[c], npuv_cfg_val[c]);
 
-  /* Read one of them back. A configuration write that was silently
-     refused -- the lock, an out-of-range value, a decode that went to
-     the wrong register -- would otherwise be invisible until the
-     inference produced the wrong answer, and then it would look like an
-     arithmetic bug. */
+/* THE READ-BACK IS A PARAMETER SO THAT ITS COST CAN BE SEPARATED FROM
+   THE RTL'S, and that separation is the whole evidentiary value of the
+   whole-SoC cycle count. Every document since docs/40 has used that
+   number to say "behaviour did not change"; docs/55 changes both the
+   RTL and this program, so it reports the invariant TWICE -- once with
+   the hardened RTL and this loop disabled, which must reproduce
+   docs/51's number exactly, and once as shipped. One number could not
+   have told the two apart.
+
+     SW_DEFINES=-DNPU_CFG_READBACK=0 hw/soc/flow/sim_soc.sh <out>       */
+#ifndef NPU_CFG_READBACK
+#define NPU_CFG_READBACK 1
+#endif
+
+  /* Read EVERY one of them back. A configuration write that was
+     silently refused -- the lock, an out-of-range value, a decode that
+     went to the wrong register -- would otherwise be invisible until
+     the inference produced the wrong answer, and then it would look
+     like an arithmetic bug.
+
+     IT USED TO READ BACK ONE, AND docs/52 MEASURED WHAT THAT MISSED.
+     Of 265 injections that landed before the block was enabled, 14
+     corrupted the inference; this sequence's read-backs caught 3; every
+     one of the 14 was silent to every hardware channel. The sharpest
+     record is `ser.tx` bit 32, which is ADDR[0] of the serial frame:
+     the write went to the WRONG register, the die accepted it, and the
+     single CFG_THRESH read-back read the register that was NOT
+     corrupted and passed.
+
+     The cost is NPUV_N_CFG - 1 extra 176-cycle frames, once per
+     bring-up, and it is the reason the whole-SoC cycle count moved in
+     docs/55. What it does NOT close is the weight array: docs/10
+     section 10's map has no weight read port, so a weight word
+     corrupted on the way in is stored as a valid SECDED codeword of the
+     wrong value and nothing on this side of the pin boundary can ask
+     the die what it holds. */
+#if NPU_CFG_READBACK
+  for (int c = 0; c < NPUV_N_CFG; c++) {
+    uint32_t got = npu_rd(npuv_cfg_off[c]);
+    if (got != npuv_cfg_val[c]) {
+      ok = 0;
+      puts_("  npu: cfg offset "); puthex(npuv_cfg_off[c]);
+      puts_(" reads "); puthex(got);
+      puts_(" want "); puthex(npuv_cfg_val[c]); putc_('\n');
+    }
+  }
+#else
+  /* docs/51's single read-back, kept only so the RTL's own contribution
+     to the cycle count can be measured. */
   {
     uint32_t th = npu_rd(NPUV_OFF_CFG_THRESH);
     if (th != NPUV_VAL_CFG_THRESH) {
       ok = 0; puts_("  npu: CFG_THRESH reads "); puthex(th); putc_('\n');
     }
   }
+#endif
 
   /* W_ADDR auto-increments on the W_DATA_HI commit (docs/10 section 10),
      so it is written once. */

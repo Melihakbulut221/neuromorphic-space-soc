@@ -63,10 +63,17 @@ CNT_RFRD = 0x00C
 CNT_RFDED = 0x010
 CNT_TMRERR = 0x014
 CLR = 0x018
+# docs/55's three, added above CLR rather than displacing it: CLR's
+# offset is in hw/soc/tb/sw/soc_timers.h and in every program written
+# against this block.
+CNT_NPUCOR = 0x01C
+CNT_NPUDET = 0x020
+CNT_NPUTMR = 0x024
 
 # Bit index of each source, shared by STATUS, IRQEN and CLR.
 S_RFSEC, S_RFRD, S_RFDED, S_TMRERR = 0, 1, 2, 3
-NSRC = 4
+S_NPUCOR, S_NPUDET, S_NPUTMR = 4, 5, 6
+NSRC = 7
 STATUS_IRQ = 8
 
 CNT_MAX = 0xFFFF          # CNT_W = 16, saturating
@@ -101,6 +108,9 @@ async def setup(dut):
     dut.pwdata_i.value = 0
     dut.rf_ecc_err_i.value = 0
     dut.tmr_ev_i.value = 0
+    dut.npu_cor_i.value = 0
+    dut.npu_det_i.value = 0
+    dut.npu_tmr_i.value = 0
     for _ in range(4):
         await RisingEdge(dut.clk_i)
     dut.rst_por_ni.value = 1
@@ -171,6 +181,20 @@ def tmr(dut):
     return setter
 
 
+def npu(dut, which):
+    """One of docs/55's three NPU fault lines, by name.
+
+    They are three ports and not one field for the reason docs/44
+    section 6.2 gives and pilot_top.v's header records paying for: a
+    corrected queue pointer, a discarded queue entry and a masked vote in
+    the NPU's cause bank are three structures with three remedies, and a
+    host reading an aggregate could not tell them apart.
+    """
+    def setter(v):
+        getattr(dut, "npu_{}_i".format(which)).value = v
+    return setter
+
+
 @cocotb.test()
 async def test_out_of_reset_nothing_is_reported_and_nothing_is_enabled(dut):
     """The reset state a fresh boot must see.
@@ -186,23 +210,30 @@ async def test_out_of_reset_nothing_is_reported_and_nothing_is_enabled(dut):
 
 @cocotb.test()
 async def test_each_source_counts_its_own_events_and_no_others(dut):
-    """Four counters, four sources, no cross-talk.
+    """Seven counters, seven sources, no cross-talk.
 
-    This is the reason the block has four counters instead of one:
+    This is the reason the block has seven counters instead of one:
     pilot_top.v aggregates its two ECC domains into one CNT_SEC and says
     in a comment what that costs -- "a host reading CNT_SEC cannot tell a
     synapse array correction from a load-path one".
+
+    Every count in the plan below is a DIFFERENT number on purpose. Equal
+    counts would pass on a block whose sources all drove one counter,
+    which is the exact defect the separation exists to prevent.
     """
     await setup(dut)
     plan = [(S_RFSEC, rf(dut, 0), CNT_RFSEC, 3),
             (S_RFRD, rf(dut, 1), CNT_RFRD, 5),
             (S_RFDED, rf(dut, 2), CNT_RFDED, 2),
-            (S_TMRERR, tmr(dut), CNT_TMRERR, 7)]
+            (S_TMRERR, tmr(dut), CNT_TMRERR, 7),
+            (S_NPUCOR, npu(dut, "cor"), CNT_NPUCOR, 11),
+            (S_NPUDET, npu(dut, "det"), CNT_NPUDET, 4),
+            (S_NPUTMR, npu(dut, "tmr"), CNT_NPUTMR, 9)]
     for _, setter, _, n in plan:
         await pulse(dut, setter, n)
     for src, _, reg, n in plan:
         assert await apb_read(dut, reg) == n, "source {} counted wrong".format(src)
-    assert await apb_read(dut, STATUS) & ((1 << NSRC) - 1) == 0b1111
+    assert await apb_read(dut, STATUS) & ((1 << NSRC) - 1) == (1 << NSRC) - 1
 
 
 @cocotb.test()
@@ -327,7 +358,7 @@ async def test_an_offset_that_names_no_register_reads_zero(dut):
     await setup(dut)
     await pulse(dut, rf(dut, 0), 1)
     assert await apb_read(dut, CLR) == 0
-    for off in (0x01C, 0x100, 0xFFC):
+    for off in (0x028, 0x100, 0xFFC):
         assert await apb_read(dut, off) == 0, hex(off)
     assert await apb_read(dut, CNT_RFSEC) == 1, \
         "a read of an unoccupied offset disturbed a counter"

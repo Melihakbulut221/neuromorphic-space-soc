@@ -340,8 +340,27 @@ def npu_flagged(rec, golden):
     The cause register's EVT bit is deliberately excluded: it is a LEVEL
     that means "the capture queue is not empty" (docs/51 section 9) and
     it is not a fault report.
+
+    THE MASK IS EVERY FAULT BIT THE BLOCK HAS AND IT IS DERIVED, not
+    written out.  docs/52 ran with bits 1..6 listed one at a time;
+    docs/55 added five more, and a hand-written mask would have gone on
+    reporting "silent to every hardware channel" for events the block had
+    just learned to announce -- which is the single most flattering way
+    this campaign could have been wrong about its own hardening.
+    `NCAUSE` is parsed out of hw/soc/rtl/soc_npu.v so that a bit added to
+    the block cannot be left out of the set here, and
+    hw/soc/tb/sw/soc_npucfg.h's NPUCFG_C_FAULTS is the same set on the
+    software side, defined once there for the same reason.
+
+    BUSSTAT's three NPU counters are NOT in this condition, and that is
+    deliberate rather than an omission.  They are a second, independent
+    view of the same events -- the cause register's Q_COR, Q_DET and
+    CFG_TMR bits are what make a record DETECTED -- and folding both into
+    one announcement test would make it impossible to say later whether
+    the two agreed.  `bst_cor`, `bst_det` and `bst_tmr` are carried as
+    their own columns and section 5 of docs/55 compares them.
     """
-    C_FAULTS = (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5) | (1 << 6)
+    C_FAULTS = ((1 << targets.NCAUSE) - 1) & ~1      # every bit but EVT
     return (bool(h(rec, "cause") & C_FAULTS)
             or h(rec, "drop") != h(golden, "drop")
             or h(rec, "ovf") != h(golden, "ovf")
@@ -423,6 +442,19 @@ def classify(rec, golden):
         "q_par_err": i(rec, "q_par_err"),
         "q_rv_mm": i(rec, "q_rv_mm"),
         "fetch_er": i(rec, "fetch_er"),
+        # docs/55's mechanisms, at the bench.
+        "ser_to": i(rec, "ser_to"),
+        "win_to": i(rec, "win_to"),
+        "win_orph": i(rec, "win_orph"),
+        "tmr_ev": i(rec, "tmr_ev"),
+        # ... and what an OPERATOR saw of them, read out of BUSSTAT by a
+        # load the core executed.  The pair is the point: docs/52 section
+        # 10's finding was not that the mechanisms failed, it was that
+        # nothing could see them work, so a bench count with no matching
+        # operator count would be the same finding again.
+        "bst_cor": h(rec, "bst_cor"),
+        "bst_det": h(rec, "bst_det"),
+        "bst_tmr": h(rec, "bst_tmr"),
         "wdog_stage": wdog_stage(rec),
         "wdog_first": i(rec, "wdog_first"),
         "cycles": i(rec, "cycles"),
@@ -582,6 +614,8 @@ def main():
                 for k in ("bit", "cycle", "wdog_stage", "wdog_first",
                           "wdog_latency", "armed_cycles", "disarmed_cycles",
                           "q_ptr_mm", "q_par_err", "q_rv_mm", "fetch_er",
+                          "ser_to", "win_to", "win_orph", "tmr_ev",
+                          "bst_cor", "bst_det", "bst_tmr",
                           "at_ser", "at_win", "at_ev"):
                     if k in r:
                         r[k] = int(r[k])
@@ -662,8 +696,28 @@ def main():
         if not s.path.endswith(".bits"):
             sys.exit("evq_ptr site %s is %s, which is not replica storage"
                      % (s.name, s.path))
+    # AND THE SAME FOR docs/55's CAUSE BANK.  soc_tmr_bank's `q_o` is a
+    # continuously driven function of `bits`, so a deposit there would be
+    # overwritten in the same delta cycle and the record would say
+    # nothing about the replicas -- which is what docs/41 section 8.1
+    # records this campaign's ancestor doing twice.  The three cause-bank
+    # sites are the only ones in `cfgreg` that name a submodule; the two
+    # self-clearing pulses are plain registers in soc_npu.v by decision.
+    n_replica = 0
+    for s in targets.stratum_sites("cfgreg"):
+        if "u_cfg_" not in s.path:
+            continue
+        n_replica += 1
+        if not s.path.endswith(".bits"):
+            sys.exit("cfgreg site %s is %s, which is not replica storage"
+                     % (s.name, s.path))
+    if n_replica != 3:
+        sys.exit("the cause bank has %d replica sites and must have three; "
+                 "a campaign that drew from two of three replicas would "
+                 "under-report a vote it never made" % n_replica)
     say("control 1b: every replicated target is a `.bits` storage register "
-        "and not a voted wire")
+        "and not a voted wire, in both queues and in all three replicas "
+        "of the %d-bit cause bank", targets.PROT_W)
 
     # =================================================================
     # CONTROL 2: the golden run, and the window it measures
@@ -797,10 +851,24 @@ def main():
     # =================================================================
     # CONTROL 4: the injector reaches the design, in both directions
     # =================================================================
-    # POSITIVE.  Bit 0 of `ctrl_in_en`, the NPUCFG enable that lets the
-    # event engine take anything out of the injection queue.  Clearing it
-    # stops every inbound event, so no frame's barrier can come back and
-    # the inference cannot complete.  It MUST NOT classify MASKED.
+    # POSITIVE.  Bit 15 of `cnt_in`, the event engine's own count of what
+    # it has delivered to the die.  It only ever INCREMENTS, and it ends
+    # the clean run at 22, so a flip of bit 15 is never undone by the
+    # design's own writes: the program's cross-check of NPUCFG.CNT
+    # against the stream it collected must fail.  MASKED is impossible if
+    # the deposit landed, which is exactly what a positive control needs.
+    #
+    # THIS CONTROL WAS `ctrl_in_en` UNTIL docs/55 AND IT HAD TO CHANGE,
+    # which is worth recording rather than quietly editing.  That
+    # register is now a field of a TRIPLE-REDUNDANT word: a single
+    # deposit into one replica is masked by the vote, so the old control
+    # would have failed -- correctly -- on a design that had just been
+    # hardened against exactly the thing the control was exercising.  The
+    # fix is a new positive control on state that is still single, plus a
+    # NEW control 4d that asserts the vote does mask it and does report
+    # it.  Moving the old control's threshold until it passed would have
+    # been the other option, and it is the one docs/52 section 5.1 says
+    # makes docs/41 section 6.6's list longer.
     #
     # docs/42 section 8.5 item 1 records what a campaign in which the
     # deposit never landed looks like: almost entirely MASKED, which is
@@ -823,16 +891,79 @@ def main():
                  "en_at=%d, window %d..%d" % (en_at, win_open, win_close))
     live_cycle = en_at + (win_close - en_at) // 4
     pos_site = next(k for k, s in enumerate(targets.SITES)
-                    if s.name == "ctrl_in_en")
-    pos = runner.run(site=pos_site, bit=0, cycle=live_cycle)
+                    if s.name == "cnt_in")
+    pos = runner.run(site=pos_site, bit=15, cycle=live_cycle)
     pcls, _ = classify(pos, golden)
-    verify_deposit(pos, targets.SITES[pos_site], 0)
+    verify_deposit(pos, targets.SITES[pos_site], 15)
     if pcls == "MASKED":
-        sys.exit("clearing CTRL.IN_EN mid-inference classified MASKED. The "
-                 "deposit is not landing and the campaign would measure "
-                 "nothing.")
-    say("control 4a: CTRL.IN_EN goes high at cycle %d; clearing it at "
-        "cycle %d classifies %s, so deposits land", en_at, live_cycle, pcls)
+        sys.exit("bit 15 of cnt_in, deposited mid-inference, classified "
+                 "MASKED. That counter only increments and ends at 22, so "
+                 "the flip cannot be undone: the deposit is not landing and "
+                 "the campaign would measure nothing.")
+    say("control 4a: the block is enabled at cycle %d; bit 15 of the "
+        "engine's cnt_in at cycle %d classifies %s, so deposits land",
+        en_at, live_cycle, pcls)
+
+    # CONTROL 4d: THE CAUSE BANK'S VOTE MASKS A DEPOSIT AND REPORTS IT.
+    #
+    # New in docs/55, and it is the only control in this campaign that
+    # exercises a mechanism this work built rather than one it measures.
+    # A deposit into ONE replica of the protected word must be:
+    #   * masked -- the inference still produces the golden answer;
+    #   * corrected -- soc_tmr_bank is written from the vote on every
+    #     edge, so the replica is repaired on the next cycle;
+    #   * and ANNOUNCED, in two independent places: IRQ_CAUSE.CFG_TMR,
+    #     which the program reads with a load, and BUSSTAT's CNT_NPUTMR,
+    #     which it also reads with a load.
+    #
+    # A design whose three replicas had been merged into one by the
+    # synthesiser would still pass this control, because it deposits into
+    # RTL.  sw/tests/test_soc_synthesis_guards.py is the check that they
+    # are three in the netlist, and neither is a substitute for the
+    # other -- docs/41 section 6 makes that division and this is the same
+    # one.
+    tmr_site = next(k for k, s in enumerate(targets.SITES)
+                    if s.name == "cfg_a")
+    tpos = runner.run(site=tmr_site, bit=0, cycle=live_cycle)
+    verify_deposit(tpos, targets.SITES[tmr_site], 0)
+    tcls, tf = classify(tpos, golden)
+    # THE ORACLE HERE IS THE MODEL AND NOT THE COMPARED RESULT, and the
+    # first run of this control is why that is written down rather than
+    # assumed.  `answer()` compares the WHOLE published result, and that
+    # includes the cause register -- which this deposit is SUPPOSED to
+    # move, because IRQ_CAUSE.CFG_TMR is the announcement the vote makes.
+    # So `out_ok` is false on a record whose inference is exactly right,
+    # and a control written against `out_ok` fails on a design that is
+    # working.  That is docs/52 section 9's second finding -- "it
+    # separates a wrong answer from a moved counter" -- turned into a
+    # gate, and without the golden model this control could not be
+    # written at all.
+    say("control 4d: bit 0 of cause-bank replica A at cycle %d classifies "
+        "%s. The MODEL says the inference is %s; the compared result "
+        "differs only because the cause register moved (IRQ_CAUSE=%s). "
+        "The voter fired %s time(s) and BUSSTAT.CNT_NPUTMR reads %s",
+        live_cycle, tcls, "WRONG" if tf["model_wrong"] else "RIGHT",
+        tpos["cause"], i(tpos, "tmr_ev"), tpos["bst_tmr"])
+    if tf["model_wrong"]:
+        sys.exit("a single-bit deposit into one replica of the protected "
+                 "word produced a WRONG INFERENCE against "
+                 "sw/golden/lif_core.py. The vote is not masking it.")
+    if i(tpos, "nev") != i(golden, "nev") or tpos["sig"] != golden["sig"]:
+        sys.exit("a single-bit deposit into one replica of the protected "
+                 "word changed the event stream or the neuron state file")
+    if not (h(tpos, "cause") & (1 << targets.C_CFG_TMR)):
+        sys.exit("the vote masked the deposit and IRQ_CAUSE.CFG_TMR is "
+                 "clear: the correction happened and the part did not say "
+                 "so, which is exactly the finding docs/52 section 10 made "
+                 "and this work exists to close")
+    if i(tpos, "tmr_ev") == 0:
+        sys.exit("a single-bit deposit into one replica of the protected "
+                 "word produced no voter mismatch at all; the three "
+                 "replicas are not three")
+    if h(tpos, "bst_tmr") == 0:
+        sys.exit("the voter fired and BUSSTAT's CNT_NPUTMR is still zero: "
+                 "the fault line does not reach the counter, which is the "
+                 "whole of docs/55 H2's claim")
 
     # A SECOND POSITIVE, INSIDE THE FROZEN DIE, because the two halves of
     # the design are reached by different hierarchical paths and a case
@@ -896,10 +1027,23 @@ def main():
         say("%-14s %5s %8s  %-10s %-9s  %-10s %-10s %-8s %s"
             % ("site", "bit", "cycle", "was(armed)", "was(truth)",
                "now(armed)", "now(dis)", "now(truth)", "mechanism"))
-        out_rows = []
-        for name, path, bit, cycle, was_truth, was_cls in want:
+        # RUN IN PARALLEL, exactly as the campaign below does.
+        #
+        # It was a serial loop until docs/55, which is fine for the three
+        # records docs/52 section 7.2 replayed and is not fine for the
+        # 616 this one does: at about eight seconds a simulation the
+        # difference is two and a half hours against fifteen minutes.
+        # The ORDER of the report is preserved by mapping over the plan
+        # rather than collecting as they finish, so two runs of the same
+        # replay produce diffable logs -- which is the property docs/52
+        # section 5.4 item 3 had to add to `--replay` after finding it
+        # missing.
+        for _, path, _, _, _, _ in want:
             if path not in by_path:
                 sys.exit("path %s is not in this build's site list" % path)
+
+        def djob(item):
+            _, path, bit, cycle, _, _ = item
             idx = by_path[path]
             a = runner.run(site=idx, bit=bit, cycle=cycle, armed=True)
             d = runner.run(site=idx, bit=bit, cycle=cycle, armed=False)
@@ -908,6 +1052,13 @@ def main():
             # never a quiet MASKED that looks like a design that fixed it.
             verify_deposit(a, targets.SITES[idx], bit)
             verify_deposit(d, targets.SITES[idx], bit)
+            return item, a, d
+
+        out_rows = []
+        with concurrent.futures.ThreadPoolExecutor(
+                max_workers=args.jobs) as ex:
+            done = list(ex.map(djob, want))
+        for (name, path, bit, cycle, was_truth, was_cls), a, d in done:
             acls, af = classify(a, golden)
             dcls, df = classify(d, golden)
             t = "OK" if df["out_ok"] else ("WRONG" if df["done"] else "DEAD")
@@ -920,6 +1071,17 @@ def main():
                 how.append("rdv rails %d" % af["q_rv_mm"])
             if af["fetch_er"]:
                 how.append("fetch bound %d" % af["fetch_er"])
+            # docs/55's three mechanisms, named where they fired, so a
+            # row that changed class between the two campaigns says WHY
+            # rather than only THAT.
+            if af["ser_to"]:
+                how.append("frame bound %d" % af["ser_to"])
+            if af["win_to"]:
+                how.append("window bound %d" % af["win_to"])
+            if af["win_orph"]:
+                how.append("window orphan %d" % af["win_orph"])
+            if af["tmr_ev"]:
+                how.append("cause-bank vote %d" % af["tmr_ev"])
             if af["ann_wdog"]:
                 how.append("watchdog stage %d" % af["wdog_stage"])
             say("%-14s %5d %8d  %-10s %-9s  %-10s %-10s %-8s %s"
@@ -938,7 +1100,14 @@ def main():
                              "q_ptr_mm": af["q_ptr_mm"],
                              "q_par_err": af["q_par_err"],
                              "q_rv_mm": af["q_rv_mm"],
-                             "fetch_er": af["fetch_er"]})
+                             "fetch_er": af["fetch_er"],
+                             "ser_to": af["ser_to"],
+                             "win_to": af["win_to"],
+                             "win_orph": af["win_orph"],
+                             "tmr_ev": af["tmr_ev"],
+                             "bst_cor": af["bst_cor"],
+                             "bst_det": af["bst_det"],
+                             "bst_tmr": af["bst_tmr"]})
         dpath = os.path.join(out_dir, "directed.csv")
         with open(dpath, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(out_rows[0].keys()))
@@ -1021,6 +1190,12 @@ def main():
             "silent_det": af["silent_det"],
             "q_ptr_mm": af["q_ptr_mm"], "q_par_err": af["q_par_err"],
             "q_rv_mm": af["q_rv_mm"], "fetch_er": af["fetch_er"],
+            # docs/55: the two bounds and the cause bank's voter, at the
+            # bench, beside what BUSSTAT told the program about them.
+            "ser_to": af["ser_to"], "win_to": af["win_to"],
+            "win_orph": af["win_orph"], "tmr_ev": af["tmr_ev"],
+            "bst_cor": af["bst_cor"], "bst_det": af["bst_det"],
+            "bst_tmr": af["bst_tmr"],
             "wdog_stage": af["wdog_stage"],
             "wdog_first": af["wdog_first"],
             "wdog_latency": (af["wdog_first"] - cycle

@@ -45,9 +45,13 @@ PILOT = $(PWD)/../../../rtl
 SOC_NPU_SRC ?= $(RTL)/soc_npu.v
 SOC_NPU_SER_SRC ?= $(RTL)/soc_npu_ser.v
 
+# soc_tmr_bank.v is docs/55's addition to this list: soc_npu.v now holds
+# its control and cause registers in three replicas of that bank under
+# hw/rtl/tmr_voter.v, which was already here.
 VERILOG_SOURCES = \
 	$(SOC_NPU_SRC) \
 	$(SOC_NPU_SER_SRC) \
+	$(RTL)/soc_tmr_bank.v \
 	$(PILOT)/pilot_top.v \
 	$(PILOT)/lif_core.v \
 	$(PILOT)/aer_fifo.v \

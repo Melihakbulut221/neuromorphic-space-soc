@@ -81,6 +81,38 @@
 //               A different structure, a different mechanism and a
 //               different remedy, so a different counter.
 //
+// and three added by docs/55, which are the NPU connection's. docs/52
+// section 10 counted 79 upsets in 700 injections absorbed by mechanisms
+// that WORKED, and found that no software and no pin could see any of
+// them -- "in silicon a corrected pointer upset is indistinguishable
+// from no upset at all". docs/51 section 14 item 1 had declined to give
+// them a home on the grounds that a fault-counter block invented inside
+// soc_npu.v would put NPU-only telemetry outside BUSSTAT. That argument
+// is about WHERE THE COUNTERS LIVE, and this is where they live.
+//
+//   CNT_NPUCOR  Pointer-vote disagreements aer_fifo CORRECTED, across
+//               both of the connection's queues. The queues' pointers
+//               are triple-redundant and reload every replica from the
+//               vote on the next edge, so this counts upsets the part
+//               survived. It is the connection's UPSET-RATE counter, the
+//               way CNT_RFSEC is the core's, and docs/52 section 6.1
+//               measured 74 of them in 700 injections.
+//
+//   CNT_NPUDET  Queue entries the connection DISCARDED: an entry whose
+//               stored parity failed, or a read whose two rd_valid rails
+//               disagreed. NOT the same event as CNT_NPUCOR and
+//               deliberately not folded into it -- a correction lost
+//               nothing and a discard LOST AN EVENT. A mission reading
+//               this one is reading dropped work.
+//
+//   CNT_NPUTMR  Mismatches the NPU cause bank's own voter masked
+//               (soc_npu.v H3). Separate from CNT_TMRERR for exactly the
+//               reason CNT_TMRERR is separate from CNT_RFSEC: a host
+//               that could not tell a watchdog vote from an NPU vote
+//               would be reading the aggregate pilot_top.v's header
+//               records costing it -- "a host reading CNT_SEC cannot
+//               tell a synapse array correction from a load-path one".
+//
 // All four SATURATE. A counter that wraps is indistinguishable from a
 // counter that has barely moved, which for a radiation counter is the
 // one failure that cannot be detected downstream. pilot_top.v saturates
@@ -174,6 +206,13 @@ module soc_busstat #(
     input  wire [2:0]  rf_ecc_err_i,
     // One pulse per masked TMR mismatch in the watchdog (docs/41 W6).
     input  wire        tmr_ev_i,
+    // The NPU connection's three, from soc_npu.v (docs/55). Each is one
+    // cycle per event by construction at the source, which is the
+    // property these counters need and the one soc_npu.v's port comment
+    // establishes for all three.
+    input  wire        npu_cor_i,   // a queue pointer vote corrected
+    input  wire        npu_det_i,   // a queue entry was discarded
+    input  wire        npu_tmr_i,   // the NPU cause bank's voter masked
 
     // Level, to fast interrupt line 10 (IRQ 22 in the frozen map).
     output wire        irq_o
@@ -186,6 +225,12 @@ module soc_busstat #(
   localparam [11:0] REG_RFDED  = 12'h010;
   localparam [11:0] REG_TMRERR = 12'h014;
   localparam [11:0] REG_CLR    = 12'h018;
+  // docs/55. CLR keeps 0x018 -- it is in hw/soc/tb/sw/soc_busstat.h and
+  // in every program that has been written against this block -- and the
+  // three new counters go above it rather than displacing anything.
+  localparam [11:0] REG_NPUCOR = 12'h01C;
+  localparam [11:0] REG_NPUDET = 12'h020;
+  localparam [11:0] REG_NPUTMR = 12'h024;
 
   // Bit index of each source, shared by STATUS, IRQEN and CLR so that
   // the three cannot disagree about which bit is which. sw/tests and
@@ -194,7 +239,10 @@ module soc_busstat #(
   localparam integer S_RFRD   = 1;
   localparam integer S_RFDED  = 2;
   localparam integer S_TMRERR = 3;
-  localparam integer NSRC     = 4;
+  localparam integer S_NPUCOR = 4;
+  localparam integer S_NPUDET = 5;
+  localparam integer S_NPUTMR = 6;
+  localparam integer NSRC     = 7;
 
   localparam [CNT_W-1:0] CNT_MAX = {CNT_W{1'b1}};
 
@@ -210,6 +258,9 @@ module soc_busstat #(
   assign ev[S_RFRD]   = rf_ecc_err_i[1];
   assign ev[S_RFDED]  = rf_ecc_err_i[2];
   assign ev[S_TMRERR] = tmr_ev_i;
+  assign ev[S_NPUCOR] = npu_cor_i;
+  assign ev[S_NPUDET] = npu_det_i;
+  assign ev[S_NPUTMR] = npu_tmr_i;
 
   // ---- the clear strobes --------------------------------------------
   wire [NSRC-1:0] clr;
@@ -299,15 +350,22 @@ module soc_busstat #(
   // ---- reads --------------------------------------------------------
   always @(*) begin
     case (paddr_i)
+      // Bit 8 is the interrupt and stays at bit 8: it is in the frozen
+      // header and in every program written against this block, so the
+      // sticky field grows UP TO bit 6 and the gap between them shrinks
+      // rather than the interrupt moving.
       REG_STATUS: prdata_o = {23'h0,
                               irq_o,                        // 8
-                              4'h0,                         // 7..4
-                              sticky};                      // 3..0
+                              1'h0,                         // 7
+                              sticky};                      // 6..0
       REG_IRQEN:  prdata_o = {{(32-NSRC){1'b0}}, irqen};
       REG_RFSEC:  prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_RFSEC]};
       REG_RFRD:   prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_RFRD]};
       REG_RFDED:  prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_RFDED]};
       REG_TMRERR: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_TMRERR]};
+      REG_NPUCOR: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_NPUCOR]};
+      REG_NPUDET: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_NPUDET]};
+      REG_NPUTMR: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_NPUTMR]};
       // CLR is write-only. It reads zero rather than reading back what
       // was last written, because a clear strobe has no state and a
       // register that reads back a strobe invites software to treat it

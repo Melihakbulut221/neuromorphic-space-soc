@@ -321,3 +321,238 @@ def test_the_new_rtl_is_verilog_2005_and_carries_a_timescale(name):
                    "package ", "interface "):
         assert banned not in text, (
             "{} uses SystemVerilog construct {!r}".format(name, banned))
+
+
+# ---------------------------------------------------------------------
+# 5. docs/55: the two bounds, the reports, and the protected word
+# ---------------------------------------------------------------------
+def _lp(text, name, where, env=None):
+    """One `localparam integer <name> = <expression>;`, evaluated.
+
+    The right-hand side is restricted to integer literals, the four
+    arithmetic operators, parentheses and names the caller has already
+    resolved into `env`. That is enough for every constant this file
+    checks and it is deliberately not enough for anything else: an
+    evaluator that could reach further would be a test that could be
+    made to pass by writing something clever in the RTL.
+    """
+    m = re.search(r"localparam\s+integer\s+" + name + r"\s*=\s*([^;]+);",
+                  text)
+    assert m, "no `localparam integer {} = ...;` in {}".format(name, where)
+    expr = m.group(1).strip()
+    assert re.fullmatch(r"[0-9A-Za-z_+\-*/() ]+", expr), (
+        "{} in {} is {!r}, which this test will not evaluate".format(
+            name, where, expr))
+    try:
+        return int(eval(expr, {"__builtins__": {}}, dict(env or {})))
+    except NameError as exc:
+        raise AssertionError(
+            "{} in {} refers to {}, which the test has not resolved: "
+            "{!r}".format(name, where, exc, expr))
+
+
+def test_the_two_bounds_are_derived_from_one_frame():
+    """soc_npu.v sizes the node window's response bound from the
+    transport's frame length, and Verilog-2005 gives an instantiating
+    module no way to read a submodule's localparam. So the two numbers
+    are restated -- and this is the check that the restatement is still
+    true.
+
+    docs/40 section 7.4 records what ONE literal bit position, written
+    in two places, cost soc_wdog.v. The window's bound is worse than a
+    bit position: if HALVES_FRAME grew in the transport and not here,
+    the window would give up on a frame that was still legally in
+    flight, and the symptom would be an intermittent bus error on a
+    healthy part.
+    """
+    nbits = _lp(SER, "NBITS", "soc_npu_ser.v")
+    assert nbits == 40, "the pilot's frame is 40 bits (pilot_top.v P2)"
+    setup = _lp(SER, "HALVES_SETUP", "soc_npu_ser.v")
+    shift = _lp(SER, "HALVES_SHIFT", "soc_npu_ser.v", {"NBITS": nbits})
+    gap = _lp(SER, "HALVES_GAP", "soc_npu_ser.v")
+    env = {"HALVES_SETUP": setup, "HALVES_SHIFT": shift, "HALVES_GAP": gap}
+    ser_frame = _lp(SER, "HALVES_FRAME", "soc_npu_ser.v", env)
+    ser_slack = _lp(SER, "HALVES_SLACK", "soc_npu_ser.v")
+    npu_frame = _lp(NPU, "SER_HALVES_FRAME", "soc_npu.v")
+    npu_slack = _lp(NPU, "SER_HALVES_SLACK", "soc_npu.v")
+    assert (ser_frame, ser_slack) == (npu_frame, npu_slack), (
+        "soc_npu.v thinks a serial frame is {} half periods plus {} of "
+        "slack and soc_npu_ser.v says {} plus {}. The node window's "
+        "bound is derived from the first pair and the transport's from "
+        "the second, so they cannot disagree.".format(
+            npu_frame, npu_slack, ser_frame, ser_slack))
+    # And the transport's own arithmetic is the frame it actually
+    # drives: setup + 2 x NBITS + gap, in half periods.
+    assert shift == 2 * nbits
+    assert ser_frame == setup + 2 * nbits + gap
+
+
+def test_the_frame_bound_expires_on_greater_or_equal_and_not_on_equal():
+    """An upset that pushes a guard counter ABOVE its bound must expire
+    now, not wrap.
+
+    With `==` the counter would count up, wrap through its whole range
+    and only then reach the bound -- which is the unbounded stall the
+    guards exist to remove, rebuilt inside the guard itself. Both
+    counters are checked, because the two were written at different
+    times and only one of them has a formal invariant behind it.
+    """
+    assert "guard >= GUARD_MAX[GUARD_W-1:0]" in SER, (
+        "soc_npu_ser.v's frame bound no longer compares with >=")
+    assert "win_guard >= WIN_MAX[WIN_GRD_W-1:0]" in NPU, (
+        "soc_npu.v's window bound no longer compares with >=")
+
+
+def test_a_bound_that_fires_fails_the_access_and_says_which_bound():
+    """docs/52 section 12 item 1 asked for "a load access fault the
+    program can handle" instead of a system reset, and for the part to
+    say what happened.
+
+    Half of that is the error response and half is the report. A bound
+    that ended the wait and returned ZERO as data would be worse than
+    the hang it replaced: the CPU would carry on with a register value
+    that is not the register's.
+    """
+    assert "win_err_q <= win_err_q | ser_timeout;" in NPU, (
+        "an aborted serial frame no longer fails the node-window access")
+    assert re.search(r"end else if \(win_expire\) begin\s*\n(\s*//[^\n]*\n)*"
+                     r"\s*win_err_q <= 1'b1;", NPU), (
+        "an expired window wait no longer fails the access")
+    assert "sticky_ev[C_SER_TO   - C_STICKY0] = ser_timeout;" in NPU
+    assert ("sticky_ev[C_WIN_TO   - C_STICKY0] = win_expire || win_orphan;"
+            in NPU), (
+        "the window's two recoveries no longer share the cause bit that "
+        "tells an operator the node window had to repair itself")
+
+
+def test_the_window_bound_is_armed_by_the_grant_and_not_by_the_state():
+    """The first version of this bound was armed by `win_state`, and it
+    MISSED TWO OF THE SEVEN RECORDS IT WAS BUILT FOR.
+
+    docs/55 section 8.2 is that measurement. The failure the state-armed
+    version modelled is "the window waits for ever"; two of docs/52's
+    seven dead machines are different shapes, and a counter that turns
+    only in W_ISSUE and W_WAIT does not run in either:
+
+      * the window FORGETS -- `win_state` W_WAIT to W_IDLE with a granted
+        request unanswered. Nothing is waiting, so nothing counts.
+      * the window is BUSY WITH NOTHING OWED -- W_IDLE to W_ISSUE. It
+        issues a frame nobody asked for and raises rvalid with no grant
+        behind it, which puts soc_bus.v's response-ownership queue out of
+        step and sends every later response to the wrong master.
+
+    Both are facts about the FABRIC HANDSHAKE rather than about this
+    FSM's encoding, and both are answered from `win_out`: one bit that
+    says the slave owes a response. This test exists to stop a future
+    edit re-deriving the state-armed version, which reads more naturally
+    and is wrong.
+    """
+    assert re.search(r"else if \(gnt_o\)\s+win_out <= 1'b1;", NPU), (
+        "win_out is no longer set by the grant")
+    assert re.search(r"else if \(rvalid_o\)\s+win_out <= 1'b0;", NPU), (
+        "win_out is no longer cleared by the response")
+    assert "wire win_expire = win_out &&" in NPU, (
+        "the window's bound is armed by something other than an "
+        "outstanding request; docs/55 section 8.2 measured what the "
+        "state-armed version missed")
+    assert "wire win_orphan = !win_out && (win_state != W_IDLE);" in NPU, (
+        "the window no longer detects a state that no grant put it in")
+    # And the orphan recovery must NOT answer the fabric.
+    m = re.search(r"if \(win_orphan\) begin(.*?)end else if", NPU, re.S)
+    assert m, "the orphan recovery is gone"
+    assert "W_RESP" not in m.group(1), (
+        "the orphan recovery returns a response. It must not: an rvalid "
+        "the fabric was never expecting is the whole reason that record "
+        "was fatal.")
+    # And the transport itself must not present a partial frame as data.
+    assert re.search(r"rdata_o\s*<= 32'd0;\s*\n\s*done_o\s*<= 1'b1;\s*\n"
+                     r"\s*timeout_o\s*<= 1'b1;", SER), (
+        "soc_npu_ser.v no longer zeroes rdata_o when it aborts a frame")
+
+
+def test_the_protected_word_bundles_the_flags_it_cannot_triple_alone():
+    """The replication bound, asserted rather than trusted.
+
+    hw/rtl/pilot_top.v section 8.2 proves three replicas cannot be held
+    apart over ONE bit, and nine of the eleven fields this bank protects
+    are one bit wide. The answer is docs/41 section 4.2's: bundle them
+    into one word and replicate the WORD. A future edit that gave any of
+    them a bank of its own would produce a netlist with one flip-flop
+    and a voter voting it against itself, and every test and every proof
+    in this repository would still pass.
+
+    soc_tmr_bank.v refuses below four bits, so the only thing this test
+    has to check is that the bundle is still a bundle.
+    """
+    ncause = _lp(NPU, "NCAUSE", "soc_npu.v")
+    nsticky = ncause - _lp(NPU, "C_INJ_OVF", "soc_npu.v")
+    prot_w = 2 + nsticky + ncause
+    assert prot_w >= 4, (
+        "the protected word is {} bits and soc_tmr_bank refuses below "
+        "four; below that the MIX transform is silently disarmed".format(
+            prot_w))
+    # Three banks, one voter, all at PROT_W.
+    assert len(re.findall(r"soc_tmr_bank\s*#\(\.W\(PROT_W\)", NPU)) == 3
+    assert "tmr_voter #(.WIDTH(PROT_W)) u_cfg_vote" in NPU
+    # And the fields are inside it rather than beside it.
+    for field in ("P_IN_EN", "P_OUT_EN", "P_STICKY", "P_MASK"):
+        assert field in NPU, (
+            "{} is no longer a named field of the protected "
+            "word".format(field))
+
+
+def test_the_report_is_inside_the_protected_word():
+    """docs/16 section 5.8 measured this repository's own safety-net
+    report being a single point of failure: an upset could erase the
+    announcement of the very event it caused, and docs/16 section 5.9 is
+    the fix at minus two flip-flops.
+
+    So the cause bank's own mismatch report is a FIELD of the bank. The
+    write that repairs the replica and the write that records the repair
+    are the same write on the same edge, which is docs/30 section 4.2's
+    rule and docs/41 section 5.3's application of it.
+    """
+    c_cfg_tmr = _lp(NPU, "C_CFG_TMR", "soc_npu.v")
+    c_sticky0 = _lp(NPU, "C_INJ_OVF", "soc_npu.v")
+    assert c_cfg_tmr >= c_sticky0, (
+        "C_CFG_TMR is below the first sticky bit, so it is not carried "
+        "in the protected word's sticky field at all")
+    assert "sticky_ev[C_CFG_TMR  - C_STICKY0] = prot_mismatch;" in NPU
+
+
+def test_nothing_instantiates_the_npu_unhardened():
+    """HARDEN = 0 exists so the redundancy can be PRICED against the
+    same file list with the same recipe -- docs/41 section 6.5 -- and
+    for nothing else. A design that shipped it would have the cause
+    register docs/52 measured producing a false fault report in 16 of
+    100 draws.
+    """
+    m = re.search(r"parameter\s+integer\s+HARDEN\s*=\s*(\d+)", NPU)
+    assert m and int(m.group(1)) == 1, (
+        "soc_npu.v's HARDEN no longer defaults to 1")
+    assert ".HARDEN" not in TOP, (
+        "soc_top.v overrides soc_npu's HARDEN; the only configuration "
+        "this SoC ships is the hardened one")
+
+
+def test_the_queue_storage_is_left_alone_on_purpose():
+    """The measurement disagreeing with instinct, written into a test.
+
+    `evq_data` is 41.2 % of the connection's flip-flops and 53.5 % of
+    its area, and docs/52 measured it producing ZERO silent wrong
+    inferences in 100 draws -- because the queues hold a couple of live
+    entries out of eight, so most of those bits are storage nothing will
+    read. A hardening wave that started with the biggest structure would
+    have spent its whole budget there.
+
+    There is no way to test for the ABSENCE of a future protection, so
+    this tests for the presence of the argument: soc_npu.v has to keep
+    saying why, and hw/rtl/aer_fifo.v has to stay the only thing
+    protecting those entries.
+    """
+    assert "NOTHING IN THIS FILE PROTECTS" in NPU and "QUEUE STORAGE" in NPU, (
+        "soc_npu.v no longer records that the queue storage is "
+        "deliberately unprotected; if that changed, it changed against "
+        "docs/52's measurement and needs a measurement of its own")
+    # The queues are still hw/rtl/aer_fifo.v and still at 16 x 8.
+    assert len(re.findall(r"aer_fifo #\(\.WIDTH \(16\)", NPU)) == 2

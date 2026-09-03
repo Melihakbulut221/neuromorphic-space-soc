@@ -52,6 +52,23 @@
  *   BST_RFDED   Uncorrectable syndromes: two upsets in one register
  *               between two scrubs.
  *   BST_TMRERR  Mismatches the watchdog's voter masked, docs/41 W6.
+ *
+ * and three the NPU connection drives, docs/55. Read the unit off the
+ * name here too, because two of them are not the same quantity:
+ *
+ *   BST_NPUCOR  UPSETS THE QUEUES SURVIVED. aer_fifo's pointers are
+ *               triple-redundant and reload every replica from the vote
+ *               on the next edge, so this counts corrected
+ *               disagreements: nothing was lost. It is the connection's
+ *               upset-rate counter, the way BST_RFSEC is the core's.
+ *   BST_NPUDET  EVENTS THE CONNECTION LOST: a queue entry whose stored
+ *               parity failed, or a read whose two rd_valid rails
+ *               disagreed. Deliberately not folded into BST_NPUCOR --
+ *               one counts survival and this one counts dropped work.
+ *   BST_NPUTMR  Mismatches the NPU control-and-cause bank's own voter
+ *               masked (soc_npu.v H3). Separate from BST_TMRERR because
+ *               a watchdog vote and an NPU vote are different parts
+ *               with different remedies.
  */
 #define BST_STATUS      (SOC_BUSSTAT_BASE + 0x000u)
 #define BST_IRQEN       (SOC_BUSSTAT_BASE + 0x004u)
@@ -60,13 +77,21 @@
 #define BST_RFDED       (SOC_BUSSTAT_BASE + 0x010u)
 #define BST_TMRERR      (SOC_BUSSTAT_BASE + 0x014u)
 #define BST_CLR         (SOC_BUSSTAT_BASE + 0x018u)
+#define BST_NPUCOR      (SOC_BUSSTAT_BASE + 0x01Cu)
+#define BST_NPUDET      (SOC_BUSSTAT_BASE + 0x020u)
+#define BST_NPUTMR      (SOC_BUSSTAT_BASE + 0x024u)
 
 /* One bit index per source, shared by STATUS, IRQEN and CLR. */
 #define BST_S_RFSEC     (1u << 0)
 #define BST_S_RFRD      (1u << 1)
 #define BST_S_RFDED     (1u << 2)
 #define BST_S_TMRERR    (1u << 3)
-#define BST_S_ALL       (BST_S_RFSEC | BST_S_RFRD | BST_S_RFDED | BST_S_TMRERR)
+#define BST_S_NPUCOR    (1u << 4)
+#define BST_S_NPUDET    (1u << 5)
+#define BST_S_NPUTMR    (1u << 6)
+#define BST_S_ALL       (BST_S_RFSEC | BST_S_RFRD | BST_S_RFDED \
+                         | BST_S_TMRERR | BST_S_NPUCOR | BST_S_NPUDET \
+                         | BST_S_NPUTMR)
 /* STATUS bit 8: any enabled sticky is set, i.e. the line is asserted. */
 #define BST_STATUS_IRQ  (1u << 8)
 

@@ -45,7 +45,11 @@ eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 
 mkdir -p "$OUT"
 
-SRC="$RTL/soc_npu.v $RTL/soc_npu_ser.v $PILOT_RTL/aer_fifo.v \
+# soc_tmr_bank.v joins this list with docs/55: the connection's control
+# and cause registers are now three replicas of that bank under
+# hw/rtl/tmr_voter.v, which was already read here.
+SRC="$RTL/soc_npu.v $RTL/soc_npu_ser.v $RTL/soc_tmr_bank.v \
+     $PILOT_RTL/aer_fifo.v \
      $PILOT_RTL/pilot_top.v $PILOT_RTL/lif_core.v $PILOT_RTL/scrub.v \
      $PILOT_RTL/secded_enc.v $PILOT_RTL/secded_dec.v \
      $PILOT_RTL/tmr_voter.v"

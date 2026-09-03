@@ -135,14 +135,123 @@
 // docs/51 section 9 prices it and states the event rate above which it
 // pays for itself.
 //
-// No hardening of anything this file adds. The queues carry aer_fifo's
-// protection because they are aer_fifo; the engine's state, the
-// registers and the serial shift path have none, which is the same
-// position docs/39 section 9 item 3 records for the whole SoC.
-//
 // No second node. N_NODES is a parameter, the window decodes all
 // sixteen NODE_ID values docs/10 section 8 item 2 allows, and fifteen
 // of them are a bus error.
+//
+// =====================================================================
+// 6. WHAT IS HARDENED, AND WHAT THE MEASUREMENT SAID TO LEAVE ALONE
+// =====================================================================
+//
+// Until docs/55 this header said "No hardening of anything this file
+// adds", and docs/39 section 9 item 3 recorded the same for the whole
+// SoC. docs/52 then measured the block -- 700 injections, seven strata,
+// each run twice -- and RANKED WHAT TO PROTECT BY CONSEQUENCE rather
+// than by size. Three things came out of it and they are built here.
+// Every one of them names the number it rests on, because a hardening
+// with no measurement behind it is the mistake docs/38 section 10 item 4
+// names and this file is the second block in the SoC to avoid it.
+//
+//   H1. A BOUND ON THE FABRIC RESPONSE.  [7 of 7 dead machines,
+//       docs/52 section 7.1; 5 in the transport's phase state, 2 in
+//       `win_state`]
+//       This block's ONLY lethal failure is a lost fabric response: a
+//       frame that never ends, so busy_o never falls, so the window
+//       never leaves W_WAIT, so rvalid never returns, and Ibex stalls
+//       for ever. soc_npu_ser.v now bounds the frame; the window now
+//       bounds its own wait, and both turn a dead machine into a LOAD
+//       ACCESS FAULT the program can handle. The watchdog caught all
+//       seven and its answer was a system reset; this is the cheaper
+//       answer the campaign says is worth building.
+//
+//   H2. THE QUEUES' PROTECTION HAS SOMEWHERE TO REPORT.  [79 absorbed
+//       upsets, 0 visible to any operator channel, docs/52 section 10]
+//       `ptr_mismatch`, `par_err` and `rv_mismatch` used to leave the
+//       two aer_fifo instances and go nowhere. They now do two things:
+//       they raise a sticky bit in this block's own cause register, and
+//       they leave the block as fault lines into BUSSTAT, where docs/44
+//       already built saturating counters and stickies for exactly this
+//       class of event. docs/51 section 14 item 1 declined this on the
+//       grounds that a fault-counter block invented HERE would put
+//       NPU-only telemetry outside BUSSTAT -- which is an argument about
+//       WHERE THE COUNTERS LIVE and not about whether the events are
+//       visible, and the counters live in BUSSTAT.
+//
+//   H3. THE CONTROL AND CAUSE BANK IS TRIPLED.  [16 false fault reports
+//       in 100 draws, docs/52 sections 6.3 and 11.2]
+//       The highest per-bit consequence anywhere in that campaign, and
+//       note its SHAPE: it is not a missed fault, it is a FABRICATED
+//       one. A fault-reporting channel that invents events is worse than
+//       one that is merely lossy, because it will be believed, and every
+//       recovery policy docs/09's S2 supervisor might implement reads
+//       this register. docs/41 section 3.1's criterion -- persistent
+//       times silent -- selects exactly these bits: software writes them
+//       once, this block never rewrites them, and nothing votes, scrubs
+//       or reports them.
+//
+// AND ONE THING THE MEASUREMENT SAID TO LEAVE ALONE, which is the part
+// of the ranking that was counter-intuitive. `evq_data` -- the two
+// queues' stored words and their entry parity -- is 41.2 % of the
+// connection's flip-flops and 53.5 % of its area (docs/51 section 11),
+// and it produced ZERO silent wrong inferences in 100 draws. The reason
+// is occupancy: the queues hold a couple of live entries out of eight,
+// so most of those 304 bits are storage nothing will read. A hardening
+// wave that started with the biggest structure would have spent its
+// whole budget there and bought nothing. NOTHING IN THIS FILE PROTECTS
+// THE QUEUE STORAGE and docs/55 section 6 is why.
+//
+// =====================================================================
+// 7. THE REPLICATION BOUND, AND WHY THE BANK IS ONE WORD
+// =====================================================================
+//
+// hw/rtl/pilot_top.v section 8.2 proves three replicas cannot be held
+// apart over ONE bit -- there are exactly two storage functions, x and
+// ~x -- and docs/30 section 3.3 generalises it: three bits is the first
+// width at which a third replica has a function left to take. Almost
+// everything H3 protects is one bit wide: `ctrl_in_en`, `ctrl_out_en`
+// and each of the seven sticky cause bits. Replicating any of them on
+// its own would give a netlist with ONE flip-flop and a voter voting it
+// against itself, and every test and every proof in this repository
+// would still pass.
+//
+// So they are BUNDLED into one PROT_W-bit word and the WORD is
+// replicated, which is docs/41 section 4.2's answer and the move
+// hw/rtl/pilot_top.v's own header names. The bank is
+// hw/soc/rtl/soc_tmr_bank.v -- already built, already proved, already
+// instantiated in the watchdog -- and the voter is hw/rtl/tmr_voter.v,
+// read in place out of the frozen directory and not copied.
+//
+// TWO CONSEQUENCES OF THE BUNDLE, both stated rather than discovered.
+//
+//   * The bank has NO WRITE ENABLE: the whole word is written from the
+//     voted value on every edge, which makes the voter a continuous
+//     scrubber and bounds the exposure to a coincident second upset at
+//     one clock cycle. soc_tmr_bank.v difference 1 is the argument. It
+//     costs nothing here that it does not cost in the watchdog.
+//   * THE REPORT IS INSIDE THE PROTECTED WORD. `sticky_cfg_tmr` is a
+//     field of the bank, not a register beside it, so the write that
+//     repairs a replica and the write that records the repair are the
+//     same write on the same edge. docs/16 section 5.8 measured what the
+//     other arrangement costs: an upset can erase the announcement of
+//     the very event it caused.
+//
+// ONE DELIBERATE DIVERGENCE FROM docs/41 SECTION 5.3, and it is the
+// clearability of that report. The watchdog's `tmr_err` is NOT
+// clearable, on the rule that a record software can erase is a record an
+// upset can erase. Here every sticky cause bit IS write-1-to-clear,
+// including this one, because IRQ_CAUSE is an INTERRUPT cause register
+// whose entire contract is acknowledgement: a bit in it that could not
+// be acknowledged would hold an enabled interrupt asserted for ever,
+// which is docs/40 section 7.2's brick in a new place. The durable
+// record lives in BUSSTAT's saturating counter instead, which is
+// docs/44 section 6.4's argument for the same choice.
+//
+// WHAT IS STILL NOT PROTECTED, and it is most of the flip-flops. The
+// transport's 40-bit shift register, the event engine's state, the
+// window's captured request, the two queues' storage and both frame
+// guards are single points by decision. docs/55 section 6 prices each
+// one against what docs/52 measured of it, and docs/52 section 12 item 5
+// is why parity over the shift register was declined.
 
 `timescale 1ns / 1ps
 
@@ -160,7 +269,15 @@ module soc_npu #(
     parameter integer INJ_DEPTH = 8,
     parameter integer CAP_DEPTH = 8,
     // Bounded wait on an injection-queue fetch, in clk cycles.
-    parameter integer FETCH_MAX = 8
+    parameter integer FETCH_MAX = 8,
+    // H3, the triple-redundant control and cause bank. 0 builds the
+    // block as docs/51 shipped it and exists ONLY so that the cost of
+    // the hardening can be measured against the same file list with the
+    // same recipe -- docs/41 section 6.5 records what a baseline taken
+    // against an OLDER file list costs: it credits the hardening with a
+    // refactor's saving. Nothing in this repository instantiates 0, and
+    // sw/tests/test_soc_npu_guards.py asserts that.
+    parameter integer HARDEN = 1
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -188,6 +305,28 @@ module soc_npu #(
 
     // ---- interrupt, fast local line SOC_IRQLINE_NPUCFG ----
     output wire        irq_o,
+
+    // ---- fault lines, to soc_busstat (H2 and H3) ----
+    //
+    // One cycle per event, which is what soc_busstat.v's counters count.
+    // All three sources below are single-cycle by construction:
+    // aer_fifo.v rewrites all three pointer replicas from the vote on
+    // every edge and both rd_valid rails from `rd_pass` on every edge, so
+    // a disagreement is exactly one cycle wide from any state; `par_err`
+    // is `rd_ok && head_bad`, one cycle per accepted read; and
+    // soc_tmr_bank.v is written unconditionally, so the cause bank's
+    // voter disagrees for exactly one cycle after an upset.
+    //
+    // THEY ARE THREE PORTS AND NOT ONE, for docs/44 section 6.2's
+    // reason. A corrected pointer, a discarded entry and a masked vote in
+    // the register bank are three different structures with three
+    // different remedies; folding them into one counter would reproduce
+    // exactly what pilot_top.v's own header records costing it -- "a host
+    // reading CNT_SEC cannot tell a synapse array correction from a
+    // load-path one".
+    output wire        q_cor_o,      // a queue pointer vote CORRECTED
+    output wire        q_det_o,      // a queue entry was DISCARDED, lost
+    output wire        cfg_tmr_o,    // the cause bank's voter masked one
 
     // ---- observation of the die's pins, for a testbench or a scope ----
     output wire        obs_ser_sck_o,
@@ -264,9 +403,77 @@ module soc_npu #(
   localparam integer C_SEC      = 2; // level: the die's SEC pin
   localparam integer C_DED      = 3; // level: the die's DED pin
   localparam integer C_TMR      = 4; // level: the die's TMR pin
+  // ---- the sticky half, contiguous from C_STICKY0 upward -------------
   localparam integer C_INJ_OVF  = 5; // sticky: an EVQ_IN write was refused
   localparam integer C_FETCH_ER = 6; // sticky: an injection fetch expired
-  localparam integer NCAUSE     = 7;
+  // Five bits added by docs/55, and each names the measurement it
+  // answers. The first two are H1's report: a bound that fired and told
+  // nobody would be a bounded wait with docs/16 section 5.1's original
+  // defect still in it.
+  localparam integer C_SER_TO   = 7;  // sticky: a serial frame was aborted
+                                      //         by soc_npu_ser's bound
+  localparam integer C_WIN_TO   = 8;  // sticky: the node window's own
+                                      //         response bound expired
+  // H2. docs/52 section 10: 79 upsets in 700 injections were absorbed by
+  // aer_fifo's protection and NO SOFTWARE AND NO PIN COULD SEE ANY OF
+  // THEM. These two bits and BUSSTAT's two counters are what changes
+  // that. They are two and not one because a CORRECTED pointer
+  // disagreement and a DISCARDED entry are not the same event: the first
+  // lost nothing, the second lost an event.
+  localparam integer C_Q_COR    = 9;  // sticky: a queue pointer vote
+                                      //         corrected a replica
+  localparam integer C_Q_DET    = 10; // sticky: a queue entry was
+                                      //         discarded -- parity or
+                                      //         a rd_valid rail
+  // H3's own report, and it is a FIELD OF THE PROTECTED WORD rather than
+  // a register beside it. Section 7 of the header is why.
+  localparam integer C_CFG_TMR  = 11; // sticky: the cause bank's voter
+                                      //         masked a mismatch
+  localparam integer NCAUSE     = 12;
+
+  // The sticky bits are contiguous so that the protected word can carry
+  // them as one field and the write-1-to-clear can be one part-select.
+  // A future bit inserted in the middle of the levels would move
+  // C_STICKY0 and everything below follows it.
+  localparam integer C_STICKY0  = C_INJ_OVF;
+  localparam integer NSTICKY    = NCAUSE - C_STICKY0;   // 7
+
+  // -------------------------------------------------------------------
+  // H3: the protected word.
+  //
+  // ONE WORD, because the replication bound is real: nine of these
+  // eleven fields are ONE BIT WIDE and a one-bit bank cannot be tripled
+  // (header section 7). The layout is named constants used by the
+  // packing, the unpacking and the register reads alike, because docs/40
+  // section 7.4 records what one literal bit position cost soc_wdog.v.
+  // -------------------------------------------------------------------
+  localparam integer P_IN_EN  = 0;
+  localparam integer P_OUT_EN = 1;
+  localparam integer P_STICKY = 2;                      // NSTICKY bits
+  localparam integer P_MASK   = P_STICKY + NSTICKY;     // NCAUSE bits
+  localparam integer PROT_W   = P_MASK + NCAUSE;        // 2 + 7 + 12 = 21
+
+  // Per-replica storage transform, and the masks are soc_wdog.v's for
+  // its reasons: A is the true image, B and C are MIXED so every stored
+  // bit of either is an XOR of two or three distinct word bits and can
+  // equal neither x_i nor ~x_i for any i -- provably non-collidable with
+  // A rather than measured to be -- and B and C are separated from each
+  // other by POL_B = ~POL_C on every bit. Neither reset image is
+  // uniform, which is what docs/33 measured mattering at technology
+  // mapping.
+  localparam [63:0] POL_A = 64'h0000000000000000;
+  localparam [63:0] POL_B = 64'h5555555555555555;
+  localparam [63:0] POL_C = 64'hAAAAAAAAAAAAAAAA;
+
+  generate
+    // soc_tmr_bank refuses below four bits, and PROT_W is derived, so a
+    // future field-list edit that narrowed it fails THERE with the
+    // reason. This guard is the other direction: POL and RST_VAL are
+    // 64-bit parameters.
+    if (PROT_W > 64) begin : g_prot_too_wide
+      ERROR_soc_npu_protected_word_exceeds_64_bits g ();
+    end
+  endgenerate
 
   // -------------------------------------------------------------------
   // The serial transport, and its arbiter
@@ -283,7 +490,64 @@ module soc_npu #(
   // -------------------------------------------------------------------
   wire        ser_busy;
   wire        ser_done;
+  wire        ser_timeout;
   wire [31:0] ser_rdata;
+
+  // -------------------------------------------------------------------
+  // H1: the node window's own response bound.
+  //
+  // soc_npu_ser.v now bounds the FRAME. That covers the five of docs/52
+  // section 7.1's seven dead machines that were drawn into the
+  // transport's phase state. It does NOT cover the other two, which were
+  // drawn into `win_state` itself: a window that enters W_WAIT with no
+  // frame in flight, or whose `ser_owner_win` is flipped so that
+  // `ser_done_win` never asserts, waits for a completion that is never
+  // coming and holds `rvalid_o` low for ever. A bound in the transport
+  // cannot see that; only the window can.
+  //
+  // THE BOUND IS DERIVED FROM THE TRANSPORT'S, and the arithmetic is the
+  // worst case the arbiter permits: the window may enter W_ISSUE in the
+  // cycle an event-engine frame starts, wait a whole frame for it, and
+  // then wait a whole frame of its own. Beyond that the engine cannot
+  // interpose, because E_SER_RQ and E_DRN_RQ both stand off on
+  // `win_wants`, which is high in W_ISSUE and W_WAIT.
+  //
+  // The two SER_HALVES_ constants restate soc_npu_ser.v's HALVES_FRAME
+  // and HALVES_SLACK. Verilog-2005 gives an instantiating module no way
+  // to read a submodule's localparam, so they are restated -- and
+  // sw/tests/test_soc_npu_guards.py parses BOTH files and fails if they
+  // disagree, which is this repository's rule for a constant that has to
+  // live in two places (docs/40 section 7.4).
+  localparam integer SER_HALVES_FRAME = 2 + 2 * 40 + 3;  // setup+shift+gap
+  localparam integer SER_HALVES_SLACK = 2;
+  localparam integer SER_GUARD_MAX =
+      (SER_HALVES_FRAME + SER_HALVES_SLACK) * SER_HALF;
+  // The worst LEGAL wait, counted in clk cycles from the first cycle in
+  // W_ISSUE, and every term is a thing that can actually happen:
+  //
+  //   an event-engine frame already in flight, taken at the transport's
+  //   own bound rather than at a healthy frame's length, because a
+  //   frame that the transport aborts still had to be waited for
+  //                                              SER_GUARD_MAX + 2
+  //   the cycle W_ISSUE sees the transport idle, and the start pulse
+  //                                              2
+  //   the window's own frame, at the same bound  SER_GUARD_MAX + 2
+  //
+  // That is 2 * (SER_GUARD_MAX + 2) + 2 = 354 at SER_HALF = 2, and the
+  // bound is set 16 cycles above it. The margin is small on purpose:
+  // every cycle of it is a cycle a stalled CPU spends stalled, and the
+  // whole point of this bound is that it is cheaper than the system
+  // reset docs/52 section 7.1 measured the watchdog answering with.
+  //
+  // AN ARGUMENT IS NOT A MEASUREMENT and this one is measured twice:
+  // hw/soc/tb/cocotb/test_soc_npu.py's
+  // test_the_window_bound_never_fires_on_a_healthy_access reports the
+  // largest `win_guard` a real inference produces, and the campaign's
+  // clean run is a second, longer one.
+  localparam integer WIN_MAX   = 2 * (SER_GUARD_MAX + 2) + 2 + 16;
+  localparam integer WIN_GRD_W = $clog2(WIN_MAX + 1);
+
+  reg [WIN_GRD_W-1:0] win_guard;
 
   // Node-window FSM state, declared here because the transport arbiter
   // below reads it. Its behaviour is in the node-window section.
@@ -352,6 +616,7 @@ module soc_npu #(
       .wdata_i    (ser_wdata),
       .busy_o     (ser_busy),
       .done_o     (ser_done),
+      .timeout_o  (ser_timeout),
       .rdata_o    (ser_rdata),
       .ser_sck_o  (ser_sck),
       .ser_cs_n_o (ser_cs_n),
@@ -410,6 +675,96 @@ module soc_npu #(
 
   reg win_err_q;
 
+  // -------------------------------------------------------------------
+  // THE BOUND IS ARMED BY THE GRANT AND NOT BY THE STATE, and the first
+  // version of it was armed by the state and MISSED TWO OF THE SEVEN
+  // RECORDS IT WAS BUILT FOR.
+  //
+  // That version ran the counter while `win_state` was W_ISSUE or
+  // W_WAIT, on the reasoning that those are the two states that can wait
+  // for ever. docs/55 section 8.2 replayed docs/52's seven dead machines
+  // against it: the five in the transport's phase state were converted
+  // to a bus error, and the two in `win_state` itself were still dead,
+  // with `win_to` reading ZERO. The bound had not fired.
+  //
+  // The reason is that the failure is not the one the state-armed
+  // version modelled. `win_state` bit 1 flipped at cycle 566 takes
+  // W_WAIT (2) to W_IDLE (0): the window does not WAIT for ever, it
+  // FORGETS that it was waiting. The fabric has granted a request and
+  // soc_bus.v rule 3 says this slave owes exactly one rvalid for it; the
+  // window has dropped back to idle owing one, and a counter that runs
+  // only in W_ISSUE and W_WAIT is not running.
+  //
+  // So the thing that is bounded is THE OUTSTANDING REQUEST, which is a
+  // fact about the fabric handshake and not about this FSM's encoding: a
+  // grant happened and the rvalid it obliges has not been returned. That
+  // covers both shapes with one counter -- a window that waits for ever
+  // and a window that forgets -- and it has a second property the
+  // state-armed version did not: the bound can never manufacture an
+  // rvalid the fabric was not expecting, because `win_out` is set by a
+  // grant and by nothing else.
+  //
+  // ONE MORE FLIP-FLOP, AND IT IS UNPROTECTED. An upset that clears
+  // `win_out` while a request is outstanding re-opens the hang the bound
+  // closes; an upset that sets it produces one spurious rvalid. Both are
+  // in the campaign's `window` stratum and docs/55 section 8.4 reports
+  // what the draws found.
+  // -------------------------------------------------------------------
+  reg win_out;
+  always @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni)        win_out <= 1'b0;
+    // A grant in the same cycle as a response is a NEW transaction, so
+    // the set arm wins: W_RESP returns to W_IDLE as it raises rvalid_o,
+    // and gnt_o is combinational on `win_state == W_IDLE`, so the two
+    // can and do coincide.
+    else if (gnt_o)     win_out <= 1'b1;
+    else if (rvalid_o)  win_out <= 1'b0;
+  end
+
+  // `>=` rather than `==`, for soc_npu_ser.v's reason: an upset that
+  // pushes the counter above the bound must expire now, not wrap.
+  wire win_expire = win_out && (win_guard >= WIN_MAX[WIN_GRD_W-1:0]);
+
+  // -------------------------------------------------------------------
+  // AND THE DUAL FAILURE, WHICH THE BOUND ALONE DOES NOT COVER.
+  //
+  // The bound answers "a response is owed and has not come". Its dual is
+  // "the window is busy and NO response is owed", and docs/52's seventh
+  // dead machine is that one: `win_state` bit 0 flipped at cycle 5,658
+  // takes W_IDLE (0) to W_ISSUE (1) with nothing outstanding. The window
+  // then issues a serial frame nobody asked for and, when it completes,
+  // RAISES rvalid_o WITH NO GRANT BEHIND IT -- a response into a fabric
+  // that is not expecting one. soc_bus.v keeps one response-ownership
+  // queue per slave and rule 3 is exactly one rvalid per granted
+  // request; a spurious one puts that queue out of step and every later
+  // response goes to the wrong master.
+  //
+  // A timeout cannot see it, because nothing is waiting. What sees it is
+  // that the FSM's state DISAGREES WITH THE HANDSHAKE: `win_out` is the
+  // fabric's own record of whether this slave owes anything, and a
+  // window that is not idle while owing nothing is in a state no grant
+  // put it in.
+  //
+  // IT IS UNREACHABLE WITHOUT A FAULT, and by construction rather than
+  // by argument: `win_out` is set on the same edge as the only
+  // transition out of W_IDLE, both arms of it -- W_ISSUE for a good
+  // access and W_RESP for a bad address -- and it is cleared by
+  // `rvalid_o`, which W_RESP raises in the cycle it returns to W_IDLE.
+  // The two move together in every cycle of a healthy access.
+  //
+  // The recovery is to go back to idle AND SAY NOTHING. Returning a
+  // response here would be manufacturing the very thing that made this
+  // record fatal.
+  wire win_orphan = !win_out && (win_state != W_IDLE);
+
+  // Two ways an access fails rather than completing, and they say
+  // different things about the part: the transport aborted a frame it
+  // could not finish (`ser_timeout`, handled in W_WAIT below), or the
+  // window never got an answer at all (`win_expire`). Both end the
+  // access the SAME way -- W_RESP with the error flag, which is a load
+  // or store ACCESS FAULT at the core -- and each raises its own sticky
+  // cause bit, C_SER_TO and C_WIN_TO.
+
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       win_state <= W_IDLE;
@@ -418,12 +773,37 @@ module soc_npu #(
       win_addr  <= 7'd0;
       win_wdata <= 32'd0;
       win_err_q <= 1'b0;
+      win_guard <= {WIN_GRD_W{1'b0}};
       rvalid_o  <= 1'b0;
+      // (`win_out` has its own reset, in its own block above.)
       rdata_o   <= 32'd0;
       err_o     <= 1'b0;
     end else begin
       win_start <= 1'b0;
       rvalid_o  <= 1'b0;
+
+      // Restarted by every grant -- otherwise a second access would
+      // inherit the first one's count -- and running for as long as a
+      // response is owed.
+      if (gnt_o)        win_guard <= {WIN_GRD_W{1'b0}};
+      else if (win_out) win_guard <= win_guard + {{(WIN_GRD_W-1){1'b0}}, 1'b1};
+      else              win_guard <= {WIN_GRD_W{1'b0}};
+
+      if (win_orphan) begin
+        // The dual. Back to idle, and NO response: the window is in a
+        // state no grant put it in, and the one thing it must not do is
+        // manufacture an rvalid the fabric never asked for.
+        win_state <= W_IDLE;
+        win_guard <= {WIN_GRD_W{1'b0}};
+      end else if (win_expire) begin
+        // H1. The access is FAILED rather than held, from whatever state
+        // the window is in -- including W_IDLE, which is where an upset
+        // that made it forget leaves it. `rdata_o` is zeroed by W_RESP's
+        // own error path, so nothing here has to.
+        win_err_q <= 1'b1;
+        win_guard <= {WIN_GRD_W{1'b0}};
+        win_state <= W_RESP;
+      end else
       case (win_state)
         W_IDLE: begin
           if (req_i) begin
@@ -453,7 +833,14 @@ module soc_npu #(
 
         W_WAIT: begin
           if (ser_done_win) begin
+            // An aborted frame returns zero and must not be presented as
+            // data. The window turns it into the bus error the fabric
+            // and the core already know how to carry, which is what
+            // docs/52 section 12 item 1 asked for: "a load access fault
+            // the program can handle" instead of a system reset.
             rdata_o   <= ser_rdata;
+            win_err_q <= win_err_q | ser_timeout;
+            win_guard <= {WIN_GRD_W{1'b0}};
             win_state <= W_RESP;
           end
         end
@@ -473,10 +860,30 @@ module soc_npu #(
   // -------------------------------------------------------------------
   // Control and status registers, driven from the APB face
   // -------------------------------------------------------------------
-  reg        ctrl_in_en, ctrl_out_en;
+  // H3. The protected word is DECLARED here, because the queues and the
+  // event engine below read `ctrl_in_en`, `ctrl_out_en` and
+  // `flush_pulse`; it is DRIVEN in the register-file section at the
+  // bottom of the file, where the next-state function and the three
+  // replicas are. Everything in this module reads the named views and
+  // never the storage, which is what lets the bank be added without
+  // rewriting a line of the engine.
+  wire [PROT_W-1:0] prot_store;    // the voted word, or the plain one
+  wire              prot_mismatch; // this cycle a replica disagrees
+
+  wire              ctrl_in_en  = prot_store[P_IN_EN];
+  wire              ctrl_out_en = prot_store[P_OUT_EN];
+  wire [NSTICKY-1:0] sticky     = prot_store[P_STICKY +: NSTICKY];
+  wire [NCAUSE-1:0]  irq_mask   = prot_store[P_MASK   +: NCAUSE];
+
+  // The two self-clearing pulses are NOT in the bank, and that is
+  // docs/41 section 3.1's criterion applied rather than ignored: they
+  // are rewritten to zero by this block on every single clock edge, so
+  // they shed an upset on their own within one cycle and there is
+  // nothing for a vote to protect. Bundling them would cost four more
+  // flip-flops -- two replicas of two bits -- for a hold time of one
+  // cycle. docs/41 section 7 leaves 36 of the watchdog's 102 flip-flops
+  // alone on the same rule.
   reg        flush_pulse, scrub_pulse;
-  reg [NCAUSE-1:0] irq_mask;
-  reg        sticky_inj_ovf, sticky_fetch_er;
 
   wire apb_wr = psel_i && penable_i &&  pwrite_i;
   wire apb_rd = psel_i && penable_i && !pwrite_i;
@@ -497,7 +904,7 @@ module soc_npu #(
   wire [15:0] inj_rd_data;
   wire [$clog2(INJ_DEPTH):0] inj_level;
   wire [7:0]  inj_drop;
-  wire        inj_ptr_mm, inj_par_err;
+  wire        inj_ptr_mm, inj_par_err, inj_rv_mm;
   reg         inj_rd_en;
 
   wire        inj_wr_en = apb_wr && (paddr_i == R_EVQ_IN);
@@ -508,14 +915,20 @@ module soc_npu #(
       .rd_en (inj_rd_en), .rd_data (inj_rd_data),
       .rd_valid (inj_rd_valid), .empty (inj_empty), .level (inj_level),
       .drop_clr (1'b0), .drop_cnt (inj_drop),
-      .ptr_mismatch (inj_ptr_mm), .rv_mismatch (),
+      // rv_mismatch was not brought out of either instance until
+      // docs/55. aer_fifo.v's own header calls the rd_valid flag "the
+      // design's most dangerous small state" -- docs/16 section 5.7
+      // measured 2 of 2 injections into it producing silent corruption
+      // -- and the rails that detect an upset in it were reporting to
+      // nothing at all.
+      .ptr_mismatch (inj_ptr_mm), .rv_mismatch (inj_rv_mm),
       .par_err (inj_par_err)
   );
 
   wire        cap_full, cap_empty, cap_rd_valid;
   wire [15:0] cap_rd_data;
   wire [$clog2(CAP_DEPTH):0] cap_level;
-  wire        cap_ptr_mm, cap_par_err;
+  wire        cap_ptr_mm, cap_par_err, cap_rv_mm;
   reg         cap_wr_en;
   reg  [15:0] cap_wr_data;
   reg         cap_rd_en;
@@ -526,9 +939,33 @@ module soc_npu #(
       .rd_en (cap_rd_en), .rd_data (cap_rd_data),
       .rd_valid (cap_rd_valid), .empty (cap_empty), .level (cap_level),
       .drop_clr (1'b0), .drop_cnt (),
-      .ptr_mismatch (cap_ptr_mm), .rv_mismatch (),
+      .ptr_mismatch (cap_ptr_mm), .rv_mismatch (cap_rv_mm),
       .par_err (cap_par_err)
   );
+
+  // -------------------------------------------------------------------
+  // H2: the queues' protection, made observable.
+  //
+  // docs/52 section 10 counted every one of these at the bench and found
+  // 74 corrected pointer disagreements, 5 rail disagreements and 2
+  // discarded entries in 700 injections, of which an operator could see
+  // exactly ZERO. In silicon a corrected pointer upset was
+  // indistinguishable from no upset at all, which means nothing could
+  // tell "the mechanism has never fired" from "the mechanism is broken"
+  // -- docs/16 section 7.6's general form of the argument.
+  //
+  // A CORRECTION AND A DETECTION ARE NOT THE SAME EVENT and they are not
+  // folded together. The pointer vote CORRECTED and lost nothing; a
+  // discarded entry or a held-low rd_valid LOST AN EVENT and the queue
+  // is merely still consistent. A mission reading a rising `q_det_o`
+  // count is reading dropped work; a rising `q_cor_o` count is reading
+  // the environment.
+  // -------------------------------------------------------------------
+  wire q_cor_ev = inj_ptr_mm  || cap_ptr_mm;
+  wire q_det_ev = inj_par_err || cap_par_err || inj_rv_mm || cap_rv_mm;
+
+  assign q_cor_o = q_cor_ev;
+  assign q_det_o = q_det_ev;
 
   // The one-entry show-ahead adapter (pilot_top.v section 8, convention
   // C9): the register view of EVQ_OUT is a single-access pop, and
@@ -613,12 +1050,10 @@ module soc_npu #(
 
   // The die's four-bit output nibble is deliberately unread: section 3
   // is why the word comes from the register and not from these pins.
-  // The queues' pointer-voter and parity observability is likewise
-  // brought out of aer_fifo and not yet given a register -- the SoC has
-  // no fault-counter block of its own and inventing one here would put
-  // NPU-only telemetry outside BUSSTAT, which docs/41 owns.
-  wire _unused_node = &{1'b0, node_aer_out_id, inj_ptr_mm, cap_ptr_mm,
-                        cap_par_err, inj_par_err, 1'b0};
+  // The queues' four fault reports are no longer in this list; docs/55
+  // gave them a sticky bit each in the cause register and a counter each
+  // in BUSSTAT, which is header section 6 item H2.
+  wire _unused_node = &{1'b0, node_aer_out_id, 1'b0};
 
   // -------------------------------------------------------------------
   // The event engine
@@ -821,51 +1256,150 @@ module soc_npu #(
   assign cause[C_SEC]      = node_sec;
   assign cause[C_DED]      = node_ded;
   assign cause[C_TMR]      = node_tmr;
-  assign cause[C_INJ_OVF]  = sticky_inj_ovf;
-  assign cause[C_FETCH_ER] = sticky_fetch_er;
+  assign cause[NCAUSE-1:C_STICKY0] = sticky;
 
   assign irq_o = |(cause & irq_mask);
 
   wire fetch_expire = (ev_state == E_FETCH) && !inj_rd_valid
                    && (ev_wait == FETCHMAX_4);
 
-  always @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      ctrl_in_en      <= 1'b0;
-      ctrl_out_en     <= 1'b0;
-      flush_pulse     <= 1'b0;
-      scrub_pulse     <= 1'b0;
-      irq_mask        <= {NCAUSE{1'b0}};
-      sticky_inj_ovf  <= 1'b0;
-      sticky_fetch_er <= 1'b0;
-    end else begin
-      flush_pulse <= 1'b0;
-      scrub_pulse <= 1'b0;
+  // ---- the seven sticky events, in cause-bit order -------------------
+  //
+  // Each is one cycle wide and each sets its bit for good until software
+  // acknowledges it. `ser_timeout` is taken UNQUALIFIED by owner: a
+  // frame the transport had to abort is a fault of the part whether the
+  // window or the event engine owned it, and an engine frame that was
+  // aborted would otherwise be reported by nothing at all.
+  wire [NSTICKY-1:0] sticky_ev;
+  assign sticky_ev[C_INJ_OVF  - C_STICKY0] = inj_wr_en && inj_full;
+  assign sticky_ev[C_FETCH_ER - C_STICKY0] = fetch_expire;
+  assign sticky_ev[C_SER_TO   - C_STICKY0] = ser_timeout;
+  // ONE BIT FOR BOTH OF THE WINDOW'S RECOVERIES -- the bound and its
+  // dual -- because what an operator has to know is that the node
+  // register window had to repair itself, and the two are told apart at
+  // the bench rather than in the register. A second cause bit would be
+  // three more flip-flops in the protected word for a distinction no
+  // recovery policy acts on differently.
+  assign sticky_ev[C_WIN_TO   - C_STICKY0] = win_expire || win_orphan;
+  assign sticky_ev[C_Q_COR    - C_STICKY0] = q_cor_ev;
+  assign sticky_ev[C_Q_DET    - C_STICKY0] = q_det_ev;
+  assign sticky_ev[C_CFG_TMR  - C_STICKY0] = prot_mismatch;
 
-      if (inj_wr_en && inj_full) sticky_inj_ovf  <= 1'b1;
-      if (fetch_expire)          sticky_fetch_er <= 1'b1;
+  // The clear strobe. Write-1-to-clear, and only the sticky half: a
+  // write to a level bit is accepted and does nothing, because the way
+  // to clear a level is to fix what is raising it.
+  wire [NSTICKY-1:0] sticky_clr =
+      (apb_wr && (paddr_i == R_IRQCAUSE)) ? pwdata_i[NCAUSE-1:C_STICKY0]
+                                          : {NSTICKY{1'b0}};
 
-      if (apb_wr) begin
-        case (paddr_i)
-          R_CTRL: begin
-            ctrl_in_en  <= pwdata_i[B_IN_EN];
-            ctrl_out_en <= pwdata_i[B_OUT_EN];
-            flush_pulse <= pwdata_i[B_FLUSH];
-            scrub_pulse <= pwdata_i[B_SCRUB];
-          end
-          R_IRQMASK: irq_mask <= pwdata_i[NCAUSE-1:0];
-          R_IRQCAUSE: begin
-            // Only the two sticky bits are clearable. A write to a
-            // level bit is accepted and does nothing, because the way
-            // to clear a level is to fix what is raising it.
-            if (pwdata_i[C_INJ_OVF])  sticky_inj_ovf  <= 1'b0;
-            if (pwdata_i[C_FETCH_ER]) sticky_fetch_er <= 1'b0;
-          end
-          default: ;
-        endcase
-      end
+  // -------------------------------------------------------------------
+  // H3: the next value of the protected word.
+  //
+  // COMBINATIONAL, and the whole word is written from it on every edge.
+  // That is not a style choice: soc_tmr_bank.v has no write enable, so
+  // the voter is a continuous scrubber and the exposure to a coincident
+  // second upset is one clock cycle rather than the rest of the mission.
+  // A bank that HELD its value would repair a corrupted replica only at
+  // the next write -- and `ctrl_in_en`, the interrupt mask and every
+  // sticky bit are written once by software and then never again, which
+  // is exactly the accumulation soc_tmr_bank.v difference 1 describes.
+  //
+  // Writing it as one function of the current word also means the
+  // HARDEN = 0 configuration below runs IDENTICAL policy to HARDEN = 1,
+  // which is what makes the area comparison in docs/55 a comparison of
+  // the redundancy and not of two different designs. docs/41 section 6.5
+  // is the record of getting that baseline wrong once.
+  //
+  // AN EVENT AND ITS OWN CLEAR IN THE SAME CYCLE RESOLVE IN FAVOUR OF
+  // THE EVENT, which is soc_busstat.v's rule and for its reason: the
+  // cycle a sticky is being acknowledged is the cycle a telemetry frame
+  // is being built, and losing the upset that lands in it is the one
+  // loss this block can avoid for free.
+  // -------------------------------------------------------------------
+  reg [PROT_W-1:0] prot_n;
+  integer          pi;
+  always @(*) begin
+    prot_n = prot_store;
+
+    for (pi = 0; pi < NSTICKY; pi = pi + 1)
+      prot_n[P_STICKY + pi] = sticky_ev[pi]
+                            | (sticky[pi] & ~sticky_clr[pi]);
+
+    if (apb_wr) begin
+      case (paddr_i)
+        R_CTRL: begin
+          prot_n[P_IN_EN]  = pwdata_i[B_IN_EN];
+          prot_n[P_OUT_EN] = pwdata_i[B_OUT_EN];
+        end
+        R_IRQMASK: prot_n[P_MASK +: NCAUSE] = pwdata_i[NCAUSE-1:0];
+        default: ;
+      endcase
     end
   end
+
+  // The self-clearing pulses, outside the bank. See their declaration.
+  always @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      flush_pulse <= 1'b0;
+      scrub_pulse <= 1'b0;
+    end else begin
+      flush_pulse <= apb_wr && (paddr_i == R_CTRL) && pwdata_i[B_FLUSH];
+      scrub_pulse <= apb_wr && (paddr_i == R_CTRL) && pwdata_i[B_SCRUB];
+    end
+  end
+
+  generate
+  if (HARDEN != 0) begin : g_cfg_tmr
+    wire [PROT_W-1:0] qa, qb, qc;
+
+    // Three replicas of ONE word. Nine of the eleven fields are one bit
+    // wide and could not be tripled on their own -- header section 7 --
+    // and the transform that holds these three apart through `opt_merge`
+    // is soc_tmr_bank.v's POL/MIX storage coding, not the attributes it
+    // also carries. The evidence that it survived is the FLIP-FLOP COUNT
+    // in sw/tests/test_soc_synthesis_guards.py, taken with every
+    // attribute deleted from the text of the file; docs/33 is the record
+    // of what a header claim without that census is worth.
+    soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_A), .MIX(0))
+      u_cfg_a (.clk_i(clk_i), .rst_ni(rst_ni), .d_i(prot_n), .q_o(qa));
+    soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_B), .MIX(1))
+      u_cfg_b (.clk_i(clk_i), .rst_ni(rst_ni), .d_i(prot_n), .q_o(qb));
+    soc_tmr_bank #(.W(PROT_W), .RST_VAL(64'd0), .POL(POL_C), .MIX(1))
+      u_cfg_c (.clk_i(clk_i), .rst_ni(rst_ni), .d_i(prot_n), .q_o(qc));
+
+    // hw/rtl/tmr_voter.v, read in place and not copied. Proved
+    // exhaustively in formal/tmr_voter.sby and checked against an
+    // independent Python majority model in hw/tb/test_tmr_voter.py.
+    // Nothing in hw/rtl is modified by this instantiation.
+    tmr_voter #(.WIDTH(PROT_W)) u_cfg_vote (
+        .in_a     (qa),
+        .in_b     (qb),
+        .in_c     (qc),
+        .out      (prot_store),
+        .mismatch (prot_mismatch)
+    );
+  end else begin : g_cfg_plain
+    // HARDEN = 0: the bank as docs/51 shipped it, one flip-flop per bit.
+    // MEASUREMENT ONLY -- it is the baseline docs/55 section 7 prices the
+    // redundancy against, and nothing in this repository instantiates it.
+    reg [PROT_W-1:0] plain;
+    always @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) plain <= {PROT_W{1'b0}};
+      else         plain <= prot_n;
+    end
+    assign prot_store    = plain;
+    // A constant, so `sticky_ev[C_CFG_TMR]` is a constant, so the bit
+    // and the fault line below are dead and the optimiser deletes them.
+    // That is correct and it is what makes the HARDEN = 0 flip-flop
+    // count PROT_W - 1 rather than PROT_W; the census in
+    // sw/tests/test_soc_synthesis_guards.py derives that arithmetic
+    // rather than writing it down, exactly as docs/41 section 6.3 does
+    // for the watchdog's own five missing flip-flops.
+    assign prot_mismatch = 1'b0;
+  end
+  endgenerate
+
+  assign cfg_tmr_o = prot_mismatch;
 
   // Every offset this block does not implement completes with PSLVERR,
   // the same rule soc_clint.v applies inside its window and soc_top.v

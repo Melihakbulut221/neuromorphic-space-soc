@@ -37,6 +37,36 @@
 //     through the transport in the cocotb suite.
 //   - HALF > 2. Every task runs at one parameter point; the frame-length
 //     arithmetic below is parameterised but nothing sweeps it.
+//
+// WHAT docs/55 ADDED, AND WHY IT IS AN INVARIANT AND NOT A COVER
+//
+// The module now carries a FRAME BOUND: a counter that runs for as long
+// as a frame is in flight and, at GUARD_MAX, forces ST_IDLE, releases
+// the select and raises `timeout_o` beside `done_o`. docs/52 section 7.1
+// is the measurement that asked for it -- seven upsets in 600 left the
+// whole SoC dead and five of them were a corrupted `tick` or `state`
+// here, a frame that never ends.
+//
+// A mechanism that fires only under a fault cannot be proved to WORK by
+// a proof that has no fault model. What CAN be proved, and is the claim
+// worth making, is the other half:
+//
+//   I10 states GUARD as an EXACT FUNCTION of the frame position, and
+//   I11 concludes GUARD < GUARD_MAX.
+//
+// Together they say THE BOUND CAN NEVER FIRE ON A HEALTHY FRAME -- which
+// is the property that stops this mechanism from being a new way to fail
+// an access that would have succeeded. If a future protocol change made
+// a frame one half period longer without moving HALVES_FRAME with it,
+// I11 fails here rather than the SoC taking a bus error in the field.
+//
+// It is also what keeps P2 provable. P2 says a select is not released
+// before the fortieth edge, which an aborted frame deliberately
+// violates; with I11 in the inductive hypothesis, the abort is
+// unreachable and P2 needs no exception clause. THE EXCEPTION IS THEREFORE
+// NOT WRITTEN, and that is a decision: an assertion weakened by
+// `&& !timeout_o` would still pass on a design whose bound fired every
+// frame.
 
 `ifdef FORMAL
 
@@ -221,6 +251,22 @@
       assert (!busy_o);
     end
 
+  // D1b. `timeout_o` never rises on its own. The caller distinguishes a
+  //      completed frame from an aborted one by reading timeout_o IN THE
+  //      done_o cycle; a timeout without a done would be an abort no
+  //      caller ever hears about, which is the failure the bound exists
+  //      to remove, reintroduced one level up.
+  always @(*)
+    if (rst_ni && timeout_o) assert (done_o);
+
+  // D1c. An aborted frame returns no data. A caller that ignored
+  //      timeout_o must not be able to read a partial frame as a
+  //      register value; soc_npu.v's node window turns the pair into a
+  //      bus error, and this is the property that says there is nothing
+  //      else it could have done with the word.
+  always @(*)
+    if (rst_ni && timeout_o) assert (rdata_o == 32'd0);
+
   // D2. done_o is exactly one cycle wide, and never two in a row.
   always @(posedge clk_i)
     if (f_past_valid && rst_ni && $past(rst_ni) && $past(done_o))
@@ -280,6 +326,17 @@
     assert (bit_cnt < NBITS[5:0]);
     // I5. hcnt is a small phase index, never a wild value.
     assert (hcnt <= 2'd2);
+    // I5a. And it is TIGHTER than that in three of the four states.
+    //      docs/55 needs this: I10 below expresses `guard` as
+    //      hcnt * HALF + ..., and hcnt is two bits, so an induction that
+    //      began in ST_SETUP with hcnt = 3 would wrap it to 0 on the next
+    //      half period and the position formula would jump backwards.
+    //      Each clause is also a real check -- a design that reached the
+    //      shift phase with a gap-phase index would be a design whose
+    //      frame had lost its place.
+    assert (!(state == ST_IDLE)  || (hcnt == 2'd0));
+    assert (!(state == ST_SETUP) || (hcnt <= 2'd1));
+    assert (!(state == ST_SHIFT) || (hcnt <= 2'd1));
     // I6. The clock is low outside the high half of a shift.
     assert ((state == ST_SHIFT && hcnt == 2'd1) || !ser_sck_o);
     // I7. The ghost edge count -- built from the PIN alone -- agrees
@@ -313,7 +370,47 @@
           || ((state == ST_SHIFT) && (hcnt == 2'd0) && (tick == 16'd0)
               && (bit_cnt != 6'd0))
           || ((state == ST_GAP) && (hcnt == 2'd0) && (tick == 16'd0))));
+
+    // I10. THE FRAME BOUND'S COUNTER IS AN EXACT FUNCTION OF THE FRAME
+    //      POSITION. `f_pos` below is "clk cycles since the first cycle
+    //      of ST_SETUP", computed from the state encoding alone, and the
+    //      counter has to equal it in every cycle. This is what makes
+    //      I11 provable rather than assumed, and it is a real check of
+    //      its own: a guard that was cleared or held anywhere inside a
+    //      frame would satisfy I11 while doing nothing.
+    assert (f_guard == f_pos);
+
+    // I11. AND THEREFORE THE BOUND CANNOT FIRE ON A HEALTHY FRAME.
+    //      This is the property docs/55 section 4 rests on. The bound is
+    //      a fault-tolerance mechanism, and a fault-tolerance mechanism
+    //      that can fire without a fault is a new way to fail an access
+    //      that would have succeeded. Nothing in this file can prove the
+    //      bound WORKS -- there is no fault model here, and docs/55
+    //      section 8's campaign is where that is measured -- but this
+    //      says it costs nothing when there is no fault.
+    assert (f_guard < GUARD_MAX[15:0]);
   end
+
+  // ---- the frame position, from the state encoding alone -------------
+  //
+  // Written as a `wire` rather than folded into the assertion so that a
+  // counterexample trace prints it. The three arms are the three phases
+  // of the frame in soc_npu_ser.v's own HALVES_ constants; nothing here
+  // reads `guard`.
+  localparam [15:0] F_HSETUP = HALVES_SETUP[15:0];
+  localparam [15:0] F_HSHIFT = HALVES_SHIFT[15:0];
+
+  wire [15:0] f_guard = {{(16 - GUARD_W){1'b0}}, guard};
+
+  wire [15:0] f_pos =
+      (state == ST_SETUP)
+        ? ({14'd0, hcnt} * F_HALF + tick)
+    : (state == ST_SHIFT)
+        ? ((F_HSETUP + {10'd0, bit_cnt} * 16'd2 + {14'd0, hcnt}) * F_HALF
+           + tick)
+    : (state == ST_GAP)
+        ? ((F_HSETUP + F_HSHIFT + {14'd0, hcnt}) * F_HALF + tick)
+    : 16'd0;
 
   // -------------------------------------------------------------------
   // Cover: the frame is reachable, in both directions, twice in a row
@@ -326,6 +423,15 @@
     cover (f_past_valid && rst_ni && done_o && !f_we);             // C3
     cover (f_past_valid && rst_ni && busy_o && (bit_cnt == 6'd39));// C4
     cover (f_past_valid && rst_ni && (state == ST_GAP));           // C5
+    // C6. The counter reaches the last cycle of a healthy frame. Without
+    //     it, I11 would be satisfied by a design whose guard never left
+    //     zero -- and I10 would be satisfied by a design that never left
+    //     ST_IDLE. This is the reachability half of the bound's claim:
+    //     a healthy frame gets to within HALVES_SLACK * HALF of the
+    //     bound and no further.
+    cover (f_past_valid && rst_ni
+           && (f_guard == GUARD_MAX[15:0] - HALVES_SLACK[15:0] * F_HALF
+                          - 16'd1));                               // C6
   end
 
 `endif

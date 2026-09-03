@@ -61,7 +61,30 @@
 
 /* IRQ_CAUSE. b0..b4 are LEVELS: a write to one is accepted and does
  * nothing, because the way to clear a level is to fix what raises it.
- * b5 and b6 are STICKY and write-1-to-clear. */
+ * b5 upward are STICKY and write-1-to-clear.
+ *
+ * b7..b11 were added by docs/55 and every one of them answers a number
+ * docs/52 measured:
+ *
+ *   SER_TO   soc_npu_ser.v's frame bound aborted a serial frame. Before
+ *            docs/55 the same corruption was a frame that never ended
+ *            and a CPU that stalled for ever -- 5 of the 7 dead machines
+ *            in 600 injections.
+ *   WIN_TO   the node register window's own response bound expired,
+ *            which is the other 2 of the 7.
+ *   Q_COR    aer_fifo's pointer vote CORRECTED a replica disagreement.
+ *            74 of these in 700 injections were invisible to every
+ *            operator channel before this bit existed.
+ *   Q_DET    a queue entry was DISCARDED -- a failed entry parity or a
+ *            rd_valid rail disagreement. An event was lost.
+ *   CFG_TMR  the voter over this register's own triple-redundant bank
+ *            masked a mismatch. The report is a FIELD OF THE PROTECTED
+ *            WORD, so the upset that caused it is corrected and recorded
+ *            by the same write on the same edge.
+ *
+ * A SER_TO or a WIN_TO also FAILS the access that provoked it, so
+ * software normally learns of those from a load access fault first and
+ * reads this register to find out which of the two it was. */
 #define NPUCFG_C_EVT      (1u << 0)
 #define NPUCFG_C_ERR      (1u << 1)
 #define NPUCFG_C_SEC      (1u << 2)
@@ -69,6 +92,20 @@
 #define NPUCFG_C_TMR      (1u << 4)
 #define NPUCFG_C_INJ_OVF  (1u << 5)
 #define NPUCFG_C_FETCH_ER (1u << 6)
+#define NPUCFG_C_SER_TO   (1u << 7)
+#define NPUCFG_C_WIN_TO   (1u << 8)
+#define NPUCFG_C_Q_COR    (1u << 9)
+#define NPUCFG_C_Q_DET    (1u << 10)
+#define NPUCFG_C_CFG_TMR  (1u << 11)
+/* Every FAULT bit, which is every cause bit except the EVT level. It is
+ * defined once, here, because a program that spelled the set out for
+ * itself would go on reporting a clean part after a bit was added to the
+ * block -- and hw/soc/tb/sw/fi_npu.c spelled it out until docs/55. */
+#define NPUCFG_C_FAULTS   (NPUCFG_C_ERR | NPUCFG_C_SEC | NPUCFG_C_DED \
+                           | NPUCFG_C_TMR | NPUCFG_C_INJ_OVF \
+                           | NPUCFG_C_FETCH_ER | NPUCFG_C_SER_TO \
+                           | NPUCFG_C_WIN_TO | NPUCFG_C_Q_COR \
+                           | NPUCFG_C_Q_DET | NPUCFG_C_CFG_TMR)
 
 /* EVQ_OUT */
 #define NPUCFG_EVQ_VALID  (1u << 31)

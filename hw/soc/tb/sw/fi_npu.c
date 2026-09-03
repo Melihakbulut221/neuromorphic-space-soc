@@ -139,6 +139,30 @@
 #define FI_IDLE_MAX 16
 #endif
 
+// docs/52 SECTION 12 ITEM 4: READ BACK EVERY CONFIGURATION REGISTER THE
+// BRING-UP WROTE, not one of them chosen in advance.
+//
+// The measurement: of 265 draws that landed before the block was
+// enabled, 14 corrupted the inference; the sequence's own read-backs
+// caught 3; every one of the 14 was silent to every hardware channel.
+// The clearest single record is `ser.tx` bit 32 -- ADDR[0] of the frame
+// -- which sent a configuration write TO THE WRONG REGISTER, and the one
+// read-back this program did was of the register that was NOT corrupted.
+//
+// IT IS A PARAMETER SO THAT ITS COST AND ITS BENEFIT CAN BE MEASURED
+// SEPARATELY. docs/55 runs the campaign twice: once with this off, where
+// the injection window is docs/52's and every directed replay lands at
+// the same point in the same program, and once with it on, which is the
+// design of record. A software change that moved the window would
+// otherwise make every cycle in docs/52's records.csv refer to a
+// different instant, and the delta would not be a delta.
+//
+// The cost is arithmetic on docs/51 section 8.1's measured 176 cycles
+// per access: NPUV_N_CFG registers at 176 each, once per bring-up.
+#ifndef FI_CFG_READBACK
+#define FI_CFG_READBACK 1
+#endif
+
 // -------------------------------------------------------------------
 // The words the testbench reads. Not static: hw/soc/flow/fi_npu.sh
 // resolves their addresses out of the ELF with `nm`, exactly as
@@ -161,6 +185,17 @@ volatile uint32_t fi_ovf;      /* the die's CNT_EVQ_OVF */
 volatile uint32_t fi_oor;      /* the die's CNT_AXON_OOR */
 volatile uint32_t fi_cnt;      /* NPUCFG.CNT: {out, in}, the engine's count */
 volatile uint32_t fi_spins;    /* the largest empty-poll run seen */
+
+/* BUSSTAT's three NPU counters, docs/55 H2. THESE ARE THE ANSWER TO
+ * docs/52 SECTION 10: seventy-nine upsets in 700 injections were absorbed
+ * by mechanisms that worked, and no software and no pin could see any of
+ * them -- so at the bench a corrected pointer upset was indistinguishable
+ * from no upset at all. These three words are read WITH A LOAD THIS CORE
+ * EXECUTES, which is what makes them an operator channel and not another
+ * hierarchical bench read. docs/44 section 8.2 draws the distinction. */
+volatile uint32_t fi_bst_cor;  /* BST_NPUCOR: pointer votes corrected */
+volatile uint32_t fi_bst_det;  /* BST_NPUDET: queue entries discarded */
+volatile uint32_t fi_bst_tmr;  /* BST_NPUTMR: cause-bank votes masked */
 
 /* The collected stream, in .bss so crt0 zeroes it on every boot and a
  * re-run after a watchdog reset starts from the memory the first run
@@ -249,19 +284,40 @@ static uint32_t npu_bring_up(void) {
     if ((npu_rd(NPU_STATUS) & (1u << NPU_BIT_STATUS_BUSY)) == 0u) break;
   if (i == FI_IDLE_MAX) bad = F_BRINGUP;
 
-  npu_wr(NPUV_OFF_CFG_AXON,      NPUV_VAL_CFG_AXON);
-  npu_wr(NPUV_OFF_CFG_THRESH,    NPUV_VAL_CFG_THRESH);
-  npu_wr(NPUV_OFF_CFG_VRESET,    NPUV_VAL_CFG_VRESET);
-  npu_wr(NPUV_OFF_CFG_LEAK,      NPUV_VAL_CFG_LEAK);
-  npu_wr(NPUV_OFF_CFG_SYNSHIFT,  NPUV_VAL_CFG_SYNSHIFT);
-  npu_wr(NPUV_OFF_CFG_REFR,      NPUV_VAL_CFG_REFR);
-  npu_wr(NPUV_OFF_CFG_FLAGS,     NPUV_VAL_CFG_FLAGS);
-  npu_wr(NPUV_OFF_PASS_TILE_OFF, NPUV_VAL_PASS_TILE_OFF);
+  for (i = 0; i < NPUV_N_CFG; i++)
+    npu_wr(npuv_cfg_off[i], npuv_cfg_val[i]);
 
-  /* Read one back. A configuration write that was refused is otherwise
-     invisible until the arithmetic comes out wrong, and then it looks
-     like an arithmetic defect. docs/51 section 7.2. */
+#if FI_CFG_READBACK
+  /* EVERY register that was just written, read back. docs/52 section
+     12 item 4, and the reason it is every one rather than one: an upset
+     in the transport's address field sends the write somewhere else, and
+     a read-back of a register that was NOT corrupted passes. That is the
+     measured record -- `ser.tx` bit 32 is ADDR[0] -- and this program's
+     single CFG_THRESH read-back was the thing that passed.
+
+     WHICH HALF OF THE CLASS THIS CLOSES, stated here as well as in
+     docs/55 section 5, because a reader of this loop will otherwise
+     assume it closes all of it. Of the eleven bring-up-phase records
+     that corrupted the inference and passed every check the sequence
+     did, six were in the transport on one side of the pin boundary or
+     the other and five were in the EVENT ENGINE -- the show-ahead
+     adapter and the AER strobe, which are not configuration at all and
+     which no configuration read-back can see.
+
+     AND IT DOES NOT COVER THE WEIGHT ARRAY. docs/10 section 10's map has
+     no weight read port, so a weight word corrupted on the way in is
+     stored as a VALID SECDED CODEWORD OF THE WRONG VALUE: CNT_SEC and
+     CNT_DED stay at zero, the check below passes, and the inference is
+     wrong with a clean bill of health. Closing that needs a register the
+     die does not have, which is a full-scale-node requirement and
+     docs/10 section 14 is where it belongs. */
+  for (i = 0; i < NPUV_N_CFG; i++)
+    if (npu_rd(npuv_cfg_off[i]) != npuv_cfg_val[i]) bad |= F_BRINGUP;
+#else
+  /* docs/51 section 7.2's single read-back, kept so that the campaign
+     can be run against docs/52's own injection window. */
   if (npu_rd(NPUV_OFF_CFG_THRESH) != NPUV_VAL_CFG_THRESH) bad |= F_BRINGUP;
+#endif
 
   npu_wr(NPU_W_ADDR, 0u);
   for (i = 0; i < NPUV_N_WWORDS; i++) {
@@ -380,8 +436,20 @@ int main(void) {
   fi_ovf    = npu_rd(NPU_CNT_EVQ_OVF);
   fi_oor    = npu_rd(NPU_CNT_AXON_OOR);
 
-  if ((fi_cause & (NPUCFG_C_ERR | NPUCFG_C_SEC | NPUCFG_C_DED
-                   | NPUCFG_C_TMR | NPUCFG_C_INJ_OVF | NPUCFG_C_FETCH_ER))
+  /* The counters docs/55 gave the connection's protection. Read here
+     rather than at the bench, on purpose: docs/52's finding was not that
+     the mechanisms did not work, it was that nothing could see them
+     working. */
+  fi_bst_cor = *(volatile uint32_t *)BST_NPUCOR;
+  fi_bst_det = *(volatile uint32_t *)BST_NPUDET;
+  fi_bst_tmr = *(volatile uint32_t *)BST_NPUTMR;
+
+  /* NPUCFG_C_FAULTS is every cause bit except the EVT level, and it is
+     defined in soc_npucfg.h rather than spelled out here. It was spelled
+     out here until docs/55, which is why five new fault bits would have
+     been added to the block and this check would have gone on reporting
+     a clean part. */
+  if ((fi_cause & NPUCFG_C_FAULTS)
       || fi_drop || fi_ovf || fi_oor)
     mask |= F_TELEM;
 

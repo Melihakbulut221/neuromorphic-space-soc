@@ -1001,3 +1001,371 @@ async def test_evt_is_a_level_and_says_so(dut):
     assert w & EVQ_VALID
     assert await env.crd(C_IRQCAUSE) & CAUSE_EVT == 0, \
         "EVT stayed set with the queue empty"
+
+
+# ---------------------------------------------------------------------------
+# 6. docs/55: the two bounds, and the protection that can now be seen
+#
+# EVERY TEST BELOW INJECTS A FAULT BY WRITING A FLIP-FLOP HIERARCHICALLY,
+# which nothing else in this suite does, and it is worth saying why that
+# is legitimate here and would not be in section 1 to 5. These three
+# mechanisms only ever fire under an upset: there is no legal stimulus
+# that reaches them. hw/soc/tb/tb_soc_npu_fi.v does the same thing on the
+# whole SoC and docs/55 section 8 is the campaign; what these add is that
+# the mechanism is exercised in a place where a FAILURE names the
+# mechanism instead of moving a rate by half a point.
+#
+# The deposits are made with the same model the campaign uses: one bit,
+# one flip-flop, XORed in place, left flipped until the design's own
+# logic writes the register again (docs/16 section 7.4).
+# ---------------------------------------------------------------------------
+CAUSE_SER_TO, CAUSE_WIN_TO = 1 << 7, 1 << 8
+CAUSE_Q_COR, CAUSE_Q_DET, CAUSE_CFG_TMR = 1 << 9, 1 << 10, 1 << 11
+
+
+@cocotb.test()
+async def test_a_stuck_frame_becomes_a_bus_error_and_not_a_dead_machine(dut):
+    """docs/52 section 7.1: seven upsets in 600 left the whole SoC dead,
+    and five of them were the transport's phase counter.
+
+    THE CHAIN, in one sentence: a corrupted `tick` is a frame that never
+    ends, so `busy_o` never falls, so the window never leaves W_WAIT, so
+    `rvalid` never returns, and Ibex -- a two-stage in-order machine that
+    stalls the pipeline on a load -- waits for ever. The watchdog caught
+    all seven and its answer was a system reset.
+
+    This is the cheaper answer: the frame bound expires, the transport
+    forces itself idle, and the window fails the access. An access that
+    took 176 cycles now takes the bound and returns an ERROR, which is a
+    load access fault the program can handle.
+    """
+    env = Env(dut)
+    await env.reset()
+
+    # Start a read and let the frame get going, then corrupt the
+    # half-period counter so that `half_done` is never true again.
+    task = cocotb.start_soon(env.bus(node(0, ADDR["ID"]), limit=4000))
+    for _ in range(40):
+        await RisingEdge(dut.clk_i)
+    assert dut.u_ser.busy_o.value == 1, "the frame had not started"
+    await Timer(T_DRIVE, unit="ns")
+    dut.u_ser.tick.value = 0x4000
+
+    rd, er, cycles = await task
+    assert er, (
+        "a frame the transport could not finish returned rvalid WITHOUT "
+        "an error, so the CPU carried on with a register value that is "
+        "not the register's")
+    assert rd == 0, f"an aborted frame returned data 0x{rd:08x}"
+    assert dut.u_ser.state.value == 0, "the transport did not return to idle"
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_SER_TO, (
+        f"the frame was aborted and IRQ_CAUSE reads 0x{cause:08x}: the "
+        "bound fired and told nobody, which is docs/16 section 5.1's "
+        "original defect with a timeout bolted on")
+    assert dut.q_cor_o.value == 0 and dut.q_det_o.value == 0, \
+        "a transport timeout moved a QUEUE fault line"
+
+    # And the part is still usable: the next access completes normally.
+    assert await env.nrd(ADDR["ID"]) == RESET["ID"], \
+        "the transport did not recover for the next frame"
+
+
+@cocotb.test()
+async def test_the_frame_bound_never_fires_on_a_healthy_frame(dut):
+    """The other half of the claim, and the one that matters more.
+
+    A bound that could fire without a fault would be a new way to fail
+    an access that would have succeeded, and it would do it
+    intermittently on a healthy part. hw/soc/formal/soc_npu_ser_props.v
+    proves it -- invariant I10 states the counter as an exact function of
+    the frame position and I11 concludes it stays below the bound -- and
+    this is the same claim measured over real frames with the pilot in
+    the loop, because a proof and a run fail differently.
+    """
+    env = Env(dut)
+    await env.reset()
+    seen_max = 0
+
+    async def watch():
+        nonlocal seen_max
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            assert dut.u_ser.timeout_o.value == 0, \
+                "the frame bound fired on a healthy frame"
+            g = int(dut.u_ser.guard.value)
+            seen_max = max(seen_max, g)
+
+    w = cocotb.start_soon(watch())
+    for _ in range(8):
+        await env.nrd(ADDR["ID"])
+    await env.nrd(ADDR["VERSION"])
+    w.kill()
+
+    bound = int(dut.u_ser.GUARD_MAX.value)
+    assert seen_max < bound, (
+        f"a healthy frame reached {seen_max} of a bound of {bound}")
+    # And the margin is the one the module derives, not more: a frame
+    # that never got near the bound would mean the bound was set from a
+    # number nobody measured. HALVES_SLACK * HALF is the whole of it.
+    slack = int(dut.u_ser.HALVES_SLACK.value) * int(dut.u_ser.HALF.value)
+    assert seen_max == bound - slack - 1, (
+        f"a healthy frame's longest guard is {seen_max} and the bound is "
+        f"{bound} with {slack} cycles of declared slack; those three "
+        "numbers no longer agree")
+
+
+@cocotb.test()
+async def test_the_window_bounds_a_response_that_never_comes(dut):
+    """The other two of docs/52's seven dead machines were drawn into
+    `win_state` itself, and a bound in the TRANSPORT cannot see them.
+
+    A window that enters W_WAIT with no frame in flight is waiting for a
+    completion that is never coming. Nothing below it will ever produce
+    one, so the only thing that can end that wait is the window.
+    """
+    env = Env(dut)
+    await env.reset()
+
+    task = cocotb.start_soon(env.bus(node(0, ADDR["ID"]), limit=8000))
+    for _ in range(20):
+        await RisingEdge(dut.clk_i)
+    # Break the ownership flag: `ser_done_win` is `ser_done && owner`, so
+    # the frame completes and the window never hears about it. This is
+    # `window`/`ser_owner_win`, a real site in docs/52's campaign.
+    await Timer(T_DRIVE, unit="ns")
+    dut.ser_owner_win.value = 0
+
+    rd, er, cycles = await task
+    assert er, "the window returned rvalid without an error"
+    assert rd == 0
+    bound = int(dut.WIN_MAX.value)
+    assert cycles <= bound + 8, (
+        f"the window took {cycles} cycles to give up on a bound of {bound}")
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_WIN_TO, (
+        f"the window bound fired and IRQ_CAUSE reads 0x{cause:08x}")
+    assert cause & CAUSE_SER_TO == 0, (
+        "the window's own bound was reported as a transport timeout; the "
+        "two are kept apart because they say different things about the "
+        "part")
+    assert await env.nrd(ADDR["ID"]) == RESET["ID"], \
+        "the window did not recover for the next access"
+
+
+@cocotb.test()
+async def test_a_single_upset_in_the_cause_bank_is_voted_out_and_counted(dut):
+    """docs/52 section 11.2: the unprotected cause register produced a
+    FALSE FAULT REPORT in 16 of 100 draws -- the highest per-bit
+    consequence anywhere in that campaign, and note its shape: not a
+    missed fault, a FABRICATED one.
+
+    Three things have to be true of the fix and all three are checked
+    here, because the first two would pass on a design that did the wrong
+    one of them:
+      * the vote MASKS it -- the control bit keeps its value;
+      * the bank SCRUBS it -- soc_tmr_bank has no write enable, so the
+        corrupted replica is repaired on the very next edge and the
+        exposure to a coincident second upset is one cycle rather than
+        the mission (soc_tmr_bank.v difference 1);
+      * and the part SAYS SO, in the cause register and on the fault line
+        into BUSSTAT. A correction nobody can count is indistinguishable
+        from no upset at all.
+    """
+    env = Env(dut)
+    await env.reset()
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    before = await env.crd(C_CTRL)
+    assert before & (CTRL_IN_EN | CTRL_OUT_EN) == CTRL_IN_EN | CTRL_OUT_EN
+
+    fired = []
+
+    async def watch():
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            if dut.cfg_tmr_o.value:
+                fired.append(1)
+
+    w = cocotb.start_soon(watch())
+    await RisingEdge(dut.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    stored = int(dut.g_cfg_tmr.u_cfg_a.bits.value)
+    dut.g_cfg_tmr.u_cfg_a.bits.value = stored ^ 1
+    for _ in range(4):
+        await RisingEdge(dut.clk_i)
+    w.kill()
+
+    assert await env.crd(C_CTRL) & (CTRL_IN_EN | CTRL_OUT_EN) == \
+        CTRL_IN_EN | CTRL_OUT_EN, \
+        "one upset in one replica changed the voted control word"
+    assert len(fired) == 1, (
+        f"the voter's fault line was high on {len(fired)} cycles; it must "
+        "be exactly one, because the bank is rewritten from the vote on "
+        "every edge and a disagreement therefore lasts one cycle. More "
+        "than one would mean the scrub is not happening and the replica "
+        "stays wrong until something writes it")
+
+    # THE REPAIR IS CHECKED AGAINST THE VOTE AND NOT AGAINST THE VALUE
+    # BEFORE THE DEPOSIT, and the first version of this test got that
+    # wrong and failed on a design that was working.
+    #
+    # The word does not come back the way it went in, because the write
+    # that repairs the replica is the same write that RECORDS the repair:
+    # `sticky_cfg_tmr` is a field of the bank (soc_npu.v header section
+    # 7, following docs/41 section 5.3), so the repaired word is the old
+    # one plus the CFG_TMR bit. Comparing with the pre-deposit value asks
+    # the bank to forget the event it just survived, which is precisely
+    # the arrangement docs/16 section 5.8 measured being a single point
+    # of failure.
+    #
+    # What "repaired" means is that the replica agrees with the vote
+    # again, so that is what is asserted -- through `q_o`, which is the
+    # replica's stored image decoded, and `prot_store`, which is the
+    # voted word all three are written from.
+    assert int(dut.g_cfg_tmr.qa.value) == int(dut.prot_store.value), (
+        "replica A does not agree with the voted word: the write-back "
+        "did not repair it, so the bank is one more upset from a wrong "
+        "vote rather than one cycle from it")
+    assert int(dut.g_cfg_tmr.qb.value) == int(dut.prot_store.value)
+    assert int(dut.g_cfg_tmr.qc.value) == int(dut.prot_store.value)
+    assert int(dut.prot_mismatch.value) == 0, \
+        "the voter still reports a mismatch after the scrub"
+    assert int(dut.prot_store.value) == stored | (1 << 8), (
+        "the voted word is not the old word plus the CFG_TMR report; the "
+        "repair and the record are supposed to be the same write")
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_CFG_TMR, (
+        f"the vote masked an upset and IRQ_CAUSE reads 0x{cause:08x}: the "
+        "correction happened and the part did not say so, which is the "
+        "state docs/52 section 10 found the queues in")
+    # And it is acknowledgeable, unlike docs/41's tmr_err. IRQ_CAUSE is an
+    # interrupt cause register and a bit in it that could not be cleared
+    # would hold an enabled line asserted for ever.
+    await env.cwr(C_IRQCAUSE, CAUSE_CFG_TMR)
+    assert await env.crd(C_IRQCAUSE) & CAUSE_CFG_TMR == 0, \
+        "IRQ_CAUSE.CFG_TMR is not write-1-to-clear"
+
+
+@cocotb.test()
+async def test_the_queues_protection_reaches_a_register_and_a_pin(dut):
+    """docs/52 section 10: 79 upsets in 700 injections were absorbed by
+    `aer_fifo`'s pointer voting, its entry parity and its rd_valid rails,
+    and NO SOFTWARE AND NO PIN COULD SEE ANY OF THEM.
+
+    A correction and a discard are counted apart, because one lost
+    nothing and the other lost an event.
+    """
+    env = Env(dut)
+    await env.reset()
+    assert await env.crd(C_IRQCAUSE) & (CAUSE_Q_COR | CAUSE_Q_DET) == 0
+
+    # A CORRECTED pointer disagreement: one replica of the injection
+    # queue's write pointer, which the vote repairs on the next edge.
+    cor = []
+
+    async def watch_cor():
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            if dut.q_cor_o.value:
+                cor.append(1)
+
+    w = cocotb.start_soon(watch_cor())
+    await RisingEdge(dut.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    dut.u_inj.u_wptr_a.bits.value = int(dut.u_inj.u_wptr_a.bits.value) ^ 1
+    for _ in range(4):
+        await RisingEdge(dut.clk_i)
+    w.kill()
+
+    assert cor, "a corrected pointer disagreement did not reach q_cor_o"
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_Q_COR, (
+        f"IRQ_CAUSE reads 0x{cause:08x}: the pointer vote corrected a "
+        "replica and nothing said so")
+    assert cause & CAUSE_Q_DET == 0, (
+        "a CORRECTED pointer disagreement was reported as a DISCARDED "
+        "entry; the two are separate bits because one lost nothing and "
+        "the other lost an event")
+
+    await env.cwr(C_IRQCAUSE, CAUSE_Q_COR)
+    assert await env.crd(C_IRQCAUSE) & CAUSE_Q_COR == 0
+
+    # A DISCARDED entry: corrupt one queue slot's stored parity bit, then
+    # read the entry out. aer_fifo checks the stored parity on the way
+    # out, discards the entry and holds rd_valid low.
+    await enable_node(env)
+    await env.cwr(C_CTRL, CTRL_OUT_EN)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    await env.cwr(C_EVQ_IN, TYPE_SYNC | 7)
+    await RisingEdge(dut.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    dut.u_inj.u_par.bits.value = int(dut.u_inj.u_par.bits.value) ^ 1
+    for _ in range(400):
+        if await env.crd(C_IRQCAUSE) & CAUSE_Q_DET:
+            break
+    else:
+        raise AssertionError(
+            "an entry whose stored parity failed was discarded and "
+            "IRQ_CAUSE.Q_DET never rose")
+
+
+@cocotb.test()
+async def test_the_window_bound_never_fires_on_a_healthy_access(dut):
+    """The window's bound has no formal invariant behind it, and this is
+    the measurement that stands in for one.
+
+    soc_npu_ser.v's frame bound is proved unreachable on a healthy frame
+    -- hw/soc/formal/soc_npu_ser_props.v I10 and I11 -- because a frame's
+    length is an exact function of the state encoding. The WINDOW's wait
+    is not: it depends on what the event engine happens to be doing, so
+    its worst case is an ARGUMENT about the arbiter (soc_npu.v's WIN_MAX
+    comment) and the argument has to be checked against a run.
+
+    So this runs a whole inference with the event engine competing for
+    the transport -- which is the only way the window ever waits for more
+    than its own frame -- and reports the largest `win_guard` it saw.
+    """
+    env = Env(dut)
+    await env.reset()
+    seen_max = 0
+
+    async def watch():
+        nonlocal seen_max
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            assert dut.win_expire.value == 0, \
+                "the window bound fired on a healthy access"
+            seen_max = max(seen_max, int(dut.win_guard.value))
+
+    w = cocotb.start_soon(watch())
+    await enable_node(env)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    # Queue a barrier so the engine is using the transport, then hammer
+    # the node window from the other side. This is the contention the
+    # bound is sized for and nothing else in this suite produces it.
+    await env.cwr(C_EVQ_IN, TYPE_SYNC | 9)
+    for _ in range(8):
+        await env.nrd(ADDR["ID"])
+    for _ in range(400):
+        if await env.crd(C_STATUS) & ST_CAP_EMPTY == 0:
+            break
+    w.kill()
+
+    bound = int(dut.WIN_MAX.value)
+    assert seen_max > 0, "the window never waited; this measured nothing"
+    assert seen_max < bound, (
+        f"a healthy access reached {seen_max} of a bound of {bound}")
+    # And the bound is not absurdly loose either: a bound ten times the
+    # worst real wait would be a bound that lets a stalled CPU sit for
+    # ten times as long as it has to.
+    assert bound < 3 * seen_max, (
+        f"the window bound is {bound} against a measured worst wait of "
+        f"{seen_max}; that is more margin than the arbiter can justify")
+    assert await env.crd(C_IRQCAUSE) & (CAUSE_WIN_TO | CAUSE_SER_TO) == 0

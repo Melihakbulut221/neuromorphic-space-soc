@@ -239,15 +239,29 @@ class Census:
     def __init__(self, design):
         self.total = 0
         self.by_instance = []
+        self.by_src = []
         for mod in design["modules"].values():
             for cell_name, cell in mod["cells"].items():
                 if not _is_flop(cell["type"]):
                     continue
                 self.total += 1
                 self.by_instance.append(cell_name)
+                # The `src` attribute survives the post-mapping flatten
+                # that erases the instance path, and it is the only thing
+                # left in the netlist that says which FILE a flip-flop
+                # came from. docs/55 uses it to tie the campaign's site
+                # list to the netlist, which nothing had done before:
+                # every other check in this file counts flip-flops
+                # without asking whether they are the ones the campaign
+                # believes it is injecting into.
+                self.by_src.append(str(cell.get("attributes", {})
+                                       .get("src", "")))
 
     def in_instance(self, needle):
         return sum(1 for n in self.by_instance if needle in n)
+
+    def from_file(self, needle):
+        return sum(1 for s in self.by_src if needle in s)
 
 
 def _census(script_body, workdir):
@@ -561,7 +575,6 @@ def test_harden_zero_removes_the_replicas(workdir):
 # netlist holds. The count here is arithmetic on the block's own
 # parameters, so widening CNT_W moves the expectation with it.
 BUSSTAT = SOC_RTL / "soc_busstat.v"
-BUSSTAT_NSRC = 4
 
 
 def _busstat_cnt_w():
@@ -570,6 +583,24 @@ def _busstat_cnt_w():
                   BUSSTAT.read_text())
     assert m, "soc_busstat.v no longer declares CNT_W"
     return int(m.group(1))
+
+
+def _busstat_nsrc():
+    """NSRC, likewise DERIVED.
+
+    It was written down here as 4 until docs/55 added three sources, and
+    a literal would have made this test fail for the right reason with
+    the wrong message -- or, worse, have been edited to 7 without anyone
+    asking whether the three new counters had actually survived. The
+    arithmetic below is what says they did.
+    """
+    m = re.search(r"localparam\s+integer\s+NSRC\s*=\s*(\d+)",
+                  BUSSTAT.read_text())
+    assert m, "soc_busstat.v no longer declares NSRC"
+    return int(m.group(1))
+
+
+BUSSTAT_NSRC = _busstat_nsrc()
 
 
 @needs_yosys
@@ -608,11 +639,58 @@ def test_the_fault_lines_are_connected_in_soc_top():
     for pat in (".rf_ecc_err_o           (rf_ecc_err)",
                 ".rf_ecc_err_i (rf_ecc_err)",
                 ".tmr_ev_o (wdog_tmr_ev)",
-                ".tmr_ev_i (wdog_tmr_ev)"):
+                ".tmr_ev_i (wdog_tmr_ev)",
+                # docs/55. The NPU connection's three, and the same
+                # failure is available here in the same form: soc_npu.v
+                # brought `ptr_mismatch` and `par_err` out of both queue
+                # instances and connected them TO NOTHING for a whole
+                # document, and docs/52 section 10 then measured 79
+                # absorbed upsets that no operator could see.
+                ".q_cor_o (npu_cor_ev)",
+                ".q_det_o (npu_det_ev)",
+                ".cfg_tmr_o (npu_tmr_ev)",
+                ".npu_cor_i (npu_cor_ev)",
+                ".npu_det_i (npu_det_ev)",
+                ".npu_tmr_i (npu_tmr_ev)"):
         assert pat in top, (
             "soc_top.v no longer connects a fault line: {}".format(pat))
-    assert "rf_ecc_err_i (3'b0" not in top and "tmr_ev_i (1'b0" not in top, \
-        "a fault line in soc_top.v has been tied off"
+    for tied in ("rf_ecc_err_i (3'b0", "tmr_ev_i (1'b0",
+                 "npu_cor_i (1'b0", "npu_det_i (1'b0", "npu_tmr_i (1'b0"):
+        assert tied not in top, \
+            "a fault line in soc_top.v has been tied off: {}".format(tied)
+
+
+def test_the_npu_queues_report_their_protection_somewhere():
+    """`aer_fifo` DETECTS and CORRECTS, and until docs/55 soc_npu.v
+    threw all four of its reports away -- `rv_mismatch` was not even
+    brought out of the instance.
+
+    This is a TEXTUAL check and it is here because no other check in
+    this repository can fail on it. Every cocotb test, every proof and
+    the whole fault-injection campaign would pass on a soc_npu.v that
+    left these unconnected: that is precisely the state docs/51 shipped
+    and docs/52 measured. The failure mode has a name in this project --
+    `pilot_top.v` left four ECC status wires unconnected and a campaign
+    then classified 84 corrections as MASKED with every gate green."""
+    npu = (SOC_RTL / "soc_npu.v").read_text()
+    for pat in (".rv_mismatch (inj_rv_mm)", ".rv_mismatch (cap_rv_mm)",
+                ".ptr_mismatch (inj_ptr_mm)", ".ptr_mismatch (cap_ptr_mm)"):
+        assert pat in npu, (
+            "soc_npu.v no longer brings a queue fault report out of its "
+            "aer_fifo instance: {}".format(pat))
+    assert ".rv_mismatch ()" not in npu, (
+        "an aer_fifo rv_mismatch port in soc_npu.v is unconnected again")
+    # And each one reaches BOTH destinations: a sticky bit software can
+    # read in this block's own cause register, and a saturating counter
+    # in BUSSTAT.
+    for pat in ("assign q_cor_o = q_cor_ev;", "assign q_det_o = q_det_ev;",
+                "assign cfg_tmr_o = prot_mismatch;",
+                "sticky_ev[C_Q_COR    - C_STICKY0] = q_cor_ev;",
+                "sticky_ev[C_Q_DET    - C_STICKY0] = q_det_ev;",
+                "sticky_ev[C_CFG_TMR  - C_STICKY0] = prot_mismatch;"):
+        assert pat in npu, (
+            "soc_npu.v no longer routes a queue or bank fault report to "
+            "both of its destinations: {}".format(pat))
 
 
 def test_the_ibex_top_patch_applies_to_the_pinned_output():
@@ -643,6 +721,345 @@ def test_the_ibex_top_patch_applies_to_the_pinned_output():
             "supposed to be the smallest thing that reaches the "
             "SoC".format(added))
 
+
+# =====================================================================
+# 3b. THE NPU CONNECTION'S CAUSE BANK -- docs/55 H3
+#
+# The same question as section 1 asks of the watchdog, on a second
+# block, and it has to be asked again rather than inherited: this bank
+# is a different width, a different reset domain and a different
+# instantiating module, and the only thing it shares with the
+# watchdog's is `soc_tmr_bank.v` itself.
+#
+# WHAT MAKES IT WORTH A SEPARATE CENSUS. docs/52 measured the
+# unprotected version producing a FALSE FAULT REPORT in 16 of 100 draws
+# -- a fabricated event, not a missed one -- and a fault channel that
+# invents events is worse than one that is lossy because it will be
+# believed. The protection against that is three banks. Every cocotb
+# test, every formal task and the whole fault-injection campaign would
+# pass on a netlist holding ONE, because all three deposit into or
+# reason about RTL. This is the only check that looks at the netlist.
+# =====================================================================
+NPU_SOURCES = [
+    SOC_RTL / "soc_npu.v",
+    SOC_RTL / "soc_npu_ser.v",
+    SOC_RTL / "soc_tmr_bank.v",
+    PILOT_RTL / "tmr_voter.v",
+    PILOT_RTL / "aer_fifo.v",
+    PILOT_RTL / "pilot_top.v",
+]
+
+NPU_REPLICAS = ("g_cfg_tmr.u_cfg_a.",
+                "g_cfg_tmr.u_cfg_b.",
+                "g_cfg_tmr.u_cfg_c.")
+
+
+def _npu_prot_w():
+    """soc_npu.v's PROT_W, DERIVED from the two literals it is built
+    from rather than written down here.
+
+    The RTL says `PROT_W = P_MASK + NCAUSE` and `P_MASK = P_STICKY +
+    NSTICKY`, which are not literals; `NCAUSE` and `C_INJ_OVF` are. So
+    the arithmetic is redone here from those two, exactly as
+    hw/soc/fi/npu_targets.py redoes it, and a cause bit added to the
+    block moves this expectation with it instead of turning the file
+    red for the wrong reason."""
+    text = (SOC_RTL / "soc_npu.v").read_text()
+
+    def lp(name):
+        m = re.search(r"localparam\s+integer\s+" + name + r"\s*=\s*(\d+)\s*;",
+                      text)
+        assert m, "no `localparam integer {} = <literal>;` in " \
+                  "soc_npu.v".format(name)
+        return int(m.group(1))
+
+    ncause = lp("NCAUSE")
+    nsticky = ncause - lp("C_INJ_OVF")
+    return 2 + nsticky + ncause
+
+
+NPU_PROT_W = _npu_prot_w()
+
+
+def _npu_script(sources, force_flatten=False, chparam=""):
+    """The connection alone, with the frozen pilot BLACK-BOXED.
+
+    That is the same scope docs/51 section 11 measured at 717 flip-flops
+    and the same scope hw/soc/flow/fi_npu_coverage.sh censuses, and it
+    is chosen for a mechanical reason as well as a principled one:
+    elaborating the whole die costs about a minute and this file already
+    runs yosys eleven times.
+
+    `blackbox` comes BEFORE `hierarchy` here and takes a bare name,
+    which works because this script does not use `read_verilog -defer`.
+    hw/soc/flow/syn_soc.sh does, and has to spell the pattern
+    differently; its comment records why.
+    """
+    lib = _sg13g2_liberty()
+    script = "read_verilog -I {} -I {} {};".format(
+        SOC_RTL, PILOT_RTL, " ".join(str(s) for s in sources))
+    script += " blackbox pilot_top;"
+    if chparam:
+        script += " " + chparam
+    script += " hierarchy -top soc_npu;"
+    if force_flatten:
+        script += " attrmap -modattr -remove keep_hierarchy;"
+    script += " synth -top soc_npu -flatten;"
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+    script += " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;"
+    return script
+
+
+@pytest.fixture(scope="module")
+def npu_asic(workdir):
+    return _census(_npu_script(NPU_SOURCES), workdir)
+
+
+@needs_yosys
+def test_the_npu_cause_bank_is_three_banks_in_the_netlist(npu_asic):
+    found = {r: npu_asic.in_instance(r) for r in NPU_REPLICAS}
+    assert all(v == NPU_PROT_W for v in found.values()), (
+        "the NPU cause bank collapsed in the netlist: expected {} "
+        "flip-flops per replica, found {}. Three replicas written from "
+        "the same expression are one bank after opt_dff + opt_merge, and "
+        "the voter above them then votes three copies of the same upset "
+        "value. Total flip-flops in this netlist: {}.".format(
+            NPU_PROT_W, found, npu_asic.total))
+
+
+@needs_yosys
+def test_the_npu_cause_bank_survives_every_attribute_being_deleted(workdir):
+    """The POL/MIX storage transform on its own, with `keep` and
+    `keep_hierarchy` deleted from the TEXT of the sources so that no
+    pass can honour them and none can re-derive them.
+
+    A TOTAL census and not a per-replica one, for the reason
+    test_no_flip_flop_is_lost_when_every_attribute_is_deleted_asic gives:
+    with keep_hierarchy gone the banks are flattened during `synth` and
+    the instance path they would be counted by no longer exists. The
+    total is strictly wider anyway -- it would also catch storage lost
+    somewhere else in the connection."""
+    dst = Path(workdir) / "npu_noattr"
+    dst.mkdir(exist_ok=True)
+    stripped = []
+    for src in NPU_SOURCES:
+        text = src.read_text()
+        for attr in _ATTRS:
+            text = text.replace(attr, "")
+        target = dst / src.name
+        target.write_text(text)
+        stripped.append(target)
+    with_attrs = _census(_npu_script(NPU_SOURCES), workdir)
+    without = _census(_npu_script(stripped, force_flatten=True), workdir)
+    assert without.total == with_attrs.total, (
+        "the NPU connection maps to {} flip-flops with every keep and "
+        "keep_hierarchy deleted from the text, against {} with them. "
+        "Something in this block is held together by an attribute alone, "
+        "and an attribute is not portable to a front end that does not "
+        "read yosys's.".format(without.total, with_attrs.total))
+
+
+@needs_yosys
+def test_removing_the_mix_transform_from_one_npu_replica_collapses_it(
+        workdir):
+    """A guard that cannot fail is not a guard.
+
+    `.MIX(0)` on replica C is FUNCTIONALLY IDENTICAL RTL, bit for bit at
+    every port, so no simulation and no proof in this repository can see
+    it. What it does is make C store `v[i] ^ POL_C[i]` -- one of the only
+    two storage functions a single bit has -- and POL_C is zero on every
+    odd bit, so on exactly those bits C stores what A stores and
+    structural hashing merges the pair. The count that comes back is the
+    pigeonhole measured rather than argued."""
+    dst = Path(workdir) / "npu_mut_mix"
+    dst.mkdir(exist_ok=True)
+    mutated = []
+    hits = 0
+    for src in NPU_SOURCES:
+        text = src.read_text()
+        old = ".POL(POL_C), .MIX(1))"
+        if old in text:
+            hits += text.count(old)
+            text = text.replace(old, ".POL(POL_C), .MIX(0))")
+        for attr in _ATTRS:
+            text = text.replace(attr, "")
+        target = dst / src.name
+        target.write_text(text)
+        mutated.append(target)
+    assert hits == 1, (
+        "the .MIX(1) anchor on the NPU cause bank's replica C matched {} "
+        "times and must match once; the source moved".format(hits))
+    base = _census(_npu_script(NPU_SOURCES, force_flatten=True), workdir)
+    mut = _census(_npu_script(mutated, force_flatten=True), workdir)
+    lost = base.total - mut.total
+    assert lost > 0, (
+        "turning the MIX transform off on replica C of the NPU cause "
+        "bank lost NO flip-flops ({} either way). Either the replicas "
+        "are being held apart by something else -- which would mean this "
+        "file is not measuring what it claims -- or they had already "
+        "merged.".format(base.total))
+    # POL_C is 0xAAAA..., which is zero on every EVEN bit index, so those
+    # are the bits on which C would store exactly what A stores.
+    expected = (NPU_PROT_W + 1) // 2
+    assert lost == expected, (
+        "expected the mutation to lose {} flip-flops -- one for each of "
+        "the {} even bits of the {}-bit word, where POL_C is zero and a "
+        "polarity-only replica C stores what replica A stores -- and it "
+        "lost {}".format(expected, expected, NPU_PROT_W, lost))
+
+
+@needs_yosys
+def test_npu_harden_zero_removes_the_replicas(workdir):
+    """`HARDEN = 0` is the baseline docs/55 section 7 prices the
+    redundancy against, and this is the check that it IS a baseline: it
+    has to hold the same state once rather than three times.
+
+    IT IS EXACTLY 2 x PROT_W, AND THE PREDICTION THAT IT WOULD BE ONE
+    MORE THAN THAT WAS WRONG. docs/41 section 6.3 measured the watchdog's
+    HARDEN = 0 at 53 flip-flops and not 58, because with `prot_mismatch`
+    a constant its `tmr_err` and `tmr_count` fields are dead and the
+    optimiser deletes them. The same reasoning says this bank's CFG_TMR
+    sticky bit should go the same way, and it does NOT: HARDEN = 0 holds
+    all PROT_W bits.
+
+    The difference is the CLEAR PATH, and it is a consequence of a
+    decision made for an unrelated reason. The watchdog's `tmr_err` is
+    not clearable, so its next value is `tmr_err | 0`, which is `d == q`,
+    which `opt_dff` folds into the reset value. This block's sticky bits
+    ARE write-1-to-clear -- IRQ_CAUSE is an interrupt cause register and
+    a bit in it that could not be acknowledged would hold an enabled line
+    asserted for ever -- so the next value is `q & ~clr`, and proving
+    THAT constant needs a fixpoint no optimiser here runs.
+
+    So the clearability decision costs one flip-flop in a configuration
+    nothing ships. It is recorded because the wrong number was written
+    here first and this test is what found it, which is the whole reason
+    docs/41 section 6.1 derives its counts instead of writing them
+    down."""
+    base = _census(_npu_script(NPU_SOURCES), workdir)
+    plain = _census(
+        _npu_script(NPU_SOURCES, chparam="chparam -set HARDEN 0 soc_npu;"),
+        workdir)
+    for r in NPU_REPLICAS:
+        assert plain.in_instance(r) == 0, (
+            "HARDEN = 0 still holds flip-flops under {}".format(r))
+    lost = base.total - plain.total
+    expected = 2 * NPU_PROT_W
+    assert lost == expected, (
+        "HARDEN = 0 lost {} flip-flops; expected {} = three replicas of "
+        "{} bits minus one plain bank of the same width. If it lost {} "
+        "instead, the CFG_TMR sticky bit has become removable -- which "
+        "would mean it is no longer clearable, and this docstring is "
+        "then the record of why that matters.".format(
+            lost, expected, NPU_PROT_W, expected + 1))
+
+
+@needs_yosys
+def test_the_npu_instantiates_the_frozen_voter_and_three_distinct_banks():
+    """A second, TEXTUAL check on the same thing, because the census
+    cannot see a change of parameters at the instance: three replicas
+    given the same POL and MIX would census as three banks under
+    keep_hierarchy and collapse without it. docs/41 section 6.6 lists
+    that gap and pairs the same two checks for the watchdog."""
+    npu = (SOC_RTL / "soc_npu.v").read_text()
+    assert "tmr_voter #(.WIDTH(PROT_W)) u_cfg_vote" in npu
+    banks = re.findall(
+        r"soc_tmr_bank\s*#\(\.W\(PROT_W\),\s*\.RST_VAL\(64'd0\),"
+        r"\s*\.POL\((POL_[ABC])\),\s*\.MIX\((\d)\)\)", npu)
+    assert len(banks) == 3, (
+        "soc_npu.v instantiates {} soc_tmr_bank replicas, expected "
+        "three".format(len(banks)))
+    assert len(set(banks)) == 3, (
+        "two of the NPU cause bank's replicas have the same (POL, MIX): "
+        "{}. They would present the same stored function to opt_merge "
+        "and hash away.".format(banks))
+    # And the polarities are the ones the transform needs: A true, B and
+    # C mixed and mutually inverse.
+    assert ("POL_A", "0") in banks
+    assert ("POL_B", "1") in banks and ("POL_C", "1") in banks
+    assert "POL_B = 64'h5555555555555555" in npu
+    assert "POL_C = 64'hAAAAAAAAAAAAAAAA" in npu
+
+
+@needs_yosys
+def test_the_transport_is_the_campaign_site_list_in_the_netlist(npu_asic):
+    """A DIFFERENT QUESTION FROM EVERY OTHER CHECK IN THIS FILE, and one
+    nothing in this repository had asked.
+
+    Every other census here counts flip-flops. This one asks whether the
+    flip-flops in the netlist are THE ONES THE FAULT-INJECTION CAMPAIGN
+    BELIEVES IT IS INJECTING INTO. The campaign deposits into RTL, and
+    docs/52 section 13's last bullet says so plainly -- "the campaign
+    cannot fail because a flip-flop vanished in synthesis". So a bound
+    whose counter the mapper had deleted would be reported as working by
+    the campaign, by every cocotb test and by the formal proof, and the
+    part would ship without it. That is docs/38 section 8.5's lockstep
+    and hw/rtl/pilot_top.v section 9's configuration TMR, in a third
+    place.
+
+    `soc_npu_ser.v` is the whole of one stratum, so its declared bit
+    count and its mapped flip-flop count are comparable directly. Both
+    sides are DERIVED: the left from hw/soc/fi/npu_targets.py, the right
+    from the `src` attributes of the netlist.
+    """
+    sys.path.insert(0, str(ROOT / "hw" / "soc" / "fi"))
+    import npu_targets
+
+    declared = npu_targets.stratum_bits("ser")
+    mapped = npu_asic.from_file("soc_npu_ser.v")
+    assert mapped == declared, (
+        "hw/soc/fi/npu_targets.py's `ser` stratum declares {} bits and "
+        "the mapped netlist holds {} flip-flops from soc_npu_ser.v. The "
+        "campaign injects into the RTL, so it would report a mechanism "
+        "working whose flip-flops the mapper had removed -- which is "
+        "exactly what docs/38 section 8.5 measured costing an unguarded "
+        "lockstep 15,455 um2.".format(declared, mapped))
+
+
+@needs_yosys
+def test_both_guards_survive_synthesis_at_their_full_width(workdir):
+    """The two counters docs/55 added, by name, in the mapped netlist.
+
+    The count above is a total and a total can hide a redistribution.
+    These are the two structures whose loss would be silent everywhere
+    else, so they are checked individually and against the widths the
+    RTL derives rather than against numbers written here.
+    """
+    # A by-NAME census needs the names, which the post-mapping flatten
+    # erases -- so this one stops before `dfflibmap` and counts the
+    # generic flip-flop cells, which still carry the public net they
+    # drive. It is a weaker netlist than the one above and it is the
+    # strongest one in which these two signals still have names.
+    out = Path(workdir) / "guards.json"
+    script = ("read_verilog -I {} -I {} {};".format(
+                  SOC_RTL, PILOT_RTL,
+                  " ".join(str(s) for s in NPU_SOURCES))
+              + " blackbox pilot_top; hierarchy -top soc_npu;"
+                " synth -top soc_npu -flatten; opt_clean;"
+                " write_json {};".format(out))
+    _run_yosys(script, workdir)
+    design = json.loads(out.read_text())
+
+    width = {}
+    for mod in design["modules"].values():
+        for name, net in mod.get("netnames", {}).items():
+            width[name] = len(net["bits"])
+
+    text = (SOC_RTL / "soc_npu_ser.v").read_text()
+    m = re.search(r"localparam\s+integer\s+GUARD_W\s*=\s*\$clog2", text)
+    assert m, "soc_npu_ser.v no longer derives GUARD_W with $clog2"
+
+    for sig, floor in (("u_ser.guard", 4), ("win_guard", 4)):
+        got = width.get(sig)
+        assert got is not None, (
+            "{} is not a net in the synthesised connection at all. A "
+            "bounded wait whose counter the mapper deleted is a bounded "
+            "wait that does not exist, and nothing else in this "
+            "repository would notice.".format(sig))
+        assert got >= floor, (
+            "{} is {} bits wide in the netlist, which is too narrow to "
+            "reach its bound".format(sig, got))
 
 # =====================================================================
 # 4. the composition, one level up

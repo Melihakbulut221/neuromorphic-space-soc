@@ -11,9 +11,23 @@
 //        address the map derives, fetches from one slave, reads and
 //        writes data in another, and reaches its peripherals through an
 //        APB bridge.
-//   IS NOT hardened. No ECC, no scrubbing, no TMR, no bus error latch.
-//        soc_mem.v is a behavioural array; the BUSSTAT and SCRUB slots
-//        in the map are reserved and empty.
+//   IS PARTLY hardened, and the list is worth being exact about because
+//        this line said "IS NOT hardened. No ECC, no scrubbing, no TMR,
+//        no bus error latch ... the BUSSTAT and SCRUB slots in the map
+//        are reserved and empty" until docs/55, by which time four
+//        documents had made most of it false. What is protected today:
+//        the architectural register file carries a SECDED codec and a
+//        scrub (docs/43); the watchdog's persistent state is a
+//        triple-redundant word (docs/41); BUSSTAT is implemented and
+//        counts what those two mechanisms absorb (docs/44); and the NPU
+//        connection carries bounded waits on its transport and its
+//        register window plus a triple-redundant control and cause bank
+//        (docs/55). What is NOT: soc_mem.v is still a behavioural array
+//        with no ECC, the core is still SecureIbex = 0 with no lockstep,
+//        the fabric, the CLINT and the timers are unprotected, the SCRUB
+//        slot in the map is still reserved and empty, and the NPU's
+//        transport, event engine and queue storage are single points by
+//        the decision docs/52 measured and docs/55 section 6 records.
 //   IS   interruptible, and the interrupts are real. soc_clint.v drives
 //        irq_timer_i and irq_software_i, soc_gptimer.v and soc_uart.v
 //        drive fast local interrupt lines the generated map assigns, and
@@ -163,6 +177,12 @@ module soc_top #(
   // The fault lines soc_busstat counts. docs/44.
   wire [2:0]  rf_ecc_err;      // from the register file, via ibex_top
   wire        wdog_tmr_ev;     // from the watchdog's voter
+  // The NPU connection's three, added by docs/55. docs/52 section 10
+  // measured 79 upsets absorbed by mechanisms that worked and visible to
+  // nothing; these are the wires that end that.
+  wire        npu_cor_ev;      // a queue pointer vote corrected
+  wire        npu_det_ev;      // a queue entry was discarded
+  wire        npu_tmr_ev;      // the NPU cause bank's voter masked one
 
   // -------------------------------------------------------------------
   // The fast local interrupt vector
@@ -507,6 +527,9 @@ module soc_top #(
       .pslverr_o (pslverr_busstat),
       .rf_ecc_err_i (rf_ecc_err),
       .tmr_ev_i (wdog_tmr_ev),
+      .npu_cor_i (npu_cor_ev),
+      .npu_det_i (npu_det_ev),
+      .npu_tmr_i (npu_tmr_ev),
       .irq_o (busstat_irq)
   );
 
@@ -603,6 +626,9 @@ module soc_top #(
       .prdata_o (prdata_npucfg), .pready_o (pready_npucfg),
       .pslverr_o (pslverr_npucfg),
       .irq_o (npu_irq),
+      .q_cor_o (npu_cor_ev),
+      .q_det_o (npu_det_ev),
+      .cfg_tmr_o (npu_tmr_ev),
       .obs_ser_sck_o (npu_ser_sck_o),
       .obs_ser_cs_n_o (npu_ser_cs_n_o),
       .obs_ser_mosi_o (npu_ser_mosi_o),

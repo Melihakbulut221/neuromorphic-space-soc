@@ -166,18 +166,47 @@ def emit(out):
     L.append(f"#define NPUV_N_AXONS   {N_AXONS}")
     L.append("")
     L.append("/* docs/10 section 6 configuration, by generated register offset */")
-    for name, value in [
+    # The order below is the order the two programs WRITE these
+    # registers, and the table emitted after it inherits that order so
+    # that a reader comparing the write loop with the read-back loop is
+    # comparing like with like.
+    cfg_regs = [
+        ("CFG_AXON", N_AXONS),
         ("CFG_THRESH", CFG.thresh & 0xFFFF),
         ("CFG_VRESET", CFG.v_reset & 0xFFFF),
         ("CFG_LEAK", CFG.leak_shift),
         ("CFG_SYNSHIFT", CFG.syn_shift),
         ("CFG_REFR", CFG.refr_period),
         ("CFG_FLAGS", (1 if CFG.leak_en else 0) << 1),
-        ("CFG_AXON", N_AXONS),
         ("PASS_TILE_OFF", 0),
-    ]:
+    ]
+    for name, value in cfg_regs:
         L.append(f"#define NPUV_OFF_{name:<14} 0x{ADDR[name]:03X}u")
         L.append(f"#define NPUV_VAL_{name:<14} 0x{value:08X}u")
+    L.append("")
+    L.append("/* THE SAME EIGHT AS A TABLE, added by docs/55.")
+    L.append(" *")
+    L.append(" * docs/52 section 12 item 4 asks a bring-up sequence to read")
+    L.append(" * back EVERY configuration register it wrote, and not one")
+    L.append(" * chosen in advance: an upset in the transport's address")
+    L.append(" * field sends a write to the WRONG register, and a read-back")
+    L.append(" * of some OTHER register then passes. That is the measured")
+    L.append(" * record ser.tx bit 32 at cycle 3,081.")
+    L.append(" *")
+    L.append(" * A program cannot iterate the #defines above without")
+    L.append(" * spelling the list out for itself, and a spelled-out list is")
+    L.append(" * a list that stops matching when a register is added. So it")
+    L.append(" * is emitted here, once, from the same source the writes come")
+    L.append(" * from.")
+    L.append(" */")
+    L.append(f"#define NPUV_N_CFG {len(cfg_regs)}")
+    L.append(f"static const uint32_t npuv_cfg_off[{len(cfg_regs)}] = {{")
+    L.append("    " + ", ".join(f"0x{ADDR[n]:03X}u" for n, _ in cfg_regs))
+    L.append("};")
+    L.append(f"static const uint32_t npuv_cfg_val[{len(cfg_regs)}] = {{")
+    L.append("    " + ", ".join(f"0x{v & 0xFFFFFFFF:08X}u"
+                                for _, v in cfg_regs))
+    L.append("};")
     L.append("")
     L.append(f"/* {len(words)} weight words, docs/10 section 5 packing, "
              "low half then high half */")

@@ -70,8 +70,56 @@ WHAT IS DELIBERATELY NOT HERE
 """
 
 import collections
+import os
+import re
 
 Site = collections.namedtuple("Site", "stratum name path width")
+
+_RTL = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "rtl", "soc_npu.v"))
+
+
+def _lp_int(name):
+    """One `localparam integer <name> = <literal>;` out of soc_npu.v.
+
+    PARSED AND NOT WRITTEN DOWN.  docs/52's classifier spelled the cause
+    register's fault bits out one at a time; docs/55 added five more, and
+    a hand-written copy would have gone on reporting every one of them as
+    "silent to every hardware channel" -- a campaign flattering its own
+    hardening, which is the exact shape docs/41 section 6.6's list is
+    made of.  A literal that moves in the RTL has to move here with it,
+    and the only way to guarantee that is to read it from there.
+    """
+    with open(_RTL) as f:
+        text = f.read()
+    m = re.search(r"localparam\s+integer\s+" + name + r"\s*=\s*(\d+)\s*;", text)
+    if not m:
+        raise RuntimeError(
+            "no `localparam integer %s = <literal>;` in %s" % (name, _RTL))
+    return int(m.group(1))
+
+
+# The cause register's width, and the first STICKY bit in it.  Both are
+# literals in soc_npu.v; everything below is arithmetic on them.
+NCAUSE = _lp_int("NCAUSE")
+C_STICKY0 = _lp_int("C_INJ_OVF")
+NSTICKY = NCAUSE - C_STICKY0
+
+# The five sticky bits docs/55 added, by name, for the controls and the
+# report.  Parsed for the same reason NCAUSE is.
+C_SER_TO = _lp_int("C_SER_TO")
+C_WIN_TO = _lp_int("C_WIN_TO")
+C_Q_COR = _lp_int("C_Q_COR")
+C_Q_DET = _lp_int("C_Q_DET")
+C_CFG_TMR = _lp_int("C_CFG_TMR")
+
+# soc_npu.v's protected word, docs/55 H3:
+#   P_IN_EN (1) + P_OUT_EN (1) + NSTICKY + NCAUSE
+# The RTL writes it as `P_MASK + NCAUSE`, which is not a literal, so it
+# is re-derived here from the two that are -- and the testbench's own
+# `$bits` dump is what checks the derivation, in npu_campaign.py control
+# 1, which fails on a one-bit disagreement.
+PROT_W = 2 + NSTICKY + NCAUSE
 
 # Everything hangs off the NPU subsystem in soc_top.v.  The testbench
 # supplies `dut.u_npu.` in front of every path below, so the strings here
@@ -134,8 +182,15 @@ def _sites():
     # soc_npu_ser.v.  134 flip-flops, which is the number docs/51
     # section 11 measured with Yosys on the same module -- an
     # independent check that this list is the whole of it.
+    # `guard` and `timeout_o` are docs/55's frame bound and are targets
+    # like anything else.  THE GUARD IS UNPROTECTED STATE WHOSE UPSET
+    # ABORTS A HEALTHY FRAME, which is a new failure the hardening
+    # introduced, and a campaign that did not draw into it would be
+    # measuring the mechanism's benefit without its cost.  docs/55
+    # section 8 reports what the draws found there.
     for name, width in (("state", 2), ("tx", 40), ("rx", 32),
                         ("bit_cnt", 6), ("hcnt", 2), ("tick", 16),
+                        ("guard", 8), ("timeout_o", 1),
                         ("done_o", 1), ("rdata_o", 32),
                         ("ser_sck_o", 1), ("ser_cs_n_o", 1),
                         ("ser_mosi_o", 1)):
@@ -157,9 +212,19 @@ def _sites():
     # upset here corrupts ONE register access -- and docs/51 section
     # 13 defect 1 records what a lost or duplicated response looks like
     # from the CPU: a read after a write returning zero.
+    #
+    # `win_guard` is docs/55's response bound, nine flip-flops, and
+    # `win_out` is the flag that arms it: one bit saying the fabric has
+    # granted a request this slave has not yet answered.  Both carry the
+    # same asymmetry `ser_guard` does -- an upset in either FAILS A
+    # HEALTHY ACCESS with a bus error rather than hanging one, and an
+    # upset that CLEARS `win_out` while a request is outstanding re-opens
+    # the hang the bound closes.  They are in the campaign for that
+    # reason: a hardening measured without its own new state is a
+    # hardening measured for its benefit and not its cost.
     for name, width in (("win_state", 2), ("win_start", 1), ("win_we", 1),
                         ("win_addr", 7), ("win_wdata", 32),
-                        ("win_err_q", 1),
+                        ("win_err_q", 1), ("win_guard", 9), ("win_out", 1),
                         ("rvalid_o", 1), ("rdata_o", 32), ("err_o", 1),
                         ("ser_owner_win", 1)):
         s.append(Site("window", name, name, width))
@@ -167,12 +232,30 @@ def _sites():
     # ---- cfgreg: the control and cause registers -------------------
     # docs/41 section 3.1's criterion applies to these exactly: they are
     # PERSISTENT -- written once by software and never rewritten by the
-    # block -- and their corruption is SILENT.  Nothing votes them,
-    # nothing scrubs them and nothing reports them.
-    for name, width in (("ctrl_in_en", 1), ("ctrl_out_en", 1),
-                        ("flush_pulse", 1), ("scrub_pulse", 1),
-                        ("irq_mask", 7),
-                        ("sticky_inj_ovf", 1), ("sticky_fetch_er", 1)):
+    # block -- and before docs/55 their corruption was SILENT.  docs/52
+    # measured what that cost: a FALSE FAULT REPORT in 16 of 100 draws,
+    # the highest per-bit consequence anywhere in that campaign.
+    #
+    # THE POPULATION OF THIS STRATUM IS NOT THE ONE docs/52 DREW FROM,
+    # and that is the hardening rather than a change of method.  Thirteen
+    # plain flip-flops became a PROT_W = 21 word held in three
+    # soc_tmr_bank replicas, plus the two self-clearing pulses that
+    # docs/41 section 3.1's own rule leaves out of the bank.  A directed
+    # replay of docs/52's cfgreg records is therefore impossible -- the
+    # paths no longer exist -- and docs/55 section 9 says so where it
+    # compares the two.
+    #
+    # THE TARGETS ARE THE REPLICA STORAGE AND NEVER THE VOTED WIRE.
+    # `soc_tmr_bank`'s `bits` is what a flip-flop holds; `q_o` is a
+    # continuously driven function of it, and a deposit there would be
+    # overwritten in the same delta cycle and report nothing about the
+    # replicas.  docs/41 section 8.1 records this campaign's ancestor
+    # doing exactly that twice, and control 1b in npu_campaign.py now
+    # asserts it for this stratum as well as for evq_ptr.
+    for r in ("a", "b", "c"):
+        s.append(Site("cfgreg", "cfg_%s" % r,
+                      "g_cfg_tmr.u_cfg_%s.bits" % r, PROT_W))
+    for name, width in (("flush_pulse", 1), ("scrub_pulse", 1)):
         s.append(Site("cfgreg", name, name, width))
 
     # ---- engine: the event engine and the show-ahead adapter -------

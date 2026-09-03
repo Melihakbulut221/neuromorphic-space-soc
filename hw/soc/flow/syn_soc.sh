@@ -14,6 +14,28 @@
 #       flow/syn_soc.sh soc_wdog
 #       flow/syn_soc.sh soc_fabric_meas      (see below)
 #
+# Two environment variables, both additive and both off by default:
+#
+#   SOC_SYN_BLACKBOX   a space-separated list of modules to declare as
+#                      black boxes before `hierarchy`. docs/51 section 11
+#                      quotes "soc_npu, the connection only (pilot
+#                      black-boxed)" and section 17's reproduction list
+#                      had no way to produce that row; this is it:
+#                        SOC_SYN_BLACKBOX=pilot_top flow/syn_soc.sh soc_npu
+#                      The black box is ASSERTED and not assumed -- the
+#                      script fails if the boxed module's own flip-flops
+#                      turn up in the netlist, because `blackbox` on a
+#                      module that has already been elaborated warns and
+#                      exits zero, which is docs/49 section 8.1's shape.
+#   SOC_CHPARAM        a `chparam` argument list applied before
+#                      `hierarchy`, e.g. SOC_CHPARAM="-set HARDEN 0". It
+#                      is what lets a hardened block's own unhardened
+#                      configuration be measured with the identical
+#                      recipe and the identical file list, which is the
+#                      baseline docs/41 section 6.5 insists on: a
+#                      baseline taken against an older file list credits
+#                      the hardening with a refactor's saving.
+#
 # The recipe is deliberately identical to flow/syn_probe.sh's, which is
 # itself syn_ibex.sh's: same liberty, same corner, same abc constraint
 # file, same 20 ns delay target that hw/soc/out/small-pmp was
@@ -178,7 +200,17 @@ read_verilog -I$RTL -I$PILOT_RTL -defer $RTL/soc_bus.v $RTL/soc_apb_bridge.v \
                           $PILOT_RTL/tmr_voter.v \
                           $OUT/soc_fabric_meas.v
 
+${SOC_CHPARAM:+chparam $SOC_CHPARAM $TOP}
 hierarchy -check -top $TOP
+
+# The blackbox comes AFTER hierarchy and the pattern carries a leading
+# star, because \`read_verilog -defer\` stores a module as
+# \`\$abstract\\name\` and \`hierarchy\` then derives it as
+# \`\$paramod\$<hash>\\name\`. A bare \`blackbox name\` matches neither and
+# yosys reports "Selection did not match any module" as a WARNING and
+# exits zero -- which is precisely the shape docs/49 section 8.1 spends
+# four pages on, and it is why the assertion below the run exists.
+$(for m in ${SOC_SYN_BLACKBOX:-}; do echo "blackbox *$m"; done)
 
 synth -flatten -top $TOP
 opt -purge
@@ -211,6 +243,23 @@ tee -o $OUT/area.rpt stat -liberty $SG13G2_TYP
 EOF
 
 "$YOSYS" -l "$OUT/syn.log" -s "$OUT/soc_syn.ys" > /dev/null
+
+# THE BLACK BOX IS ASSERTED AND NOT ASSUMED. `blackbox` on a module that
+# the reader has already elaborated warns and exits zero, and a run that
+# silently boxed nothing would report the WHOLE subsystem's area under
+# the name of the connection alone. hw/soc/flow/fi_npu_coverage.sh makes
+# the same check on its own census for the same reason.
+for m in ${SOC_SYN_BLACKBOX:-}; do
+  # `$paramod$<hash>\pilot_top  u_node0 (` -- the module name is a SUFFIX
+  # of the type yosys writes, so the pattern anchors on the instance name
+  # that follows it and not on a word boundary in front of it.
+  grep -qE "$m[[:space:]]+[A-Za-z_][A-Za-z_0-9]*[[:space:]]*\(" \
+       "$OUT/$TOP.netlist.v" || {
+    echo "== the $m black box did not take: no instance of it survives in" >&2
+    echo "   $OUT/$TOP.netlist.v, so this area is not the boxed scope." >&2
+    exit 1; }
+  echo "== black-boxed $m"
+done
 
 awk -v top="$TOP" -v ge=7.2576 '
   $NF == "cells"                      { cells = $1 }
