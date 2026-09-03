@@ -1,0 +1,782 @@
+{
+ "areas_um2": {
+  "antenna": 3298.5792,
+  "buffer": 142611.84,
+  "clockgate": 27.216,
+  "combinational": 234284.4,
+  "fill": 1400419.2384,
+  "macro": 2246899.8528,
+  "sequential": 151148.592
+ },
+ "class_crosscheck": [
+  {
+   "metrics_json": 6,
+   "quantity": "macros",
+   "script": 6
+  },
+  {
+   "metrics_json": 132118,
+   "quantity": "fill cells",
+   "script": 132118
+  },
+  {
+   "metrics_json": 606,
+   "quantity": "antenna diodes",
+   "script": 606
+  },
+  {
+   "metrics_json": 3085,
+   "quantity": "sequential cells",
+   "script": 3085
+  },
+  {
+   "metrics_json": 1,
+   "quantity": "clock gates",
+   "script": 1
+  },
+  {
+   "metrics_json": 11380,
+   "quantity": "buffers+inverters",
+   "script": 11380
+  },
+  {
+   "metrics_json": 37623,
+   "quantity": "standard cells, no fill",
+   "script": 37623
+  },
+  {
+   "metrics_json": 531371,
+   "quantity": "standard-cell area um2",
+   "script": 531371
+  },
+  {
+   "metrics_json": 2246900,
+   "quantity": "macro area um2",
+   "script": 2246900
+  },
+  {
+   "metrics_json": 169747,
+   "quantity": "total instances",
+   "script": 169747
+  }
+ ],
+ "core_area_um2": 4338910.8,
+ "core_um": [
+  60,
+  45.36,
+  2246.4,
+  2029.86
+ ],
+ "counts": {
+  "antenna": 606,
+  "buffer": 11380,
+  "clockgate": 1,
+  "combinational": 22551,
+  "fill": 132118,
+  "macro": 6,
+  "sequential": 3085
+ },
+ "declared": {
+  "components": 169747,
+  "nets": 37156,
+  "pins": 18
+ },
+ "def_units_per_micron": 1000.0,
+ "die_area_um2": 4786287.408,
+ "die_um": [
+  0.0,
+  0.0,
+  2306.4,
+  2075.22
+ ],
+ "hierarchy": {
+  "anonymous_NNNNN": 27542,
+  "dotted_roots": {
+   "u_ibex": 1,
+   "u_ram": 584,
+   "u_rom": 166
+  },
+  "dotted_rtl_paths": 751,
+  "tool_inserted": {
+   "<other>": 552,
+   "ANTENNA_": 606,
+   "FILLER_": 132118,
+   "clkbuf_": 321,
+   "fanout": 2771,
+   "hold": 3549,
+   "input": 2,
+   "max_cap": 11,
+   "output": 10,
+   "rebuffer": 919,
+   "wire": 595
+  },
+  "total": 169747
+ },
+ "logic_cells": {
+  "area_um2": 528072.048,
+  "bbox_area_um2": 2950459.344,
+  "bbox_um": [
+   60.0,
+   45.36,
+   2246.4,
+   1394.82
+  ],
+  "count": 37017,
+  "density_in_bbox": 0.17897960501434382,
+  "density_in_rows": 0.27335894933685484,
+  "span_um": [
+   2186.4,
+   1349.46
+  ]
+ },
+ "macro_area_um2": 2246899.8528,
+ "macro_fraction_of_die": 0.469445242474248,
+ "macros": [
+  {
+   "area_um2": 491633.616,
+   "h_um": 626.7,
+   "instance": "u_ram.g_ram_2048x64.u_b0",
+   "master": "RM_IHPSG13_1P_2048x64_c2_bm_bist",
+   "w_um": 784.48,
+   "x_um": 120.0,
+   "y_um": 60.48
+  },
+  {
+   "area_um2": 491633.616,
+   "h_um": 626.7,
+   "instance": "u_ram.g_ram_2048x64.u_b1",
+   "master": "RM_IHPSG13_1P_2048x64_c2_bm_bist",
+   "w_um": 784.48,
+   "x_um": 944.64,
+   "y_um": 60.48
+  },
+  {
+   "area_um2": 491633.616,
+   "h_um": 626.7,
+   "instance": "u_ram.g_ram_2048x64.u_b2",
+   "master": "RM_IHPSG13_1P_2048x64_c2_bm_bist",
+   "w_um": 784.48,
+   "x_um": 120.0,
+   "y_um": 1387.26
+  },
+  {
+   "area_um2": 491633.616,
+   "h_um": 626.7,
+   "instance": "u_ram.g_ram_2048x64.u_b3",
+   "master": "RM_IHPSG13_1P_2048x64_c2_bm_bist",
+   "w_um": 784.48,
+   "x_um": 944.64,
+   "y_um": 1387.26
+  },
+  {
+   "area_um2": 140182.6944,
+   "h_um": 336.46,
+   "instance": "u_rom.g_rom_1024x32.u_b0",
+   "master": "RM_IHPSG13_1P_1024x32_c2_bm_bist",
+   "w_um": 416.64,
+   "x_um": 1769.28,
+   "y_um": 60.48
+  },
+  {
+   "area_um2": 140182.6944,
+   "h_um": 336.46,
+   "instance": "u_rom.g_rom_1024x32.u_b1",
+   "master": "RM_IHPSG13_1P_1024x32_c2_bm_bist",
+   "w_um": 416.64,
+   "x_um": 1769.28,
+   "y_um": 1387.26
+  }
+ ],
+ "memory_over_logic": 4.228498411061589,
+ "nonfill_cells": {
+  "area_um2": 531370.6272,
+  "bbox_area_um2": 2950459.344,
+  "bbox_um": [
+   60.0,
+   45.36,
+   2246.4,
+   1394.82
+  ],
+  "count": 37623,
+  "density_in_bbox": 0.1800975933732439,
+  "density_in_rows": 0.27506647418660113,
+  "span_um": [
+   2186.4,
+   1349.46
+  ]
+ },
+ "pdn": {
+  "Metal1": {
+   "nets": [
+    "VGND",
+    "VPWR"
+   ],
+   "segments": 1398,
+   "union_area_um2": 227898.2112,
+   "via_placements": 7415
+  },
+  "Metal2": {
+   "nets": [],
+   "segments": 0,
+   "union_area_um2": 0.0,
+   "via_placements": 7413
+  },
+  "Metal3": {
+   "nets": [],
+   "segments": 0,
+   "union_area_um2": 0.0,
+   "via_placements": 7413
+  },
+  "Metal4": {
+   "nets": [],
+   "segments": 0,
+   "union_area_um2": 0.0,
+   "via_placements": 7447
+  },
+  "Metal5": {
+   "nets": [
+    "VGND",
+    "VPWR"
+   ],
+   "segments": 7413,
+   "union_area_um2": 11696.0582,
+   "via_placements": 7447
+  },
+  "TopMetal1": {
+   "nets": [
+    "VGND",
+    "VPWR"
+   ],
+   "segments": 66,
+   "union_area_um2": 262649.948,
+   "via_placements": 2358
+  },
+  "TopMetal2": {
+   "nets": [
+    "VGND",
+    "VPWR"
+   ],
+   "segments": 53,
+   "union_area_um2": 255190.76,
+   "via_placements": 0
+  }
+ },
+ "pins": [
+  {
+   "dir": "INOUT",
+   "layer": "TopMetal1",
+   "name": "VGND",
+   "x_um": 927.32,
+   "y_um": 1701.0
+  },
+  {
+   "dir": "INOUT",
+   "layer": "TopMetal1",
+   "name": "VPWR",
+   "x_um": 2222.36,
+   "y_um": 1553.58
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "alert_major_bus_o",
+   "x_um": 0.2,
+   "y_um": 1387.26
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "alert_major_internal_o",
+   "x_um": 0.2,
+   "y_um": 1386.42
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "alert_minor_o",
+   "x_um": 0.2,
+   "y_um": 1385.58
+  },
+  {
+   "dir": "INPUT",
+   "layer": "Metal3",
+   "name": "clk_i",
+   "x_um": 2306.2,
+   "y_um": 396.9
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "core_sleep_o",
+   "x_um": 2306.2,
+   "y_um": 1009.26
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal2",
+   "name": "double_fault_seen_o",
+   "x_um": 1409.76,
+   "y_um": 0.2
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "gptimer_irq_o",
+   "x_um": 2306.2,
+   "y_um": 859.74
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "irq_soft_o",
+   "x_um": 2306.2,
+   "y_um": 842.1
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "irq_timer_o",
+   "x_um": 2306.2,
+   "y_um": 842.94
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "nmi_o",
+   "x_um": 2306.2,
+   "y_um": 938.7
+  },
+  {
+   "dir": "INPUT",
+   "layer": "Metal3",
+   "name": "rst_ni",
+   "x_um": 2306.2,
+   "y_um": 701.82
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "uart_irq_o",
+   "x_um": 2306.2,
+   "y_um": 853.86
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "uart_tx_o",
+   "x_um": 2306.2,
+   "y_um": 721.98
+  },
+  {
+   "dir": "INPUT",
+   "layer": "Metal3",
+   "name": "wdog_dis_i",
+   "x_um": 2306.2,
+   "y_um": 807.66
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "wdog_no",
+   "x_um": 2306.2,
+   "y_um": 926.94
+  },
+  {
+   "dir": "OUTPUT",
+   "layer": "Metal3",
+   "name": "wdog_rst_o",
+   "x_um": 2306.2,
+   "y_um": 874.86
+  }
+ ],
+ "regions": {
+  "above_the_channel": {
+   "area_um2": 121.5648,
+   "count": 13,
+   "flops": 0
+  },
+  "below_the_channel": {
+   "area_um2": 13040.0928,
+   "count": 1094,
+   "flops": 64
+  },
+  "channel": {
+   "area_um2": 518208.9696,
+   "count": 36516,
+   "density": 0.34837970727756423,
+   "flops": 3021,
+   "height_um": 700.08,
+   "placeable_um2": 1487483.2224,
+   "share_of_cells": 0.970576509050315,
+   "y_um": [
+    687.18,
+    1387.26
+   ]
+  },
+  "right_of_the_macros": {
+   "area_um2": 14743.8144,
+   "count": 963,
+   "width_um": 60.48,
+   "x_from_um": 2185.92
+  }
+ },
+ "rows": {
+  "bbox_um": [
+   60.0,
+   45.36,
+   2246.4,
+   2029.86
+  ],
+  "count": 1403,
+  "union_area_um2": 1931789.8656
+ },
+ "site_um": [
+  0.48,
+  3.78
+ ],
+ "source_def": "/home/hasanmelih/Documents/neuromorphic-space-soc/hw/soc/pnr/runs/full3/final/def/soc_top.def",
+ "synthesised_cells": {
+  "area_um2": 402210.7488,
+  "bbox_area_um2": 1474562.8800000001,
+  "bbox_um": [
+   388.8,
+   582.12,
+   2246.4,
+   1375.92
+  ],
+  "count": 27542,
+  "density_in_bbox": 0.27276608834748367,
+  "density_in_rows": 0.20820626299076078,
+  "span_um": [
+   1857.6000000000001,
+   793.8000000000001
+  ]
+ },
+ "transistors": {
+  "by_class": {
+   "antenna": 0,
+   "buffer": 57544,
+   "clockgate": 20,
+   "combinational": 152738,
+   "fill": 219162,
+   "macro": 3694900,
+   "sequential": 98720
+  },
+  "cdl_files_read": 28,
+  "masters_without_a_cdl_subcircuit": [],
+  "per_master": {
+   "RM_IHPSG13_1P_1024x32_c2_bm_bist": {
+    "instances": 2,
+    "transistors": 425100,
+    "transistors_each": 212550
+   },
+   "RM_IHPSG13_1P_2048x64_c2_bm_bist": {
+    "instances": 4,
+    "transistors": 3269800,
+    "transistors_each": 817450
+   },
+   "sg13g2_a21o_1": {
+    "instances": 356,
+    "transistors": 2848,
+    "transistors_each": 8
+   },
+   "sg13g2_a21o_2": {
+    "instances": 4,
+    "transistors": 32,
+    "transistors_each": 8
+   },
+   "sg13g2_a21oi_1": {
+    "instances": 1937,
+    "transistors": 11622,
+    "transistors_each": 6
+   },
+   "sg13g2_a21oi_2": {
+    "instances": 79,
+    "transistors": 474,
+    "transistors_each": 6
+   },
+   "sg13g2_a221oi_1": {
+    "instances": 761,
+    "transistors": 7610,
+    "transistors_each": 10
+   },
+   "sg13g2_a22oi_1": {
+    "instances": 2502,
+    "transistors": 20016,
+    "transistors_each": 8
+   },
+   "sg13g2_and2_1": {
+    "instances": 439,
+    "transistors": 2634,
+    "transistors_each": 6
+   },
+   "sg13g2_and2_2": {
+    "instances": 15,
+    "transistors": 90,
+    "transistors_each": 6
+   },
+   "sg13g2_and3_1": {
+    "instances": 136,
+    "transistors": 1088,
+    "transistors_each": 8
+   },
+   "sg13g2_and3_2": {
+    "instances": 3,
+    "transistors": 24,
+    "transistors_each": 8
+   },
+   "sg13g2_and4_1": {
+    "instances": 199,
+    "transistors": 1990,
+    "transistors_each": 10
+   },
+   "sg13g2_and4_2": {
+    "instances": 6,
+    "transistors": 60,
+    "transistors_each": 10
+   },
+   "sg13g2_antennanp": {
+    "instances": 606,
+    "transistors": 0,
+    "transistors_each": 0
+   },
+   "sg13g2_buf_1": {
+    "instances": 4437,
+    "transistors": 17748,
+    "transistors_each": 4
+   },
+   "sg13g2_buf_16": {
+    "instances": 220,
+    "transistors": 880,
+    "transistors_each": 4
+   },
+   "sg13g2_buf_2": {
+    "instances": 396,
+    "transistors": 1584,
+    "transistors_each": 4
+   },
+   "sg13g2_buf_4": {
+    "instances": 840,
+    "transistors": 3360,
+    "transistors_each": 4
+   },
+   "sg13g2_buf_8": {
+    "instances": 858,
+    "transistors": 3432,
+    "transistors_each": 4
+   },
+   "sg13g2_decap_4": {
+    "instances": 9719,
+    "transistors": 19438,
+    "transistors_each": 2
+   },
+   "sg13g2_decap_8": {
+    "instances": 99862,
+    "transistors": 199724,
+    "transistors_each": 2
+   },
+   "sg13g2_dfrbpq_1": {
+    "instances": 3075,
+    "transistors": 98400,
+    "transistors_each": 32
+   },
+   "sg13g2_dfrbpq_2": {
+    "instances": 10,
+    "transistors": 320,
+    "transistors_each": 32
+   },
+   "sg13g2_dlygate4sd3_1": {
+    "instances": 3547,
+    "transistors": 28376,
+    "transistors_each": 8
+   },
+   "sg13g2_fill_1": {
+    "instances": 11148,
+    "transistors": 0,
+    "transistors_each": 0
+   },
+   "sg13g2_fill_2": {
+    "instances": 11389,
+    "transistors": 0,
+    "transistors_each": 0
+   },
+   "sg13g2_inv_1": {
+    "instances": 965,
+    "transistors": 1930,
+    "transistors_each": 2
+   },
+   "sg13g2_inv_16": {
+    "instances": 2,
+    "transistors": 4,
+    "transistors_each": 2
+   },
+   "sg13g2_inv_2": {
+    "instances": 66,
+    "transistors": 132,
+    "transistors_each": 2
+   },
+   "sg13g2_inv_4": {
+    "instances": 28,
+    "transistors": 56,
+    "transistors_each": 2
+   },
+   "sg13g2_inv_8": {
+    "instances": 21,
+    "transistors": 42,
+    "transistors_each": 2
+   },
+   "sg13g2_lgcp_1": {
+    "instances": 1,
+    "transistors": 20,
+    "transistors_each": 20
+   },
+   "sg13g2_mux2_1": {
+    "instances": 1483,
+    "transistors": 17796,
+    "transistors_each": 12
+   },
+   "sg13g2_mux2_2": {
+    "instances": 17,
+    "transistors": 204,
+    "transistors_each": 12
+   },
+   "sg13g2_mux4_1": {
+    "instances": 2,
+    "transistors": 52,
+    "transistors_each": 26
+   },
+   "sg13g2_nand2_1": {
+    "instances": 2692,
+    "transistors": 10768,
+    "transistors_each": 4
+   },
+   "sg13g2_nand2_2": {
+    "instances": 34,
+    "transistors": 136,
+    "transistors_each": 4
+   },
+   "sg13g2_nand2b_1": {
+    "instances": 466,
+    "transistors": 2796,
+    "transistors_each": 6
+   },
+   "sg13g2_nand2b_2": {
+    "instances": 11,
+    "transistors": 66,
+    "transistors_each": 6
+   },
+   "sg13g2_nand3_1": {
+    "instances": 639,
+    "transistors": 3834,
+    "transistors_each": 6
+   },
+   "sg13g2_nand3b_1": {
+    "instances": 49,
+    "transistors": 392,
+    "transistors_each": 8
+   },
+   "sg13g2_nand4_1": {
+    "instances": 1147,
+    "transistors": 9176,
+    "transistors_each": 8
+   },
+   "sg13g2_nor2_1": {
+    "instances": 2297,
+    "transistors": 9188,
+    "transistors_each": 4
+   },
+   "sg13g2_nor2_2": {
+    "instances": 52,
+    "transistors": 208,
+    "transistors_each": 4
+   },
+   "sg13g2_nor2b_1": {
+    "instances": 328,
+    "transistors": 1968,
+    "transistors_each": 6
+   },
+   "sg13g2_nor2b_2": {
+    "instances": 16,
+    "transistors": 96,
+    "transistors_each": 6
+   },
+   "sg13g2_nor3_1": {
+    "instances": 543,
+    "transistors": 3258,
+    "transistors_each": 6
+   },
+   "sg13g2_nor3_2": {
+    "instances": 80,
+    "transistors": 480,
+    "transistors_each": 6
+   },
+   "sg13g2_nor4_1": {
+    "instances": 197,
+    "transistors": 1576,
+    "transistors_each": 8
+   },
+   "sg13g2_nor4_2": {
+    "instances": 40,
+    "transistors": 320,
+    "transistors_each": 8
+   },
+   "sg13g2_o21ai_1": {
+    "instances": 2713,
+    "transistors": 16278,
+    "transistors_each": 6
+   },
+   "sg13g2_or2_1": {
+    "instances": 251,
+    "transistors": 1506,
+    "transistors_each": 6
+   },
+   "sg13g2_or2_2": {
+    "instances": 5,
+    "transistors": 30,
+    "transistors_each": 6
+   },
+   "sg13g2_or3_1": {
+    "instances": 91,
+    "transistors": 728,
+    "transistors_each": 8
+   },
+   "sg13g2_or3_2": {
+    "instances": 12,
+    "transistors": 96,
+    "transistors_each": 8
+   },
+   "sg13g2_or4_1": {
+    "instances": 24,
+    "transistors": 240,
+    "transistors_each": 10
+   },
+   "sg13g2_or4_2": {
+    "instances": 15,
+    "transistors": 150,
+    "transistors_each": 10
+   },
+   "sg13g2_tiehi": {
+    "instances": 291,
+    "transistors": 1164,
+    "transistors_each": 4
+   },
+   "sg13g2_tielo": {
+    "instances": 741,
+    "transistors": 2964,
+    "transistors_each": 4
+   },
+   "sg13g2_xnor2_1": {
+    "instances": 1267,
+    "transistors": 12670,
+    "transistors_each": 10
+   },
+   "sg13g2_xor2_1": {
+    "instances": 611,
+    "transistors": 6110,
+    "transistors_each": 10
+   }
+  },
+  "subcircuits": 2319,
+  "total": 4223084
+ }
+}
