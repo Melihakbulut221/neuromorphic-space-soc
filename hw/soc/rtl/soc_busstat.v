@@ -39,7 +39,7 @@
 // `tmr_ev_i` and is counted beside the register file's.
 //
 // =====================================================================
-// THE FOUR COUNTERS, AND WHY THEY ARE FOUR AND NOT ONE
+// THE COUNTERS, AND WHY THEY ARE EIGHT AND NOT ONE
 // =====================================================================
 //
 // pilot_top.v aggregates its LIF core's corrections into the same
@@ -113,7 +113,30 @@
 //               records costing it -- "a host reading CNT_SEC cannot
 //               tell a synapse array correction from a load-path one".
 //
-// All four SATURATE. A counter that wraps is indistinguishable from a
+// and one added by docs/58, which is the time base's:
+//
+//   CNT_MTECC   Cycles in which the CLINT's stored mtime codeword was
+//               not a codeword (soc_clint.v H6). docs/41 section 7.4
+//               ranked mtime above everything the watchdog wave left
+//               unprotected -- "an upset displaces it FOR EVER" -- and
+//               this is the counter that says how often the code that
+//               now protects it has had to act.
+//
+//               IT CONFLATES A CORRECTION WITH AN UNCORRECTABLE, which
+//               is the exact aggregation the paragraph above criticises
+//               pilot_top.v for, and it is done knowingly. There is one
+//               bit left below the interrupt bit, S_MTECC's comment
+//               says why a ninth source is not free, and the class the
+//               conflation hides is empty under this repository's fault
+//               model: mtime's codeword is re-encoded every clock, so
+//               an uncorrectable needs TWO upsets inside one 20 ns tick
+//               in one 72-bit word. The cost is named rather than
+//               glossed -- an operator watching this counter move
+//               cannot tell a healed clock from a wrong one, and the
+//               only thing that can is software comparing mtime against
+//               the core's own mcycle. docs/58 sections 5 and 9.
+//
+// All five SATURATE. A counter that wraps is indistinguishable from a
 // counter that has barely moved, which for a radiation counter is the
 // one failure that cannot be detected downstream. pilot_top.v saturates
 // for the same reason.
@@ -122,7 +145,7 @@
 // TWO RESET DOMAINS, AND THE BRICK THAT MADE THEM TWO
 // =====================================================================
 //
-// The RECORD -- the four counters and the four sticky bits -- is in the
+// The RECORD -- the eight counters and the eight sticky bits -- is in the
 // POWER-ON domain, by docs/40's W4 argument applied to telemetry: a
 // watchdog stage-2 reset must not erase the evidence of what caused it.
 // The most valuable reading of these counters is the one taken after
@@ -213,6 +236,12 @@ module soc_busstat #(
     input  wire        npu_cor_i,   // a queue pointer vote corrected
     input  wire        npu_det_i,   // a queue entry was discarded
     input  wire        npu_tmr_i,   // the NPU cause bank's voter masked
+    // The CLINT's, from soc_clint.v H6 (docs/58). One cycle per event by
+    // construction at the source for a reason no other line here has:
+    // mtime's codeword is re-encoded on EVERY edge, so a syndrome that is
+    // nonzero this cycle is zero the next whether it was correctable or
+    // not. THIS IS THE LAST SOURCE THAT FITS -- see S_MTECC below.
+    input  wire        mt_ecc_i,
 
     // Level, to fast interrupt line 10 (IRQ 22 in the frozen map).
     output wire        irq_o
@@ -231,10 +260,12 @@ module soc_busstat #(
   localparam [11:0] REG_NPUCOR = 12'h01C;
   localparam [11:0] REG_NPUDET = 12'h020;
   localparam [11:0] REG_NPUTMR = 12'h024;
+  // docs/58. Same rule: nothing below it moves.
+  localparam [11:0] REG_MTECC  = 12'h028;
 
   // Bit index of each source, shared by STATUS, IRQEN and CLR so that
   // the three cannot disagree about which bit is which. sw/tests and
-  // hw/soc/tb/sw/soc_busstat.h carry the same four names.
+  // hw/soc/tb/sw/soc_timers.h carry the same names.
   localparam integer S_RFSEC  = 0;
   localparam integer S_RFRD   = 1;
   localparam integer S_RFDED  = 2;
@@ -242,7 +273,16 @@ module soc_busstat #(
   localparam integer S_NPUCOR = 4;
   localparam integer S_NPUDET = 5;
   localparam integer S_NPUTMR = 6;
-  localparam integer NSRC     = 7;
+  // docs/58 H6. THE LAST BIT BELOW THE INTERRUPT, and that is a hard
+  // constraint and not a coincidence: the read multiplexer below places
+  // irq_o at bit 8 and the comment there forbids moving it, so the
+  // sticky field could grow to bit 7 and no further. A ninth source
+  // either moves an interrupt bit that is in a frozen header and in
+  // every program written against this block, or leaves a hole at bit 8
+  // and puts the sticky field on both sides of it. Neither is free, and
+  // whoever needs a ninth should read docs/58 section 9 before choosing.
+  localparam integer S_MTECC  = 7;
+  localparam integer NSRC     = 8;
 
   localparam [CNT_W-1:0] CNT_MAX = {CNT_W{1'b1}};
 
@@ -261,13 +301,14 @@ module soc_busstat #(
   assign ev[S_NPUCOR] = npu_cor_i;
   assign ev[S_NPUDET] = npu_det_i;
   assign ev[S_NPUTMR] = npu_tmr_i;
+  assign ev[S_MTECC]  = mt_ecc_i;
 
   // ---- the clear strobes --------------------------------------------
   wire [NSRC-1:0] clr;
   assign clr = (wr && (paddr_i == REG_CLR)) ? pwdata_i[NSRC-1:0]
                                             : {NSRC{1'b0}};
 
-  // ---- the record: four counters and four stickies, POR domain ------
+  // ---- the record: one counter and one sticky per source, POR domain
   //
   // One `always` block per source, each driving its own `reg`, gathered
   // into the vectors below by continuous assignment. Writing different
@@ -287,7 +328,7 @@ module soc_busstat #(
       // not a style choice. The first version of this block computed
       // `{1'b0, cnt_q} + {{CNT_W{1'b0}}, ev[gi]}` and saturated on the
       // carry, which is arithmetically identical and synthesises the
-      // same -- and it made two of the four counters read X for the
+      // same -- and it made two of the counters read X for the
       // whole of every SoC simulation.
       //
       // The reason is upstream's, not this block's. `rf_ecc_err_i[1]`
@@ -352,12 +393,13 @@ module soc_busstat #(
     case (paddr_i)
       // Bit 8 is the interrupt and stays at bit 8: it is in the frozen
       // header and in every program written against this block, so the
-      // sticky field grows UP TO bit 6 and the gap between them shrinks
-      // rather than the interrupt moving.
+      // sticky field grew UP TO bit 7 and the gap between them closed
+      // rather than the interrupt moving. docs/58 took the last bit of
+      // that gap; the field is now full and S_MTECC's comment says what
+      // a ninth source costs.
       REG_STATUS: prdata_o = {23'h0,
                               irq_o,                        // 8
-                              1'h0,                         // 7
-                              sticky};                      // 6..0
+                              sticky};                      // 7..0
       REG_IRQEN:  prdata_o = {{(32-NSRC){1'b0}}, irqen};
       REG_RFSEC:  prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_RFSEC]};
       REG_RFRD:   prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_RFRD]};
@@ -366,6 +408,7 @@ module soc_busstat #(
       REG_NPUCOR: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_NPUCOR]};
       REG_NPUDET: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_NPUDET]};
       REG_NPUTMR: prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_NPUTMR]};
+      REG_MTECC:  prdata_o = {{(32-CNT_W){1'b0}}, cnt[S_MTECC]};
       // CLR is write-only. It reads zero rather than reading back what
       // was last written, because a clear strobe has no state and a
       // register that reads back a strobe invites software to treat it

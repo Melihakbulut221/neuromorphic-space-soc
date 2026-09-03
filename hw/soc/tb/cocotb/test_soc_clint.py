@@ -540,3 +540,225 @@ async def test_no_traffic_and_no_response_in_reset(dut):
         assert val(dut.irq_software_o) == 0, (
             "cycle {}: a write during reset reached msip".format(cycle))
     dut.req_i.value = 0
+
+
+# ---------------------------------------------------------------------------
+# H6, docs/58: mtime is a (72,64) SECDED codeword
+#
+# These are DIRECTED tests and not a campaign. The campaign is
+# test_soc_clint_fi.py, which draws 342 injections and reports the rates;
+# what these five do is pin the individual claims a rate cannot express,
+# including the one the campaign cannot reach at all -- the double error,
+# which needs two upsets inside one tick.
+#
+# Every one of them reaches into the hierarchy to DEPOSIT and observes
+# only at the ports, which is docs/16 section 1.2's rule.
+# ---------------------------------------------------------------------------
+
+# The eight rows of secded_enc.v's H matrix, written out again rather
+# than read off the instance. A check that read the encoder's own output
+# would be comparing the design against itself.
+H_ROWS = (0x1F04225844B12CB7, 0x2F0844A88952555B,
+          0x4F10893112649A6D, 0x8F2111C22388E38E,
+          0xF1421E043C0F03F0, 0xF283E007C00FFC00,
+          0xF4FC0007FFF00000, 0xF8FFFFF800000000)
+
+
+def _encode(data):
+    chk = 0
+    for i, row in enumerate(H_ROWS):
+        chk |= (bin(data & row).count("1") & 1) << i
+    return chk
+
+
+def _hardened(dut):
+    return hasattr(dut, "mtime_chk_q")
+
+
+T_INJECT = 4          # inside the cycle, after the drive at T_DRIVE and
+                      # before the sample at T_SAMPLE
+
+
+async def _deposit(dut, sigs):
+    """XOR a mask into one or more registers, mid-cycle.
+
+    THE PHASE MATTERS AND GETTING IT WRONG IS SILENT. The deposit has to
+    land after the stimulus has been driven and before the sampling
+    point, so that the corrupt word is what the design holds for the
+    whole of the cycle that is then observed. Written as `Timer(1)` from
+    the T_SAMPLE point where a transaction returns, the deposit lands at
+    9 ns of a 10 ns cycle -- one nanosecond before the edge that
+    immediately re-encodes it -- so the correction happened, the pin
+    pulsed between two sampling points, and three tests reported that a
+    corrected upset had been corrected silently. It had not; nothing was
+    looking when it was announced.
+
+    Call from the T_SAMPLE point of a cycle. Returns at the T_SAMPLE
+    point of the NEXT cycle, with the deposit in place and observable.
+    """
+    await RisingEdge(dut.clk_i)
+    await Timer(T_INJECT, unit="ns")
+    for sig, mask in sigs:
+        sig.value = val(sig) ^ mask
+    await Timer(T_SAMPLE - T_INJECT, unit="ns")
+
+
+@cocotb.test()
+async def test_the_stored_word_is_always_a_codeword(dut):
+    """H6 E1, as a measurement rather than as an induction.
+
+    The check bits are recomputed here from the eight H rows and
+    compared against what the design stored, on every cycle of a run
+    that ticks, that is written, and that is written with byte lanes.
+    This is the self-scrub: there is no scrubber and no period, because
+    the counter rewrites its own codeword on every edge.
+    """
+    c = await setup(dut)
+    if not _hardened(dut):
+        return
+    for _ in range(20):
+        await next_cycle(dut)
+        assert val(dut.mtime_chk_q) == _encode(val(dut.mtime_q))
+    await c.write(MTIMEH, 0x0003_5A6C)
+    await c.write(MTIMEL, 0x39F1_84B2, be=0x3)
+    for _ in range(20):
+        await next_cycle(dut)
+        assert val(dut.mtime_chk_q) == _encode(val(dut.mtime_q)), (
+            "0x{:016x} carries check bits 0x{:02x}, not 0x{:02x}".format(
+                val(dut.mtime_q), val(dut.mtime_chk_q),
+                _encode(val(dut.mtime_q))))
+
+
+@cocotb.test()
+async def test_a_single_upset_in_mtime_never_reaches_a_port(dut):
+    """H6's whole claim, on every one of the 64 data bits.
+
+    Not a sample: every bit, because the argument docs/41 section 7.4
+    makes is about the HIGH bits and a test that flipped bit 3 would be
+    evidence about bit 3. After each deposit the very next read of mtime
+    is the value the arithmetic predicts -- mtime advances one per
+    clock -- and mt_ecc_o pulsed for exactly one cycle.
+    """
+    c = await setup(dut)
+    if not _hardened(dut):
+        return
+    await c.write(MTIMEH, 0x0003_5A6C)
+    await c.write(MTIMEL, 0x39F1_84B2)
+    for bit in range(64):
+        before = val(dut.mtime_q)
+        await _deposit(dut, [(dut.mtime_q, 1 << bit)])
+        # The pin is high for the one cycle the corrupt word is stored,
+        # and the stored word IS corrupt while it is.
+        assert val(dut.mt_ecc_o) == 1, (
+            "bit {} was corrected silently".format(bit))
+        assert val(dut.mtime_q) == (before + 1) ^ (1 << bit), bit
+        await next_cycle(dut)
+        assert val(dut.mt_ecc_o) == 0, (
+            "bit {}: mt_ecc_o did not fall, so the codeword did not "
+            "heal in one cycle".format(bit))
+        # And the counter carried on from the RIGHT value: two cycles
+        # elapsed between `before` and here.
+        assert val(dut.mtime_q) == before + 2, (
+            "bit {}: mtime is 0x{:016x}, expected 0x{:016x}".format(
+                bit, val(dut.mtime_q), before + 2))
+
+
+@cocotb.test()
+async def test_a_single_upset_in_the_check_bits_is_corrected_too(dut):
+    """The eight flip-flops H6 ADDED are eight an upset can land in.
+
+    docs/43 made its check bits a stratum of their own for this reason.
+    A codec that repaired the data and not its own check field would
+    leave a word that is permanently one bit from uncorrectable.
+    """
+    c = await setup(dut)
+    if not _hardened(dut):
+        return
+    await c.write(MTIMEH, 0x0003_5A6C)
+    await c.write(MTIMEL, 0x39F1_84B2)
+    for bit in range(8):
+        before = val(dut.mtime_q)
+        await _deposit(dut, [(dut.mtime_chk_q, 1 << bit)])
+        assert val(dut.mt_ecc_o) == 1, bit
+        # The DATA was never wrong here, so the counter must not have
+        # moved off its own value either.
+        assert val(dut.mtime_q) == before + 1, bit
+        await next_cycle(dut)
+        assert val(dut.mt_ecc_o) == 0, bit
+        assert val(dut.mtime_chk_q) == _encode(val(dut.mtime_q)), bit
+        assert val(dut.mtime_q) == before + 2, bit
+
+
+@cocotb.test()
+async def test_a_double_upset_is_detected_and_never_miscorrected(dut):
+    """The class the campaign cannot reach, and the reason SECDED and
+    not a plain Hamming code.
+
+    Two upsets in one tick is outside this repository's single-upset
+    fault model, so no draw in test_soc_clint_fi.py can produce one.
+    What matters is not that the block repairs it -- it cannot, the
+    information is gone -- but that it does not INVENT a third wrong
+    value by correcting a bit neither upset touched. Every column of the
+    H matrix has odd weight, so a two-bit error always produces a
+    nonzero EVEN-parity syndrome, which can never equal a column.
+
+    The measurement: over 64 disjoint pairs, the data field is passed
+    through untouched and the event is announced.
+    """
+    c = await setup(dut)
+    if not _hardened(dut):
+        return
+    await c.write(MTIMEH, 0x0003_5A6C)
+    await c.write(MTIMEL, 0x39F1_84B2)
+    for a in range(0, 64, 2):
+        b = a + 1
+        before = val(dut.mtime_q)
+        mask = (1 << a) | (1 << b)
+        corrupt = (before + 1) ^ mask
+        await _deposit(dut, [(dut.mtime_q, mask)])
+        assert val(dut.mt_ecc_o) == 1, (
+            "bits {},{}: a double error was not announced".format(a, b))
+        # Passed through, NOT miscorrected: the counter continues from
+        # the corrupt value and from no other. A miscorrection would
+        # show up on the next cycle as a THIRD value, which is the
+        # failure the odd column weights exist to prevent.
+        await next_cycle(dut)
+        assert val(dut.mtime_q) == corrupt + 1, (
+            "bits {},{}: the decoder produced 0x{:016x}, which is "
+            "neither the stored word nor the true one".format(
+                a, b, val(dut.mtime_q) - 1))
+        # And it heals in one cycle, into a codeword over the WRONG
+        # value. That is the honest end of this story: the clock is now
+        # wrong for ever and the block has said so exactly once.
+        assert val(dut.mt_ecc_o) == 0, (a, b)
+        assert val(dut.mtime_chk_q) == _encode(val(dut.mtime_q)), (a, b)
+        # Put the two bits back, so the next pair starts from a counter
+        # that is on the value the arithmetic says it should be.
+        await _deposit(dut, [(dut.mtime_q, mask)])
+        await next_cycle(dut)
+
+
+@cocotb.test()
+async def test_nothing_is_reported_when_nothing_is_wrong(dut):
+    """mt_ecc_o is a fault line into a saturating counter in
+    soc_busstat.v. A line that pulses on healthy traffic turns the
+    mission's upset-rate telemetry into noise, so this drives every
+    access shape the block has -- ticks, whole-word writes, byte-lane
+    writes, reads, and an unmapped offset -- and asserts silence.
+    """
+    c = await setup(dut)
+    if not _hardened(dut):
+        return
+    rng = random.Random(58)
+    for _ in range(150):
+        off = rng.choice(IMPLEMENTED)
+        if rng.randrange(2):
+            await c.write_raw(off, rng.randrange(1 << 32),
+                              be=rng.randrange(1, 16))
+        else:
+            await c.read_raw(off)
+        assert val(dut.mt_ecc_o) == 0, (
+            "mt_ecc_o pulsed on healthy traffic at offset 0x{:04x}".format(
+                off))
+    await c.read_raw(0x0100)
+    assert val(dut.mt_ecc_o) == 0

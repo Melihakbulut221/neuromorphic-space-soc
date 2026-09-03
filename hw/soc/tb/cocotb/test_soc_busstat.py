@@ -69,11 +69,18 @@ CLR = 0x018
 CNT_NPUCOR = 0x01C
 CNT_NPUDET = 0x020
 CNT_NPUTMR = 0x024
+# docs/58's one, the CLINT's mtime codeword. Same rule again: nothing
+# below it moves.
+CNT_MTECC = 0x028
 
 # Bit index of each source, shared by STATUS, IRQEN and CLR.
 S_RFSEC, S_RFRD, S_RFDED, S_TMRERR = 0, 1, 2, 3
 S_NPUCOR, S_NPUDET, S_NPUTMR = 4, 5, 6
-NSRC = 7
+# docs/58. THE LAST BIT BELOW THE INTERRUPT: STATUS puts irq_o at bit 8
+# and soc_busstat.v's read multiplexer forbids moving it, so the sticky
+# field is now full and a ninth source cannot be added below it.
+S_MTECC = 7
+NSRC = 8
 STATUS_IRQ = 8
 
 CNT_MAX = 0xFFFF          # CNT_W = 16, saturating
@@ -108,6 +115,7 @@ async def setup(dut):
     dut.pwdata_i.value = 0
     dut.rf_ecc_err_i.value = 0
     dut.tmr_ev_i.value = 0
+    dut.mt_ecc_i.value = 0
     dut.npu_cor_i.value = 0
     dut.npu_det_i.value = 0
     dut.npu_tmr_i.value = 0
@@ -181,6 +189,14 @@ def tmr(dut):
     return setter
 
 
+def mtecc(dut):
+    """docs/58's line: the CLINT's stored mtime codeword was not a
+    codeword this cycle."""
+    def setter(v):
+        dut.mt_ecc_i.value = v
+    return setter
+
+
 def npu(dut, which):
     """One of docs/55's three NPU fault lines, by name.
 
@@ -203,16 +219,17 @@ async def test_out_of_reset_nothing_is_reported_and_nothing_is_enabled(dut):
     powers on asserting a fault interrupt cannot boot.
     """
     await setup(dut)
-    for reg in (STATUS, IRQEN, CNT_RFSEC, CNT_RFRD, CNT_RFDED, CNT_TMRERR):
+    for reg in (STATUS, IRQEN, CNT_RFSEC, CNT_RFRD, CNT_RFDED, CNT_TMRERR,
+                CNT_NPUCOR, CNT_NPUDET, CNT_NPUTMR, CNT_MTECC):
         assert await apb_read(dut, reg) == 0, hex(reg)
     assert val(dut.irq_o) == 0
 
 
 @cocotb.test()
 async def test_each_source_counts_its_own_events_and_no_others(dut):
-    """Seven counters, seven sources, no cross-talk.
+    """Eight counters, eight sources, no cross-talk.
 
-    This is the reason the block has seven counters instead of one:
+    This is the reason the block has eight counters instead of one:
     pilot_top.v aggregates its two ECC domains into one CNT_SEC and says
     in a comment what that costs -- "a host reading CNT_SEC cannot tell a
     synapse array correction from a load-path one".
@@ -228,7 +245,8 @@ async def test_each_source_counts_its_own_events_and_no_others(dut):
             (S_TMRERR, tmr(dut), CNT_TMRERR, 7),
             (S_NPUCOR, npu(dut, "cor"), CNT_NPUCOR, 11),
             (S_NPUDET, npu(dut, "det"), CNT_NPUDET, 4),
-            (S_NPUTMR, npu(dut, "tmr"), CNT_NPUTMR, 9)]
+            (S_NPUTMR, npu(dut, "tmr"), CNT_NPUTMR, 9),
+            (S_MTECC, mtecc(dut), CNT_MTECC, 13)]
     for _, setter, _, n in plan:
         await pulse(dut, setter, n)
     for src, _, reg, n in plan:

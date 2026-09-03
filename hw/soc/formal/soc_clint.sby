@@ -12,6 +12,20 @@
 #
 # TICK_DIV is 1, which is how soc_top.v instantiates it. Nothing here
 # proves anything about a divided time base.
+#
+# H6 (docs/58) makes mtime the data field of a (72,64) SECDED codeword,
+# so the two codec modules are read here. They come from hw/rtl, which
+# docs/34 freezes by blob hash; they are READ and never modified, exactly
+# as ibex_regfile_secded.v already reads these two and as soc_wdog reads
+# tmr_voter.v. The CODE is not re-proved here -- formal/secded.sby does
+# that once, for every consumer. What is proved here is that this block
+# keeps the stored word a codeword and that the codec is invisible when
+# it is (E1, E2).
+#
+# SOC_CLINT_HARDENED is defined so that E1 and E2 elaborate: they read
+# mtime_chk_q, which exists only at HARDEN = 1, and a property file that
+# named it unconditionally could not elaborate the unhardened
+# configuration at all.
 
 [tasks]
 bmc
@@ -30,9 +44,13 @@ cover: depth 20
 smtbmc yices
 
 [script]
-read_verilog -formal soc_clint.v
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
+read_verilog -formal -DSOC_CLINT_HARDENED soc_clint.v
 prep -top soc_clint
 
 [files]
 ../rtl/soc_clint.v
+../../rtl/secded_enc.v
+../../rtl/secded_dec.v
 soc_clint_props.v

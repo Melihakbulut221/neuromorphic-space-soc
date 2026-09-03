@@ -40,7 +40,17 @@ RTL = $(PWD)/../../rtl
 # (make -f Makefile.soc_clint SOC_CLINT_SRC=/path/to/mutant.v SIM_BUILD=... ).
 SOC_CLINT_SRC ?= $(RTL)/soc_clint.v
 
-VERILOG_SOURCES = $(SOC_CLINT_SRC)
+# hw/rtl/secded_enc.v and hw/rtl/secded_dec.v are READ from the pilot's
+# directory and never modified -- docs/34 pins hw/rtl by git blob hash --
+# exactly as Makefile.ibex_regfile_secded already reads them and as
+# Makefile.soc_wdog reads tmr_voter.v. soc_clint.v instantiates them at
+# HARDEN = 1 (docs/58 H6) and does not at HARDEN = 0; they are listed
+# unconditionally, because a source list that moves with a parameter is
+# a source list two measurements cannot share.
+PILOT_RTL = $(PWD)/../../../rtl
+
+VERILOG_SOURCES = $(SOC_CLINT_SRC) \
+                  $(PILOT_RTL)/secded_enc.v $(PILOT_RTL)/secded_dec.v
 TOPLEVEL = soc_clint
 MODULE = test_soc_clint
 

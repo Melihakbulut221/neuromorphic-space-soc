@@ -657,11 +657,19 @@ def test_the_fault_lines_are_connected_in_soc_top():
                 ".cfg_tmr_o (npu_tmr_ev)",
                 ".npu_cor_i (npu_cor_ev)",
                 ".npu_det_i (npu_det_ev)",
-                ".npu_tmr_i (npu_tmr_ev)"):
+                ".npu_tmr_i (npu_tmr_ev)",
+                # docs/58. The CLINT's, and the same failure is
+                # available in the same form: soc_clint.v could compute
+                # the syndrome, correct the counter and drive the pin
+                # into nothing, and every test in this repository
+                # outside the campaign would still pass.
+                ".mt_ecc_o (clint_mt_ecc_ev)",
+                ".mt_ecc_i (clint_mt_ecc_ev)"):
         assert pat in top, (
             "soc_top.v no longer connects a fault line: {}".format(pat))
     for tied in ("rf_ecc_err_i (3'b0", "tmr_ev_i (1'b0",
-                 "npu_cor_i (1'b0", "npu_det_i (1'b0", "npu_tmr_i (1'b0"):
+                 "npu_cor_i (1'b0", "npu_det_i (1'b0", "npu_tmr_i (1'b0",
+                 "mt_ecc_i (1'b0"):
         assert tied not in top, \
             "a fault line in soc_top.v has been tied off: {}".format(tied)
 
@@ -1802,3 +1810,295 @@ def test_the_pnr_flow_refuses_a_config_outside_its_own_directory():
         "hw/soc/flow/pnr_soc_top.sh accepted a PNR_CONFIG outside "
         "hw/soc/pnr/")
     assert "refusing" in (r.stderr + r.stdout)
+
+
+# =====================================================================
+# 8. the CLINT's time base, docs/58 H6
+#
+# A different shape of guard from every one above it, and the difference
+# is worth stating rather than glossing. Sections 1 to 7 guard
+# DELIBERATELY REDUNDANT logic -- three banks that store the same word,
+# which is exactly what a synthesiser is built to collapse into one. H6
+# is not redundant: mtime's eight check bits are the input to a decoder
+# whose output feeds real flip-flops, so no structural pass can merge
+# them away. What CAN happen here is the opposite failure, and it is
+# recorded honestly below: the census counts the same 171 flip-flops for
+# a corrector, for a detector, and for a codec wired the wrong way
+# round. Only the fault-injection campaign can tell those apart, and
+# `test_the_census_cannot_tell_a_corrector_from_a_detector` measures
+# that rather than asserting it -- which is `docs/43` section 9.4's
+# lesson pointed at this file.
+# =====================================================================
+CLINT = SOC_RTL / "soc_clint.v"
+SECDED_ENC = PILOT_RTL / "secded_enc.v"
+SECDED_DEC = PILOT_RTL / "secded_dec.v"
+
+CLINT_SOURCES = [CLINT, SECDED_ENC, SECDED_DEC]
+
+
+def _clint_geometry():
+    """soc_clint's flip-flop budget at TICK_DIV = 1, DERIVED.
+
+    Every width is read out of the register declarations rather than
+    written here, so a width change moves the expectation with it. Three
+    facts the arithmetic needs and the file states:
+
+      * `tick_cnt` is 32 flip-flops of prescaler that are DEAD at
+        TICK_DIV = 1 -- `tick` is the constant 1 and nothing assigns
+        the counter -- so the optimiser removes it. That is why
+        `docs/40` section 9 measured 163 and not 195, and it is stated
+        in soc_clint.v's H6 section.
+      * the check field's width comes from secded_enc.v's CHECK_W, which
+        an elaboration guard in that file fixes at 8. It is read from
+        there rather than from the CLINT, because the CLINT does not
+        name it.
+      * the response registers -- rdata_o, rvalid_o, err_o -- are
+        declared as `output reg` and are flip-flops like any other.
+    """
+    text = CLINT.read_text()
+
+    def width(name):
+        m = re.search(r"(?:output\s+)?reg\s*(?:\[\s*(\d+)\s*:\s*(\d+)\s*\])?"
+                      r"\s*" + name + r"\s*[;,]", text)
+        assert m, "no reg declaration for {} in soc_clint.v".format(name)
+        if m.group(1) is None:
+            return 1
+        return int(m.group(1)) - int(m.group(2)) + 1
+
+    live = ("mtime_q", "mtimecmp", "msip", "rdata_o", "rvalid_o", "err_o")
+    base = sum(width(n) for n in live)
+
+    m = re.search(r"parameter\s+DATA_W\s*=\s*(\d+)", SECDED_ENC.read_text())
+    assert m, "secded_enc.v no longer declares DATA_W"
+    assert int(m.group(1)) == width("mtime_q"), (
+        "secded_enc.v is fixed at {} data bits and mtime is {}; the codec "
+        "cannot cover the counter".format(m.group(1), width("mtime_q")))
+    chk = width("mtime_chk_q")
+    m = re.search(r"parameter\s+CHECK_W\s*=\s*(\d+)", SECDED_ENC.read_text())
+    assert m and int(m.group(1)) == chk, (
+        "soc_clint.v holds {} check bits and secded_enc.v produces {}"
+        .format(chk, m.group(1) if m else "?"))
+    return base, chk
+
+
+CLINT_BASE_FF, CLINT_CHK_FF = _clint_geometry()
+
+
+def _clint_script(sources, chparam="", mtime_only=False):
+    """The recipe hw/soc/flow/syn_soc.sh runs, restricted to the CLINT.
+
+    Restricted deliberately: syn_soc.sh reads every SoC block and then
+    selects one as the top, and its own header records that this makes
+    `soc_clint` 29.3328 um2 and 5 cells BIGGER than reading the CLINT
+    alone. That effect is real and `docs/45` section 4.3 measures it;
+    what it means here is that this file's counts are counts of the
+    CLINT and the numbers in `docs/58` section 7 are the flow's, and the
+    two are not interchangeable. FLIP-FLOP counts are unaffected, which
+    is why this file counts flip-flops.
+    """
+    lib = _sg13g2_liberty()
+    script = ("read_verilog -I {} {};".format(
+        SOC_RTL, " ".join(str(s) for s in sources)))
+    if chparam:
+        script += " chparam {} soc_clint;".format(chparam)
+    script += (" hierarchy -check -top soc_clint;"
+               " synth -flatten -top soc_clint; opt -purge;")
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; opt; abc -liberty {0};".format(lib)
+    script += " flatten; setundef -zero; opt_clean -purge;"
+    return script
+
+
+def _clint_mutant(workdir, name, replacements):
+    dst = Path(workdir) / name
+    dst.mkdir(exist_ok=True)
+    out = []
+    hit = 0
+    for src in CLINT_SOURCES:
+        text = src.read_text()
+        for old, new in replacements:
+            if old in text:
+                hit += text.count(old)
+                text = text.replace(old, new)
+        target = dst / src.name
+        target.write_text(text)
+        out.append(target)
+    assert hit, "mutation {} matched nothing; soc_clint.v moved".format(name)
+    return out
+
+
+@needs_yosys
+def test_the_mtime_codeword_survives_synthesis(workdir):
+    """H6's eight check flip-flops are in the artifact.
+
+    They are the whole of the added state: 8 flip-flops where tripling
+    mtime and mtimecmp would have added 256, which is the trade
+    `docs/58` section 4 argues and section 7 prices."""
+    census = _census(_clint_script(CLINT_SOURCES), workdir)
+    expected = CLINT_BASE_FF + CLINT_CHK_FF
+    assert census.total == expected, (
+        "expected {} flip-flops of architectural and response state plus "
+        "{} check bits = {}, found {}".format(
+            CLINT_BASE_FF, CLINT_CHK_FF, expected, census.total))
+
+
+@needs_yosys
+def test_harden_zero_removes_the_check_bits_and_nothing_else(workdir):
+    """The baseline `docs/58` section 7 measures against, and the proof
+    that the guard above can fail.
+
+    `docs/41` section 6.5's rule: the baseline has to come from the SAME
+    source list and the SAME recipe, or the hardening is credited with
+    whatever else changed. Here the source list does not move at all --
+    secded_enc.v and secded_dec.v are read in both configurations and
+    simply have no instance at HARDEN = 0."""
+    census = _census(
+        _clint_script(CLINT_SOURCES, chparam="-set HARDEN 0"), workdir)
+    assert census.total == CLINT_BASE_FF, (
+        "the unhardened CLINT should hold {} flip-flops, found {}".format(
+            CLINT_BASE_FF, census.total))
+
+
+@needs_yosys
+def test_the_codec_is_in_the_mapped_netlist_and_not_only_in_the_rtl(workdir):
+    """Both cones, by instance path, after the post-mapping flatten.
+
+    Reported and not merely counted, because the ENCODER is the half a
+    reader would expect to disappear: its output goes to eight
+    flip-flops whose only consumer is the decoder, and a pass that could
+    prove the inductive invariant `chk == encode(mtime)` would be
+    entitled to delete the pair. Nothing in this flow can prove a
+    sequential invariant, so nothing does -- but that is a property of
+    the tool and this is the measurement that says it held."""
+    census = _census(_clint_script(CLINT_SOURCES), workdir)
+    enc = census.in_instance("u_mtime_enc")
+    dec = census.in_instance("u_mtime_dec")
+    # Neither codec has any state of its own -- both modules are purely
+    # combinational -- so the FLIP-FLOP count under them is zero by
+    # construction and counting it would prove nothing.
+    assert enc == 0 and dec == 0, (
+        "secded_enc and secded_dec are combinational; a flip-flop under "
+        "one of them means the module changed: enc={} dec={}".format(
+            enc, dec))
+    # What is asserted is that the cones are there at all.
+    assert census.from_file("secded_enc.v") == 0
+    assert census.cells > 0
+    text = (Path(workdir) / "census.json").read_text()
+    assert "u_mtime_enc" in text, (
+        "no cell in the mapped netlist lies under u_mtime_enc: the "
+        "encoder was optimised away")
+    assert "u_mtime_dec" in text, (
+        "no cell in the mapped netlist lies under u_mtime_dec: the "
+        "decoder was optimised away")
+
+
+@needs_yosys
+def test_the_census_cannot_tell_a_corrector_from_a_detector(workdir):
+    """WHAT THIS FILE DOES NOT COVER, measured rather than claimed.
+
+    `docs/43` section 9.4 found all twenty formal tasks green on a
+    design whose three banks the synthesiser had collapsed into one, and
+    concluded that formal cannot see what only the census can. This is
+    the mirror of that sentence and it belongs in the census's own file:
+    the mutation below turns H6 from a CORRECTOR into a DETECTOR -- the
+    syndrome is still computed and still announced on mt_ecc_o, but the
+    counter ticks from the STORED value instead of the corrected one, so
+    an upset is reported and then kept for ever. It is the detect-only
+    design `docs/58` section 4 prices and rejects.
+
+    It costs the same flip-flops, and this test asserts that it does.
+    The check that fails on it is
+    `hw/soc/tb/cocotb/test_soc_clint_fi.py`, whose 128 mtime draws go
+    from 128 CORRECTED to 0."""
+    detector = _clint_mutant(workdir, "clint_detect_only", [
+        ("wire [63:0] mtime_ticked = tick ? (mtime + 64'd1) : mtime;",
+         "wire [63:0] mtime_ticked = tick ? (mtime_q + 64'd1) : mtime_q;"),
+        ("wr_mtimeh ? wmerge(mtime[63:32], be_i, wdata_i) "
+         ": mtime_ticked[63:32],",
+         "wr_mtimeh ? wmerge(mtime_q[63:32], be_i, wdata_i) "
+         ": mtime_ticked[63:32],"),
+        ("wr_mtimel ? wmerge(mtime[31:0], be_i, wdata_i)  "
+         ": mtime_ticked[31:0]};",
+         "wr_mtimel ? wmerge(mtime_q[31:0], be_i, wdata_i)  "
+         ": mtime_ticked[31:0]};"),
+    ])
+    census = _census(_clint_script(detector), workdir)
+    assert census.total == CLINT_BASE_FF + CLINT_CHK_FF, (
+        "the detect-only mutation changed the flip-flop count, so this "
+        "test is no longer measuring what it says it measures: {} "
+        "against {}".format(census.total, CLINT_BASE_FF + CLINT_CHK_FF))
+
+
+def test_nothing_in_the_design_instantiates_the_clint_unhardened():
+    """The same rule the watchdog's HARDEN carries. A parameter that can
+    turn a defence off is a parameter someone turns off, and the only
+    thing standing between that and silicon is this test."""
+    text = CLINT.read_text()
+    assert re.search(r"parameter\s+integer\s+HARDEN\s*=\s*1", text), (
+        "soc_clint.v's HARDEN parameter no longer defaults to 1")
+    top = (SOC_RTL / "soc_top.v").read_text()
+    m = re.search(r"soc_clint\s*#\((.*?)\)\s*u_clint", top, re.S)
+    assert m, "soc_top.v no longer instantiates soc_clint with parameters"
+    assert "HARDEN" not in m.group(1), (
+        "soc_top.v overrides soc_clint's HARDEN parameter. Nothing in "
+        "the design may: HARDEN = 0 is the unprotected counter.")
+
+
+def test_the_clint_corrects_on_every_path_that_reads_the_counter():
+    """Textual, and complementary to the census rather than a weaker
+    version of it.
+
+    The census proves the check bits and the two cones EXIST. This
+    proves they are wired the way round that corrects: `mtime` -- the
+    decoder's output -- is what ticks, what the comparator sees and what
+    a bus read returns, and `mtime_next` -- the value about to be
+    stored -- is what the encoder covers. Both of the wrong-way-round
+    edits are functionally identical in a fault-free machine, so every
+    cocotb test outside the campaign, every property in
+    soc_clint_props.v and every count in this file would pass on them:
+
+      * encode over `mtime_q` instead of `mtime_next` and the code
+        follows the corruption into consistency, so the upset is never
+        seen and never repaired;
+      * tick from `mtime_q` instead of `mtime` and the block detects
+        without correcting.
+
+    The second is measured in
+    `test_the_census_cannot_tell_a_corrector_from_a_detector`.
+    """
+    text = CLINT.read_text()
+    assert ".data_in   (mtime_next)" in text, (
+        "soc_clint.v's encoder no longer covers the value about to be "
+        "stored")
+    assert ".code_in  ({mtime_chk_q, mtime_q})" in text, (
+        "soc_clint.v's decoder no longer reads the stored codeword")
+    assert ".data_out (mtime)" in text
+    # The three consumers, each reading the CORRECTED wire.
+    for pat in ("assign irq_timer_o    = (mtime >= mtimecmp);",
+                "wire [63:0] mtime_ticked = tick ? (mtime + 64'd1) : mtime;",
+                "REG_MTIMEL:    rdata_o <= mtime[31:0];",
+                "REG_MTIMEH:    rdata_o <= mtime[63:32];"):
+        assert pat in text, (
+            "a consumer of the counter in soc_clint.v no longer reads the "
+            "corrected value: {}".format(pat))
+    # And the raw register reaches NOTHING except the codec and its own
+    # next-state assignment. Anything else is a path the correction does
+    # not cover.
+    allowed = (
+        "reg [63:0] mtime_q;",
+        "  reg [63:0] mtime_q;",
+        ".code_in  ({mtime_chk_q, mtime_q}),",
+        "      mtime_q     <= 64'd0;",
+        "      mtime_q     <= mtime_next;",
+        "    assign mtime          = mtime_q;",
+    )
+    for line in text.splitlines():
+        if "mtime_q" not in line:
+            continue
+        stripped = line.split("//")[0].rstrip()
+        if not stripped.strip():
+            continue
+        assert stripped.strip() in [a.strip() for a in allowed], (
+            "mtime_q -- the RAW, possibly corrupt register -- is read "
+            "somewhere the correction does not cover:\n  {}".format(
+                stripped.strip()))

@@ -69,6 +69,21 @@
  *               masked (soc_npu.v H3). Separate from BST_TMRERR because
  *               a watchdog vote and an NPU vote are different parts
  *               with different remedies.
+ *
+ * and one the CLINT drives, docs/58:
+ *
+ *   BST_MTECC   CYCLES in which the stored mtime codeword was not a
+ *               codeword. mtime is held as the data field of a (72,64)
+ *               SECDED word that is decoded, corrected and re-encoded on
+ *               every tick, so this is an upset-rate counter over those
+ *               72 flip-flops with a scrub period of one cycle -- but it
+ *               DOES NOT SEPARATE a correction from an uncorrectable,
+ *               and soc_busstat.v's header says why there is one bit
+ *               left and not two. If this counter moves and the clock is
+ *               also wrong, the second upset was the one that mattered;
+ *               the only way to tell from software is to compare mtime
+ *               against the core's own mcycle, which advances at the
+ *               same rate at TICK_DIV = 1.
  */
 #define BST_STATUS      (SOC_BUSSTAT_BASE + 0x000u)
 #define BST_IRQEN       (SOC_BUSSTAT_BASE + 0x004u)
@@ -80,6 +95,7 @@
 #define BST_NPUCOR      (SOC_BUSSTAT_BASE + 0x01Cu)
 #define BST_NPUDET      (SOC_BUSSTAT_BASE + 0x020u)
 #define BST_NPUTMR      (SOC_BUSSTAT_BASE + 0x024u)
+#define BST_MTECC       (SOC_BUSSTAT_BASE + 0x028u)
 
 /* One bit index per source, shared by STATUS, IRQEN and CLR. */
 #define BST_S_RFSEC     (1u << 0)
@@ -89,10 +105,13 @@
 #define BST_S_NPUCOR    (1u << 4)
 #define BST_S_NPUDET    (1u << 5)
 #define BST_S_NPUTMR    (1u << 6)
+#define BST_S_MTECC     (1u << 7)
 #define BST_S_ALL       (BST_S_RFSEC | BST_S_RFRD | BST_S_RFDED \
                          | BST_S_TMRERR | BST_S_NPUCOR | BST_S_NPUDET \
-                         | BST_S_NPUTMR)
-/* STATUS bit 8: any enabled sticky is set, i.e. the line is asserted. */
+                         | BST_S_NPUTMR | BST_S_MTECC)
+/* STATUS bit 8: any enabled sticky is set, i.e. the line is asserted.
+ * Bit 7 is now BST_S_MTECC and the sticky field is full: a ninth source
+ * cannot be added below the interrupt bit. docs/58 section 9. */
 #define BST_STATUS_IRQ  (1u << 8)
 
 /* ---- GPTIMER, hw/soc/rtl/soc_gptimer.v ------------------------------ */

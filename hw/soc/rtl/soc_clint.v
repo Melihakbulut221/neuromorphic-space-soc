@@ -95,9 +95,9 @@
 //     has not reached. Consequence: with TICK_DIV = 1 the mtime tick and
 //     the CPU cycle are the same event, so mtime cannot be used to
 //     measure anything the clock itself is doing wrong.
-//   * Any protection. No parity on the counter, no ECC, no redundancy.
-//     An upset in mtime is a silently wrong clock and nothing here would
-//     notice. That belongs with the hardening architecture.
+//   * Protection for mtimecmp, msip, or the response registers. Section
+//     H6 below is the argument, and it is an argument and not an
+//     omission.
 //
 // UNIMPLEMENTED OFFSETS ARE A BUS ERROR, not a read of zero. This is the
 // same choice soc_top.v makes for an unoccupied peripheral slot and the
@@ -107,6 +107,124 @@
 // expectation that probing hart 1's MSIP returns something rather than
 // faulting -- there is no hart 1 in this SoC, and saying so loudly is
 // the point.
+//
+// =====================================================================
+// H6: MTIME IS A CODEWORD, AND THE CODE CORRECTS IT EVERY TICK
+// =====================================================================
+//
+// docs/41 section 7.4 ranked mtime above everything the watchdog wave
+// left unprotected and then declined to protect it, on cost:
+//
+//     mtime is monotonic and free-running and never reloads, so an
+//     upset displaces it FOR EVER ... a single-bit flip in a high bit
+//     jumps the architectural clock by up to 2^63 ticks, and every
+//     deadline software computes as mtime + delta is then wrong
+//
+// and priced the obvious answer -- triple mtime and mtimecmp -- at 256
+// added flip-flops and roughly +27,000 um2, about a tenth of the Ibex
+// core. docs/43 section 12 and docs/44 section 3 deferred it twice more,
+// each time for a stated reason. This is the answer, and it is not TMR.
+//
+// WHAT THE STRUCTURE BUYS. TMR is what you use when the next value of a
+// register is unrelated to its current one, because then the only way to
+// know the stored value is wrong is to store it again somewhere else.
+// mtime is not that register: its next value is its current value plus
+// one, and a code over it is therefore CHECKABLE and REPAIRABLE without
+// a second copy of the data. Concretely:
+//
+//   mtime is held as the 64-bit data field of a (72,64) SECDED codeword
+//   whose 8 check bits are the only added state. Every tick the stored
+//   codeword is DECODED, the corrected 64-bit value is what ticks, what
+//   the comparator sees and what a bus read returns, and the check bits
+//   are RE-ENCODED over the value that goes back in.
+//
+// Three consequences, and the third is the one that makes this cheap:
+//
+//   1. A single-bit upset anywhere in the 72 bits -- data or check -- is
+//      CORRECTED, not merely detected, and it is corrected before it
+//      reaches any port. mtip never asserts early, a bus read never
+//      returns the corrupt word, and the counter goes on from the right
+//      value. That is the same guarantee TMR gives, on 8 added
+//      flip-flops instead of 128.
+//   2. A double-bit upset is DETECTED and never miscorrected, because
+//      every column of the H matrix in secded_enc.v has odd weight. The
+//      block cannot repair it -- the information is gone -- and it says
+//      so on mt_ecc_o.
+//   3. THE COUNTER SCRUBS ITSELF. A code over a register that is written
+//      once a mission needs a scrubber, because errors accumulate until
+//      something rewrites the word; docs/43 built one for the register
+//      file and docs/43 section 6.4 left its period unbounded. mtime is
+//      rewritten EVERY CLOCK by construction, so the scrub period here
+//      is one cycle and there is no scrubber to build, no period to
+//      choose and no accumulation to bound. The window in which a second
+//      upset could turn a correctable word into an uncorrectable one is
+//      20 ns wide.
+//
+// WHY NOT A RESIDUE CHECK, which docs/41 section 7.4 pointed at. A
+// residue mod k maintained beside the counter -- r <= r + 1 mod k, and
+// check mtime mod k == r -- is cheaper still: mod 3 is TWO flip-flops.
+// It detects every single-bit flip, and that is not a small claim: a
+// flip at bit i changes the value by +/- 2^i, and 2 is invertible modulo
+// any ODD k, so 2^i is never 0 mod k and the residue always moves. All
+// 64 bits, not most of them. (The trap is an EVEN modulus: mod 2^a the
+// residue is the low a bits and is blind to bits a..63 -- 62 of the 64
+// bits at mod 4. An even modulus is a check that covers the harmless end
+// of the counter and none of the dangerous one.)
+//
+// But it only DETECTS. The residue says the clock is wrong; it does not
+// say by how much, so there is nothing to subtract. Making a residue
+// CORRECT means making the syndrome name the bit -- an arithmetic AN
+// code with the 128 values +/- 2^i all distinct mod k, which needs k
+// > 128 and so 8 check flip-flops, the SAME storage as this SECDED, plus
+// a 128-way syndrome decode that the Hamming code gets for free from its
+// column structure. So the residue is not a cheaper corrector; it is
+// only a cheaper detector, and docs/38 section 8.5's argument against
+// lockstep applies here in reverse: a detector whose only recovery is
+// "software is told its clock is wrong" is worth less than a corrector
+// that costs six more flip-flops. It is priced in docs/58 section 4.
+//
+// WHAT IS DELIBERATELY NOT PROTECTED, and these are decisions:
+//
+//   * mtimecmp, 64 flip-flops. It fails the docs/41 section 3.1
+//     criterion on BOTH halves. It is not persistent -- software
+//     rewrites it at every deadline, so an upset survives one interval
+//     and not the mission -- and it is not silent: an upset DOWNWARD
+//     satisfies mtime >= mtimecmp at once, the handler runs early and
+//     rewrites the deadline, and an upset UPWARD moves the deadline out
+//     of reach so the timer interrupt stops, which is a missed deadline,
+//     which is the exact failure the watchdog is the backstop for.
+//     mtime's upset is the one that keeps the interrupts coming and
+//     makes them all wrong. That is the asymmetry, and it is why the
+//     code is over the counter and not over the comparand.
+//   * msip, 1 flip-flop. One bit cannot be tripled -- the replication
+//     bound in soc_tmr_bank.v's header -- and there is nothing in this
+//     module to bundle it with that shares its reset domain and its
+//     write policy. Its upset raises or drops a software interrupt that
+//     software itself sets and clears, and it is visible in the register
+//     it lives in.
+//   * rdata_o, rvalid_o, err_o -- 34 flip-flops of bus response. They
+//     are overwritten every cycle from the request, which is docs/41
+//     section 3.1's "a register the block itself overwrites every tick
+//     sheds an upset on its own".
+//   * tick_cnt. At TICK_DIV = 1 it is dead logic and the optimiser
+//     removes it: the block's 163 flip-flops are 64 + 64 + 1 + 32 + 1 +
+//     1 and there are none of it left to protect.
+//
+// WHAT THE REPORT IS, and what it conflates. mt_ecc_o is one cycle high
+// whenever the stored codeword was not a codeword, corrected or not. It
+// goes to BUSSTAT (docs/44), which is the only telemetry destination in
+// this SoC: there is NO free offset in a standard CLINT window to put a
+// status register at -- 0x0000..0x3FFF is the msip array, 0x4000..0xBFF7
+// the mtimecmp array and 0xBFF8..0xBFFF mtime, so every offset this
+// block faults on is architecturally spoken for by a hart that does not
+// exist. Conflating a correction with an uncorrectable is the mistake
+// soc_busstat.v's own header criticises pilot_top.v for making, and it
+// is made here knowingly: BUSSTAT's STATUS register has exactly one bit
+// left below the interrupt bit that its header forbids moving, and the
+// class the conflation hides -- an uncorrectable -- needs two upsets
+// inside one 20 ns tick in one 72-bit word, which is outside the
+// single-upset fault model every campaign in this repository uses.
+// docs/58 section 9 prices the separation at 18 more flip-flops.
 
 `timescale 1ns / 1ps
 
@@ -115,7 +233,16 @@ module soc_clint #(
     // which is what the simulation uses because it makes every deadline
     // in a test exactly computable. A real part sets this from the
     // always-on time base's frequency.
-    parameter integer TICK_DIV = 1
+    parameter integer TICK_DIV = 1,
+    // H6. 1 holds mtime as a (72,64) SECDED codeword and corrects it on
+    // every tick; 0 is the design docs/40 shipped, bit for bit.
+    //
+    // The unhardened configuration exists so that the SAME source list
+    // and the SAME recipe can measure the baseline -- docs/41 section
+    // 6.5's rule, which is that a baseline taken against an older file
+    // list credits the hardening with a refactor's saving. NOTHING IN
+    // THIS DESIGN INSTANTIATES IT AT 0, and sw/tests asserts that.
+    parameter integer HARDEN = 1
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -133,7 +260,16 @@ module soc_clint #(
 
     // ---- to the core ----
     output wire        irq_timer_o,      // Ibex irq_timer_i,    ID 7
-    output wire        irq_software_o    // Ibex irq_software_i, ID 3
+    output wire        irq_software_o,   // Ibex irq_software_i, ID 3
+
+    // ---- fault line, to soc_busstat.v (docs/44) ----
+    //
+    // ONE CYCLE PER EVENT BY CONSTRUCTION, which is the property
+    // soc_busstat.v's counters need and which this block gets for free:
+    // the codeword is re-encoded over the corrected value on the very
+    // next edge, so a syndrome that is nonzero this cycle is zero the
+    // next whether it was correctable or not. Constant 0 at HARDEN = 0.
+    output wire        mt_ecc_o
 );
 
   // Offsets within the region. Sixteen bits is the whole 64 KiB window.
@@ -150,12 +286,67 @@ module soc_clint #(
           || (off == REG_MTIMEH);
 
   // ---- storage ----
-  reg [63:0] mtime;
+  //
+  // mtime_q is the STORED data field and `mtime` is the ARCHITECTURAL
+  // value: at HARDEN = 1 they differ for exactly the one cycle after an
+  // upset lands, and everything downstream -- the tick, the comparator,
+  // the read multiplexer -- reads `mtime`. That is what makes the
+  // correction invisible at the ports rather than merely available.
+  reg [63:0] mtime_q;
+  reg [7:0]  mtime_chk_q;
   reg [63:0] mtimecmp;
   reg        msip;
 
   reg [31:0] tick_cnt;
   wire       tick = (TICK_DIV <= 1) || (tick_cnt == 32'd0);
+
+  wire [63:0] mtime;            // corrected, architectural
+  wire [63:0] mtime_next;       // declared below, used by the codec
+  wire [7:0]  mtime_chk_next;
+
+  generate
+  if (HARDEN != 0) begin : g_mtime_secded
+    // hw/rtl/secded_dec.v and hw/rtl/secded_enc.v are READ from the
+    // pilot's directory and never modified, exactly as
+    // hw/rtl/tmr_voter.v is by soc_wdog.v and as these two already are
+    // by ibex_regfile_secded.v (docs/43). docs/34 freezes that
+    // directory by blob hash; nothing here touches it. They are fixed
+    // at 64 data bits and 8 check bits by an elaboration guard, and 64
+    // is exactly mtime's width, so no width parameter is passed and
+    // none could be.
+    wire       sec, ded;
+    wire [7:0] syndrome_unused;
+
+    secded_dec u_mtime_dec (
+        .code_in  ({mtime_chk_q, mtime_q}),
+        .data_out (mtime),
+        .syndrome (syndrome_unused),
+        .sec      (sec),
+        .ded      (ded)
+    );
+
+    // Encoded over the value that is about to be STORED, not over the
+    // value that was stored. Written the other way -- check bits
+    // recomputed from mtime_q -- the code would follow the corruption
+    // into consistency on the next edge and the error would be gone
+    // without ever having been seen or repaired. That is the standard
+    // way to build an ECC counter that silently does nothing.
+    wire [71:0] code_unused;
+    secded_enc u_mtime_enc (
+        .data_in   (mtime_next),
+        .check_out (mtime_chk_next),
+        .code_out  (code_unused)
+    );
+
+    // Both classes, on one wire. The header says what that conflates
+    // and why there is one wire and not two.
+    assign mt_ecc_o = sec | ded;
+  end else begin : g_mtime_plain
+    assign mtime          = mtime_q;
+    assign mtime_chk_next = 8'h0;
+    assign mt_ecc_o       = 1'b0;
+  end
+  endgenerate
 
   // ---- interrupt outputs ----
   //
@@ -210,29 +401,40 @@ module soc_clint #(
   // carry in the upper half and discard it in the lower, producing a
   // clock that has jumped by 2^32. A software write takes precedence
   // over the tick for the half it names, and the other half still ticks.
+  //
+  // EVERY TERM BELOW READS `mtime` AND NOT `mtime_q`, which is the whole
+  // of the H6 correction: the value that ticks is the corrected one, so
+  // a single upset is repaired on the next edge and never accumulates.
   wire [63:0] mtime_ticked = tick ? (mtime + 64'd1) : mtime;
   wire        wr_mtimel    = wr && (off == REG_MTIMEL);
   wire        wr_mtimeh    = wr && (off == REG_MTIMEH);
-  wire [63:0] mtime_next   = {
+  assign      mtime_next   = {
       wr_mtimeh ? wmerge(mtime[63:32], be_i, wdata_i) : mtime_ticked[63:32],
       wr_mtimel ? wmerge(mtime[31:0], be_i, wdata_i)  : mtime_ticked[31:0]};
 
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      mtime    <= 64'd0;
-      mtimecmp <= 64'd0;
-      msip     <= 1'b0;
-      tick_cnt <= 32'd0;
-      rvalid_o <= 1'b0;
-      rdata_o  <= 32'h0;
-      err_o    <= 1'b0;
+      // secded_enc.v's H matrix over the all-zero word gives the
+      // all-zero check field, so this reset image is a valid codeword
+      // and the design comes out of reset with a clean syndrome. It is
+      // an arithmetic fact about the code and not a coincidence: every
+      // check bit is an XOR reduction over a subset of the data.
+      mtime_q     <= 64'd0;
+      mtime_chk_q <= 8'h00;
+      mtimecmp    <= 64'd0;
+      msip        <= 1'b0;
+      tick_cnt    <= 32'd0;
+      rvalid_o    <= 1'b0;
+      rdata_o     <= 32'h0;
+      err_o       <= 1'b0;
     end else begin
       // -- time base --
       if (TICK_DIV > 1) begin
         if (tick_cnt == 32'd0) tick_cnt <= TICK_DIV[31:0] - 32'd1;
         else                   tick_cnt <= tick_cnt - 32'd1;
       end
-      mtime <= mtime_next;
+      mtime_q     <= mtime_next;
+      mtime_chk_q <= mtime_chk_next;
 
       // -- register writes --
       if (wr) begin

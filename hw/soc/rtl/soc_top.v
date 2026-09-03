@@ -183,6 +183,10 @@ module soc_top #(
   wire        npu_cor_ev;      // a queue pointer vote corrected
   wire        npu_det_ev;      // a queue entry was discarded
   wire        npu_tmr_ev;      // the NPU cause bank's voter masked one
+  // The CLINT's, added by docs/58 H6: the stored mtime codeword was not a
+  // codeword this cycle. One event per cycle by construction at the
+  // source, because the codeword is re-encoded on every edge.
+  wire        clint_mt_ecc_ev;
 
   // -------------------------------------------------------------------
   // The fast local interrupt vector
@@ -530,6 +534,7 @@ module soc_top #(
       .npu_cor_i (npu_cor_ev),
       .npu_det_i (npu_det_ev),
       .npu_tmr_i (npu_tmr_ev),
+      .mt_ecc_i (clint_mt_ecc_ev),
       .irq_o (busstat_irq)
   );
 
@@ -592,7 +597,8 @@ module soc_top #(
       .gnt_o (s_gnt[4]), .rvalid_o (s_rvalid[4]),
       .rdata_o (s_rdata_clint), .err_o (s_err[4]),
       .irq_timer_o (clint_irq_timer),
-      .irq_software_o (clint_irq_soft)
+      .irq_software_o (clint_irq_soft),
+      .mt_ecc_o (clint_mt_ecc_ev)
   );
 
   // -------------------------------------------------------------------

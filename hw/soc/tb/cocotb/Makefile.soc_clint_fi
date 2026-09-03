@@ -1,0 +1,75 @@
+# cocotb + Icarus FAULT INJECTION campaign against hw/soc/rtl/soc_clint.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_clint_fi
+#
+# and the counterfactual, which is the design docs/40 shipped -- mtime a
+# plain 64-bit register, no check bits, mt_ecc_o tied low:
+#
+#   make -f Makefile.soc_clint_fi \
+#        EXTRA_COMPILE_ARGS=-Psoc_clint.HARDEN=0 \
+#        SOC_CLINT_FI_UNHARDENED=1 SIM_BUILD=sim_build_soc_clint_fi_h0 \
+#        COCOTB_RESULTS_FILE=results_soc_clint_fi_h0.xml
+#
+# This is the evidence for H6 in the header of hw/soc/rtl/soc_clint.v:
+# that a single-bit upset in mtime's 72 stored bits leaves the
+# architectural clock unchanged at every port and is announced, and that
+# the state H6 deliberately leaves alone fails in a way with a number
+# against it. docs/58 section 8 reports what it measured;
+# docs/16-fault-injection-campaign.md sections 1.2 to 1.6 are the method.
+#
+# Deliberately a SEPARATE suite and a separate build from
+# Makefile.soc_clint, for the reason docs/16 section 1.2 gives: a
+# campaign that shares a build with a functional suite shares its
+# failures, and a campaign is long enough that it should be runnable and
+# skippable on its own.
+#
+# Standalone by design, same structure as Makefile.soc_wdog_fi and the
+# same rootless tool discovery: iverilog from PATH, cocotb from the
+# project venv hw/.venv -- if cocotb-config is not already on PATH the
+# recipe re-invokes make with the venv prepended, because make < 4.4 does
+# not pass an exported PATH into $(shell ...), which the cocotb makefiles
+# rely on.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+# hw/rtl/secded_enc.v and hw/rtl/secded_dec.v are READ from the pilot's
+# directory and never modified, exactly as Makefile.ibex_regfile_secded
+# already reads them and as Makefile.soc_wdog reads tmr_voter.v. docs/34
+# pins that directory by git blob hash for the TTIHP26b shuttle.
+PILOT_RTL = $(PWD)/../../../rtl
+
+# SOC_CLINT_SRC exists so a mutation run can point the same suite at a
+# modified copy of the RTL without editing the tree.
+SOC_CLINT_SRC ?= $(RTL)/soc_clint.v
+
+VERILOG_SOURCES = $(SOC_CLINT_SRC) \
+                  $(PILOT_RTL)/secded_enc.v $(PILOT_RTL)/secded_dec.v
+TOPLEVEL = soc_clint
+MODULE = test_soc_clint_fi
+
+SIM_BUILD ?= sim_build_soc_clint_fi
+COCOTB_RESULTS_FILE ?= results_soc_clint_fi.xml
+export COCOTB_RESULTS_FILE
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+endif

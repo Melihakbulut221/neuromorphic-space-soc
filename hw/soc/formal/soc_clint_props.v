@@ -27,6 +27,21 @@
 // which would make it a copy of the design rather than a reconstruction
 // of the architecture.
 //
+// H6 ADDS TWO CLAUSES, E1 AND E2, and they are the ones that say the
+// protection is transparent and self-scrubbing.
+//
+//   E1. The stored word is always a codeword: mtime_chk_q is the
+//       encoding of mtime_q. That is the SELF-SCRUB stated as an
+//       invariant -- the block returns to a clean codeword on the next
+//       edge and stays there -- and it is also what makes the induction
+//       close, because without it k-induction starts from a state whose
+//       check bits are arbitrary and every clause below fails there for
+//       a reason that says nothing about the design.
+//   E2. In the absence of a fault the correction is the identity:
+//       mtime == mtime_q. `mtime` is what C1, C3 and the ghost read, so
+//       E2 is why the whole property set below is BYTE FOR BYTE what it
+//       was before H6 and why H6 is invisible to the architecture.
+//
 // WHAT IS NOT PROVEN HERE:
 //
 //   * Liveness. Nothing says a deadline is ever met or a response ever
@@ -40,6 +55,15 @@
 //   * Anything at TICK_DIV other than 1, and anything about a second
 //     hart, which does not exist.
 //   * Reset behaviour beyond the initial state.
+//   * THAT THE CODE CORRECTS ANYTHING. Nothing here injects a fault,
+//     because a formal harness that deposits into a register is proving
+//     a property of the harness. E1 and E2 are statements about the
+//     fault-free machine; the correction is measured in
+//     hw/soc/tb/cocotb/test_soc_clint_fi.py and the codec itself is
+//     proved once, for every consumer, in formal/secded.sby.
+//   * Anything at HARDEN = 0. The proof runs the configuration that
+//     ships. E1 and E2 are guarded so that the file still elaborates
+//     unhardened, and nothing runs it there.
 
 reg f_past_valid;
 initial f_past_valid = 1'b0;
@@ -144,6 +168,47 @@ always @(posedge clk_i) if (rst_ni) begin
     assert (f_msip     == msip);
     assert (f_out      == rvalid_o);
 end
+
+// ---------------------------------------------------------------------
+// E1-E2: the H6 codeword (docs/58)
+// ---------------------------------------------------------------------
+//
+// f_chk is the encoding recomputed HERE, from the eight rows of the H
+// matrix written out again rather than read from the instance. That is
+// deliberate and it is the same rule secded_enc.v's own header applies
+// to secded_dec.v: a check that read the encoder's output would be
+// comparing the design against itself. If these constants and the RTL's
+// diverge, E1 fails.
+`ifdef SOC_CLINT_HARDENED
+localparam [63:0] F_H_ROW0 = 64'h1F04225844B12CB7;
+localparam [63:0] F_H_ROW1 = 64'h2F0844A88952555B;
+localparam [63:0] F_H_ROW2 = 64'h4F10893112649A6D;
+localparam [63:0] F_H_ROW3 = 64'h8F2111C22388E38E;
+localparam [63:0] F_H_ROW4 = 64'hF1421E043C0F03F0;
+localparam [63:0] F_H_ROW5 = 64'hF283E007C00FFC00;
+localparam [63:0] F_H_ROW6 = 64'hF4FC0007FFF00000;
+localparam [63:0] F_H_ROW7 = 64'hF8FFFFF800000000;
+
+wire [7:0] f_chk = {^(mtime_q & F_H_ROW7), ^(mtime_q & F_H_ROW6),
+                    ^(mtime_q & F_H_ROW5), ^(mtime_q & F_H_ROW4),
+                    ^(mtime_q & F_H_ROW3), ^(mtime_q & F_H_ROW2),
+                    ^(mtime_q & F_H_ROW1), ^(mtime_q & F_H_ROW0)};
+
+always @(posedge clk_i) if (rst_ni) begin
+    // E1. The stored word is a codeword, always. This is the self-scrub:
+    //     whatever an upset does, the very next edge writes the encoding
+    //     of the value that goes in, so the invariant is restored in one
+    //     cycle and holds in every reachable state.
+    assert (mtime_chk_q == f_chk);
+
+    // E2. With E1 holding, the syndrome is zero, so the decoder is the
+    //     identity and the codec is invisible to everything above it.
+    assert (mtime == mtime_q);
+
+    // E2b. And nothing is reported in a fault-free machine.
+    assert (!mt_ecc_o);
+end
+`endif
 
 // ---------------------------------------------------------------------
 // C1-C2: the two interrupt outputs are functions of the architecture
