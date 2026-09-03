@@ -393,14 +393,16 @@ def test_the_frame_bound_expires_on_greater_or_equal_and_not_on_equal():
 
     With `==` the counter would count up, wrap through its whole range
     and only then reach the bound -- which is the unbounded stall the
-    guards exist to remove, rebuilt inside the guard itself. Both
-    counters are checked, because the two were written at different
-    times and only one of them has a formal invariant behind it.
+    guards exist to remove, rebuilt inside the guard itself. All three
+    counters are checked, because they were written at different times
+    and only one of them has a formal invariant behind it.
     """
     assert "guard >= GUARD_MAX[GUARD_W-1:0]" in SER, (
         "soc_npu_ser.v's frame bound no longer compares with >=")
     assert "win_guard >= WIN_MAX[WIN_GRD_W-1:0]" in NPU, (
         "soc_npu.v's window bound no longer compares with >=")
+    assert "oh_guard >= OH_MAX_G" in NPU, (
+        "soc_npu.v's show-ahead bound no longer compares with >=")
 
 
 def test_a_bound_that_fires_fails_the_access_and_says_which_bound():
@@ -556,3 +558,207 @@ def test_the_queue_storage_is_left_alone_on_purpose():
         "docs/52's measurement and needs a measurement of its own")
     # The queues are still hw/rtl/aer_fifo.v and still at 16 x 8.
     assert len(re.findall(r"aer_fifo #\(\.WIDTH \(16\)", NPU)) == 2
+
+
+# ---------------------------------------------------------------------
+# 6. docs/56 H4: the show-ahead adapter's read bound
+# ---------------------------------------------------------------------
+def test_the_engine_split_is_a_partition_of_the_stratum_it_replaced():
+    """docs/55 section 14 item 1 made splitting the 140-bit `engine`
+    stratum the precondition of hardening it, and a split that quietly
+    added, dropped or resized a site would make docs/56's comparison
+    against docs/52's and docs/55's records meaningless while looking
+    exactly like a split.
+
+    So the five sub-strata are checked to be a PARTITION: the same 19
+    sites, the same names, the same widths and the same 140 bits that
+    `engine` had, with every site in exactly one of them.
+    """
+    sys.path.insert(0, str(ROOT / "hw" / "soc" / "fi"))
+    import npu_targets
+
+    was = {
+        "ev_state": 4, "ev_word": 16, "ev_wait": 4, "ev_start": 1,
+        "ev_we": 1, "ev_addr": 7, "inj_rd_en": 1, "aer_in_stb": 1,
+        "aer_in_tick": 1, "aer_in_addr": 4, "cap_wr_en": 1,
+        "cap_wr_data": 16, "cnt_in": 16, "cnt_out": 16, "oh_valid": 1,
+        "oh_data": 16, "oh_req": 1, "cap_rd_en": 1, "ev_wdata": 32,
+    }
+    assert sum(was.values()) == 140, "docs/52 measured `engine` at 140 bits"
+
+    now = {}
+    for name in npu_targets.ENGINE_STRATA:
+        for s in npu_targets.stratum_sites(name):
+            assert s.name not in now, (
+                "site {!r} is in two of the engine's sub-strata".format(
+                    s.name))
+            now[s.name] = s.width
+
+    # `oh_guard` is H4's own new state and is the ONE site the split did
+    # not inherit. It is named here rather than allowed through by a
+    # loose comparison, because "the partition grew" is exactly what a
+    # silent mistake in this file would look like.
+    added = {"oh_guard": 3}
+    assert now == dict(was, **added), (
+        "the engine's five sub-strata are not a partition of the 140-bit "
+        "stratum docs/52 and docs/55 measured, plus H4's guard:\n"
+        "  only in the split: {}\n  only in `engine`: {}".format(
+            sorted(set(now) - set(was) - set(added)),
+            sorted(set(was) - set(now))))
+    assert sum(npu_targets.stratum_bits(n)
+               for n in npu_targets.ENGINE_STRATA) == 143
+
+
+def test_the_show_ahead_read_is_bounded_and_the_bound_is_derived():
+    """The defect docs/56 section 5.1 measured, and the shape of its
+    answer.
+
+    `oh_req` used to be cleared by `cap_rd_valid` alone while the refill
+    stood off on `!oh_req`, so a read that produced no rd_valid -- which
+    aer_fifo raises on a discarded entry, by design -- left the adapter
+    unable to issue another one for the rest of the mission.
+
+    Three things are checked and each of them is a way the fix could be
+    undone without a simulation noticing.
+    """
+    # 1. The bound exists, is derived from the read's own latency, and
+    #    is not a literal somebody chose.
+    wait = _lp(NPU, "OH_WAIT", "soc_npu.v")
+    slack = _lp(NPU, "OH_SLACK", "soc_npu.v")
+    omax = _lp(NPU, "OH_MAX", "soc_npu.v",
+               {"OH_WAIT": wait, "OH_SLACK": slack})
+    assert omax == wait + slack, (
+        "OH_MAX is no longer OH_WAIT + OH_SLACK, so the bound is not "
+        "derived from the read it bounds")
+    assert wait == 2, (
+        "aer_fifo raises rd_valid one cycle after an accepted read, so a "
+        "healthy request is outstanding for exactly two cycles; OH_WAIT "
+        "is {}".format(wait))
+    assert slack > 0, "a bound with no slack fires on a healthy read"
+
+    # 2. The expiry gives the REQUEST back and touches nothing else. A
+    #    version that also cleared oh_valid would drop the word the
+    #    adapter is holding, and a version that issued the read itself
+    #    would pop a second entry while the first was in flight.
+    assert "if (oh_expire) oh_req   <= 1'b0;" in NPU, (
+        "the show-ahead bound no longer clears oh_req on expiry, or "
+        "clears something else as well")
+
+    # 3. It reports. A bound that fired and told nobody is docs/16
+    #    section 5.1's original defect in a new place.
+    assert "sticky_ev[C_OH_TO    - C_STICKY0] = oh_expire;" in NPU, (
+        "the show-ahead bound no longer latches IRQ_CAUSE.OH_TO")
+
+
+def test_the_show_ahead_pop_and_expiry_are_not_chained():
+    """`oh_valid` and `oh_req` can both be set under an upset, and an
+    `else if` chain would let an expiry swallow an acknowledged pop --
+    handing software the same event twice, which is the failure the
+    whole adapter exists to prevent (soc_npu.v header section 3).
+
+    The refill's `!oh_valid` makes that state unreachable on a healthy
+    part, so no simulation in this repository can fail on it. This test
+    can.
+    """
+    m = re.search(r"if \(oh_pop\)\s+oh_valid <= 1'b0;\s*\n"
+                  r"\s*//[^\n]*\n\s*//[^\n]*\n"
+                  r"\s*if \(oh_expire\) oh_req   <= 1'b0;", NPU)
+    assert m, (
+        "the show-ahead's pop and its bound's expiry are no longer two "
+        "separate `if`s; chained, an expiry can swallow a pop")
+
+
+def test_the_show_ahead_guard_is_reported_as_new_unprotected_state():
+    """docs/55 section 8.4 put its own two guards in the campaign's site
+    list, on the rule that a hardening measured without its own new
+    state is a hardening measured for its benefit and not its cost.
+    H4's guard is in it for the same reason, at the width the RTL
+    derives.
+    """
+    sys.path.insert(0, str(ROOT / "hw" / "soc" / "fi"))
+    import npu_targets
+
+    sites = {s.name: s for s in npu_targets.stratum_sites("ev_oh")}
+    assert "oh_guard" in sites, (
+        "docs/56's show-ahead guard is not a fault-injection target; the "
+        "campaign would be measuring the mechanism's benefit and not its "
+        "cost")
+    omax = _lp(NPU, "OH_MAX", "soc_npu.v",
+               {"OH_WAIT": _lp(NPU, "OH_WAIT", "soc_npu.v"),
+                "OH_SLACK": _lp(NPU, "OH_SLACK", "soc_npu.v")})
+    assert sites["oh_guard"].width == max(1, (omax).bit_length()), (
+        "npu_targets.py declares oh_guard at {} bits and soc_npu.v's "
+        "OH_MAX = {} needs {}".format(
+            sites["oh_guard"].width, omax, max(1, omax.bit_length())))
+
+
+def test_the_aer_strobe_is_gated_by_the_state_that_implies_it():
+    """docs/56 H5, and the ONE site the whole campaign ranked first.
+
+    An upset in `aer_in_stb` strobed a phantom SPIKE or TICK into the
+    frozen die with whatever the address and type pins held, and the die
+    accepted it as real: 18 silent wrong inferences in 18 draws, the
+    highest per-bit rate this block has measured, on one flip-flop.
+
+    The fix costs no state -- `aer_in_stb == (ev_state == E_PIN_S)` was
+    already an invariant of the FSM -- and costing no state is exactly
+    what makes it easy to undo by accident. Three things are checked:
+    that the pin the die sees is the gated wire and not the flag, that
+    the flag is still a register (a version that drove the pin from the
+    state alone would delete it AND move the whole exposure into
+    `ev_state`), and that a disagreement is reported.
+    """
+    assert re.search(r"\.aer_in_stb\s*\(aer_in_stb_q\)", NPU), (
+        "pilot_top's AER_IN_STB is no longer driven by the gated wire; "
+        "an upset in the flag alone reaches the die again")
+    assert "assign aer_in_stb_q = aer_in_stb && aer_stb_state;" in NPU
+    assert "wire aer_stb_state = (ev_state == E_PIN_S);" in NPU, (
+        "the strobe's gate is no longer the state that implies it")
+    # The flag is still a register, so the gate is a REDUNDANCY and not
+    # a rename. Driving the pin from ev_state alone would also mask an
+    # upset in the flag -- by deleting the flag -- and would leave
+    # ev_state, measured at 7 of 20, as the only thing between an upset
+    # and the die's input pins.
+    assert re.search(r"reg\s+aer_in_stb,\s*aer_in_tick;", NPU), (
+        "aer_in_stb is no longer a register of its own")
+    assert "assign aer_stb_mm   = aer_in_stb ^ aer_stb_state;" in NPU
+    assert "sticky_ev[C_AER_MM   - C_STICKY0] = aer_stb_mm;" in NPU, (
+        "a strobe/state disagreement no longer latches IRQ_CAUSE.AER_MM")
+    # And the observation port shows what the DIE sees, not the flag.
+    assert "assign obs_aer_in_stb_o  = aer_in_stb_q;" in NPU
+
+
+def test_every_cause_bit_the_block_has_is_a_fault_bit_the_program_knows():
+    """The cause register and `hw/soc/tb/sw/soc_npucfg.h` agree, bit for
+    bit.
+
+    `npu_flagged` in hw/soc/fi/npu_campaign.py derives its announcement
+    mask from `NCAUSE`, so a bit added to the RTL is a channel the
+    campaign counts immediately. The PROGRAM's `NPUCFG_C_FAULTS` is a
+    written list, and a bit missing from it is a fault the program reads
+    as a clean part -- which is the most flattering way this campaign
+    could be wrong about its own hardening, in the one place the derived
+    mask cannot protect against.
+    """
+    ncause = int(re.search(
+        r"localparam\s+integer\s+NCAUSE\s*=\s*(\d+)\s*;", NPU).group(1))
+    hdr = (SOC_TB / "sw" / "soc_npucfg.h").read_text()
+    defined = {int(b) for b in re.findall(
+        r"#define\s+NPUCFG_C_\w+\s+\(1u\s*<<\s*(\d+)\)", hdr)}
+    assert defined == set(range(ncause)), (
+        "soc_npu.v has {} cause bits and soc_npucfg.h defines {}".format(
+            ncause, sorted(defined)))
+    faults = re.search(r"#define NPUCFG_C_FAULTS([\s\S]*?)\n\n", hdr).group(1)
+    named = set(re.findall(r"NPUCFG_C_(\w+)", faults))
+    for m in re.finditer(r"#define\s+NPUCFG_C_(\w+)\s+\(1u\s*<<\s*(\d+)\)",
+                         hdr):
+        name, bit = m.group(1), int(m.group(2))
+        if name == "EVT":
+            assert name not in named, (
+                "EVT is a LEVEL meaning the capture queue is not empty "
+                "and must not be in the fault mask")
+            continue
+        assert name in named, (
+            "NPUCFG_C_{} is cause bit {} and is not in NPUCFG_C_FAULTS, "
+            "so the program reads a part that raised it as clean".format(
+                name, bit))

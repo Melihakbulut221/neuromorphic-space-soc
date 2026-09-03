@@ -57,6 +57,7 @@ from pathlib import Path
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, Timer
+from cocotb.types import LogicArray
 
 ROOT = Path(__file__).resolve().parents[4]
 for _p in (str(ROOT), str(ROOT / "sw")):
@@ -1369,3 +1370,267 @@ async def test_the_window_bound_never_fires_on_a_healthy_access(dut):
         f"the window bound is {bound} against a measured worst wait of "
         f"{seen_max}; that is more margin than the arbiter can justify")
     assert await env.crd(C_IRQCAUSE) & (CAUSE_WIN_TO | CAUSE_SER_TO) == 0
+
+
+# ---------------------------------------------------------------------
+# docs/56 H4: the show-ahead adapter's read bound.
+#
+# THESE THREE TESTS ARE THE ONLY PLACE THE DEFECT IS STATED EXECUTABLY.
+# The fault-injection campaign of docs/56 section 5 reaches the same
+# failure, but it reaches it as a rate; what these add is that a
+# regression names the mechanism. Two of them write a flip-flop
+# hierarchically, which docs/55 section 9.2 argues for and this inherits:
+# these mechanisms only fire under an upset and there is no legal
+# stimulus that reaches them. THE THIRD DOES NOT INJECT ANYTHING AND IS
+# THE MORE IMPORTANT ONE -- the wedge it provokes is reachable from
+# aer_fifo's own documented parity discard on a part with no upset in
+# the adapter at all.
+# ---------------------------------------------------------------------
+CAUSE_OH_TO = 1 << 12
+
+
+async def _barrier_round_trip(env, tag, limit=3000):
+    """Inject one SYNC and collect its echo, or return None."""
+    await env.cwr(C_EVQ_IN, TYPE_SYNC | tag)
+    for _ in range(limit):
+        w = await env.crd(C_EVQ_OUT)
+        if w & EVQ_VALID:
+            return w & 0xFFFF
+    return None
+
+
+@cocotb.test()
+async def test_a_stuck_show_ahead_request_recovers_instead_of_wedging(dut):
+    """One upset in `oh_req` used to stop the block delivering events for
+    the rest of the mission.
+
+    `oh_req` was cleared by `cap_rd_valid` and by nothing else, and the
+    refill stood off on `!oh_req`. So a flag set by an upset while the
+    adapter was idle meant no further `cap_rd_en` was ever issued: every
+    later event sat in the capture queue, `cause[C_EVT]` went on
+    reporting that one was waiting because it reads `!cap_empty`, and
+    `EVQ_OUT.VALID` read zero for ever.
+
+    The bound gives the request back. This test checks the recovery, the
+    report, and that the report is acknowledgeable -- and it checks the
+    EVENT came through, because a bound that unwedged the adapter and
+    lost the event would pass a test that only looked at the register.
+    """
+    env = Env(dut)
+    await env.reset()
+    await enable_node(env)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    assert await _barrier_round_trip(env, 1) == (TYPE_SYNC | 1), \
+        "the event path did not work before the upset; this proves nothing"
+    assert await env.crd(C_IRQCAUSE) & CAUSE_OH_TO == 0
+
+    await RisingEdge(dut.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    assert dut.oh_req.value == 0, "the adapter was busy; the deposit is void"
+    dut.oh_req.value = 1
+
+    got = await _barrier_round_trip(env, 2)
+    assert got == (TYPE_SYNC | 2), (
+        "a single upset in oh_req stopped the block delivering events: "
+        f"barrier 2 came back as {got}")
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_OH_TO, (
+        f"IRQ_CAUSE reads 0x{cause:08x}: the adapter had to take its own "
+        "request back and nothing said so")
+    assert cause & (CAUSE_Q_COR | CAUSE_Q_DET | CAUSE_SER_TO
+                    | CAUSE_WIN_TO) == 0, (
+        "the show-ahead bound reported itself as some other mechanism")
+
+    await env.cwr(C_IRQCAUSE, CAUSE_OH_TO)
+    assert await env.crd(C_IRQCAUSE) & CAUSE_OH_TO == 0
+    # And the part is still working afterwards, which is the difference
+    # between a recovery and a one-shot escape.
+    assert await _barrier_round_trip(env, 3) == (TYPE_SYNC | 3)
+
+
+@cocotb.test()
+async def test_a_discarded_capture_entry_does_not_stop_the_event_path(dut):
+    """NO UPSET IS INJECTED INTO THE ADAPTER HERE. This is the design
+    defect rather than its radiation-induced form.
+
+    `aer_fifo` discards an entry whose stored parity fails and holds
+    `rd_valid` low -- its own documented behaviour, which soc_npu.v's
+    header quotes and which the INJECTION queue's `E_FETCH` has been
+    bounded against since docs/51. The capture queue's reader had no such
+    bound, so one discard left `oh_req` set for ever and the block never
+    delivered another event. docs/56 section 5.1.
+
+    The parity is spoiled in the cycle after the drain engine's write and
+    before the adapter's read, which is the only window in which a stored
+    parity bit is corruptible in this design without also corrupting the
+    word.
+    """
+    env = Env(dut)
+    await env.reset()
+    await enable_node(env)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    assert await _barrier_round_trip(env, 1) == (TYPE_SYNC | 1)
+
+    spoiled = []
+
+    async def spoil():
+        while not spoiled:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            if dut.cap_wr_en.value != 1:
+                continue
+            slot = int(dut.u_cap.u_wptr_a.bits.value) & (CAP_DEPTH - 1)
+            await RisingEdge(dut.clk_i)
+            await Timer(T_DRIVE, unit="ns")
+            b = dut.u_cap.u_par.bits.value.binstr
+            i = len(b) - 1 - slot
+            dut.u_cap.u_par.bits.value = LogicArray(
+                b[:i] + ("0" if b[i] == "1" else "1") + b[i + 1:])
+            spoiled.append(slot)
+
+    w = cocotb.start_soon(spoil())
+    lost = await _barrier_round_trip(env, 2)
+    w.kill()
+    assert spoiled, "no capture-queue write happened; this measured nothing"
+    # The discarded entry IS lost -- aer_fifo detects and does not correct
+    # -- and that is not what this test is about.
+    assert lost is None, (
+        "the entry whose parity was spoiled came back anyway; the discard "
+        "did not happen and the rest of this test proves nothing")
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_Q_DET, "a discarded entry did not raise Q_DET"
+    assert cause & CAUSE_OH_TO, (
+        f"IRQ_CAUSE reads 0x{cause:08x}: the read that produced no "
+        "rd_valid was not reported by the show-ahead's bound")
+
+    # THE CLAIM. Every LATER event still arrives.
+    for tag in (3, 4, 5):
+        assert await _barrier_round_trip(env, tag) == (TYPE_SYNC | tag), (
+            f"barrier {tag} never came back: one discarded capture entry "
+            "stopped the event path for good")
+
+
+@cocotb.test()
+async def test_the_show_ahead_bound_never_fires_on_a_healthy_read(dut):
+    """The bound, the read and the declared slack are three numbers that
+    agree rather than three that are merely consistent.
+
+    `aer_fifo` registers `rd_valid` from `rd_en && !empty`, so a healthy
+    read raises `cap_rd_valid` one cycle after `cap_rd_en` and `oh_req`
+    is set for exactly OH_WAIT cycles. This runs a whole inference and
+    requires the largest guard it saw to be EXACTLY that -- not merely
+    below the bound, which a design whose guard never left zero would
+    also satisfy.
+    """
+    env = Env(dut)
+    await env.reset()
+    seen_max = 0
+
+    async def watch():
+        nonlocal seen_max
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            assert dut.oh_expire.value == 0, \
+                "the show-ahead bound fired on a healthy read"
+            seen_max = max(seen_max, int(dut.oh_guard.value))
+
+    w = cocotb.start_soon(watch())
+    weights = make_weights(N_AXONS, N_NEURONS)
+    await bring_up(env, weights)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    got = await run_stream(env, FRAMES)
+    w.kill()
+
+    assert got, "no events were collected; the adapter was never used"
+    wait = int(dut.OH_WAIT.value)
+    bound = int(dut.OH_MAX.value)
+    assert seen_max == wait, (
+        f"the largest oh_guard over a whole inference was {seen_max} and "
+        f"soc_npu.v derives OH_WAIT = {wait}. The bound, the read and the "
+        "declared slack disagree.")
+    assert bound == wait + int(dut.OH_SLACK.value)
+    assert await env.crd(C_IRQCAUSE) & CAUSE_OH_TO == 0
+
+
+# ---------------------------------------------------------------------
+# docs/56 H5: the AER strobe, gated by the state that implies it.
+# ---------------------------------------------------------------------
+CAUSE_AER_MM = 1 << 13
+
+
+@cocotb.test()
+async def test_a_phantom_aer_strobe_never_reaches_the_die(dut):
+    """The single worst site in any campaign this block has had: one
+    upset in `aer_in_stb` produced a silent wrong inference in 18 of 18
+    draws (docs/56 section 3).
+
+    The flag drove the die's AER_IN_STB pin on its own, so a flip while
+    the engine was idle strobed a SPIKE or a TICK into the frozen die
+    with whatever `aer_in_addr` and `aer_in_tick` happened to hold. The
+    die accepted it as a real event, the inference came out wrong, and
+    nothing anywhere said so -- the SoC's own `cnt_in` did not move,
+    because the SoC did not think it had sent anything.
+
+    This checks the pin, the report and the inference, in that order,
+    and it checks the pin FIRST because the other two are downstream of
+    it.
+    """
+    env = Env(dut)
+    await env.reset()
+    weights = make_weights(N_AXONS, N_NEURONS)
+    await bring_up(env, weights)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+
+    core = LIFCore(N_NEURONS, N_AXONS, weights, CFG)
+    per_frame = core.run_frames(FRAMES)
+    expect = []
+    for k, spikes in enumerate(per_frame):
+        expect += [TYPE_SPIKE | s for s in spikes]
+        expect.append(TYPE_SYNC | k)
+
+    strobes = []
+
+    async def watch_pin():
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            if dut.obs_aer_in_stb_o.value:
+                strobes.append(int(dut.ev_state.value))
+
+    w = cocotb.start_soon(watch_pin())
+
+    # Flip the flag while the engine is idle, which is where 17 of the
+    # 18 measured draws landed.
+    await RisingEdge(dut.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    assert int(dut.ev_state.value) != int(dut.E_PIN_S.value), \
+        "the engine was mid-strobe; this deposit would be legal"
+    before = len(strobes)
+    dut.aer_in_stb.value = 1
+    for _ in range(6):
+        await RisingEdge(dut.clk_i)
+    assert len(strobes) == before, (
+        "a phantom AER strobe reached the die: the flag is driving the "
+        "pin without the state that implies it")
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_AER_MM, (
+        f"IRQ_CAUSE reads 0x{cause:08x}: the strobe flag and ev_state "
+        "disagreed and nothing said so")
+    await env.cwr(C_IRQCAUSE, CAUSE_AER_MM)
+
+    # THE CLAIM THAT MATTERS. The inference is still the golden one --
+    # a suppressed strobe is only worth anything if the run it was
+    # suppressed in comes out right.
+    got = await run_stream(env, FRAMES)
+    w.kill()
+    assert got == expect, (
+        "the inference is wrong after a suppressed phantom strobe\n"
+        "  got  " + " ".join(f"{x:04x}" for x in got)
+        + "\n  want " + " ".join(f"{x:04x}" for x in expect))
+    assert strobes, "no strobe reached the die at all; this measured nothing"
+    assert set(strobes) == {int(dut.E_PIN_S.value)}, (
+        f"the die was strobed in states {sorted(set(strobes))}; the pin "
+        "is only legal in E_PIN_S")

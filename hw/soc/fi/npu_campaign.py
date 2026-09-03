@@ -447,6 +447,16 @@ def classify(rec, golden):
         "win_to": i(rec, "win_to"),
         "win_orph": i(rec, "win_orph"),
         "tmr_ev": i(rec, "tmr_ev"),
+        # docs/56 H4: the show-ahead adapter's bound, and the
+        # longest run of cycles its request stayed outstanding.
+        # The second is the OUTCOME the bound exists to prevent
+        # and is the only column that can tell a record in which
+        # the adapter recovered from one in which it wedged.
+        "oh_to": i(rec, "oh_to"),
+        "oh_req_max": i(rec, "oh_req_max"),
+        # docs/56 H5: cycles in which the AER strobe flag and the
+        # state that implies it disagreed, so the pin was held quiet.
+        "aer_mm": i(rec, "aer_mm"),
         # ... and what an OPERATOR saw of them, read out of BUSSTAT by a
         # load the core executed.  The pair is the point: docs/52 section
         # 10's finding was not that the mechanisms failed, it was that
@@ -500,6 +510,26 @@ def draws(stratum, n, window):
         cycle = rng.randrange(lo, hi)
         out.append((targets.SITES.index(site), site, bit, cycle))
     return out
+
+
+def silent_wrong(row):
+    """A CLASSIFIED row in which the inference was wrong and no HARDWARE
+    channel said so.
+
+    docs/52 section 6.2 defines this figure and computed it by hand off
+    the records; docs/56 needs it per stratum to decide which of the
+    event engine's five sub-strata carries the rate, so it lives here
+    and the report prints it.
+
+    `ann_sw` IS DELIBERATELY NOT IN THE LIST.  It is `fi_npu.c`'s own
+    model check, and counting it would make every corrupted inference
+    announced by construction -- the reason docs/52 section 6.2 says the
+    SDC column must not be quoted on its own.  The four channels below
+    are the ones that exist in silicon with no test program behind them.
+    """
+    return bool(row["model_wrong"]) and not (
+        row["ann_npu"] or row["ann_trap"] or row["ann_alert"]
+        or row["ann_wdog"])
 
 
 def weighted_rate(rows, col, cls, strata):
@@ -615,6 +645,7 @@ def main():
                           "wdog_latency", "armed_cycles", "disarmed_cycles",
                           "q_ptr_mm", "q_par_err", "q_rv_mm", "fetch_er",
                           "ser_to", "win_to", "win_orph", "tmr_ev",
+                          "oh_to", "oh_req_max", "aer_mm",
                           "bst_cor", "bst_det", "bst_tmr",
                           "at_ser", "at_win", "at_ev"):
                     if k in r:
@@ -1082,6 +1113,10 @@ def main():
                 how.append("window orphan %d" % af["win_orph"])
             if af["tmr_ev"]:
                 how.append("cause-bank vote %d" % af["tmr_ev"])
+            if af["oh_to"]:
+                how.append("show-ahead bound %d" % af["oh_to"])
+            if af["aer_mm"]:
+                how.append("AER strobe gate %d" % af["aer_mm"])
             if af["ann_wdog"]:
                 how.append("watchdog stage %d" % af["wdog_stage"])
             say("%-14s %5d %8d  %-10s %-9s  %-10s %-10s %-8s %s"
@@ -1105,6 +1140,9 @@ def main():
                              "win_to": af["win_to"],
                              "win_orph": af["win_orph"],
                              "tmr_ev": af["tmr_ev"],
+                             "oh_to": af["oh_to"],
+                             "oh_req_max": af["oh_req_max"],
+                             "aer_mm": af["aer_mm"],
                              "bst_cor": af["bst_cor"],
                              "bst_det": af["bst_det"],
                              "bst_tmr": af["bst_tmr"]})
@@ -1194,6 +1232,8 @@ def main():
             # bench, beside what BUSSTAT told the program about them.
             "ser_to": af["ser_to"], "win_to": af["win_to"],
             "win_orph": af["win_orph"], "tmr_ev": af["tmr_ev"],
+            "oh_to": af["oh_to"], "oh_req_max": af["oh_req_max"],
+            "aer_mm": af["aer_mm"],
             "bst_cor": af["bst_cor"], "bst_det": af["bst_det"],
             "bst_tmr": af["bst_tmr"],
             "wdog_stage": af["wdog_stage"],
@@ -1254,6 +1294,23 @@ def report(say, rows, golden):
     """
     conn = [r for r in rows if not r["frozen"]]
 
+    # EVERY TABLE BELOW SELECTS ON `stratum`, so a record whose stratum
+    # this build does not know about would be dropped from all of them
+    # in silence.  That is not hypothetical: docs/56 split `engine` into
+    # five, so replaying docs/52's or docs/55's records.csv against this
+    # file leaves 100 rows matching nothing.  Say so loudly rather than
+    # printing a total that is short by a stratum -- the same failure
+    # this file's own coercion list records at line 630.
+    unknown = sorted({r["stratum"] for r in rows} - set(targets.STRATA))
+    if unknown:
+        say("")
+        say("!! %d of %d records name a stratum this build does not have: %s",
+            sum(1 for r in rows if r["stratum"] in unknown), len(rows),
+            ", ".join(unknown))
+        say("!! THEY APPEAR IN NO TABLE BELOW. Every table selects on")
+        say("!! `stratum`, so these rows are dropped rather than misfiled.")
+        say("!! docs/56 split `engine` into %s.", ", ".join(targets.ENGINE_STRATA))
+
     say("")
     say("=" * 84)
     say("1. CLASSIFICATION, WATCHDOG ARMED -- the SoC as docs/51 built it")
@@ -1313,6 +1370,42 @@ def report(say, rows, golden):
         say("  the frozen die's own transport, reported apart: %d of %d "
             "SDC = %.1f %% [%.1f .. %.1f]",
             k, len(die), 100.0 * k / len(die), 100 * lo, 100 * hi)
+
+    say("")
+    say("=" * 84)
+    say("3b. THE SILENT WRONG INFERENCE, PER STRATUM, AND ITS CONTRIBUTION")
+    say("    docs/52 section 6.2's table, which that document computed by")
+    say("    hand off the records and this one prints. A record counts")
+    say("    here when the golden MODEL says the inference was wrong AND")
+    say("    no HARDWARE channel announced it -- the block's telemetry, a")
+    say("    trap, an Ibex alert pin or the watchdog. The program's own")
+    say("    model check is NOT a hardware channel: docs/52 section 6.2 is")
+    say("    that a campaign counting it would be reporting that this")
+    say("    program noticed, which is a statement about this program.")
+    say("=" * 84)
+    total_bits = sum(targets.stratum_bits(s) for s in OPEN_STRATA)
+    say("%-10s %5s %7s %10s %9s   %s"
+        % ("stratum", "bits", "share", "silent", "contrib", "95 % interval"))
+    acc = 0.0
+    for stratum in targets.STRATA:
+        sub = [r for r in rows if r["stratum"] == stratum]
+        if not sub:
+            continue
+        k = sum(1 for r in sub if silent_wrong(r))
+        lo, hi = wilson(k, len(sub))
+        if stratum in targets.FROZEN:
+            say("%-10s %5d %7s %6d/%-3d %9s   %.1f .. %.1f %%   FROZEN",
+                stratum, targets.stratum_bits(stratum), "-", k, len(sub),
+                "-", 100 * lo, 100 * hi)
+            continue
+        share = targets.stratum_bits(stratum) / total_bits
+        contrib = 100.0 * share * k / len(sub)
+        acc += contrib
+        say("%-10s %5d %6.1f %% %6d/%-3d %8.2f %%   %.1f .. %.1f %%",
+            stratum, targets.stratum_bits(stratum), 100 * share,
+            k, len(sub), contrib, 100 * lo, 100 * hi)
+    say("%-10s %5d %6.1f %% %10s %8.2f %%",
+        "CONNECTION", total_bits, 100.0, "", acc)
 
     say("")
     say("=" * 84)
@@ -1480,7 +1573,7 @@ def report(say, rows, golden):
                 % (stratum, label, len(s2),
                    "".join("%10d" % c for c in counts)))
     say("")
-    for stratum in ("window", "engine"):
+    for stratum in ("window",) + targets.ENGINE_STRATA:
         sub = [r for r in rows if r["stratum"] == stratum]
         if not sub:
             continue
@@ -1519,6 +1612,25 @@ def report(say, rows, golden):
     say("%-46s %6d"
         % ("the engine's bounded fetch wait expired",
            sum(1 for r in rows if r["fetch_er"] > 0)))
+    say("%-46s %6d"
+        % ("the show-ahead adapter's read bound expired",
+           sum(1 for r in rows if r.get("oh_to", 0) > 0)))
+    say("%-46s %6d"
+        % ("the AER strobe gate suppressed a strobe",
+           sum(1 for r in rows if r.get("aer_mm", 0) > 0)))
+    say("")
+    # docs/56 section 5.1: the failure H4 answers is not one of docs/16's
+    # five classes, it is a STALL of the event path that leaves the
+    # inference short with every register looking sane.  The only column
+    # that sees it is how long `oh_req` stayed outstanding, so it is
+    # reported rather than left to be inferred from a class.
+    runs = sorted(r.get("oh_req_max", 0) for r in rows)
+    if runs and runs[-1]:
+        say("  the longest run of cycles the show-ahead's request stayed")
+        say("  outstanding, over every record: min %d, median %d, max %d",
+            runs[0], runs[len(runs) // 2], runs[-1])
+        say("  records in which it stayed outstanding for more than 64 "
+            "cycles: %d", sum(1 for x in runs if x > 64))
     say("")
     say("  and of the records in which a mechanism moved, how many were")
     say("  ANNOUNCED to software by anything at all:")
@@ -1526,8 +1638,12 @@ def report(say, rows, golden):
                        ("entry parity (no channel exists)", "q_par_err"),
                        ("rd_valid rails (no channel exists)", "q_rv_mm"),
                        ("the fetch bound (latches IRQ_CAUSE.FETCH_ER)",
-                        "fetch_er")):
-        sub = [r for r in rows if r[key] > 0]
+                        "fetch_er"),
+                       ("the show-ahead bound (latches IRQ_CAUSE.OH_TO)",
+                        "oh_to"),
+                       ("the AER strobe gate (latches IRQ_CAUSE.AER_MM)",
+                        "aer_mm")):
+        sub = [r for r in rows if r.get(key, 0) > 0]
         if not sub:
             say("    %-44s   -", label)
             continue

@@ -148,8 +148,33 @@ _STRATA_DOC = {
               "the FSM and the response",
     "cfgreg": "the NPUCFG control and cause registers: what the operator "
               "is told",
-    "engine": "the event engine's FSM and datapath, and the show-ahead "
-              "adapter in front of the capture queue",
+    # docs/56 SPLIT THE 140-BIT `engine` STRATUM INTO FIVE.  docs/55
+    # section 14 item 1 made that the precondition of hardening it: the
+    # engine was one undifferentiated stratum contributing 1.71 of
+    # docs/52's 4.17 points, and a hardening wave aimed at an
+    # undifferentiated stratum protects the LARGEST structure in it
+    # rather than the one that carries the rate.  docs/52 section 6.3
+    # measured what that instinct costs one level up -- `evq_data` is
+    # 41.2 % of the connection's flip-flops and zero of its rate -- and
+    # the five sub-strata below are drawn so that each is a thing about
+    # which one could make a different hardening decision.
+    #
+    # The boundaries are the module's own: the sequencer that decides,
+    # the word it carries, the counters software cross-checks, the pins
+    # it strobes, and the show-ahead adapter that hands events to
+    # software.  Nothing is added or removed -- the five sum to the same
+    # 140 bits and the same 19 sites, which `test_the_engine_split_is_a_
+    # partition` in sw/tests/test_soc_npu_guards.py asserts rather than
+    # trusts.
+    "ev_seq": "the event engine's sequencer: its state, its bounded wait "
+              "and the strobes and address it drives",
+    "ev_data": "the event word in flight: the fetched word, the serial "
+               "write data and the capture queue's write data",
+    "ev_cnt": "the engine's two event counters, which software "
+              "cross-checks and no hardware does",
+    "ev_pin": "the AER pin drivers into the frozen die",
+    "ev_oh": "the one-entry show-ahead adapter in front of the capture "
+             "queue: the only path an event takes to software",
     "evq_data": "the two SoC-side queues' stored event words, their "
                 "entry-parity check field and the read capture",
     "evq_ptr": "the two SoC-side queues' triple-redundant pointers, their "
@@ -164,10 +189,20 @@ POPULATION = {
     "die_ser": "transport (frozen die)",
     "window": "register path",
     "cfgreg": "register path",
-    "engine": "event path",
+    "ev_seq": "event path",
+    "ev_data": "event path",
+    "ev_cnt": "event path",
+    "ev_pin": "event path",
+    "ev_oh": "event path",
     "evq_data": "event path",
     "evq_ptr": "event path",
 }
+
+# The five sub-strata docs/56 split `engine` into, in the order they are
+# emitted.  Kept as a named tuple of names so that a report can still say
+# what the whole event engine did -- the split is a finer question, not a
+# different one -- and so that the partition guard has one list to check.
+ENGINE_STRATA = ("ev_seq", "ev_data", "ev_cnt", "ev_pin", "ev_oh")
 
 # Which strata are inside hw/rtl/, and therefore inside silicon that
 # docs/34 has frozen.  Every report separates them, because a finding in
@@ -238,8 +273,10 @@ def _sites():
     #
     # THE POPULATION OF THIS STRATUM IS NOT THE ONE docs/52 DREW FROM,
     # and that is the hardening rather than a change of method.  Thirteen
-    # plain flip-flops became a PROT_W = 21 word held in three
-    # soc_tmr_bank replicas, plus the two self-clearing pulses that
+    # plain flip-flops became a PROT_W-bit word held in three
+    # soc_tmr_bank replicas -- 21 bits at docs/55 and 23 now that docs/56
+    # has added a sticky bit and its mask bit -- plus the two
+    # self-clearing pulses that
     # docs/41 section 3.1's own rule leaves out of the bank.  A directed
     # replay of docs/52's cfgreg records is therefore impossible -- the
     # paths no longer exist -- and docs/55 section 9 says so where it
@@ -258,20 +295,39 @@ def _sites():
     for name, width in (("flush_pulse", 1), ("scrub_pulse", 1)):
         s.append(Site("cfgreg", name, name, width))
 
-    # ---- engine: the event engine and the show-ahead adapter -------
-    # The FSM that decides which transport an event takes, the word in
-    # flight, the AER pin drivers, the two event counters, and the
-    # one-entry show-ahead register in front of the capture queue.
-    for name, width in (("ev_state", 4), ("ev_word", 16), ("ev_wait", 4),
+    # ---- the event engine, in FIVE strata and not one ---------------
+    #
+    # docs/52 and docs/55 drew this as one 140-bit stratum called
+    # `engine` and could say only that it contributed 1.71 of the
+    # connection's 4.17 points.  That is not enough to build from.
+    # docs/55 section 14 item 1 made splitting it the PRECONDITION of
+    # hardening it, and docs/56 section 3 is the measurement the split
+    # produced.  The five below are the module's own boundaries.
+    #
+    # THE SPLIT MOVES NO SITE AND CHANGES NO WIDTH.  The same 19 sites
+    # and the same 140 bits come out in the same order; only the stratum
+    # label differs, so a per-site comparison against docs/52's and
+    # docs/55's records.csv is exact.  `draws()` seeds per (stratum,
+    # index), so the six strata that are NOT split keep their draws bit
+    # for bit -- which is what makes the split run a control on itself.
+
+    # ev_seq: the sequencer.  What state the engine is in, how long it
+    # has waited, and the strobes and address it drives at the transport
+    # and the queues.  An upset here sends an event down the wrong path,
+    # or launches a frame nobody asked for.
+    for name, width in (("ev_state", 4), ("ev_wait", 4),
                         ("ev_start", 1), ("ev_we", 1), ("ev_addr", 7),
-                        ("inj_rd_en", 1),
-                        ("aer_in_stb", 1), ("aer_in_tick", 1),
-                        ("aer_in_addr", 4),
-                        ("cap_wr_en", 1), ("cap_wr_data", 16),
-                        ("cnt_in", 16), ("cnt_out", 16),
-                        ("oh_valid", 1), ("oh_data", 16), ("oh_req", 1),
-                        ("cap_rd_en", 1)):
-        s.append(Site("engine", name, name, width))
+                        ("inj_rd_en", 1), ("cap_wr_en", 1)):
+        s.append(Site("ev_seq", name, name, width))
+
+    # ev_data: the event word in flight.  The word fetched out of the
+    # injection queue, the 32-bit serial write data built from it, and
+    # the word written into the capture queue.  This is the LARGEST
+    # sub-stratum by a factor of three, which is precisely why it is
+    # drawn apart: docs/52 section 6.3's reading of `evq_data` is that
+    # size is not consequence.
+    for name, width in (("ev_word", 16), ("cap_wr_data", 16)):
+        s.append(Site("ev_data", name, name, width))
     # ev_wdata's upper half is loaded only from a constant zero, so
     # synthesis removes it (hw/soc/flow/fi_npu_coverage.sh reports the
     # arithmetic).  The low half is the event word on its way to the
@@ -279,7 +335,41 @@ def _sites():
     # register is what the RTL declares and what `$bits` will report, so
     # the width below is 32 and the coverage census is where the
     # difference is named rather than hidden.
-    s.append(Site("engine", "ev_wdata", "ev_wdata", 32))
+    s.append(Site("ev_data", "ev_wdata", "ev_wdata", 32))
+
+    # ev_cnt: the two event counters.  docs/52 section 11.3 found 14 of
+    # the engine's 24 wrong answers here and that their ONLY symptom was
+    # the hardware's count disagreeing with the stream the program
+    # collected -- a detection that is entirely a property of the
+    # software.  Drawn apart so that the campaign can say whether that
+    # software cross-check is holding, rather than averaging it into the
+    # rest of the engine.
+    for name, width in (("cnt_in", 16), ("cnt_out", 16)):
+        s.append(Site("ev_cnt", name, name, width))
+
+    # ev_pin: the AER pin drivers into the frozen die.  Six bits, and
+    # the only part of the engine whose upset crosses the pin boundary
+    # into silicon docs/34 has committed.
+    for name, width in (("aer_in_stb", 1), ("aer_in_tick", 1),
+                        ("aer_in_addr", 4)):
+        s.append(Site("ev_pin", name, name, width))
+
+    # ev_oh: the one-entry show-ahead adapter.  Nineteen bits, of which
+    # THREE ARE FLAGS, and every event the die produces passes through
+    # them on its way to software.  docs/41 section 3.1's criterion --
+    # persistence times silence -- applies to those three exactly:
+    # `oh_req` stays set until an entry arrives, `oh_valid` stays set
+    # until software pops, and nothing votes, scrubs or reports either.
+    #
+    # `oh_guard` is docs/56's read bound and is a target like anything
+    # else, for docs/55 section 8.4's reason: a hardening measured
+    # without its own new state is a hardening measured for its benefit
+    # and not its cost.  Unlike the two guards docs/55 added, an upset in
+    # this one CANNOT fail a healthy access -- soc_npu.v header section 8
+    # is the argument and section 6.4 of docs/56 is the measurement.
+    for name, width in (("oh_valid", 1), ("oh_data", 16), ("oh_req", 1),
+                        ("cap_rd_en", 1), ("oh_guard", 3)):
+        s.append(Site("ev_oh", name, name, width))
 
     # ---- evq_data: the queues' stored words and their parity -------
     # THIS IS THE ONE PART OF THE CONNECTION THAT CARRIES PROTECTION,

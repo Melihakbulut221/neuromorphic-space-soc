@@ -400,6 +400,35 @@ module tb_soc_npu_fi;
     if (dut.u_npu.win_orphan)  win_orph_n = win_orph_n + 1;
   end
 
+  // docs/56's bound, counted the same way and for the same reason: it is
+  // the mechanism this wave built, so a record in which the show-ahead
+  // adapter recovered has to be able to NAME it rather than have it
+  // inferred from IRQ_CAUSE, which a later event could also have set.
+  integer oh_to_n = 0;       // show-ahead reads that expired
+  integer aer_mm_n = 0;      // strobe/state disagreements H5 suppressed
+  always @(posedge clk) if (rst_n) begin
+    if (dut.u_npu.oh_expire) oh_to_n  = oh_to_n + 1;
+    if (dut.u_npu.aer_stb_mm) aer_mm_n = aer_mm_n + 1;
+  end
+
+  // AND THE OUTCOME THE BOUND EXISTS TO PREVENT, watched directly rather
+  // than inferred. docs/56 section 5.1: before H4 a read that produced
+  // no rd_valid left `oh_req` set FOR EVER and the adapter never issued
+  // another one. The bench measures the longest run of consecutive
+  // cycles with `oh_req` set, so a record in which the adapter wedged is
+  // separable from one in which it recovered even where both end in the
+  // same class -- and so that the clean run's own figure is on every
+  // record as a control.
+  integer oh_req_run = 0, oh_req_max = 0;
+  always @(posedge clk) if (rst_n) begin
+    if (dut.u_npu.oh_req) begin
+      oh_req_run = oh_req_run + 1;
+      if (oh_req_run > oh_req_max) oh_req_max = oh_req_run;
+    end else begin
+      oh_req_run = 0;
+    end
+  end
+
   // The connection's three fault lines into BUSSTAT, counted at the
   // source. The PROGRAM reads BUSSTAT's counters with a load and
   // publishes them in fi_bst_*; these are the bench's own count of the
@@ -761,6 +790,9 @@ module tb_soc_npu_fi;
               "det_ev=%0d tmr_ev=%0d"},
              ser_to_n, win_to_n, win_orph_n, npu_cor_n, npu_det_n,
              npu_tmr_n);
+    // docs/56's mechanism, and the state it exists to bound.
+    $display("RECORD oh_to=%0d oh_req_max=%0d aer_mm=%0d",
+             oh_to_n, oh_req_max, aer_mm_n);
     // ... and what the PROGRAM read out of BUSSTAT with a load. The pair
     // is docs/44 section 8.2's distinction made measurable: a counter a
     // testbench reads is not a counter an operator can see.

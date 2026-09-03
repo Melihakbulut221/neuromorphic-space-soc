@@ -189,18 +189,26 @@ frozen TTIHP26b submission, instantiated and not copied — is now inside
 and a program on Ibex out of the boot ROM configures it, loads its
 weights, feeds it a six-frame event stream and reads the spikes back
 **against an answer `sw/golden/lif_core.py` computed at build time**.
-27 checks, fail mask 0, 213,971 cycles. The transport is serial because
-that is what the die has: it costs 176 clock cycles per register access,
-and what it buys is that there is exactly one implementation of the
-die's host protocol and it is the one in the SoC's own regression.
-Nothing in it is hardened beyond the two event queues, which are the
-pilot's own proved `aer_fifo`.
+27 checks, fail mask 0, **215,428 cycles** — `docs/51` measured 213,971
+and `docs/55` section 8.5 says where the other 1,457 went, all of them
+software. The transport is serial because that is what the die has: it
+costs 176 clock cycles per register access, and what it buys is that
+there is exactly one implementation of the die's host protocol and it is
+the one in the SoC's own regression.
 
-The next block is the fault-injection campaign through that connection.
-It sits between two blocks whose upset behaviour has been measured —
-the die in `docs/16`, the core in `docs/42` — and is itself unmeasured,
-and hardening it before measuring it is the mistake `docs/38` section 10
-item 4 names.
+**And it is now hardened where a campaign said to harden it, which this
+paragraph used to deny.** `docs/52` measured the connection, `docs/55`
+built the four items it ranked, and `docs/56` split the event engine
+into five strata and bounded the one that carried the rate. What is
+still unprotected is unprotected because a measurement said so, and each
+of those documents names which one.
+
+The block after the connection was its fault-injection campaign. It sat
+between two blocks whose upset behaviour had been measured — the die in
+`docs/16`, the core in `docs/42` — and was itself unmeasured, and
+hardening it before measuring it is the mistake `docs/38` section 10
+item 4 names. `docs/52` is that campaign and `docs/55` and `docs/56` are
+what it produced.
 
 ## Documents
 

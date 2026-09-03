@@ -238,10 +238,16 @@ class Census:
 
     def __init__(self, design):
         self.total = 0
+        # EVERY cell, not only the flip-flops. docs/56 H5's whole
+        # mechanism is combinational -- it costs no state at all -- so
+        # a flip-flop census is blind to whether it is in the netlist,
+        # and `cells` is what its mutation guard compares.
+        self.cells = 0
         self.by_instance = []
         self.by_src = []
         for mod in design["modules"].values():
             for cell_name, cell in mod["cells"].items():
+                self.cells += 1
                 if not _is_flop(cell["type"]):
                     continue
                 self.total += 1
@@ -910,6 +916,60 @@ def test_removing_the_mix_transform_from_one_npu_replica_collapses_it(
 
 
 @needs_yosys
+def test_the_aer_strobe_gate_is_in_the_netlist_and_costs_no_flip_flop(
+        workdir):
+    """docs/56 H5 is the one hardening in this repository whose whole
+    mechanism is COMBINATIONAL, and that is exactly why it needs a
+    census of its own.
+
+    Every other guard here is checked by counting flip-flops, and this
+    one adds none: the pin becomes `aer_in_stb && (ev_state == E_PIN_S)`
+    and the redundancy it uses was already in the netlist. So a mapper
+    that folded the gate away, or an edit that removed it, would leave
+    the flip-flop count IDENTICAL -- and the campaign, which deposits
+    into RTL, and the cocotb suite, which drives RTL, would both go on
+    passing on a part whose die can be strobed by one upset again.
+
+    The check is the mutation: build the design with the gate removed
+    and require the netlist to be strictly smaller in CELLS at exactly
+    the same flip-flop count. That says two things at once -- the gate
+    is physically present, and it costs no state."""
+    dst = Path(workdir) / "npu_mut_stb"
+    dst.mkdir(exist_ok=True)
+    old = ("assign aer_in_stb_q = aer_in_stb && aer_stb_state;\n"
+           "  assign aer_stb_mm   = aer_in_stb ^ aer_stb_state;")
+    new = ("assign aer_in_stb_q = aer_in_stb;\n"
+           "  assign aer_stb_mm   = 1'b0;\n"
+           "  wire _unused_stb = &{1'b0, aer_stb_state, 1'b0};")
+    mutated = []
+    hits = 0
+    for src in NPU_SOURCES:
+        text = src.read_text()
+        hits += text.count(old)
+        text = text.replace(old, new)
+        target = dst / src.name
+        target.write_text(text)
+        mutated.append(target)
+    assert hits == 1, (
+        "the AER strobe gate matched {} times in the NPU sources and "
+        "must match once; soc_npu.v moved".format(hits))
+
+    base = _census(_npu_script(NPU_SOURCES), workdir)
+    mut = _census(_npu_script(mutated), workdir)
+    assert base.total == mut.total, (
+        "removing the AER strobe gate changed the FLIP-FLOP count "
+        "({} -> {}). H5 is combinational and must cost no state; if it "
+        "does, this test is measuring something else".format(
+            base.total, mut.total))
+    assert base.cells > mut.cells, (
+        "the netlist is the same size with the AER strobe gate as "
+        "without it ({} cells either way). The gate has been optimised "
+        "away or is no longer there, and NOTHING ELSE in this "
+        "repository can fail on that -- the campaign and the cocotb "
+        "suite both drive the RTL.".format(base.cells))
+
+
+@needs_yosys
 def test_npu_harden_zero_removes_the_replicas(workdir):
     """`HARDEN = 0` is the baseline docs/55 section 7 prices the
     redundancy against, and this is the check that it IS a baseline: it
@@ -1019,12 +1079,21 @@ def test_the_transport_is_the_campaign_site_list_in_the_netlist(npu_asic):
 
 @needs_yosys
 def test_both_guards_survive_synthesis_at_their_full_width(workdir):
-    """The two counters docs/55 added, by name, in the mapped netlist.
+    """The two counters docs/55 added and the one docs/56 added, by
+    name, in the mapped netlist.
 
     The count above is a total and a total can hide a redistribution.
-    These are the two structures whose loss would be silent everywhere
+    These are the three structures whose loss would be silent everywhere
     else, so they are checked individually and against the widths the
     RTL derives rather than against numbers written here.
+
+    docs/56's `oh_guard` is the one most likely to go: three bits
+    against the others' eight and nine, a next value that is a small
+    function of two flags, and on a healthy part it counts to two and
+    clears -- exactly the shape an optimiser is entitled to try to fold.
+    Nothing else in this repository could fail if it did. The campaign
+    deposits into RTL, the cocotb tests drive RTL, and soc_npu.v has no
+    proof at all.
     """
     # A by-NAME census needs the names, which the post-mapping flatten
     # erases -- so this one stops before `dfflibmap` and counts the
@@ -1050,7 +1119,22 @@ def test_both_guards_survive_synthesis_at_their_full_width(workdir):
     m = re.search(r"localparam\s+integer\s+GUARD_W\s*=\s*\$clog2", text)
     assert m, "soc_npu_ser.v no longer derives GUARD_W with $clog2"
 
-    for sig, floor in (("u_ser.guard", 4), ("win_guard", 4)):
+    # `oh_guard`'s floor is DERIVED from the bound it has to reach, not
+    # written down: soc_npu.v sizes it as the width of OH_MAX, and a
+    # narrower net could not count that far.
+    npu = (SOC_RTL / "soc_npu.v").read_text()
+
+    def _lpi(name):
+        m = re.search(r"localparam\s+integer\s+" + name + r"\s*=\s*(\d+)\s*;",
+                      npu)
+        assert m, "no `localparam integer {} = <literal>;` in " \
+                  "soc_npu.v".format(name)
+        return int(m.group(1))
+
+    oh_max = _lpi("OH_WAIT") + _lpi("OH_SLACK")
+
+    for sig, floor in (("u_ser.guard", 4), ("win_guard", 4),
+                       ("oh_guard", max(1, oh_max.bit_length()))):
         got = width.get(sig)
         assert got is not None, (
             "{} is not a net in the synthesised connection at all. A "

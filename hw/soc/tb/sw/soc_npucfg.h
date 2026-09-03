@@ -84,7 +84,27 @@
  *
  * A SER_TO or a WIN_TO also FAILS the access that provoked it, so
  * software normally learns of those from a load access fault first and
- * reads this register to find out which of the two it was. */
+ * reads this register to find out which of the two it was.
+ *
+ * b12 was added by docs/56:
+ *
+ *   OH_TO    the show-ahead adapter issued a read of the capture queue
+ *            that produced no rd_valid inside its bound, and took its
+ *            own request back so the read could be re-issued. Before
+ *            that bound existed one such read stopped the block
+ *            delivering events FOR GOOD, with EVT still reporting that
+ *            one was waiting -- so a driver polling EVQ_OUT polled for
+ *            ever. It is reachable from a discarded capture entry as
+ *            well as from an upset in the flag.
+ *   AER_MM   the AER strobe flag and the event engine's state, which
+ *            imply each other on a healthy part, disagreed. The strobe
+ *            into the die was held quiet. docs/56 measured an upset in
+ *            that ONE flip-flop producing a silent wrong inference in 18
+ *            of 18 draws -- a phantom spike the die accepted as real --
+ *            which is the highest per-bit rate this block has measured.
+ *            It DETECTS and does not correct: held quiet is right when
+ *            the flag was corrupted and loses an event when the state
+ *            was, and the block cannot tell which. */
 #define NPUCFG_C_EVT      (1u << 0)
 #define NPUCFG_C_ERR      (1u << 1)
 #define NPUCFG_C_SEC      (1u << 2)
@@ -97,6 +117,8 @@
 #define NPUCFG_C_Q_COR    (1u << 9)
 #define NPUCFG_C_Q_DET    (1u << 10)
 #define NPUCFG_C_CFG_TMR  (1u << 11)
+#define NPUCFG_C_OH_TO    (1u << 12)
+#define NPUCFG_C_AER_MM   (1u << 13)
 /* Every FAULT bit, which is every cause bit except the EVT level. It is
  * defined once, here, because a program that spelled the set out for
  * itself would go on reporting a clean part after a bit was added to the
@@ -105,7 +127,8 @@
                            | NPUCFG_C_TMR | NPUCFG_C_INJ_OVF \
                            | NPUCFG_C_FETCH_ER | NPUCFG_C_SER_TO \
                            | NPUCFG_C_WIN_TO | NPUCFG_C_Q_COR \
-                           | NPUCFG_C_Q_DET | NPUCFG_C_CFG_TMR)
+                           | NPUCFG_C_Q_DET | NPUCFG_C_CFG_TMR \
+                           | NPUCFG_C_OH_TO | NPUCFG_C_AER_MM)
 
 /* EVQ_OUT */
 #define NPUCFG_EVQ_VALID  (1u << 31)

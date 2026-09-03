@@ -189,9 +189,52 @@
 //       once, this block never rewrites them, and nothing votes, scrubs
 //       or reports them.
 //
-// AND ONE THING THE MEASUREMENT SAID TO LEAVE ALONE, which is the part
-// of the ranking that was counter-intuitive. `evq_data` -- the two
-// queues' stored words and their entry parity -- is 41.2 % of the
+// H4 AND H5 ARE docs/56'S, AND THE TWO OF THEM REST ON ONE MEASUREMENT
+// THAT COULD NOT BE MADE BEFORE IT. docs/52 and docs/55 drew the event
+// engine as ONE stratum of 140 bits contributing 1.71 of the
+// connection's 4.17 points, and docs/55 section 14 item 1 made splitting
+// it the PRECONDITION of hardening it, on the ground that an
+// undifferentiated stratum is hardened by protecting its largest
+// structure. Split into five and drawn 100 times each, the engine's
+// silent corruption is not spread over it at all:
+//
+//     ev_data   64 bits, 45.7 % of the engine   0 of 100
+//     ev_cnt    32 bits, 22.9 %                 0 of 100
+//     ev_seq    19 bits                        13 of 100
+//     ev_oh     19 bits                         6 of 100
+//     ev_pin     6 bits                        18 of 100
+//
+// -- and per SITE, 96 % of the engine's whole rate is in NINE BITS:
+// `aer_in_stb` (18 of 18 draws), `ev_state` (7 of 20), `oh_req` (3 of
+// 4), `cap_wr_en` (5 of 8), `oh_valid` (2 of 4) and `inj_rd_en` (1 of
+// 4). THE RATE IS IN THE STROBES AND NOT IN THE DATA. docs/56 section 3.
+//
+//   H4. THE SHOW-AHEAD ADAPTER'S READ IS BOUNDED.  [`oh_req`: 3 silent
+//       wrong inferences in 4 draws, and a wedge no campaign reached]
+//       The reason is a defect this file's own header describes and
+//       applies to the OTHER queue -- a read of an aer_fifo may
+//       legitimately return nothing, so it needs a bound -- and the
+//       adapter had none. `oh_req` was cleared by `cap_rd_valid` alone
+//       and the refill stood off on `!oh_req`, so ONE discarded capture
+//       entry, or one upset that set that flag, stopped the block
+//       delivering events FOR EVER while `cause[C_EVT]` went on saying
+//       one was waiting. Measured both ways in: docs/56 section 5.1.
+//
+//   H5. THE AER STROBE IS GATED BY THE STATE THAT IMPLIES IT.
+//       [`aer_in_stb`: 18 silent wrong inferences in 18 draws]
+//       The highest per-bit rate in any campaign this block has had, on
+//       ONE flip-flop, and the whole of `ev_pin`'s contribution. An
+//       upset in it strobed a phantom SPIKE or TICK into the frozen die
+//       with whatever the address and type pins held, and the die
+//       accepted it. `aer_in_stb == (ev_state == E_PIN_S)` was already
+//       an invariant of the FSM, so the redundancy was in the netlist
+//       and was not being used; the pin is now the AND of the two and a
+//       disagreement raises IRQ_CAUSE.AER_MM. IT COSTS NO FLIP-FLOP.
+//       Section 9.
+//
+// AND TWO THINGS THE MEASUREMENT SAID TO LEAVE ALONE, which is the part
+// of the ranking that keeps being counter-intuitive. `evq_data` -- the
+// two queues' stored words and their entry parity -- is 41.2 % of the
 // connection's flip-flops and 53.5 % of its area (docs/51 section 11),
 // and it produced ZERO silent wrong inferences in 100 draws. The reason
 // is occupancy: the queues hold a couple of live entries out of eight,
@@ -199,6 +242,12 @@
 // wave that started with the biggest structure would have spent its
 // whole budget there and bought nothing. NOTHING IN THIS FILE PROTECTS
 // THE QUEUE STORAGE and docs/55 section 6 is why.
+//
+// docs/56 found the same shape one level down and it is now a rule
+// rather than a coincidence: `ev_data`, the event word in flight, is 64
+// of the engine's 140 bits -- the largest sub-stratum by a factor of
+// three -- and came back 0 of 100, as did `ev_cnt`'s 32. NOTHING IN
+// THIS FILE PROTECTS THE EVENT WORD EITHER.
 //
 // =====================================================================
 // 7. THE REPLICATION BOUND, AND WHY THE BANK IS ONE WORD
@@ -252,6 +301,71 @@
 // guards are single points by decision. docs/55 section 6 prices each
 // one against what docs/52 measured of it, and docs/52 section 12 item 5
 // is why parity over the shift register was declined.
+// =====================================================================
+// 8. H4's GUARD IS UNPROTECTED STATE, AND ITS CORRUPTION IS BENIGN
+// =====================================================================
+//
+// docs/55 added twenty unprotected flip-flops whose upset FAILS A
+// HEALTHY ACCESS -- the transport's guard, the window's guard and
+// `win_out` -- and said so rather than netting it off. H4 adds three
+// more, `oh_guard`, and they are different in kind, which is worth
+// stating because "one more guard" would otherwise read as one more of
+// the same trade.
+//
+// An upset that makes `oh_guard` expire early clears `oh_req` while a
+// read may still be in flight. It cannot pop a second entry: the refill
+// stands off on `!cap_rd_valid` and `!cap_rd_en`, so the earliest
+// re-issue is two cycles later, by which time the in-flight read has
+// either raised `cap_rd_valid` -- which sets `oh_valid` and blocks the
+// refill -- or been discarded, which is the case the bound is for. And
+// it cannot lose one, because nothing here touches `oh_valid` or the
+// queue's pointers. THE WHOLE COST OF A SPURIOUS EXPIRY IS ONE NEEDLESS
+// STICKY BIT. docs/56 section 6.4 draws into these three like any other
+// site rather than assuming it.
+//
+// What H4 does NOT protect is the rest of the adapter. `oh_valid` and
+// `oh_data` are single points: an upset that sets `oh_valid` makes the
+// block hand software a stale word and report an event that is not
+// there, and one that clears it loses the word the adapter is holding.
+// docs/56 section 6.2 prices tripling the adapter's bundle against what
+// the campaign measured of it and declines it in this wave, and section
+// 11 is the surviving exposure.
+//
+// =====================================================================
+// 9. H5 COSTS NO STATE AT ALL, AND THAT IS WHY IT IS NOT ENOUGH
+// =====================================================================
+//
+// H5 adds no flip-flop. `aer_in_stb == (ev_state == E_PIN_S)` is an
+// invariant of the FSM below -- the flag is set on the edge out of
+// E_PIN_A, cleared on the edge out of E_PIN_S, and the flush path
+// clears it in the same statement that returns `ev_state` to E_IDLE --
+// so the flag is a REDUNDANT ENCODING of a state this module already
+// holds, and the pin is now the AND of the two. A spurious strobe needs
+// two coincident upsets where it needed one.
+//
+// FOUR THINGS IT DOES NOT DO, and each is a decision rather than an
+// oversight:
+//
+//   * IT DOES NOT CORRECT. On a disagreement the pin is held quiet.
+//     That is the right answer when the FLAG was corrupted -- 18 of 18
+//     of docs/56's draws -- and it LOSES AN EVENT when `ev_state` was,
+//     and this module cannot tell which. `IRQ_CAUSE.AER_MM` says the
+//     inbound path took an upset and does not claim to say more.
+//   * IT DOES NOTHING FOR THE ADDRESS AND TYPE PINS. `aer_in_addr` and
+//     `aer_in_tick` have no state that implies them, and docs/56
+//     measured them at 0 of 65 and 0 of 17: a corrupted address on a
+//     strobe that is not happening reaches nothing, and there is one
+//     cycle per event in which it would.
+//   * IT DOES NOTHING FOR `ev_state` ITSELF, which docs/56 measured at
+//     7 of 20 and which is now the largest single site left in the
+//     engine. Section 11 of docs/56 ranks it and says what it would
+//     cost.
+//   * AND IT IS NOT TMR. Tripling the flag is impossible on one bit
+//     (section 7) and tripling the bundle would cost twelve flip-flops
+//     and correct rather than mask. docs/56 section 6.1 prices that
+//     against this and takes this one first because it is free, not
+//     because it is stronger.
+//
 
 `timescale 1ns / 1ps
 
@@ -429,14 +543,25 @@ module soc_npu #(
   // a register beside it. Section 7 of the header is why.
   localparam integer C_CFG_TMR  = 11; // sticky: the cause bank's voter
                                       //         masked a mismatch
-  localparam integer NCAUSE     = 12;
+  // H4's report. docs/56 split the event engine into five strata and
+  // measured the show-ahead adapter carrying the rate; this bit says the
+  // adapter had to re-issue a read that produced no rd_valid. It is the
+  // only channel that exists for that event: header section 8.
+  localparam integer C_OH_TO    = 12; // sticky: the show-ahead adapter's
+                                      //         read bound expired
+  // H5's report. The AER strobe flag and the FSM state that implies it
+  // disagreed, so a phantom event was suppressed at the pin -- or a real
+  // one was. Header section 9.
+  localparam integer C_AER_MM   = 13; // sticky: the AER strobe flag and
+                                      //         ev_state disagreed
+  localparam integer NCAUSE     = 14;
 
   // The sticky bits are contiguous so that the protected word can carry
   // them as one field and the write-1-to-clear can be one part-select.
   // A future bit inserted in the middle of the levels would move
   // C_STICKY0 and everything below follows it.
   localparam integer C_STICKY0  = C_INJ_OVF;
-  localparam integer NSTICKY    = NCAUSE - C_STICKY0;   // 7
+  localparam integer NSTICKY    = NCAUSE - C_STICKY0;   // 9
 
   // -------------------------------------------------------------------
   // H3: the protected word.
@@ -451,7 +576,7 @@ module soc_npu #(
   localparam integer P_OUT_EN = 1;
   localparam integer P_STICKY = 2;                      // NSTICKY bits
   localparam integer P_MASK   = P_STICKY + NSTICKY;     // NCAUSE bits
-  localparam integer PROT_W   = P_MASK + NCAUSE;        // 2 + 7 + 12 = 21
+  localparam integer PROT_W   = P_MASK + NCAUSE;        // 2 + 9 + 14 = 25
 
   // Per-replica storage transform, and the masks are soc_wdog.v's for
   // its reasons: A is the true image, B and C are MIXED so every stored
@@ -976,29 +1101,120 @@ module soc_npu #(
 
   wire        oh_pop = apb_rd && (paddr_i == R_EVQ_OUT) && oh_valid;
 
+  // -------------------------------------------------------------------
+  // H4: THE SHOW-AHEAD'S READ IS BOUNDED. Header section 8.
+  //
+  // Until docs/56 the sentence where this counter now sits read:
+  //
+  //   "A read whose entry fails its parity check returns no rd_valid;
+  //    oh_req simply stays set until the next entry arrives, and the
+  //    queue's own level tells software the difference."
+  //
+  // THAT IS FALSE AND IT IS FALSE IN THE ONE DIRECTION THAT MATTERS.
+  // `oh_req` is cleared by `cap_rd_valid` and by nothing else, and the
+  // refill below requires `!oh_req`. So a read that produces no
+  // `rd_valid` leaves `oh_req` set for ever, no further `cap_rd_en` is
+  // ever issued, and EVERY LATER EVENT IS STRANDED IN THE CAPTURE QUEUE
+  // -- while `cause[C_EVT]` goes on reporting that an event is waiting,
+  // because it reads `!cap_empty`. A driver polling EVQ_OUT polls for
+  // ever. docs/56 section 5.1 measures both ways in.
+  //
+  // The precedent is TWENTY LINES UP IN THIS FILE'S OWN HEADER, applied
+  // to the other queue: "aer_fifo may legitimately answer a read with
+  // nothing -- an entry whose stored parity fails is DISCARDED and
+  // rd_valid is held low. A fetch that never returns would hang the
+  // engine, so it expires, counts, and reports." The engine's E_FETCH
+  // does exactly that. The adapter did not, and the two reads have the
+  // same failure because they are reads of the same queue type.
+  //
+  // THE BOUND IS DERIVED AND NOT WRITTEN DOWN. `aer_fifo` registers
+  // `rd_valid` from `rd_ok = rd_en && !empty`, so a healthy read raises
+  // `cap_rd_valid` exactly one cycle after `cap_rd_en`, and `oh_req` is
+  // high for the `cap_rd_en` cycle and the `rd_valid` cycle and no
+  // others:
+  //
+  //   OH_WAIT   = 1 (the cap_rd_en cycle) + 1 (the rd_valid cycle) = 2
+  //   OH_MAX    = OH_WAIT + OH_SLACK                               = 4
+  //   OH_GUARD_W= $clog2(OH_MAX + 1)                               = 3
+  //
+  // The guard counts cycles in which `oh_req` is set, so on a healthy
+  // read it reaches exactly OH_WAIT and never more.
+  //
+  // `test_the_show_ahead_bound_never_fires_on_a_healthy_read` reports
+  // the largest guard it saw over a real inference and requires it to be
+  // exactly OH_WAIT, so the bound, the read and the declared slack are
+  // three numbers that agree rather than three that are consistent.
+  //
+  // THE COMPARISON IS `>=` AND NOT `==`, for docs/55 section 4.2's
+  // reason: an upset that pushed the counter above the bound would
+  // otherwise wrap and take another 2^OH_GUARD_W cycles, rebuilding the
+  // stall inside the guard that exists to stop it.
+  //
+  // ON EXPIRY IT CLEARS `oh_req` AND DOES NOTHING ELSE -- no read is
+  // issued here and `oh_valid` is not touched. That matters, and it is
+  // why this guard's own corruption is BENIGN where docs/55's two are
+  // not (header section 8): the refill below stands off on
+  // `!cap_rd_valid` and `!cap_rd_en`, so the earliest a re-issue can
+  // happen is two cycles after the expiry, by which time a read that
+  // was genuinely in flight has either set `oh_valid` -- which blocks
+  // the refill -- or been discarded. A SPURIOUS EXPIRY THEREFORE CANNOT
+  // POP A SECOND ENTRY AND CANNOT LOSE ONE. What it costs is one
+  // needless `IRQ_CAUSE.OH_TO`.
+  // -------------------------------------------------------------------
+  localparam integer OH_WAIT    = 2;
+  localparam integer OH_SLACK   = 2;
+  localparam integer OH_MAX     = OH_WAIT + OH_SLACK;
+  localparam integer OH_GUARD_W = (OH_MAX < 2)   ? 1 :
+                                  (OH_MAX < 4)   ? 2 :
+                                  (OH_MAX < 8)   ? 3 :
+                                  (OH_MAX < 16)  ? 4 :
+                                  (OH_MAX < 32)  ? 5 : 6;
+  localparam [OH_GUARD_W-1:0] OH_MAX_G = OH_MAX[OH_GUARD_W-1:0];
+
+  reg [OH_GUARD_W-1:0] oh_guard;
+  wire oh_expire = oh_req && !cap_rd_valid && (oh_guard >= OH_MAX_G);
+
   always @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       oh_valid  <= 1'b0;
       oh_data   <= 16'd0;
       oh_req    <= 1'b0;
       cap_rd_en <= 1'b0;
+      oh_guard  <= {OH_GUARD_W{1'b0}};
     end else if (!blk_rst_n) begin
       oh_valid  <= 1'b0;
       oh_req    <= 1'b0;
       cap_rd_en <= 1'b0;
+      oh_guard  <= {OH_GUARD_W{1'b0}};
     end else begin
       cap_rd_en <= 1'b0;
       if (cap_rd_valid) begin
         oh_data  <= cap_rd_data;
         oh_valid <= 1'b1;
         oh_req   <= 1'b0;
-      end else if (oh_pop) begin
-        oh_valid <= 1'b0;
+      end else begin
+        // The pop and the expiry are SEPARATE `if`s and not an
+        // `else if` chain, because `oh_valid` and `oh_req` can both be
+        // set at once under an upset -- the refill's `!oh_valid` makes
+        // that unreachable on a healthy part -- and chaining them would
+        // let an expiry swallow an acknowledged pop and hand software
+        // the same event twice. With `oh_expire` false this is the
+        // arm docs/51 shipped, unchanged.
+        if (oh_pop)    oh_valid <= 1'b0;
+        // H4. The read produced no rd_valid inside its bound: give the
+        // adapter its request back so the refill can re-issue it.
+        if (oh_expire) oh_req   <= 1'b0;
       end
+      // The guard counts cycles in which a request is outstanding and is
+      // cleared by anything that ends one -- including its own expiry,
+      // so a second expiry costs a second full bound rather than firing
+      // on every cycle after the first.
+      if (oh_req && !oh_expire) oh_guard <= oh_guard + 1'b1;
+      else                      oh_guard <= {OH_GUARD_W{1'b0}};
       // Refill when the holding register is free and nothing is in
       // flight. A read whose entry fails its parity check returns no
-      // rd_valid; oh_req simply stays set until the next entry arrives,
-      // and the queue's own level tells software the difference.
+      // rd_valid, and H4's bound above is what gives `oh_req` back so
+      // this condition can become true again.
       if (!oh_valid && !oh_req && !cap_rd_valid && !cap_empty
           && !cap_rd_en && !oh_pop) begin
         cap_rd_en <= 1'b1;
@@ -1017,6 +1233,12 @@ module soc_npu #(
   reg         aer_in_stb, aer_in_tick;
   reg  [3:0]  aer_in_addr;
 
+  // H5: THE STROBE THE DIE SEES IS NOT THE FLIP-FLOP. Header section 9.
+  // Both wires are assigned below the event engine, because both are
+  // functions of `ev_state`, which that section declares.
+  wire        aer_in_stb_q;   // the flag AND the state that implies it
+  wire        aer_stb_mm;     // the two disagreed: an upset in one of them
+
   pilot_top #(
       .N_NEURONS     (N_NEURONS),
       .N_AXONS       (N_AXONS),
@@ -1030,7 +1252,7 @@ module soc_npu #(
       .ser_cs_n    (ser_cs_n),
       .ser_mosi    (ser_mosi),
       .ser_miso    (ser_miso),
-      .aer_in_stb  (aer_in_stb),
+      .aer_in_stb  (aer_in_stb_q),
       .aer_in_tick (aer_in_tick),
       .aer_in_addr (aer_in_addr),
       .aer_in_rdy  (node_aer_in_rdy),
@@ -1248,6 +1470,47 @@ module soc_npu #(
   end
 
   // -------------------------------------------------------------------
+  // H5: the AER strobe, gated by and checked against the state that
+  // already implies it. Header section 9.
+  //
+  // `aer_in_stb` is set on the edge out of E_PIN_A and cleared on the
+  // edge out of E_PIN_S, and the flush path clears it in the same
+  // statement that returns `ev_state` to E_IDLE. So
+  //
+  //     aer_in_stb == (ev_state == E_PIN_S)
+  //
+  // IS AN INVARIANT OF THIS FSM, and the flag is therefore a REDUNDANT
+  // ENCODING of a state the module already holds. It was not being used
+  // as one: the flag drove the die's pin alone, so a single upset in it
+  // strobed a phantom SPIKE or TICK into the frozen die -- with whatever
+  // `aer_in_addr` and `aer_in_tick` happened to hold -- and the die
+  // accepted it as a real event. docs/56 section 3 measured that at
+  // 18 SILENT WRONG INFERENCES IN 18 DRAWS, the highest per-bit rate
+  // anywhere in this block's campaigns and the whole of the largest
+  // sub-stratum's contribution.
+  //
+  // WHAT IT COSTS IS NOTHING AND THAT IS THE POINT. There is no new
+  // flip-flop, no replica, no counter: the redundancy is already in the
+  // netlist and this uses it. A spurious strobe now needs TWO
+  // coincident upsets -- one in the flag and one in `ev_state`, in the
+  // same cycle, landing on the same encoding -- where it needed one.
+  // docs/56 section 6.1 is why that is not the same as tripling the
+  // flag, and what it does NOT buy.
+  //
+  // AND IT DOES NOT CORRECT, IT MASKS AND REPORTS. `aer_stb_mm` is the
+  // disagreement, and it is the aer_fifo dual-rail pattern
+  // (hw/rtl/aer_fifo.v, "the rd_valid rails") with the second rail
+  // being state that exists for another reason. Driving the pin from
+  // `ev_state` ALONE would also mask the flag's upset, and would delete
+  // the flag -- but it would move the whole exposure into `ev_state`,
+  // which docs/56 section 3 measured at 7 of 20, and it would report
+  // nothing. This keeps both and requires both.
+  // -------------------------------------------------------------------
+  wire aer_stb_state = (ev_state == E_PIN_S);
+  assign aer_in_stb_q = aer_in_stb && aer_stb_state;
+  assign aer_stb_mm   = aer_in_stb ^ aer_stb_state;
+
+  // -------------------------------------------------------------------
   // APB register file
   // -------------------------------------------------------------------
   wire [NCAUSE-1:0] cause;
@@ -1284,6 +1547,23 @@ module soc_npu #(
   assign sticky_ev[C_Q_COR    - C_STICKY0] = q_cor_ev;
   assign sticky_ev[C_Q_DET    - C_STICKY0] = q_det_ev;
   assign sticky_ev[C_CFG_TMR  - C_STICKY0] = prot_mismatch;
+  // H4. The show-ahead adapter had to take its own request back. It is
+  // ONE bit and there is no BUSSTAT counter behind it, which is a
+  // decision and not an omission: docs/55 section 14 item 2 ranks that
+  // block -- 126 unprotected flip-flops whose whole job is to be
+  // believed -- as the next thing to protect, and a fourth NPU counter
+  // would be eighteen more of them for an event whose durable record
+  // nothing yet acts on. docs/56 section 6.3 is the argument and section
+  // 10 carries the exposure it leaves: this bit is write-1-to-clear, so
+  // software that acknowledges it keeps no record of it anywhere.
+  assign sticky_ev[C_OH_TO    - C_STICKY0] = oh_expire;
+  // H5. The strobe flag and the state that implies it disagreed. It
+  // is a DETECTION and not a correction -- the pin was held quiet,
+  // which is right when the flag was the corrupted one and is a lost
+  // event when `ev_state` was, and this block cannot tell which. The
+  // bit says an upset reached the inbound event path; docs/56 section
+  // 6.1 is why that is worth one bit and not three.
+  assign sticky_ev[C_AER_MM   - C_STICKY0] = aer_stb_mm;
 
   // The clear strobe. Write-1-to-clear, and only the sticky half: a
   // write to a level bit is accepted and does nothing, because the way
@@ -1441,7 +1721,11 @@ module soc_npu #(
   assign obs_ser_cs_n_o    = ser_cs_n;
   assign obs_ser_mosi_o    = ser_mosi;
   assign obs_ser_miso_o    = ser_miso;
-  assign obs_aer_in_stb_o  = aer_in_stb;
+  // THE GATED STROBE, which is what the die sees. An observation port
+  // that showed the flag instead would show a phantom strobe H5 had
+  // just suppressed, and hw/soc/tb/tb_soc_npu_fi.v counts pin events
+  // through it.
+  assign obs_aer_in_stb_o  = aer_in_stb_q;
   assign obs_aer_out_vld_o = node_aer_out_vld;
 
   wire _unused_apb = &{1'b0, paddr_i[1:0], pwdata_i[31:16], 1'b0};
