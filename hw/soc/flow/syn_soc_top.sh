@@ -185,6 +185,47 @@ $RTL/soc_pnp.v $RTL/soc_apb_pnp.v $RTL/soc_clint.v $RTL/soc_gptimer.v \
 $RTL/soc_wdog.v $RTL/soc_busstat.v $RTL/soc_tmr_bank.v \
 $PILOT_RTL/tmr_voter.v"
 
+# ---- THE ACCELERATOR, WHICH WAS MISSING ------------------------------
+#
+# docs/51 put `u_npu` inside soc_top.v and this list was not updated, so
+# from that commit until docs/61 this script did not elaborate at all:
+#
+#   ERROR: Module `\soc_npu' referenced in module `\soc_top' in cell
+#          `\u_npu' is not part of the design.
+#
+# docs/57 section 3.2 found it and docs/59 section 7 found it again from
+# the DEF. Everything docs/45, 47, 48, 49, 50 and 53 measure is a
+# `soc_top` that this script could still build when they were written and
+# that no longer exists: 27,565 cells against 41,543, 3,085 flip-flops
+# against 5,237.
+#
+# THERE IS NO KNOB HERE AND THERE CANNOT BE ONE. soc_top.v instantiates
+# u_npu unconditionally, so "without the NPU" is not a configuration of
+# this design -- it is a different design, and the only artefact of it is
+# the netlist already on disk at hw/soc/out/s47-sram/soc_top.netlist.v.
+# A SOC_NPU=0 mode would not reproduce that netlist; it would fail to
+# elaborate, exactly as this script did before this block was added.
+#
+# soc_npu.v instantiates hw/rtl/pilot_top.v -- the FROZEN pilot, docs/34
+# -- rather than copying it, so pilot_top.v, lif_core.v, aer_fifo.v and
+# scrub.v are READ out of hw/rtl/ and never modified, exactly as
+# flow/sim_soc.sh reads them. The include path is needed for both
+# directions: soc_npu.v includes rtl/soc_npu_regs.vh and pilot_top.v
+# includes hw/rtl/npu_regs.vh.
+#
+# secded_enc.v and secded_dec.v have TWO consumers -- the register-file
+# codec at IBEX_REGFILE=secded and lif_core's weight-word ECC -- and a
+# module declared twice is an error. ibex_sources() supplies them in the
+# secded configuration, so this list supplies them only in the other one.
+# The rule and its wording are flow/sim_soc.sh's; there is one SECDED
+# codec in this repository and both consumers read it from hw/rtl/.
+NPU_SRCS="$RTL/soc_npu.v $RTL/soc_npu_ser.v \
+$PILOT_RTL/pilot_top.v $PILOT_RTL/lif_core.v $PILOT_RTL/aer_fifo.v \
+$PILOT_RTL/scrub.v"
+if [ "$IBEX_REGFILE" != secded ]; then
+  NPU_SRCS="$NPU_SRCS $PILOT_RTL/secded_enc.v $PILOT_RTL/secded_dec.v"
+fi
+
 # ---- the memory boundary --------------------------------------------
 MEM_READ=""
 MEM_ANCHOR="# SOC_MEM=$SOC_MEM: no memory hierarchy anchor"
@@ -417,6 +458,7 @@ read_liberty -lib $SG13G2_TYP
 read_verilog -defer $RTL/prim_clock_gating.v
 read_verilog -defer $IBEX_SRCS
 read_verilog -I$RTL -defer $SOC_SRCS
+read_verilog -I$RTL -I$PILOT_RTL -defer $NPU_SRCS
 $MEM_READ
 read_verilog -I$RTL -defer $RTL/soc_top.v
 

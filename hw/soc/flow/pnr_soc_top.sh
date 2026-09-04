@@ -170,6 +170,25 @@ SRCS=$(
   # READ from the pilot's directory and never modified, exactly as
   # flow/syn_soc_top.sh reads them.
   echo "$PILOT_RTL/tmr_voter.v"
+  # THE ACCELERATOR. docs/51 put `u_npu` inside soc_top.v and neither
+  # this list nor flow/syn_soc_top.sh's was updated, so `full3` -- the
+  # sign-off run docs/47 through docs/53 report from -- was hardened
+  # from a netlist with no accelerator in it. docs/57 section 3.2 and
+  # docs/59 section 7 found it independently; docs/61 is the re-run.
+  # soc_npu.v instantiates hw/rtl/pilot_top.v, the FROZEN pilot, so the
+  # four files below are READ out of hw/rtl/ and never modified.
+  echo "$RTL/soc_npu.v"
+  echo "$RTL/soc_npu_ser.v"
+  echo "$PILOT_RTL/pilot_top.v"
+  echo "$PILOT_RTL/lif_core.v"
+  echo "$PILOT_RTL/aer_fifo.v"
+  echo "$PILOT_RTL/scrub.v"
+  # secded_enc.v and secded_dec.v have two consumers -- the register-file
+  # codec and lif_core's weight-word ECC -- and ibex_sources() already
+  # emits them in the secded configuration. The rule is
+  # flow/syn_soc_top.sh's and flow/sim_soc.sh's: exactly one copy.
+  [ "$IBEX_REGFILE" = secded ] || {
+    echo "$PILOT_RTL/secded_enc.v"; echo "$PILOT_RTL/secded_dec.v"; }
   # THE REAL MEMORIES. soc_mem.v is deliberately absent: two files
   # declaring `soc_mem` would be a redeclaration, and the behavioural
   # one is 589,824 registers.

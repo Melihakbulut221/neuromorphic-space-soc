@@ -1337,6 +1337,90 @@ def test_the_whole_design_flow_uses_the_block_flows_recipe():
             "other two write".format(name))
 
 
+def test_every_flow_that_builds_soc_top_reads_every_module_it_instantiates():
+    """The defect `docs/57` and `docs/59` found independently, made loud.
+
+    `docs/51` added `u_npu` to `soc_top.v` and updated ONE of the four
+    source lists that build that file. `flow/sim_soc.sh` was the one; the
+    other three -- `syn_soc_top.sh`, `pnr_soc_top.sh` and `fi_core.sh` --
+    were not, and the consequences ran for ten documents:
+
+      * `fi_core.sh` stopped elaborating outright, so `docs/42`,
+        `docs/43` and `docs/46`'s campaigns could not be rebuilt. Loud,
+        and still not noticed for six documents.
+      * `syn_soc_top.sh` and `pnr_soc_top.sh` stopped elaborating too --
+        but nothing re-ran them, so `hw/soc/pnr/runs/full3` and every
+        area, timing and power number in `docs/45`, `docs/47`, `docs/48`,
+        `docs/49`, `docs/50` and `docs/53` stayed on disk as the sign-off
+        of a design missing 50.7 % of its cells. SILENT, which is worse.
+
+    So this test is not about the NPU. It is about the shape: a module
+    `soc_top.v` instantiates that some flow cannot resolve. It reads the
+    instantiations out of the RTL and asserts each one whose file exists
+    in `hw/soc/rtl/` or the frozen `hw/rtl/` is named by all four lists.
+
+    What it does NOT do is check that the four lists are the SAME list.
+    They are not and must not be: `sim_soc.sh` reads `soc_mem.v` and the
+    synthesis flows must not, `fi_core.sh` adds a testbench, and
+    `docs/45` section 9 item 4 is the standing proposal to derive one
+    list from the top -- which would delete this test and is a decision
+    about comparability rather than a tidy-up.
+    """
+    top = (SOC_RTL / "soc_top.v").read_text()
+    instantiated = set(re.findall(
+        r"^\s{2,}([a-z][a-z0-9_]*)\s+(?:#\s*\(|u_[a-z0-9_]+\s*\()",
+        top, re.M))
+    # `soc_mem` is deliberately substituted: syn_soc_top.sh has four
+    # implementations of it and pnr_soc_top.sh reads the SRAM one, so it
+    # is not checked by file name.
+    substituted = {"soc_mem"}
+    assert "soc_npu" in instantiated, (
+        "the pattern stopped matching soc_top.v's instantiations; this "
+        "test would then pass vacuously")
+
+    # Comments are stripped before the search, so a module named only in
+    # a header paragraph does not satisfy the check. `pnr_soc_top.sh`
+    # builds part of its list in a `for f in soc_bus soc_apb_bridge ...`
+    # loop, so the token and not the file name is what is looked for.
+    def code(path):
+        return "\n".join(ln for ln in (SOC_FLOW / path).read_text()
+                         .splitlines() if not ln.lstrip().startswith("#"))
+
+    flows = {name: code(name)
+             for name in ("syn_soc_top.sh", "pnr_soc_top.sh", "fi_core.sh",
+                          "sim_soc.sh")}
+    checked = []
+    for mod in sorted(instantiated - substituted):
+        if not ((SOC_RTL / f"{mod}.v").is_file()
+                or (PILOT_RTL / f"{mod}.v").is_file()):
+            continue        # an Ibex module or a library cell
+        checked.append(mod)
+        for name, text in flows.items():
+            assert re.search(r"\b" + mod + r"\b", text), (
+                "hw/soc/flow/{} does not read {}.v, which "
+                "hw/soc/rtl/soc_top.v instantiates. That is the defect "
+                "docs/57 section 3 and docs/61 are about: the flow "
+                "either fails to elaborate, or -- worse -- keeps "
+                "reporting from a netlist somebody built before the "
+                "module existed.".format(name, mod))
+    assert len(checked) >= 8, (
+        "only {} of soc_top.v's children were checked; the file layout "
+        "moved and this test is now nearly vacuous".format(len(checked)))
+
+    # And the transitive half, which is what made this one expensive:
+    # soc_npu.v instantiates the FROZEN pilot rather than copying it, and
+    # a list that has soc_npu.v and not pilot_top.v fails one level down.
+    npu = (SOC_RTL / "soc_npu.v").read_text()
+    for mod in ("pilot_top", "aer_fifo", "tmr_voter", "soc_npu_ser"):
+        assert re.search(r"^\s+" + mod + r"\s+", npu, re.M), (
+            "soc_npu.v no longer instantiates {}; this test's transitive "
+            "list is stale".format(mod))
+        for name, text in flows.items():
+            assert re.search(r"\b" + mod + r"\b", text), (
+                "hw/soc/flow/{} does not read {}.v, which "
+                "hw/soc/rtl/soc_npu.v instantiates".format(name, mod))
+
+
 def test_the_verdict_rule_is_one_file_and_not_two_copies_of_one():
     """`flow/sta_ibex.sh`'s header states the rule at length -- every
     check reported is also judged, the verdict names its own scope,

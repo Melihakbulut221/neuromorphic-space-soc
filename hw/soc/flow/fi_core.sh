@@ -85,6 +85,43 @@ FI_REGFILE=${IBEX_REGFILE:-secded} \
 RF_DEFINE=()
 [ "${IBEX_REGFILE:-secded}" = "secded" ] && RF_DEFINE=(-DFI_REGFILE_SECDED)
 
+# ---- THE ACCELERATOR, WHICH WAS MISSING ------------------------------
+#
+# docs/51 put `u_npu` inside soc_top.v and this source list was not
+# updated, so from that commit until docs/61 this script did not
+# elaborate at all:
+#
+#   hw/soc/rtl/soc_top.v:624: error: Unknown module type: soc_npu
+#
+# docs/57 section 3.1 found it and deliberately did not fix it, because a
+# repair to the instrument three campaigns are reported from belongs in
+# its own change. This is that repair, and what it does NOT do is stated
+# where it can be seen: THE CAMPAIGNS OF docs/42, docs/43 AND docs/46 ARE
+# NOT RE-RUN BY IT. What is restored is that they CAN be rebuilt. Whether
+# the design they would now run on -- which has 2,178 more flip-flops in
+# it and a sixth fabric port -- produces the same outcome distribution is
+# a separate measurement with its own cost, and docs/61 did not take it.
+#
+# The six files and the two include paths are flow/sim_soc.sh's, exactly:
+# soc_npu.v includes rtl/soc_npu_regs.vh and hw/rtl/pilot_top.v includes
+# hw/rtl/npu_regs.vh. hw/rtl/ is READ and never modified; soc_npu.v
+# INSTANTIATES the frozen pilot rather than copying it.
+NPU_SRC=("$SOC_DIR/rtl/soc_npu.v"
+         "$SOC_DIR/rtl/soc_npu_ser.v"
+         "$PILOT_RTL/pilot_top.v"
+         "$PILOT_RTL/lif_core.v"
+         "$PILOT_RTL/aer_fifo.v"
+         "$PILOT_RTL/scrub.v")
+# One SECDED codec in this repository, and two consumers of it: the
+# register-file codec at IBEX_REGFILE=secded and lif_core's weight-word
+# ECC. ibex_sources() emits the pair in the secded configuration, so this
+# list emits it only in the other one -- Icarus refuses a module declared
+# twice in one compilation unit. flow/sim_soc.sh states the same rule for
+# the same pair and this is a copy of it, not a second policy.
+if [ "${IBEX_REGFILE:-secded}" != secded ]; then
+  NPU_SRC+=("$PILOT_RTL/secded_enc.v" "$PILOT_RTL/secded_dec.v")
+fi
+
 # SOC_MEM_RDREG=1 builds the same campaign against docs/50's registered
 # memory read return -- soc_top.v's MEM_RDREG. It DEFAULTS TO 0 and
 # nothing sets it; docs/50 section 7 uses it to price the extra cycle on
@@ -138,6 +175,7 @@ sym_opt () {
 
 "$IVERILOG" -g2005-sv -o "$OUT/tb_soc_fi.vvp" \
   -I "$SOC_DIR/rtl" \
+  -I "$PILOT_RTL" \
   -I "$OUT" \
   -DSG13G2_ICG_BEHAVIOURAL \
   -DROM_HEX="\"$OUT/$IMG.hex\"" \
@@ -172,6 +210,7 @@ sym_opt () {
   "$SOC_DIR/rtl/soc_wdog.v" \
   "$SOC_DIR/rtl/soc_busstat.v" \
   "$SOC_DIR/rtl/soc_tmr_bank.v" \
+  "${NPU_SRC[@]}" \
   "$PILOT_RTL/tmr_voter.v" \
   "$SOC_DIR/rtl/prim_clock_gating.v" \
   $(ibex_sources "$SOC_DIR") \
