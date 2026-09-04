@@ -800,6 +800,20 @@ the same load, the same 20 ns delay target. Gate equivalent =
 
 **[fact for every measured row; the percentages are arithmetic on them]**
 
+**Note added 2026-09-05.** The `soc_clint` row reproduces only against
+the source list `flow/syn_soc.sh` read on the day. `docs/45-soc-top-synthesis.md`
+section 6.2 measures the same, unchanged `soc_clint.v` at **1,043 cells
+/ 16,712.8164 um2**, and section 4.3 of that document shows why: the
+script reads every SoC block before selecting a top, and the three files
+`docs/44` added to the list — `soc_busstat.v`, `soc_tmr_bank.v`,
+`tmr_voter.v` — move the CLINT by 29.3328 um2 and 5 cells without
+touching it; removing them brings back 16,683.4836 exactly **[fact,
+`docs/45` section 4.3, seven re-syntheses]**. Neither number is wrong.
+**1,038 / 16,683.48 is the figure for the list at `dbbef96`; the one to
+quote for the SoC as it stands is `docs/45`'s.** The `soc_fabric_meas`
+row moves the same way and for the same reason (1,027 / 16,379.9874
+today), and `docs/51` section 11 reports the same pattern for `soc_bus`.
+
 Three readings worth stating.
 
 **The fifth fabric port costs 1,421.92 um2, or 0.52 % of the CPU**

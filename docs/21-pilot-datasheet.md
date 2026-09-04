@@ -851,7 +851,33 @@ stale figure in the repository. The superseded table is retained at the
 end of this section rather than deleted, because a datasheet that
 silently improves its own numbers is not auditable.
 
-**Headline, campaign of record [measured].** Read out of
+**Corrected 2026-09-05.** The "campaign of record" below is the
+335-injection run read at `0448282`, which was the committed log on
+2026-08-29 when this section was corrected the first time. The committed
+log moved three times after that and this datasheet was not edited:
+`2c6c052` (366 injections, 18 SDC; `docs/16` section 5.11), `634ca3e`
+(374, 11 SDC; `docs/29-queue-storage-protection.md`) and `bc91c71`, then
+the freeze commit `b6738e5` (**378 injections, 6 SDC**;
+`docs/30-dispatcher-protection.md` section 5 and
+`docs/33-rail-transform.md` section 7). The file this datasheet ships
+with, `hw/tb/fi_campaign_results.json` at blob `312d3c76`, reports
+**378 injections: 97 MASKED (25.7 %), 193 CORRECTED (51.1 %), 82
+DETECTED (21.7 %), 6 SDC (1.6 %), 0 HANG**, 445.7 s of wall time
+**[fact, read out of the file at HEAD; `git log -p` on the file for the
+sequence]**. **That is the campaign of record for the frozen die**, and
+`docs/60-soc-datasheet.md` section 9 already quotes it. The 335-injection
+table below is retained by the same rule that retained the 255-injection
+one — it was true of the design at `0448282` — and this section's own
+warning applies one more time: **do not pair 7.8 % with 1.6 %**, because
+the 378-injection design carries dual-rail valid flags, queue-entry
+parity and dispatcher detection that the 335-injection design did not,
+and the injections into them are new targets. Retired injections and
+record-by-record diffs are in `docs/16` section 5.9 onward, `docs/29`
+and `docs/30`. `docs/64-document-reconciliation.md` section 3.1 has the
+trace.
+
+**Headline, ~~campaign of record~~ campaign at `0448282` [measured] —
+superseded, see above.** Read out of
 `hw/tb/fi_campaign_results.json` at commit `0448282`: **335 injections**,
 seed `0x16f12026`, 8 x 8 geometry, 891.6 s of wall time. Simulated time
 28.77 ms, per `docs/16` section 3.4.
@@ -1060,7 +1086,10 @@ intact before one did.
 **The honest statement, corrected 2026-08-29.** This paragraph opened
 "roughly a third of single-bit upsets ... 91 of 255, 35.7% [measured]".
 That was the pre-hardening campaign and is superseded; see section 6.2.
-On the campaign of record it is **26 of 335, 7.8% [measured]** — and
+On the campaign of record it is **26 of 335, 7.8% [measured]**
+*(corrected 2026-09-05: on the frozen 378-injection log it is **6 of
+378, 1.6 %** **[fact, `hw/tb/fi_campaign_results.json`]**, and the
+pairing rule below applies to 7.8 % against 1.6 % as well)* — and
 the two figures must not be paired, for the denominator reason section
 6.2 gives. The qualitative statement is what survives the correction and
 it survives unchanged: **every silent corruption still comes from a
@@ -1213,7 +1242,11 @@ is quoted:
   alone rather than the event stream, and all three are the mis-steered
   scan index of `lif_scan` **[measured,
   `state_only_divergence` in `hw/tb/fi_campaign_results.json`]**. A
-  stream-only campaign would report 23 SDC rather than 26.
+  stream-only campaign would report 23 SDC rather than 26. *Corrected
+  2026-09-05: on the frozen 378-injection log `state_only_divergence`
+  is **4 of 6 SDC** **[fact, the same key at HEAD]**, so a stream-only
+  campaign would report 2; which structures the four sit in is not
+  read out here.*
 
 ---
 

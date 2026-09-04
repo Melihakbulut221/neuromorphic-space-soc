@@ -670,6 +670,20 @@ driving cell and load, `stat -liberty`. Gate equivalent =
 
 **[fact, both measured in the same session with the same script]**
 
+**Note added 2026-09-05.** 313,733.1960 um2 is the core with the SECDED
+register file **as this document built it**. It is not the area of the
+shipped core. `docs/44-margin-and-observability.md` section 7.1
+re-measures this document's file byte-identically and then measures the
+core as shipped — `FASTCORR = 1` with the fault-report port live — at
+**22,338 cells, 2,328 flip-flops, 316,051.6590 um2**, +14.64 % over the
+baseline **[fact, `docs/44` section 7.1]**; `docs/45` section 6.2 and
+`docs/60` section 5 carry that figure. The 2,318.4630 um2 between the
+two is content — the fast-correction read path and the report cone — and
+not method **[estimate, the difference of two measurements]**, and
+`docs/44` section 7.1 says which of its rows may be subtracted from
+which. Quote 316,051.6590 for the core in the SoC; quote this table for
+what the register-file protection alone cost.
+
 > **The register-file protection costs +38,050.5762 um2 on the core,
 > +13.80 %, and +222 flip-flops** **[estimate, the difference of two
 > measurements]**.

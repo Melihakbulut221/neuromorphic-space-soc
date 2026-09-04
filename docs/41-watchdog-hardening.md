@@ -35,7 +35,7 @@ every file touched.
 | What does it cost? | **+5,091.06 um2**, +88.9 % of the unhardened watchdog, **+1.85 % of the Ibex core** **[fact]**. 1.6 % of what declining lockstep in `docs/38` would have cost. Section 6.5 |
 | Did the hardening change any behaviour? | **No, and this is measured rather than argued.** The whole-SoC run is cycle-identical to `docs/40`: stage 1 at cycle 174,128, core asleep after 185,443 cycles, 587 console characters, 0 framing errors **[fact]**. Section 9.1 |
 | Is it proved? | 5 formal jobs, 20 tasks, all PASS; the new composition job proves masking by k-induction at four widths and on two engine families, 6 of 6 cover obligations reached **[fact]**. Section 9.3 |
-| Is it *measured*? | **162 injections into the block's own flip-flops. 126 of 126 into the protected word came back CORRECTED — masked at the ports and counted. 0 SDC, 0 HANG, 0 disarmed** **[fact]**. Section 8 |
+| Is it *measured*? | **162 injections into the block's own flip-flops. 126 of 126 into the protected word came back CORRECTED — masked at the ports and counted. 0 SDC, 0 HANG, 0 disarmed** **[fact]**. Section 8. *Superseded in part 2026-09-05: the zero spurious escalations section 8.3 reports hold for upsets in the watchdog's own state, which is what this campaign injects into. `docs/43-core-hardening.md` sections 4 and 8.4 measured the windowed mode later built on this block against upsets in the core and found **7 spurious escalations in 1,232 survivable upsets**, so a zero-spurious-escalation headline no longer holds for the block as shipped* |
 | Does the same experiment on the unprotected block look different? | **Yes, and that is the point.** 32 injections into the same state with `HARDEN = 0`: 27 SDC, 1 HANG, **2 left the watchdog reading disarmed**, and only 6 of 32 preserved the escalation order **[fact]**. Section 8.3 |
 | Is `mtime` protected? | **No.** It is the highest-ranked thing this document does not do, and section 7.4 says why it is second and not first |
 
@@ -675,6 +675,16 @@ Seven of the 32 also produced an **extra** escalation ladder — a
 spurious system reset — and two failed to complete the ladder at all.
 Against the same state in the hardened block: **0 and 0** across all 126
 injections.
+
+*Superseded in part 2026-09-05.* That zero is a property of this
+campaign, whose upsets are in the watchdog's own state. The windowed
+mode `docs/43-core-hardening.md` added to this block afterwards (W7)
+measured **7 spurious escalations in 1,232 survivable upsets** when the
+upsets are in the core — 0.6 % [0.3 – 1.2], all seven stopping at
+stage 1 **[fact, `docs/43` section 8.4, `hw/soc/out/fi-h2/`]** — and
+`docs/43` says this document's zero-spurious headline does not survive
+that feature. It is retired here as well, where the claim is made, so
+that a reader of this document alone learns it.
 
 The third `weaker` record is neither of the disarmed pair: it is a draw
 on bit 20, part of `rst_hold`, which left the part armed but with the

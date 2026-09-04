@@ -413,6 +413,12 @@ the sum and the whole come from one afternoon:
 
 **[fact for every measured row; the two totals are arithmetic on them]**
 
+*Note added 2026-09-05.* The `soc_clint` row is 1,043 / 16,712.8164
+against `docs/40-interrupts-timers-watchdog.md` section 9's 1,038 /
+16,683.48 for the same unchanged file. The difference is the source
+list, not the block, and section 4.3 above reproduces both figures
+exactly; `docs/40` section 9 now says the same beside its own row.
+
 > **The whole is 4,396.3668 um2 smaller than the sum of its parts,
 > −1.11 %** **[estimate, the difference of two measurements]**. It is
 > also **8 flip-flops smaller**, and it additionally contains `soc_top`'s
@@ -911,8 +917,18 @@ attributed to the wrong cause.
   modified. `docs/44` section 8.1's 22 checks and 185,443 cycles are the
   last behavioural evidence and they stand; **this document adds none.**
 - **One clock, one corner set, one period target.** No multi-mode
-  analysis, no test mode, no scan, no power estimate, and no area for the
-  two SRAM macros the design needs and does not have.
+  analysis, no test mode, no scan, ~~no power estimate~~, and no area for
+  the two SRAM macros the design needs and does not have. *Superseded
+  2026-09-05: no power estimate was made for this document, and none
+  could be at synthesis, but the statement has been read as "there is
+  no power figure" and there is one. `docs/47`'s `full3` place-and-route
+  run wrote a `power.rpt` per corner — 34.835 mW at typ on a default
+  activity assumption, found by `docs/53-workload-and-the-clock.md`
+  section 7.1 — and `docs/57-power-under-a-duty-cycle.md` section 5
+  measured it at RTL activity: **33.890 mW computing, 5.539 mW waiting,
+  at typ**, on a layout that does not contain the NPU. "One clock" is
+  also only half true: `docs/57` section 4 finds an integrated clock
+  gate over 2,464 of the 3,085 flip-flops.*
 - **`soc_top` has still never been placed or routed**, which is the
   sentence this document replaces `docs/44` section 10's last line with.
 

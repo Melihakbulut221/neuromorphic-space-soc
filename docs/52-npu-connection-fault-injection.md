@@ -507,6 +507,21 @@ bus error at the core, an Ibex alert pin, or the watchdog.
 **[fact for the measured columns; the contributions are arithmetic on
 them, `[estimate]`]**
 
+**Note added 2026-09-05: the `engine` row's 1.71 points and `docs/56`'s
+0.58 are not a before and after.** This table draws 100 injections
+proportionally over the 140-bit `engine` stratum, gets 9, and weights
+9 % by 140 of 738 bits. `docs/56-npu-event-engine-hardening.md` section
+3.4 splits the same stratum into five sub-strata, draws 100 into each,
+weights each by its own width and gets 4.713 bit-equivalents of 140 —
+3.37 % of the stratum, **0.58 points** of a connection that had grown to
+809 injectable bits by then. The RTL did not change between the two
+figures: `docs/55`'s campaign of record measured the same unsplit stratum
+at 8 of 100. The two are different estimators of one quantity over two
+denominators — on 809 bits this table's own 9 % would weight to 1.56, not
+1.71 **[estimate]** — and **neither may be subtracted from the other**.
+The hardening that followed is measured on replayed draws, in `docs/56`
+section 8, and that is where a before and after exists.
+
 Two further figures from the same records **[fact]**:
 
 - **the connection-weighted rate of ANY silent deviation** — a wrong

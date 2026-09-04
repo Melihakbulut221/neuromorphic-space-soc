@@ -24,9 +24,33 @@ plainly, and it should be read before section 6 is quoted anywhere.
 | Device under test | `hw/rtl/pilot_top.v`, 8 x 8 neurons/axons, EVQ depth 4 |
 | Oracle | `sw/golden/lif_core.py` (`LIFCore`, `LIFConfig`) |
 | Seed | `0x16F12026` |
-| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29; 365 from 2026-08-30; 359 after the section 5.9 fix retired two targets; 361 after the section 5.10 retarget; 366 after the section 5.11 retargets (section 2) |
+| Injections | 255 to 2026-08-26; 287 from 2026-08-27; 335 from 2026-08-29; 365 from 2026-08-30; 359 after the section 5.9 fix retired two targets; 361 after the section 5.10 retarget; 366 after the section 5.11 retargets (section 2); **378 in the committed log — corrected 2026-09-05, see the note below this table** |
 | Simulated time | 22.23 ms at 255 injections; 28.77 ms at 335; 31.31 ms at 365; 30.81 ms at 359; 30.97 ms at 361; 31.39 ms at 366 |
 | Wall time | 79.5 s to 84.5 s idle before the memory hardening; 674 s for the same 255 injections after it; 892 s for 335 injections on a loaded machine; 567 s for 365 on a quiet one — and 1769 s for an identical 365-injection run alongside three other simulator jobs; 614 s for 359, 706 s for 361 and 568 s for 366 (Icarus, single-threaded; section 8) |
+
+**Corrected 2026-09-05.** The header table above, the "holds the
+366-injection wave-6 log" paragraph below, the section 3 headline and
+the closing note in section 8 all describe `hw/tb/fi_campaign_results.json`
+as the **366-injection** wave-6 second-half log with **18 SDC (4.9 %)**.
+That was true of the file this revision of the document was committed
+with — `2c6c052`, 2026-08-30: `"total": 366`, `wall_seconds` 567.7,
+SDC 18 **[fact, `git show 2c6c052:hw/tb/fi_campaign_results.json`]** —
+and it was overtaken twice without this document being edited:
+`docs/29-queue-storage-protection.md` re-ran the campaign at **374
+injections, 11 SDC** (`634ca3e`), and `docs/30-dispatcher-protection.md`
+at **378 injections, 6 SDC** (`bc91c71`). `docs/33-rail-transform.md`
+re-ran it once more at the freeze commit `b6738e5` with the same 378
+records in the same classes, moving only `wall_seconds`, 443.1 to 445.7.
+The committed file, blob `312d3c76`, is that run: **378 injections, 97
+MASKED (25.7 %), 193 CORRECTED (51.1 %), 82 DETECTED (21.7 %), 6 SDC
+(1.6 %), 0 HANG, 445.7 s** **[fact, read out of the file at HEAD; the
+history is `git log -p -- hw/tb/fi_campaign_results.json`]**. Every
+366-injection figure in this document is therefore the correct record of
+a real earlier run and not a transcription error, and it stands as the
+record of that run; it is not the log on disk, and the freeze in
+`docs/34-pilot-freeze.md` means it will not be again. The two later
+waves are documented in `docs/29` and `docs/30` and not here.
+`docs/64-document-reconciliation.md` section 3.1 has the full trace.
 
 ### Eight runs, kept side by side
 
@@ -89,8 +113,11 @@ to the measured upset response, which a single current number cannot.
 Every number in this document is labelled with which run it comes from.
 Where a section is not labelled the runs agree.
 
-`hw/tb/fi_campaign_results.json` holds the **366-injection wave-6**
-log, because that is the design that exists. Exactly five of the 255
+~~`hw/tb/fi_campaign_results.json` holds the **366-injection wave-6**
+log, because that is the design that exists.~~ *Corrected 2026-09-05:
+it holds `docs/30`'s 378-injection log, re-taken at the freeze by
+`docs/33`; see the note above the "Eight runs" heading.* Exactly five
+of the 255
 records differ between the pre-fix and post-fix runs and section 5.1
 lists all five; exactly 43 differ between the post-fix and
 post-hardening runs and section 3.2 accounts for every one; between the
@@ -124,7 +151,10 @@ three structures that were hardened and in no others** — `lif_wmem` 9,
 direction, and no record outside those three groups changed at all.
 
 **Headline, wave-6 second half [fact].** 366 injections, 2026-08-30,
-and it is the current log: **94 MASKED (25.7%), 193 CORRECTED (52.7%),
+~~and it is the current log~~ (*corrected 2026-09-05: it was the
+current log at `2c6c052`; the committed log is `docs/30`'s
+378-injection run with 6 SDC, 1.6 % — see the note above the "Eight
+runs" heading*): **94 MASKED (25.7%), 193 CORRECTED (52.7%),
 61 DETECTED (16.7%), 18 SDC (4.9%), 0 HANG**. The design's three
 one-bit valid flags are dual-rail, the whole class is out of silent
 corruption, and the residual is 18 records led outright by the AER
@@ -3272,7 +3302,11 @@ Relationship to the rest of the verification programme:
   acceptance baseline for any later campaign — an FPGA saboteur run or a
   beam campaign inherits this target list, these classes and this seed,
   and any structure whose measured behaviour disagrees with this file is
-  a finding. It now holds the 361-injection wave-6 run; the earlier
+  a finding. ~~It now holds the 361-injection wave-6 run~~ (*corrected
+  2026-09-05: it held the 366-injection run when this revision was
+  committed and holds the 378-injection run of `docs/30` at the
+  freeze, blob `312d3c76`; see the note above the "Eight runs"
+  heading*); the earlier
   numbers survive in this document, in the headline, in sections 3.1 to
   3.5, in the section 5.1 table of the five records that changed, in
   the section 3.4 table of the one that changed at wave 5, in

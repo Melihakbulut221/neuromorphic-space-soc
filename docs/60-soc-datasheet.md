@@ -1868,6 +1868,12 @@ Recorded, not corrected — these files are owned elsewhere.
 `docs/21-pilot-datasheet.md` section 10 is the precedent for keeping
 this section in a datasheet rather than quietly picking a side.
 
+**Resolved 2026-09-05.** Each item below has since been corrected in
+place in the document that owns it, with the original statement left
+visible, and `docs/64-document-reconciliation.md` records the evidence
+and names the file that settles each one. The list is kept as written;
+the *Resolved* line under each item is what changed.
+
 1. **The pilot fault-injection campaign is reported three different
    ways and the file disagrees with the document that owns it.**
    `docs/16-fault-injection-campaign.md` section 3 and its header table
@@ -1883,12 +1889,21 @@ this section in a datasheet rather than quietly picking a side.
    "campaign of record"**, which is two waves behind both. This
    document follows the file, per section 0.2. **`docs/16` owns the
    campaign and is where this should be settled.**
+   *Resolved 2026-09-05:* both outliers quoted real earlier logs —
+   `docs/21`'s at `0448282`, `docs/16`'s at `2c6c052` — and neither is
+   a transcription error. Both are corrected in place; the committed
+   file, blob `312d3c76` (378 injections, 6 SDC), is the campaign of
+   record and this section already quoted it. `docs/64` section 3.1.
 
 2. **`docs/00-index.md` lists `docs/56-npu-event-engine-hardening.md`
    twice**, as two adjacent table rows with different purpose text.
    Only one such document exists. **[measured,
    `grep -c 'docs/56-npu-event-engine-hardening.md' docs/00-index.md`
    returns 2]**. This document's own index row is added after both.
+   *Resolved:* the duplicate row was removed in the commit that added
+   this document, `62f1aff`, so the statement above was stale as
+   committed; the count is 1 at every commit since **[fact, `git show
+   <commit>:docs/00-index.md | grep -c`]**. `docs/64` section 3.7.
 
 3. **The CLINT's area is published as two different numbers.**
    `docs/40-interrupts-timers-watchdog.md` section 9 says 1,038 cells
@@ -1900,6 +1915,10 @@ this section in a datasheet rather than quietly picking a side.
    and `docs/51` section 11 re-measures the same configuration at HEAD
    as 812 / 9,917.36 — but **`docs/51` states the difference and names
    the cause**, which is what the CLINT rows do not do.
+   *Resolved:* a note beside each CLINT row — `docs/40` section 9,
+   `docs/45` section 6.2 — names the cause, the source list, and points
+   at `docs/45` section 4.3 where both figures reproduce exactly.
+   Neither number changed. `docs/64` section 3.2.
 
 4. **The Ibex core's shipped area is quoted as two different numbers
    for two different contents, and they are easy to confuse.**
@@ -1909,12 +1928,19 @@ this section in a datasheet rather than quietly picking a side.
    telemetry report cone. Both are correct for what they measure and
    the difference is 2,318.5 um2 of content, not of method — but a
    reader who takes either as "the core" will be wrong about the other.
+   *Resolved:* `docs/43` section 7.1 now says its figure is not the
+   shipped core and names `docs/44` section 7.1's 316,051.6590 and
+   what the 2,318.4630 um2 of content is. Neither number changed.
+   `docs/64` section 3.3.
 
 5. **`docs/41-watchdog-hardening.md`'s zero-spurious-escalation
    headline is superseded and the supersession lives in a different
    document.** `docs/43` section 8.4 measured 7 spurious escalations in
    1,232 survivable upsets on the windowed mode and says plainly that
    `docs/41`'s headline is gone. `docs/41` does not say so.
+   *Resolved:* it does now — the retirement is stated in `docs/41`
+   section 1's verdict row and section 8.3, with the `docs/43` figure.
+   `docs/64` section 3.5.
 
 6. **Five documents state "no power number" while the file was in the
    run directory they report from.** `docs/45` section 8, `docs/47`
@@ -1925,6 +1951,9 @@ this section in a datasheet rather than quietly picking a side.
    from. `docs/53` section 7.1 found it. **The five documents have not
    been amended**, so a reader who consults any of them will be told
    the figure does not exist.
+   *Resolved:* all five lines are struck through in place and each
+   names `docs/53` section 7.1 and `docs/57` section 5. `docs/57` had
+   superseded all five and amended none. `docs/64` section 3.4.
 
 7. **The event engine's design-weighted contribution is stated as two
    numbers that are not a before and after.** `docs/52` gives 1.71
@@ -1934,6 +1963,9 @@ this section in a datasheet rather than quietly picking a side.
    figure is wrong; it is recorded here because the two appear in
    adjacent documents and invite exactly the subtraction that is
    forbidden.
+   *Resolved:* `docs/52` section 6.2's table now carries the sentence
+   beside the 1.71, naming both estimators and both denominators;
+   `docs/56` section 3.4 already had it. `docs/64` section 3.6.
 
 ---
 
@@ -2021,6 +2053,7 @@ if that stops being true. **This document modifies nothing.**
 
 | Date | Revision | Changes |
 |---|---|---|
+| 2026-09-05 | **0.1a** | Section 14: the seven disagreements are resolved in the documents that own them, each correction left visible in place, and recorded in `docs/64-document-reconciliation.md`. No figure in this datasheet changed; section 9 already followed the committed campaign log. |
 | 2026-09-03 | **0.1** | Initial release. Covers `soc_top` at commit `7721719`: the management core, the fabric, the memory subsystem, the CLINT, the GPTIMER and watchdog, BUSSTAT, the UART, the device tables and the NPU subsystem with the frozen pilot inside it. Physical and timing data are from the `full3` place-and-route run of `docs/47`, which does **not** contain the NPU subsystem. Power is `report_power` without activity annotation and is tagged [in flux]. No frequency figure is published. No DRC, LVS or XOR result exists. |
 
 ---

@@ -1071,7 +1071,17 @@ max-slew comparisons comparisons against ONE limit, the library's own
   that this layout is manufacturable.
 - **The fast corner's macro Liberty is still characterised at −55 C
   against −40 C for the cells** (`docs/12` section 6.4a).
-- **One clock, one mode, no scan, no test, no power number.**
+- **One clock, one mode, no scan, no test, ~~no power number~~.** *Corrected 2026-09-05: there was a power
+  number, and it was in the `full3` run this document takes its timing
+  baseline from.
+  `OpenROAD.STAPostPNR` wrote a `power.rpt` per corner into
+  `hw/soc/pnr/runs/full3/19-openroad-stapostpnr/` — 27.774 / 34.835 /
+  46.095 mW at slow / typ / fast on a default activity assumption —
+  found by `docs/53-workload-and-the-clock.md` section 7.1; measured at
+  RTL activity by `docs/57-power-under-a-duty-cycle.md` section 5 it is
+  **33.890 mW computing and 5.539 mW waiting at typ**, on a layout that
+  does not contain the NPU. "One mode" is also wrong: `docs/57`
+  section 4 finds a clock gate over 2,464 of the 3,085 flip-flops.*
 - **`design__violations` still reads 0** on a run that fails setup;
   `docs/23` section 3.2's finding reproduced a fifth time.
 
