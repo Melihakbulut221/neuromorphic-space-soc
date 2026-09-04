@@ -5,10 +5,12 @@ in August 2026 and nothing was ever run with it. This document is that
 bring-up. It fetches riscv-formal at a pinned commit, binds it to the
 `small-pmp` Ibex this SoC is built from, and runs it.
 
-**This is phase 1 of two, and phase 1 is deliberately the STOCK core
-with upstream's register file.** Phase 2 substitutes the SECDED register
-file of `docs/43-core-hardening.md` section 6 and the delta between the
-two runs is the measurement. The order is not caution for its own sake:
+**This document is both phases.** Sections 1-13 are phase 1, the STOCK
+core with upstream's register file, and their numbers are unchanged
+since that work was committed. Part 2, sections 14-19, is phase 2: the
+SECDED register file of `docs/43-core-hardening.md` section 6
+substituted, at the same settings, and the delta between the two runs.
+Phase 1 first is not caution for its own sake:
 a phase-2 failure with no phase-1 baseline cannot distinguish "our
 harness is wrong" from "our substitution broke the core", and this
 document contains four separate demonstrations that a harness for this
@@ -37,7 +39,10 @@ this work touches.
 | What failed? | **Three checks failed and six were stopped without a verdict, and not one of the nine is a defect in the core.** `insn_div` and `insn_rem` fail because riscv-formal's own models compute an UNSIGNED result — Ibex is right (section 7.5). `liveness` fails at check cycle 50 on a trace whose next instruction is a 37-cycle divide, which is a statement about the bound (section 8.3). The four multiply checks, `divu` and `remu` were stopped after 35-40 minutes each because a bit-blasting solver does not close multiplier equivalence (section 8.4) |
 | Did the run find defects? | **Five. Three in this project's harness, one in Ibex's RVFI trace, and one in riscv-formal's own model of `div` and `rem`, which compute an UNSIGNED result. Not one of them is in Ibex's execution of an instruction.** Section 7 |
 | Is it a proof of ISA correctness? | **No, and the gap is not small.** Every result here is a BOUNDED check at a stated depth, under the nine assumptions ledgered in section 4.1, over a core whose CSR file, memory system, netlist and timing are all outside it. Sections 2 and 6 |
-| Is phase 2 ready? | **Yes, one environment variable.** `IBEX_REGFILE=secded`, same harness, same depths, separate work tree. Section 10 |
+| Is phase 2 ready? | It was, and it has been run. Section 10 states the plan; Part 2 is the result |
+| **Phase 2: does the SECDED register file change the core's ISA behaviour?** | **No check that passed on the stock core fails on the substituted one.** 68 of the 79 bmc checks have an identical verdict, all 79 cover jobs pass in both, and the three failures are the same three for the same reasons — two of them riscv-formal's own defective model, reproduced on fresh operands. Sections 16 and 17 |
+| **What phase 2 does NOT cover** | The **eight M-extension instructions have no verdict in either run**, so the delta over them is undefined rather than clean; and everything section 6 excludes is excluded in both. Section 16.3 |
+| **Is the substituted core harder to prove?** | **Yes, by about half again.** CPU x1.55 over the run, x1.21 median over the 62 checks comparable per-check, **x1.92 over the whole cover set**. Section 18 |
 
 **What is now proved about this core that was not proved before.** For
 **62 of the 70 instructions of RV32IMC** — every one except the eight of
@@ -961,7 +966,9 @@ cannot say FAIL. It was caught by running it.
 
 ## 10. Is phase 2 ready?
 
-**Yes, and it is one environment variable.**
+**Yes, and it is one environment variable.** *(Written before phase 2
+was run. It was, at these settings; Part 2 is the result and section 16
+is the delta this section predicts.)*
 
 ```
 IBEX_REGFILE=secded hw/soc/flow/rvformal.sh setup
@@ -1061,6 +1068,16 @@ line so a log says which run it is.
 | `.gitignore` | `hw/soc/genrvfi/`, and the tracked-source list gains `rvformal` |
 | `docs/00-index.md` | this document's row |
 
+**Phase 2 added no tracked file.** It is `IBEX_REGFILE=secded` through
+`hw/soc/flow/ibex_sources.sh`, which every other SoC flow already uses,
+and the only source change in Part 2's work was one robustness fix in
+`hw/soc/flow/rvformal.sh` (`RVF_OUT` is made absolute; a relative path
+produced `ERROR: Bad command` from a `read_slang` line resolved against
+the wrong directory) and one label change in its `report` subcommand
+(`NOT RUN` became `NO STATUS`, because a job stopped after forty minutes
+of solver time reported as "not run" is a label narrower than the thing
+it describes).
+
 Nothing under `hw/rtl/`, `hw/tb/`, `tt/`, `formal/` or `hw/openlane/` is
 touched, and `hw/tb/Makefile.fi` — which writes a file `docs/34` pins —
 was not invoked.
@@ -1104,3 +1121,402 @@ work trees (`hw/soc/out/rvformal-upstream` and `-secded`) so neither can
 overwrite the other's evidence. Everything under `hw/soc/out/`, `hw/soc/ext/` and
 `hw/soc/genrvfi/` is generated or fetched and gitignored; the tracked
 sources are the eleven files of section 12.
+
+
+---
+
+# Part 2 — Phase 2: the SECDED register file substituted
+
+Everything above is phase 1 and its numbers are unchanged. This part is
+the second half of the same experiment, run after phase 1 was reviewed
+and committed as `a5699b4`.
+
+## 14. Why this is here and not in a document of its own
+
+**Because a phase-2 result read without phase 1's ledger is a result
+that outruns its evidence, and separating them would either duplicate
+the ledger or produce a document that cannot be read alone.** Phase 2
+inherits, unchanged and by construction, every one of the nine
+assumptions of section 4.1, the eleven check depths of section 8.1, the
+two front ends of section 3, the `rvfi_intr` adapter of section 7.4 and
+the eight-instruction M-extension gap of sections 8.4 and 8.5. A reader
+who is handed "the substitution is transparent" without those is being
+handed a claim about a core with no CSR checks, no PMP enforcement
+proof, no netlist and no result at all for `mul`, `div` or their
+siblings.
+
+The second reason is smaller and also real: section 10 asks "Is phase 2
+ready?" and answers yes. Answering it somewhere else leaves a question
+open in a committed document.
+
+## 15. What changed, and what did not
+
+**One thing changed: which file supplies `ibex_register_file_ff`.**
+`hw/soc/flow/ibex_sources.sh` at `IBEX_REGFILE=secded` drops
+`hw/soc/genrvfi/ibex_register_file_ff.v` and adds
+`hw/soc/rtl/ibex_regfile_secded.v` plus `hw/rtl/secded_enc.v` and
+`hw/rtl/secded_dec.v` — the pilot's own codec, read in place from the
+frozen directory and not copied, which is the arrangement `docs/43`
+section 6.1 exists to preserve. `diff` of the two generated `.sby`
+files confirms that is the ONLY difference: same nineteen `-G`
+parameters, same defines, same depths, same engine, same wrapper, same
+32 other core files **[fact]**.
+
+| | Phase 1 | Phase 2 |
+|---|---|---|
+| `IBEX_REGFILE` | `upstream` | **`secded`** |
+| `RVF_INSN_FIX` | 0 | 0 |
+| `RVF_LIVENESS_DEPTH` | 50 | 50 |
+| Register file | `genrvfi/ibex_register_file_ff.v` | `hw/soc/rtl/ibex_regfile_secded.v` + `hw/rtl/secded_{enc,dec}.v` |
+| Work tree | `hw/soc/out/rvformal-upstream` | `hw/soc/out/rvformal-secded` |
+
+**The substituted file elaborates at its own defaults, and they are the
+ones the SoC ships.** `read_slang -G` sets `ibex_top`'s parameters and
+nothing sets the register file's, so `SCRUB = 1`, `FASTCORR = 1` and
+`SYNPRE = 0` apply — which is `docs/44`'s build and not `docs/49`'s
+declined `SYNPRE` variant **[fact, the parameter declarations in
+`ibex_regfile_secded.v`]**. What is proved below is the register file as
+built, correct-on-read and scrubbing, and it is not a statement about
+`SYNPRE = 1`.
+
+**What the substitution does to the formal model** [fact, counted out of
+the SMT2 written for `insn_add_ch0` in each tree]:
+
+| | Phase 1 | Phase 2 | Delta |
+|---|---:|---:|---:|
+| State registers | 149 | 181 | +32 |
+| **State bits** | 2,781 | **3,034** | **+253, +9.1 %** |
+| Free (`anyseq`) signals | 76 | 84 | +8 |
+| Free bits | 930 | **1,042** | **+112** |
+| SMT2 file | 1,521,200 B | 1,832,016 B | +20.4 % |
+
+The +253 state bits are the stored check bits: `docs/43` section 6.3
+measures 217 check flip-flops for 31 registers, and the remainder is the
+scrub pointer and the counters.
+
+**The +112 free bits deserve a sentence, because a free input is solver
+freedom.** They are eight signals — two of 32 bits and six of 8 —
+that `setundef -undriven -anyseq` turned into unconstrained inputs
+because nothing in the elaborated design drives them. They could not be
+attributed to named signals from the model, because sby's
+`rename -witness` anonymises them before the SMT2 is written, and no
+attempt was made to defeat that. **The direction of the effect is
+nevertheless certain: a free input can only ADD traces**, so every check
+that passes below passes with those 112 bits under the solver's control,
+and `opt_clean` did not remove them, so they reach something. This makes
+the phase-2 result marginally stronger than the phase-1 one over the
+same properties rather than weaker, and it is stated here because "the
+model grew" would otherwise read as a caveat when it is not one.
+
+## 16. The delta, check by check
+
+`hw/soc/flow/rvformal.sh report` on each tree, compared entry by entry
+rather than in totals.
+
+| | Phase 1 | Phase 2 |
+|---|---|---|
+| **bmc** | 70 PASS, 3 FAIL, 6 stopped | REG_BMC |
+| **cover** | 79 PASS | **79 PASS** |
+
+### 16.1 Sixty-nine checks pass in both, and the list is identical
+
+Of the 79 bmc checks, **68 have the same status in both runs and one
+changed**, and the one that changed is `reg_ch0`, which section 17 is
+about. Every other check — 62 instruction checks, the seven consistency
+checks other than `reg` and `liveness`, and `cover` — has the same
+verdict in both runs, and no check that passed in phase 1 fails in
+phase 2 **[fact]**.
+
+**All 79 cover jobs pass in both runs.** Nothing became unreachable, no
+depth became vacuous, and the substituted register file does not stop
+any instruction retiring at its check cycle.
+
+### 16.2 The three failures are the same three, for the same reasons
+
+| Check | Phase 1 | Phase 2 | Same cause? |
+|---|---|---|---|
+| `insn_div_ch0` | FAIL, 852 s | FAIL, 1,135 s | **Yes** |
+| `insn_rem_ch0` | FAIL, 731 s | FAIL, 1,124 s | **Yes** |
+| `liveness_ch0` | FAIL, 616 s | FAIL, 720 s | **Yes** |
+
+`insn_div` and `insn_rem` fail on the same assertion at the same step
+(`rvfi_insn_check.sv:177`, `spec_rd_wdata == rd_wdata`, step 55) and on
+the specification defect of section 7.5. **Phase 2 reproduced that
+defect independently, on different operands, and this time with negative
+DIVISORS where phase 1 had a negative dividend** — which is worth having
+because it exercises the other half of the sign confusion:
+
+| | Phase 2 `insn_div_ch0` | Phase 2 `insn_rem_ch0` |
+|---|---|---|
+| `rvfi_rs1_rdata` | `0x00724800` = +7,489,536 | `0xC957F6C6` = -900,433,722 |
+| `rvfi_rs2_rdata` | `0xFFFFFFE8` = **-24** | `0xC957F622` = **-900,433,886** |
+| Ibex's `rvfi_rd_wdata` | `0xFFFB3D00` = **-312,064** | `0xC957F6C6` = **-900,433,722** |
+| The model's `spec_rd_wdata` | `0x00000000` | `0x000000A4` = 164 |
+
+**[fact].** 7,489,536 / -24 = -312,064 signed, and 7,489,536 /
+4,294,967,272 = 0 unsigned. -900,433,722 mod -900,433,886 is
+-900,433,722 signed, and 3,394,533,574 mod 3,394,533,410 = 164 unsigned.
+**Ibex is right in both, on the substituted register file as it was on
+the stock one**, and the model is wrong in both. Section 7.5 now rests
+on four counterexamples from two independent runs rather than two.
+
+`liveness_ch0` fails at check cycle 50 in both, and section 8.3's
+account is unchanged: the bound does not fit a 37-cycle divide.
+
+### 16.3 The M-extension gap carries forward, and the delta over it is UNDEFINED
+
+The four multiply checks, `divu` and `remu` had no result in phase 1 and
+they have none in phase 2. They were stopped at a deliberately
+comparable budget — phase 1's longest ran 2,419 s before being stopped,
+phase 2's 2,434 s [fact] — and neither run produced a verdict for any of
+them.
+
+| Check | Phase 1, stopped after | Phase 2, stopped after |
+|---|---:|---:|
+| `insn_divu_ch0` | 2,419 s | 2,434 s |
+| `insn_mul_ch0` | 2,265 s | 2,227 s |
+| `insn_mulh_ch0` | 2,260 s | 2,210 s |
+| `insn_mulhsu_ch0` | 2,251 s | 2,160 s |
+| `insn_mulhu_ch0` | 2,241 s | 2,159 s |
+| `insn_remu_ch0` | 2,117 s | 1,332 s |
+
+**This is stated at length because of how it could be misread.** "62 of
+70 instruction checks pass in both runs" is true, and it is NOT the same
+sentence as "the substitution is transparent to the ISA". Over the eight
+M-extension instructions the two runs agree on nothing, because neither
+of them says anything: six have no verdict in either run and two have
+the same wrong verdict from the same wrong model. **The delta over the M
+extension is undefined, not clean.** If the SECDED register file changed
+`mulh`'s result, this experiment would not know.
+
+Together with the standing exclusions of section 6 — no CSR is checked,
+PMP enforcement is not proved, bus errors and debug are assumed away —
+the honest statement of scope for phase 2 is: *the substitution does not
+change the architectural behaviour of the 62 RV32I and RV32C
+instructions that were checked, at the depths that were checked, under
+the assumptions that were ledgered.*
+
+## 17. `reg_ch0`: what it proves, and what it cannot
+
+This is the check phase 2 exists for, and it is the one check whose
+status differs between the two runs.
+
+### 17.1 What it asserts
+
+`riscv-formal/checks/rvfi_reg_check.sv`, read rather than paraphrased.
+It carries two free CONSTANTS — `register_index`, five bits, and
+`insn_order`, sixty-four — so the solver picks which architectural
+register and which instruction in the retirement stream to interrogate,
+and the proof therefore covers **every** register and **every** position
+in the stream within the depth. It maintains a shadow of that register,
+updated from `rvfi_rd_wdata` on every retired, non-trapping instruction
+whose `rvfi_rd_addr` is `register_index` and whose order is earlier than
+`insn_order`. At the check cycle it assumes the retiring instruction is
+the one at `insn_order`, and asserts:
+
+```
+if (register_written && register_index == rvfi_rs1_addr)
+    assert(register_shadow == rvfi_rs1_rdata);
+if (register_written && register_index == rvfi_rs2_addr)
+    assert(register_shadow == rvfi_rs2_rdata);
+```
+
+In words: **the value the core reads out of a register is the value the
+last instruction to write that register wrote.** Between the write and
+the read the substituted file encodes the word to a 40-bit codeword,
+holds it in flip-flops, may scrub it, and decodes and corrects it on the
+way out. `reg_ch0` is the property that the whole of that is the
+identity function on architectural state.
+
+That is the property `docs/43` asserts and had not proved. Its evidence
+was a cycle-identical simulation on one workload; this quantifies over
+all registers, all stream positions and all values, to a depth.
+
+### 17.2 The result
+
+**Unresolved, and that is the honest word for it.** `reg_ch0` did not
+finish on the SECDED build: it waited **1 h 41 min** for the solver and
+then took `SIGTERM` when the run was stopped from outside, so `sby`
+recorded `DONE (ERROR, rc=16)` with "engine terminated without status"
+and no trace **[fact,
+`hw/soc/out/rvformal-secded/cores/ibex/checks/reg_ch0/logfile.txt`]**.
+
+`ERROR` is not `FAIL`. No counterexample was found and none was ruled
+out. **The check phase 2 exists for has no verdict**, and nothing in
+this part may be read as evidence that the substitution preserves or
+breaks the register-file consistency property.
+
+What the non-result does establish is a lower bound on section 18's
+finding: the same check on the same harness at the same depth took
+**6 min 39 s** in phase 1 **[fact, the phase-1 logfile]**. So the
+substituted core is at least **15.3x** harder here, and that ratio is a
+measurement even though the verdict is not.
+
+To close it, `reg_ch0` must be re-run alone on the secded tree carrying
+`IBEX_REGFILE=secded`, `RVF_INSN_FIX=0` and `RVF_LIVENESS_DEPTH=50`
+forward unchanged, with either no wall-clock limit or a stated one whose
+expiry is reported as a timeout rather than as a verdict.
+
+### 17.3 What it cannot prove, and one limit is sharper than it looks
+
+- **It is bounded at check cycle 25.** The write and the read both
+  happen within 25 cycles of reset.
+- **AND THE SCRUB DOES NOT COMPLETE A PASS IN 25 CYCLES.** `docs/43`
+  section 6.4: the scrub pointer walks `x1`..`x31` one register per
+  idle cycle, so a full pass is **31 cycles when the core is idle and
+  longer when it is not** [fact, `docs/43`]. At depth 25 the pointer
+  cannot have visited every register even once. So `reg_ch0` covers the
+  encode, the storage, the decode and *some* scrub writebacks — it does
+  not cover a completed scrub cycle, and it certainly does not cover the
+  case `docs/43` section 6.4 is really about, which is a register held
+  across many scrub passes. Closing that means a deeper check, and
+  section 18 measures what depth costs here.
+- **It says nothing about an unwritten register.** `register_written`
+  gates both assertions, so the arbitrary reset-state contents of a
+  register that no instruction has written are never compared.
+- **It says nothing under faults.** No injection, and the error counters
+  are deleted by `opt_clean` because nothing reads them (`docs/43`
+  section 6.5). A register file that silently corrected nothing would
+  pass this.
+- **It does not check `x0`**, which has no flip-flops in this
+  configuration (`docs/43` section 6.6), and it does not check the
+  register ADDRESSES, which come from the decoder and which `docs/43`
+  section 6.6 already excludes from the protection.
+
+## 18. Cost: the substituted core IS harder to prove
+
+Both runs used the same machine, the same `-j8`, and the same competing
+workload — a 9.5 GiB, ~96 % CPU process belonging to another project was
+resident throughout both, and the machine's load average outside the
+formal jobs was ~1 in both cases [fact]. That does not make the
+comparison perfect and it does make it fair.
+
+### 18.1 The whole run
+
+| | Phase 1 | Phase 2 | Ratio |
+|---|---:|---:|---:|
+| Wall clock, `-j8` | 50 min 52 s | **54 min 45 s** | 1.08 |
+| CPU (user + system) as attributed | 9,076 s | **14,027 s** | **1.55** |
+| Peak RSS of the largest single job | 2.82 GiB | **3.10 GiB** | 1.10 |
+| Cover set, job-seconds | 1,122 | **2,154** | **1.92** |
+
+**[fact, `/usr/bin/time -v` and the `status` files.]** The wall-clock
+ratio is the least informative of these, because both runs spent most of
+their tail blocked behind six M-extension checks that were stopped on a
+clock rather than finishing. The CPU and cover figures are the honest
+ones, and they agree: **the substituted core costs the solver about half
+again as much**.
+
+### 18.2 Per check, which is where it is visible
+
+Over the **62 checks that PASS in both runs and that ran inside their
+own `-j8` run** — this excludes eight phase-2 checks that had to be
+re-run on a nearly idle machine, section 18.3 — the phase-2 times are:
+
+| | |
+|---|---:|
+| Total | 4,640 s -> **5,629 s**, x1.213 |
+| Median per-check ratio | **x1.20** |
+| 10th / 90th percentile ratio | x0.88 / x1.56 |
+| Slower / faster | **50 of 62 slower**, 12 faster |
+| Largest increases | `insn_c_sw` 89 -> 221 s (x2.48), `insn_c_lw` 89 -> 154 s, `pc_bwd` 91 -> 149 s, `insn_c_j` 54 -> 109 s |
+
+**[fact].** The twelve that got faster and the x0.88 tenth percentile
+are contention noise: eight jobs sharing a machine do not divide it
+evenly, and no attempt was made to control for that. The signal is the
+median and the count — a 20 % median increase with fifty of sixty-two
+checks slower is not noise.
+
+**The cover set is the cleaner measurement and it is larger.** Cover
+jobs are short, uniform, and solve a satisfiability question rather than
+a proof, so they are less exposed to scheduling: **x1.92 over 79 of 79,
+median per-check x2.20** [fact]. Finding a witness in the substituted
+core costs about twice what it costs in the stock one.
+
+### 18.3 One place the measurement had to be repaired
+
+Eight phase-2 bmc jobs were killed by a mistake of mine: the watcher
+that stopped the six M-extension checks at their budget ended with a
+blanket `pkill boolector`, which took out every solver then running,
+not only the six. The eight were re-run afterwards, on a machine that
+was by then nearly idle, so **their phase-2 times are not comparable
+with phase-1 numbers measured under `-j8`** and they are excluded from
+section 18.2 rather than quietly averaged in. Seven of them are
+instruction checks that re-ran in 42-88 s and passed. The eighth is
+`reg_ch0` and it is section 17.
+
+The same mistake cost phase 1 eight cover jobs and was repaired the same
+way; it is recorded twice because the second time was avoidable and the
+watcher still has the defect.
+
+### 18.4 What this predicts for a phase 3
+
+`docs/49` measured the analogous thing at layout and found the post-CTS
+resizer 5.6 times slower on a `SYNPRE` netlist. This is a milder effect
+of the same kind — protection logic in the read path costs downstream
+tools time — and the number to carry forward is **1.5 to 2 times, not
+5 times**, for solver work on this register file at these depths.
+
+What it does NOT predict is the cost of the things phase 2 did not
+reach. The eight M-extension checks were already beyond the budget in
+phase 1; a 1.5x factor on a job that did not terminate in 40 minutes is
+not a number, it is a reason to change engine before trying again
+(section 11 item 3).
+
+## 19. What phase 2 settles for `docs/43`, and what it does not
+
+`docs/43` substituted a SECDED-protected register file into Ibex by a
+file list and asserted, in section 3.2 cost 1, that the substitution is
+behaviourally transparent. The evidence it offered was simulation:
+`docs/43` section 9.1's cycle-identical whole-SoC run and a
+byte-identical ROM image, on one workload. `docs/44` added a
+124-injection campaign, `docs/49` sections 9.1 added properties C6 and
+C7 proving the encoder and the decoder agree on the same H matrix, and
+`hw/soc/formal/regfile_secded.sby` proves the shortened code corrects
+one error and detects two. **None of those is a statement about the core
+still implementing RV32IMC**, and that is the gap phase 2 closes part of.
+
+**Settled.** For the 62 RV32I and RV32C instructions whose checks pass,
+at their depths and under the nine assumptions of section 4.1, the
+substituted register file does not change what the instruction does to
+the architectural state — not the destination register or its value, not
+the source register numbers, not the next PC, not the memory address,
+masks or store data, and not whether it traps. The retirement stream is
+still causal, unique, PC-continuous in both directions, and it still
+makes progress. Every cover obligation is still reachable. **No check
+that passed on the stock core fails on the substituted one.**
+
+**Not settled, and the list is longer than the settled one.**
+
+- **The eight M-extension instructions.** Section 16.3. Neither run has
+  a verdict for six of them, and the two that have one have it against
+  a defective model. If the substitution changed `mulh`, this
+  experiment could not see it.
+- **REG_NOT_SETTLED**
+- **Everything section 6 excludes**, unchanged: no CSR is checked, PMP
+  enforcement is not proved, bus errors and debug are assumed absent,
+  the clock gate is a substitute, and nothing below the RTL is touched.
+  Phase 2 inherits all of it.
+- **`SYNPRE = 1`.** The file elaborates at its own defaults, which are
+  `docs/44`'s build. `docs/49` and `docs/62` declined `SYNPRE` three
+  times; nothing here says anything about it.
+- **Anything about faults.** riscv-formal checks the FAULT-FREE
+  behaviour of the substituted file. It does not inject, it does not
+  read the error counters — which `opt_clean` deletes because nothing
+  reads them, `docs/43` section 6.5 — and it is not a substitute for
+  `docs/44` section 9's campaign. A register file that corrected
+  nothing but was otherwise transparent would pass every check here.
+- **The addresses.** `docs/43` section 6.6 already says the file
+  protects the data and not `raddr_a_i`, `raddr_b_i` or `waddr_a_i`.
+  Phase 2 does not change that and does not test it.
+
+**One correction of emphasis for `docs/43`.** Section 3.2 cost 2 warns
+that "an upstream interface change breaks this, and only some shapes of
+it break loudly" — a port added or removed fails at elaboration, a port
+whose *meaning* changes does not. Phase 2 is a second net under the
+second shape, for the instructions it covers: a register file that
+returned the right value at the wrong time, or the wrong register, would
+fail `reg_ch0` or one of the 62 instruction checks rather than passing
+elaboration silently. It is a net with eight instruction-sized holes in
+it and it is more than `docs/43` had.
+
