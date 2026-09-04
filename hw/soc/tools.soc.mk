@@ -97,6 +97,24 @@ IBEX_URL    ?= https://github.com/lowRISC/ibex.git
 IBEX_COMMIT ?= 34b0705760ef3dfa00e99637432473d2be8f22f3
 IBEX_DIR    ?= $(SOC_DIR)/ext/ibex
 
+# --- riscv-formal -----------------------------------------------------
+# The formal RISC-V ISA description and its check generator, planned in
+# docs/09 part B track 1 and brought up in docs/63. Same rule as Ibex:
+# fetched by commit into a gitignored ext/ directory, never vendored,
+# and `git -C $(RVFORMAL_DIR) status` stays clean -- the harness that
+# binds it to this core lives in hw/soc/rvformal/, OUTSIDE the checkout,
+# for the reason hw/soc/flow/rvformal.sh's header gives.
+#
+# Pinned by COMMIT and not by tag, because riscv-formal publishes no
+# releases. There is therefore no release archive to sha256, and that is
+# a real difference from sv2v and the RISC-V GCC above rather than an
+# omission: a git commit id is a content hash of the tree, so `checkout
+# <sha>` is verified by git itself, but there is no second, independent
+# digest of a downloaded artefact the way there is for those two.
+RVFORMAL_URL    ?= https://github.com/YosysHQ/riscv-formal.git
+RVFORMAL_COMMIT ?= c992aa61fdfe0846c5ed90324c596202a1c69b76
+RVFORMAL_DIR    ?= $(SOC_DIR)/ext/riscv-formal
+
 .PHONY: soc-toolcheck
 soc-toolcheck: toolcheck
 	@echo "---- SoC-specific tools ----"
@@ -115,6 +133,14 @@ soc-toolcheck: toolcheck
 	@if [ -d "$(IBEX_DIR)/.git" ]; then \
 	   echo "ibex HEAD = $$(git -C $(IBEX_DIR) rev-parse HEAD)"; \
 	 else echo "ibex not fetched. Run 'make fetch-ibex'."; fi
+	@echo "riscv-formal = $(RVFORMAL_DIR) @ $(RVFORMAL_COMMIT)"
+	@if [ -d "$(RVFORMAL_DIR)/.git" ]; then \
+	   echo "riscv-formal HEAD = $$(git -C $(RVFORMAL_DIR) rev-parse HEAD)"; \
+	   if [ -n "$$(git -C $(RVFORMAL_DIR) status --porcelain)" ]; then \
+	     echo "ERROR: $(RVFORMAL_DIR) is NOT clean. It is a fetched"; \
+	     echo "       checkout, not a place to edit -- the harness is in"; \
+	     echo "       hw/soc/rvformal/."; exit 1; fi; \
+	 else echo "riscv-formal not fetched. Run 'make fetch-riscv-formal'."; fi
 
 # Single source of truth for the shell scripts under flow/: they eval
 # this instead of re-deriving paths, so the Makefile and the scripts can
@@ -140,6 +166,9 @@ printvars:
 	@echo 'SRAM_FAST="$(SRAM_FAST)"'
 	@echo 'IBEX_DIR="$(IBEX_DIR)"'
 	@echo 'IBEX_COMMIT="$(IBEX_COMMIT)"'
+	@echo 'RVFORMAL_DIR="$(RVFORMAL_DIR)"'
+	@echo 'RVFORMAL_COMMIT="$(RVFORMAL_COMMIT)"'
+	@echo 'SBY="$(SBY)"'
 
 .PHONY: fetch-sv2v
 fetch-sv2v:
@@ -167,3 +196,16 @@ fetch-ibex:
 	git -C $(IBEX_DIR) fetch --quiet origin
 	git -C $(IBEX_DIR) checkout --quiet $(IBEX_COMMIT)
 	@echo "ibex @ $$(git -C $(IBEX_DIR) rev-parse HEAD)"
+
+.PHONY: fetch-riscv-formal
+fetch-riscv-formal:
+	@mkdir -p $(SOC_DIR)/ext
+	@if [ ! -d "$(RVFORMAL_DIR)/.git" ]; then \
+	   git clone --quiet $(RVFORMAL_URL) $(RVFORMAL_DIR); fi
+	git -C $(RVFORMAL_DIR) fetch --quiet origin
+	git -C $(RVFORMAL_DIR) checkout --quiet $(RVFORMAL_COMMIT)
+	@echo "riscv-formal @ $$(git -C $(RVFORMAL_DIR) rev-parse HEAD)"
+	@test -f "$(RVFORMAL_DIR)/insns/isa_rv32imc.txt" || { \
+	   echo "ERROR: the pinned commit has no insns/isa_rv32imc.txt."; exit 1; }
+	@test -z "$$(git -C $(RVFORMAL_DIR) status --porcelain)" || { \
+	   echo "ERROR: checkout is dirty after fetch."; exit 1; }

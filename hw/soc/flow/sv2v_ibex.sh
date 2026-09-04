@@ -18,13 +18,29 @@
 # include paths, and the prim_* -> prim_generic_* renaming -- is
 # upstream's, verbatim, because that is the part being evaluated.
 #
-# Usage: sv2v_ibex.sh <ibex_dir> <out_dir> <sv2v_binary>
+# Usage: sv2v_ibex.sh <ibex_dir> <out_dir> <sv2v_binary> [extra_define ...]
+#
+# The optional trailing arguments are added to the sv2v `--define` list.
+# There are none by default, so the three-argument invocation docs/38
+# section 11 records converts exactly what it converted then. docs/63
+# passes RVFI, which turns on the `ifdef RVFI` port block of
+# ibex_top.sv line 138 -- 45 trace ports that riscv-formal binds to and
+# that hw/soc/gen/ therefore does not contain. It writes its output to a
+# DIFFERENT directory for that reason: hw/soc/gen/ is what the SoC
+# builds from and it must stay the design docs/38 to docs/62 measured.
 
 set -euo pipefail
 
 IBEX_DIR=$(readlink -f "${1:?ibex dir}")
 OUT_DIR=$(readlink -f "${2:?out dir}")
 SV2V=$(readlink -f "${3:?sv2v binary}")
+shift 3
+
+EXTRA_DEFINES=()
+for d in "$@"; do EXTRA_DEFINES+=("--define=$d"); done
+if [ ${#EXTRA_DEFINES[@]} -gt 0 ]; then
+  echo "== sv2v: extra defines ${EXTRA_DEFINES[*]}"
+fi
 
 RTL="$IBEX_DIR/rtl"
 VEN="$IBEX_DIR/vendor/lowrisc_ip"
@@ -58,7 +74,7 @@ echo "== sv2v: vendored primitives"
 for file in "${DEP_SOURCES[@]}"; do
   module=$(basename -s .sv "$file")
   "$SV2V" \
-    --define=SYNTHESIS --define=YOSYS \
+    --define=SYNTHESIS --define=YOSYS ${EXTRA_DEFINES[@]+"${EXTRA_DEFINES[@]}"} \
     "$VEN/ip/prim/rtl/prim_count_pkg.sv" \
     "$VEN/ip/prim/rtl/prim_cipher_pkg.sv" \
     -I"$VEN/ip/prim/rtl" \
@@ -71,7 +87,7 @@ for file in "$RTL"/*.sv; do
   module=$(basename -s .sv "$file")
   case "$module" in *_pkg) continue;; esac
   "$SV2V" \
-    --define=SYNTHESIS --define=YOSYS \
+    --define=SYNTHESIS --define=YOSYS ${EXTRA_DEFINES[@]+"${EXTRA_DEFINES[@]}"} \
     "$RTL"/*_pkg.sv \
     "$VEN/ip/prim_generic/rtl/prim_ram_1p_pkg.sv" \
     "$VEN/ip/prim/rtl/prim_secded_pkg.sv" \

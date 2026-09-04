@@ -1,0 +1,109 @@
+// CORRECTED COPY of riscv-formal/insns/insn_div.v at the commit
+// hw/soc/tools.soc.mk pins. docs/63 section 7.5.
+//
+// Upstream's model computes an UNSIGNED division; this one computes a signed
+// one. Everything else is byte-identical to upstream and the only edited
+// lines are the ones between the two markers.
+//
+// THE DEFECT. Upstream writes the result as one conditional expression
+// whose other branches are unsigned:
+//
+//     wire [XLEN-1:0] result = rs2 == 0 ? <unsigned> :
+//                              <corner case> ? <unsigned> :
+//                              $signed(rs1) / $signed(rs2);
+//
+// IEEE 1364-2005 section 5.5.1: the second and third operands of the
+// conditional operator are context-determined, and the expression type
+// is unsigned if EITHER of them is unsigned. The unsigned branch
+// therefore demotes the third, the $signed casts do nothing, and the
+// division is evaluated unsigned.
+//
+// MEASURED, on the counterexample the check produced [fact]:
+//
+//     div x31, x6, x25 with rs1 = 0xFFFFFEA5 (-347) and rs2 =
+//     0x40100401 (+1075056129). Ibex returns 0, which is correct;
+//     upstream's model returns 3, which is 4294966949 / 1075056129.
+//
+// and confirmed in a second, independent tool: Icarus Verilog evaluates
+// upstream's expression to 3 and the same operation written on its
+// own to 0.
+//
+// The fix is to give the signed operation its own self-determined wire,
+// where nothing can demote it, and to use that wire in the conditional.
+// hw/soc/flow/rvformal.sh substitutes this file for upstream's when
+// RVF_INSN_FIX=1, by the same rule hw/soc/flow/ibex_sources.sh uses for
+// the register file: a file list, never an edit to the checkout.
+//
+// This has NOT been reported upstream from inside this repository, and
+// doing so is the obvious next step.
+
+// DO NOT EDIT -- auto-generated from riscv-formal/insns/generate.py
+
+module rvfi_insn_div (
+  input                                 rvfi_valid,
+  input  [`RISCV_FORMAL_ILEN   - 1 : 0] rvfi_insn,
+  input  [`RISCV_FORMAL_XLEN   - 1 : 0] rvfi_pc_rdata,
+  input  [`RISCV_FORMAL_XLEN   - 1 : 0] rvfi_rs1_rdata,
+  input  [`RISCV_FORMAL_XLEN   - 1 : 0] rvfi_rs2_rdata,
+  input  [`RISCV_FORMAL_XLEN   - 1 : 0] rvfi_mem_rdata,
+`ifdef RISCV_FORMAL_CSR_MISA
+  input  [`RISCV_FORMAL_XLEN   - 1 : 0] rvfi_csr_misa_rdata,
+  output [`RISCV_FORMAL_XLEN   - 1 : 0] spec_csr_misa_rmask,
+`endif
+
+  output                                spec_valid,
+  output                                spec_trap,
+  output [                       4 : 0] spec_rs1_addr,
+  output [                       4 : 0] spec_rs2_addr,
+  output [                       4 : 0] spec_rd_addr,
+  output [`RISCV_FORMAL_XLEN   - 1 : 0] spec_rd_wdata,
+  output [`RISCV_FORMAL_XLEN   - 1 : 0] spec_pc_wdata,
+  output [`RISCV_FORMAL_XLEN   - 1 : 0] spec_mem_addr,
+  output [`RISCV_FORMAL_XLEN/8 - 1 : 0] spec_mem_rmask,
+  output [`RISCV_FORMAL_XLEN/8 - 1 : 0] spec_mem_wmask,
+  output [`RISCV_FORMAL_XLEN   - 1 : 0] spec_mem_wdata
+);
+
+  // R-type instruction format
+  wire [`RISCV_FORMAL_ILEN-1:0] insn_padding = rvfi_insn >> 16 >> 16;
+  wire [6:0] insn_funct7 = rvfi_insn[31:25];
+  wire [4:0] insn_rs2    = rvfi_insn[24:20];
+  wire [4:0] insn_rs1    = rvfi_insn[19:15];
+  wire [2:0] insn_funct3 = rvfi_insn[14:12];
+  wire [4:0] insn_rd     = rvfi_insn[11: 7];
+  wire [6:0] insn_opcode = rvfi_insn[ 6: 0];
+
+`ifdef RISCV_FORMAL_CSR_MISA
+  wire misa_ok = (rvfi_csr_misa_rdata & `RISCV_FORMAL_XLEN'h 1000) == `RISCV_FORMAL_XLEN'h 1000;
+  assign spec_csr_misa_rmask = `RISCV_FORMAL_XLEN'h 1000;
+`else
+  wire misa_ok = 1;
+`endif
+
+  // DIV instruction
+`ifdef RISCV_FORMAL_ALTOPS
+  wire [`RISCV_FORMAL_XLEN-1:0] altops_bitmask = 64'h29bbf66f7f8529ec;
+  wire [`RISCV_FORMAL_XLEN-1:0] result = (rvfi_rs1_rdata - rvfi_rs2_rdata) ^ altops_bitmask;
+`else
+  // ---- docs/63 section 7.5: BEGIN the only edit in this file ----
+  wire signed [`RISCV_FORMAL_XLEN-1:0] signed_result =
+      $signed(rvfi_rs1_rdata) / $signed(rvfi_rs2_rdata);
+  wire [`RISCV_FORMAL_XLEN-1:0] result = rvfi_rs2_rdata == `RISCV_FORMAL_XLEN'b0 ? {`RISCV_FORMAL_XLEN{1'b1}} :
+                                         rvfi_rs1_rdata == {1'b1, {`RISCV_FORMAL_XLEN-1{1'b0}}} && rvfi_rs2_rdata == {`RISCV_FORMAL_XLEN{1'b1}} ? {1'b1, {`RISCV_FORMAL_XLEN-1{1'b0}}} :
+                                         signed_result;
+  // ---- docs/63 section 7.5: END the only edit in this file ----
+`endif
+  assign spec_valid = rvfi_valid && !insn_padding && insn_funct7 == 7'b 0000001 && insn_funct3 == 3'b 100 && insn_opcode == 7'b 0110011;
+  assign spec_rs1_addr = insn_rs1;
+  assign spec_rs2_addr = insn_rs2;
+  assign spec_rd_addr = insn_rd;
+  assign spec_rd_wdata = spec_rd_addr ? result : 0;
+  assign spec_pc_wdata = rvfi_pc_rdata + 4;
+
+  // default assignments
+  assign spec_trap = !misa_ok;
+  assign spec_mem_addr = 0;
+  assign spec_mem_rmask = 0;
+  assign spec_mem_wmask = 0;
+  assign spec_mem_wdata = 0;
+endmodule

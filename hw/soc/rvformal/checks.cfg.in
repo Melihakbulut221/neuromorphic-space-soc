@@ -1,0 +1,198 @@
+# riscv-formal check configuration for this project's Ibex.
+#
+# hw/soc/flow/rvformal.sh expands @MODE@ and @IBEX_FILES@ and writes
+# the result into the generated work tree; riscv-formal's own
+# checks/genchecks.py then turns this into one SymbiYosys job per check.
+# docs/63 is the record of the run.
+#
+# TWO CONFIGURATIONS ARE GENERATED FROM THIS ONE FILE, and the second is
+# not decoration:
+#
+#   checks.cfg   mode bmc    -- the proof. Every assert of the check
+#                              holds on every trace up to the depth.
+#   cover.cfg    mode cover  -- the anti-vacuity witness. The SAME check
+#                              files carry `cover` statements, and in
+#                              bmc mode sby does not look at them.
+#
+# Why that matters here more than usual. Every instruction check begins
+# `assume(spec_valid)` at the check cycle: it constrains the trace to one
+# in which THIS instruction retires exactly then. If the depth is too
+# small for the core to get there -- and Ibex's RV32MFast divider is 37
+# cycles on its own -- the assumption is unsatisfiable, there is no
+# trace, and the BMC passes having examined nothing. That is a green
+# result exactly as wide as the thing it examined, which docs/41 section
+# 6.6 catalogues by name -- eight instances as of its writing. The cover
+# run is what makes each depth a measurement:
+# it FAILS if the instruction cannot retire at the check cycle.
+#
+# ---------------------------------------------------------------------
+# ISA
+#
+# rv32imc, which is the configuration hw/soc/rtl/soc_top.v elaborates:
+# BaseIsaRV32I + RV32MFast + RV32Zca. 70 instruction models, listed in
+# riscv-formal's insns/isa_rv32imc.txt.
+# ---------------------------------------------------------------------
+[options]
+isa rv32imc
+mode @MODE@
+solver boolector
+
+# ---------------------------------------------------------------------
+# Depths
+#
+# One line per check family: <name> [start] [trig] <depth>. Every number
+# is a BOUND and none of these is an unbounded proof -- a check that
+# passed at depth 20 says nothing about cycle 21, and docs/09 C.4 item 6
+# forbids reporting a bounded result as "proven". The cover run above is
+# what says the bound was reachable rather than merely survived.
+#
+# The instruction default is 20: reset, a fetch, and the two Ibex
+# pipeline stages leave a wide margin for a single-cycle instruction.
+# The exceptions are the multi-cycle ones and they are exceptions
+# because the divider is sequential:
+#
+#   div/divu/rem/remu  ibex_multdiv_fast counts 32 quotient bits plus
+#                      setup and fixup, so the instruction alone is
+#                      about 37 cycles. Anything under that is a
+#                      vacuous pass and the cover run proves it.
+#   mul/mulh/...       the fast multiplier is 3 cycles; 20 is enough,
+#                      and the number is left at the default rather
+#                      than tuned so that only the genuinely different
+#                      family has a different line.
+#
+# The SAME 37 cycles reach `liveness`, which asks whether the
+# instruction AFTER a given one retires -- and the instruction after a
+# given one can be a divide. Its check cycle is therefore the one number
+# here that is overridable from the environment, RVF_LIVENESS_DEPTH,
+# because closing it costs a deeper unrolling than every other check in
+# the set put together and the cost has to be a decision rather than a
+# constant. The default is what docs/63 section 8 reports.
+# ---------------------------------------------------------------------
+[depth]
+insn            20
+insn_div        55
+insn_divu       55
+insn_rem        55
+insn_remu       55
+
+reg       15    25
+pc_fwd    10    30
+pc_bwd    10    30
+liveness  1  12 @LIVENESS_DEPTH@
+unique    1  10 30
+causal    10    30
+cover     1     20
+hang      1     30
+ill             20
+
+[sort]
+reg_ch0
+
+# ---------------------------------------------------------------------
+# Checks that are NOT generated, and why. Each of these is a DELIBERATE
+# disable with a reason; docs/63 section 4.1 is the ledger and an entry
+# there is what makes the absence visible rather than merely absent.
+#
+#   csrw, csrc_*, csr_ill    require the rvfi_csr_<name>_{rmask,wmask,
+#                            rdata,wdata} ports. Ibex's RVFI does not
+#                            have them -- it carries rvfi_ext_* signals
+#                            for its own Spike co-simulation instead --
+#                            so there is nothing to bind. Not
+#                            configuring any [csrs] is what leaves them
+#                            ungenerated.
+#
+#   fault, bus_*             require rvfi_mem_fault* and the rvfi_bus_*
+#                            channel. Ibex has neither, and section 4 of
+#                            wrapper.sv ties both bus error inputs low,
+#                            so there is no fault to check. Not setting
+#                            [bus] is what leaves them ungenerated.
+#
+#   causal_mem, causal_io    need `RISCV_FORMAL_VALIDADDR` /
+#                            `RISCV_FORMAL_IOADDR` address maps this
+#                            harness does not supply. The plain `causal`
+#                            check is generated and is the one that
+#                            matters: it is the memory-consistency
+#                            argument without an address map.
+#
+# The filter below removes nothing today. It is present, empty and
+# commented so that a future disable has to be written down HERE rather
+# than achieved by deleting a depth line, which is the shape of disable
+# that goes unnoticed.
+# ---------------------------------------------------------------------
+[filter-checks]
+
+# ---------------------------------------------------------------------
+# Defines
+#
+# Each of these switches on an assumption inside wrapper.sv, and each
+# narrows the traces the solver considers. They appear here rather than
+# unconditionally in the wrapper so that every generated .sby file
+# carries them in plain text: `grep IBEX_ASSUME` over the work tree
+# lists what was assumed, per check, without reading any Verilog.
+# wrapper.sv section 5 is the argument for each.
+# ---------------------------------------------------------------------
+[defines]
+`define IBEX_ASSUME_MMODE
+`define IBEX_ASSUME_NO_PROT_CSR_WRITE
+
+# The bounded-response assumption of wrapper.sv section 3 is needed ONLY
+# by the checks that ask whether the core makes progress. Every other
+# check is a safety property and holds without it, so it is applied
+# where it is needed and nowhere else -- an assumption in a proof that
+# does not need it is a weakening for free.
+[defines liveness]
+`define IBEX_FAIRNESS
+
+[defines hang]
+`define IBEX_FAIRNESS
+
+# Only the binding is read by Yosys's own Verilog front end. The CORE is
+# read by yosys-slang, below, and docs/63 section 3 is the reason.
+[verilog-files]
+@basedir@/cores/@core@/wrapper.sv
+
+# ---------------------------------------------------------------------
+# Reading the core
+#
+# genchecks.py emits this block AFTER its own `read -sv` line and BEFORE
+# `prep`, which is the only hook there is for using a second front end.
+#
+# WHY A SECOND FRONT END, in one paragraph, because it is the largest
+# single deviation in this harness. Ibex's RVFI block reads sixteen
+# signals out of submodules by hierarchical reference --
+# `id_stage_i.controller_i.exc_req_d` and fifteen others. sv2v carries
+# them through verbatim and Yosys's Verilog-2005 front end cannot
+# resolve them: every dotted name becomes an implicitly declared net and
+# width inference fails. yosys-slang resolves them. It ships in the
+# pinned oss-cad-suite and docs/38 section 6 already established that it
+# reads this design, so this is a path the project had measured before
+# it needed it -- but it is NOT the front end hw/soc/syn/ibex_syn.ys.in
+# builds the SoC with, and docs/63 section 6 says what that costs.
+#
+# THE PARAMETERS LIVE HERE and not in wrapper.sv, which is not where a
+# reader would look for them. read_slang elaborates `ibex_top` fully, so
+# the module in RTLIL is not parametric and an override at the
+# instantiation is an error ("Module `ibex_top' is used with parameters
+# but is not parametric") rather than an override. -G is the only route.
+# Every value is hw/soc/rtl/soc_top.v's, and hw/soc/rvformal/params.sh
+# reads this list back out of THIS FILE and out of soc_top.v and fails
+# if any of the nineteen has moved -- so the copy is guarded, in the
+# same way hw/soc/formal/Makefile guards soc_wdog_tmr.sby's copy of the
+# watchdog's TMR masks.
+#
+# The integers are ibex_pkg's encodings and the names do not survive
+# sv2v (docs/38 section 4.4). ONE LINE, unwrapped: a yosys script has no
+# line continuation and riscv-formal's config reader strips every line
+# it copies, so a wrapped command would arrive at yosys as nineteen
+# unknown commands. The ibex_pkg name each integer encodes, in order:
+# BaseIsaRV32I, -, -, -, -, -, -, RV32MFast, RV32BNone, RV32Zca,
+# RegFileFF, and the rest are plain bits.
+[script-sources]
+plugin -i slang
+read_slang --top ibex_top -G BaseIsa=0 -G PMPEnable=1 -G PMPGranularity=0 -G PMPNumRegions=4 -G MHPMCounterNum=0 -G MHPMCounterWidth=40 -G RV32E=0 -G RV32M=2 -G RV32B=0 -G RV32ZC=0 -G RegFile=0 -G BranchTargetALU=0 -G WritebackStage=0 -G ICache=0 -G ICacheECC=0 -G BranchPredictor=0 -G DbgTriggerEn=0 -G SecureIbex=0 -G ICacheScramble=0 @IBEX_FILES@
+
+# The cover obligation riscv-formal's own cover check carries: two
+# instructions retire. It is the floor of the vacuity argument -- if
+# this fails, no instruction check above means anything.
+[cover]
+always @* if (!reset) cover (channel[0].cnt_insns == 2);

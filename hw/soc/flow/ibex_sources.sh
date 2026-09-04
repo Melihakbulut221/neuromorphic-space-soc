@@ -60,11 +60,30 @@
 # the SoC flows build the design as it would ship, and the standalone
 # measurement flows reproduce a published number unless asked not to.
 # docs/44 section 4 states what the patch costs the pinning story.
+#
+# IBEX_GEN selects WHICH sv2v output tree the list is read from, and it
+# is the third selector because docs/63 needs a core that carries the
+# RVFI trace ports:
+#
+#   gen      (default) the tree hw/soc/flow/sv2v_ibex.sh writes with no
+#            extra defines. This is what the SoC is built and measured
+#            from and what every flow before docs/63 reads.
+#   genrvfi  the same conversion of the same pinned commit with
+#            `--define=RVFI`, adding the 45 trace ports of ibex_top.sv
+#            line 138. It is a SEPARATE tree and not a replacement:
+#            `gen` must go on reproducing byte-identically, because
+#            docs/38 to docs/62's numbers were measured from it.
+#
+# IBEX_FAULT_PORT=1 is REFUSED with anything but the default tree.
+# flow/ibex_fault_port.py rewrites a specific ibex_top.v and nothing has
+# checked it against an RVFI one, so the combination is an error here
+# rather than a wrong netlist somewhere downstream.
 
 ibex_sources () {
   local soc_dir=$1
   local mode=${IBEX_REGFILE:-secded}
   local port=${IBEX_FAULT_PORT:-0}
+  local gendir=${IBEX_GEN:-gen}
   local f
 
   case "$mode" in
@@ -77,13 +96,26 @@ ibex_sources () {
     *) echo "IBEX_FAULT_PORT must be 0 or 1, got '$port'" >&2
        return 2 ;;
   esac
+  case "$gendir" in
+    gen|genrvfi) ;;
+    *) echo "IBEX_GEN must be 'gen' or 'genrvfi', got '$gendir'" >&2
+       return 2 ;;
+  esac
+  if [ "$port" = 1 ] && [ "$gendir" != gen ]; then
+    echo "IBEX_FAULT_PORT=1 is only defined for IBEX_GEN=gen" >&2
+    return 2
+  fi
+  if [ ! -d "$soc_dir/$gendir" ]; then
+    echo "$soc_dir/$gendir does not exist. Run flow/sv2v_ibex.sh." >&2
+    return 2
+  fi
 
   if [ "$port" = 1 ]; then
     python3 "$soc_dir/flow/ibex_fault_port.py" \
             "$soc_dir/gen" "$soc_dir/genp" "$mode" >&2 || return 2
   fi
 
-  for f in "$soc_dir"/gen/*.v; do
+  for f in "$soc_dir"/$gendir/*.v; do
     if [ "$mode" = "secded" ] && \
        [ "$(basename "$f")" = "ibex_register_file_ff.v" ]; then
       continue
