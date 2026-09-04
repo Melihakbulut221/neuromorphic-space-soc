@@ -1449,7 +1449,22 @@ The same mistake cost phase 1 eight cover jobs and was repaired the same
 way; it is recorded twice because the second time was avoidable and the
 watcher still has the defect.
 
-### 18.4 What this predicts for a phase 3
+### 18.4 Where the cost goes: `reg_ch0` against check depth, both cores
+
+Section 17's non-result raised a question section 18.2's median could
+not answer — is `reg_ch0` uniformly harder on the substituted core, or
+does it fall off a cliff? It falls off a cliff, and the cliff is
+measurable. The same check was run at five shallower check cycles on
+both trees, by copying the generated `reg_ch0.sby` and changing three
+lines (`depth`, `skip`, `RISCV_FORMAL_CHECK_CYCLE`) and nothing else.
+Every one of these ran alone or nearly alone rather than inside a `-j8`
+run, so they are comparable with each other and NOT with section 18.2.
+
+DEPTHSWEEP_TABLE
+
+DEPTHSWEEP_PROSE
+
+### 18.5 What this predicts for a phase 3
 
 `docs/49` measured the analogous thing at layout and found the post-CTS
 resizer 5.6 times slower on a `SYNPRE` netlist. This is a milder effect

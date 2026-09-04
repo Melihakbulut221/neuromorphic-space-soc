@@ -35,7 +35,14 @@
 [options]
 isa rv32imc
 mode @MODE@
-solver boolector
+# The solver, and it is a knob because docs/63 section 20 needed it to
+# be. Everything in Part 1 and Part 2 ran under `boolector` and
+# docs/09 C.4 item 7 asks for solver diversity on key proofs, which
+# neither of those runs had. RVF_SOLVER takes any name riscv-formal's
+# genchecks.py understands: an smtbmc solver (boolector, bitwuzla,
+# yices, z3, cvc5), `btormc` for the BTOR2 engine, or `bmc3` for
+# ABC's AIG bounded model checker.
+solver @SOLVER@
 
 # ---------------------------------------------------------------------
 # Depths

@@ -18,6 +18,10 @@
 #                 so the two phases cannot overwrite each other's
 #                 evidence.
 #   RVF_JOBS      -j for the check makefile. Default: nproc.
+#   RVF_SOLVER    solver/engine for every check. Default boolector,
+#                 which is what every number in docs/63 Parts 1 and 2
+#                 was produced with. Any name genchecks.py understands:
+#                 boolector, bitwuzla, yices, z3, cvc5, btormc, bmc3.
 #   RVF_INSN_FIX  0 (default) uses riscv-formal's instruction models
 #                 exactly as fetched. 1 substitutes the two corrected
 #                 copies in hw/soc/rvformal/insns/ for `div` and `rem`,
@@ -93,6 +97,9 @@ RVF_LIVENESS_DEPTH=${RVF_LIVENESS_DEPTH:-50}
 # against riscv-formal would expect to reproduce. Setting it to 1 is an
 # experiment about the SPECIFICATION and it has to be asked for.
 RVF_INSN_FIX=${RVF_INSN_FIX:-0}
+# The solver. boolector is what every result in docs/63 Parts 1 and 2
+# was produced with; section 20 runs one check under six of them.
+RVF_SOLVER=${RVF_SOLVER:-boolector}
 
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -125,7 +132,7 @@ put_sby_on_path () {
 cmd_setup () {
   need_checkout
   echo "== riscv-formal = $RVF_DIR @ $(git -C "$RVF_DIR" rev-parse HEAD)"
-  echo "== RVF_INSN_FIX=$RVF_INSN_FIX  RVF_LIVENESS_DEPTH=$RVF_LIVENESS_DEPTH"
+  echo "== RVF_INSN_FIX=$RVF_INSN_FIX  RVF_LIVENESS_DEPTH=$RVF_LIVENESS_DEPTH  RVF_SOLVER=$RVF_SOLVER"
   echo "== ibex sources = $SOC_DIR/$IBEX_GEN, register file: $IBEX_REGFILE"
 
   rm -rf "$RVF_OUT"
@@ -191,6 +198,7 @@ $SOC_DIR/rvformal/prim_clock_gating_formal.v"
   # against a here-string is the kind of construction that works until
   # a path contains the delimiter.
   RVF_SRCS="$srcs" RVF_LIVENESS_DEPTH="$RVF_LIVENESS_DEPTH" \
+  RVF_SOLVER="$RVF_SOLVER" \
   python3 - "$SOC_DIR/rvformal/checks.cfg.in" \
                              "$RVF_OUT/cores/$CORE" <<'CFGPY'
 import os, sys
@@ -201,7 +209,8 @@ files = " ".join(os.environ["RVF_SRCS"].split())
 for mode, name in (("bmc", "checks"), ("cover", "cover")):
     out = (tmpl.replace("@MODE@", mode)
                 .replace("@IBEX_FILES@", files)
-                .replace("@LIVENESS_DEPTH@", os.environ["RVF_LIVENESS_DEPTH"]))
+                .replace("@LIVENESS_DEPTH@", os.environ["RVF_LIVENESS_DEPTH"])
+                .replace("@SOLVER@", os.environ["RVF_SOLVER"]))
     with open(os.path.join(sys.argv[2], name + ".cfg"), "w") as f:
         f.write(out)
 CFGPY
