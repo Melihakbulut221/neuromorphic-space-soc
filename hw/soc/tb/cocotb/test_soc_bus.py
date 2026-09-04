@@ -14,12 +14,13 @@ Every expected value in this file comes from one of exactly two sources:
     computed from REGIONS / MASKS / PORTS, so moving a region in the YAML
     moves what this suite demands of the fabric.
 
-The RTL was read for two things only: the port names, and the fact that
-rst_ni is active low. The slave index order 0 RAM, 1 ROM, 2 APB, 3 PNP and
-the internal error slave at index 4 come from the specification block in the
-soc_bus.v header, not from the decode logic; SLAVE_INDEX below is
-cross-checked against PORTS so that adding or removing a fabric port in the
-YAML fails loudly here instead of silently skipping coverage.
+The RTL was read for three things only: the port names, the fact that
+rst_ni is active low, and the slave index list, which is PARSED out of the
+specification block in the soc_bus.v header rather than copied here. The
+list is not read from the decode logic, so this suite still fails if the
+decode disagrees with the header. SLAVE_INDEX is then cross-checked against
+PORTS, so adding or removing a fabric port in the YAML without touching the
+header, or the reverse, fails loudly instead of silently skipping coverage.
 
 The slaves are behavioural Python models that obey S1-S4: always-ready
 unless a test deliberately withholds gnt, configurable latency, in-order,
@@ -54,7 +55,7 @@ WHAT THIS SUITE DOES NOT COVER
     suite.
   * Misaligned and sub-word addressing rules, which live in Ibex's LSU and
     not in the fabric.
-  * The wiring of the four slave ports in soc_top.v. This suite fixes the
+  * The wiring of the slave ports in soc_top.v. This suite takes the
     index order from the soc_bus.v specification header; that the top level
     connects index 2 to the APB bridge is not verified here.
   * More than the two Ibex masters, and any notion of arbitration fairness
@@ -63,6 +64,7 @@ WHAT THIS SUITE DOES NOT COVER
 """
 
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -85,11 +87,41 @@ from golden.memmap_gen import MASKS, PORTS, REGIONS  # noqa: E402
 # MAX_OUT is 2 because Ibex's prefetch buffer has NUM_REQS = 2.
 MAX_OUT = 2
 
-# soc_bus.v header, slave port list: "Index order is fixed [...] 0 RAM,
-# 1 ROM, 2 APB, 3 PNP, 4 CLINT. Index 5 is the internal error slave and has
-# no port."
-SLAVE_INDEX = {"RAM": 0, "ROM": 1, "APB": 2, "PNP": 3, "CLINT": 4}
-N_SLAVES = 5
+# The slave index order is READ OUT of soc_bus.v's header rather than
+# copied into this file, and the reason is a defect this suite caught in
+# itself. docs/51 added the NPU as fabric port 5: it updated the RTL, the
+# memory map and the formal property set, and left this constant at five
+# entries. The cross-check in test_memory_map_is_self_consistent then
+# failed on every run -- correctly -- and nobody saw it, because the cocotb
+# suites were not being run between documents. Transcribing the list again
+# would rebuild exactly the thing that broke.
+#
+# There are now two independent sources and they must agree: the header
+# gives the ORDER, and regmap/memmap.yaml gives the MEMBERSHIP. Adding a
+# port to one and not to the other still fails, which is the property that
+# caught this.
+def _slave_index_from_rtl():
+    """Parse "0 RAM, 1 ROM, 2 APB, 3 PNP, 4 CLINT, 5 NPU" from the header."""
+    src = (_REPO / "hw" / "soc" / "rtl" / "soc_bus.v").read_text()
+    at = src.find("Index order is fixed")
+    assert at != -1, (
+        "soc_bus.v no longer states its slave index order; this suite reads "
+        "that list rather than carrying its own copy")
+    window = src[at:at + 400]
+    pairs = re.findall(r"(\d+)\s+([A-Z][A-Z0-9]*)\b", window)
+    idx = {}
+    for n, name in pairs:
+        if name in idx:
+            break            # past the list, into the error-slave sentence
+        idx[name] = int(n)
+    assert idx, f"could not parse a slave index list out of {window[:120]!r}"
+    assert sorted(idx.values()) == list(range(len(idx))), (
+        f"slave indices in the soc_bus.v header are not 0..N-1: {idx}")
+    return idx
+
+
+SLAVE_INDEX = _slave_index_from_rtl()
+N_SLAVES = len(SLAVE_INDEX)
 
 WORD = 4
 ADDR_BITS = 32
@@ -230,12 +262,31 @@ class Slave:
         return (1, p[1], p[2])
 
 
-class SlaveArray:
-    """Drives the four slave-side input buses as one vector each."""
+def pad_latencies(latencies):
+    """Extend a latency tuple to N_SLAVES, padding with 1.
 
-    def __init__(self, dut, latencies=(1, 1, 1, 1, 1)):
+    Call sites choose latencies to create response-ordering variety, not to
+    state a requirement, so a tuple shorter than the port count is a stale
+    literal rather than an error. Padding here means adding a fabric port
+    costs one edit -- the soc_bus.v header -- instead of one per call site,
+    which is what turned a five-entry SLAVE_INDEX into a suite nobody could
+    run. A tuple LONGER than the port count is still an error, because that
+    means a port was removed and the call site was not revisited.
+    """
+    lat = tuple(latencies)
+    assert len(lat) <= N_SLAVES, (
+        f"{len(lat)} latencies for {N_SLAVES} slave ports; the fabric lost a "
+        "port and this call site still names it")
+    return lat + (1,) * (N_SLAVES - len(lat))
+
+
+class SlaveArray:
+    """Drives the slave-side input buses as one vector each."""
+
+    def __init__(self, dut, latencies=()):
         self.dut = dut
-        self.slaves = [Slave(i, latencies[i]) for i in range(N_SLAVES)]
+        lat = pad_latencies(latencies)
+        self.slaves = [Slave(i, lat[i]) for i in range(N_SLAVES)]
 
     def __getitem__(self, i):
         return self.slaves[i]
@@ -496,7 +547,7 @@ class BusMonitor:
 
 
 class Env:
-    def __init__(self, dut, latencies=(1, 1, 1, 1, 1)):
+    def __init__(self, dut, latencies=()):
         self.dut = dut
         self.slaves = SlaveArray(dut, latencies)
         self.mi = Master(dut, "mi", read_only=True)
@@ -523,7 +574,7 @@ class Env:
         )
 
 
-async def setup(dut, latencies=(1, 1, 1, 1, 1), start=True):
+async def setup(dut, latencies=(), start=True):
     cocotb.start_soon(Clock(dut.clk_i, CLK_NS, unit="ns").start())
     dut.rst_ni.value = 0
     dut.mi_req_i.value = 0
