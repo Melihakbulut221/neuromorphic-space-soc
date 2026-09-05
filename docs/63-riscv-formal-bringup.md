@@ -41,8 +41,8 @@ this work touches.
 | Is it a proof of ISA correctness? | **No, and the gap is not small.** Every result here is a BOUNDED check at a stated depth, under the nine assumptions ledgered in section 4.1, over a core whose CSR file, memory system, netlist and timing are all outside it. Sections 2 and 6 |
 | Is phase 2 ready? | It was, and it has been run. Section 10 states the plan; Part 2 is the result |
 | **Phase 2: does the SECDED register file change the core's ISA behaviour?** | **No check that passed on the stock core fails on the substituted one.** 68 of the 79 bmc checks have an identical verdict, all 79 cover jobs pass in both, and the three failures are the same three for the same reasons — two of them riscv-formal's own defective model, reproduced on fresh operands. Sections 16 and 17 |
-| **What phase 2 does NOT cover** | The **eight M-extension instructions have no verdict in either run**, so the delta over them is undefined rather than clean; and everything section 6 excludes is excluded in both. Section 16.3 |
-| **Is the substituted core harder to prove?** | **Yes, by about half again.** CPU x1.55 over the run, x1.21 median over the 62 checks comparable per-check, **x1.92 over the whole cover set**. Section 18 |
+| **What phase 2 does NOT cover** | The **eight M-extension instructions have no verdict in either run**, so the delta over them is undefined rather than clean; **`reg_ch0` — the check phase 2 exists for — is proved on the substituted core only to check cycle 18 and TIMES OUT at 21, 23 and 25 under six engines in four hours each**; and everything section 6 excludes is excluded in both. Sections 16.3, 17.2, 20 |
+| **Is the substituted core harder to prove?** | **Yes — by half again on average, and by a cliff on the one check that reads the register file.** CPU x1.55 over the run, x1.21 median per check, x1.92 over the cover set; and `reg_ch0` goes from 31 s to 353 s at cycle 18 and from one minute to more-than-four-hours at 21. Section 18 |
 
 **What is now proved about this core that was not proved before.** For
 **62 of the 70 instructions of RV32IMC** — every one except the eight of
@@ -1215,10 +1215,10 @@ rather than in totals.
 
 | | Phase 1 | Phase 2 |
 |---|---|---|
-| **bmc** | 70 PASS, 3 FAIL, 6 stopped | REG_BMC |
+| **bmc** | 70 PASS, 3 FAIL, 6 stopped | **69 PASS, 3 FAIL, 6 stopped, 1 TIMEOUT** (`reg_ch0`, section 17) |
 | **cover** | 79 PASS | **79 PASS** |
 
-### 16.1 Sixty-nine checks pass in both, and the list is identical
+### 16.1 Sixty-nine checks pass in both, and the list is identical except for `reg_ch0`
 
 Of the 79 bmc checks, **68 have the same status in both runs and one
 changed**, and the one that changed is `reg_ch0`, which section 17 is
@@ -1334,28 +1334,80 @@ all registers, all stream positions and all values, to a depth.
 
 ### 17.2 The result
 
-**Unresolved, and that is the honest word for it.** `reg_ch0` did not
-finish on the SECDED build: it waited **1 h 41 min** for the solver and
-then took `SIGTERM` when the run was stopped from outside, so `sby`
-recorded `DONE (ERROR, rc=16)` with "engine terminated without status"
-and no trace **[fact,
-`hw/soc/out/rvformal-secded/cores/ibex/checks/reg_ch0/logfile.txt`]**.
+**`reg_ch0` on the SECDED register file does not close at check cycle 25
+under any of six engines within four hours, and that is the result.**
 
-`ERROR` is not `FAIL`. No counterexample was found and none was ruled
-out. **The check phase 2 exists for has no verdict**, and nothing in
-this part may be read as evidence that the substitution preserves or
-breaks the register-file consistency property.
+Each engine ran alone in its own work tree, all six at once on the idle
+machine, under a 14,400 s wall-clock bound from `timeout(1)`. Every one
+reached the bound: `timeout` sent `SIGTERM` at 04:10:52, exactly four
+hours after the 00:10:52 start line in every logfile, and the runner
+recorded `rc=124` for every job **[fact,
+`hw/soc/out/rvf-eng-secded-*/cores/ibex/checks/reg_ch0.WALL`]**. The
+word for that is **TIMEOUT**. It is not a verdict, and section 20 gives
+each engine its own line rather than a best-of.
 
-What the non-result does establish is a lower bound on section 18's
-finding: the same check on the same harness at the same depth took
-**6 min 39 s** in phase 1 **[fact, the phase-1 logfile]**. So the
-substituted core is at least **15.3x** harder here, and that ratio is a
-measurement even though the verdict is not.
+| Engine | Outcome | Wall | Peak RSS (sampled) |
+|---|---|---:|---:|
+| `smtbmc boolector` | **TIMEOUT** | 14,400 s | 1.26 GiB |
+| `btor btormc` | **TIMEOUT** | 14,400 s | 0.98 GiB |
+| `smtbmc bitwuzla` | **TIMEOUT** | 14,400 s | 2.26 GiB |
+| `smtbmc yices` | **TIMEOUT** | 14,400 s | 0.33 GiB |
+| `smtbmc z3` | **TIMEOUT** | 14,400 s | 0.72 GiB |
+| `smtbmc cvc5` | **TIMEOUT** | 14,400 s | 2.56 GiB |
 
-To close it, `reg_ch0` must be re-run alone on the secded tree carrying
-`IBEX_REGFILE=secded`, `RVF_INSN_FIX=0` and `RVF_LIVENESS_DEPTH=50`
-forward unchanged, with either no wall-clock limit or a stated one whose
-expiry is reported as a timeout rather than as a verdict.
+No counterexample was found by any engine and none ruled one out.
+**Nothing in this part may be read as evidence that the substitution
+preserves the register-file consistency property at check cycle 25,
+and nothing may be read as evidence that it breaks it.**
+
+**The measured ratio.** Phase 1 closed the same check, same harness,
+same depth, in **399 s** under `boolector` inside its `-j8` run, and in
+**189 s** alone. Four hours is **36.1x** the in-run figure and **76x**
+the solo one — as wall clock, on a machine carrying twelve solvers and
+a foreign process at load 15. Section 20 measures that contention at
+3.4-3.6x on the engines that do close the stock case, so in
+solo-equivalent terms the SECDED check consumed **at least 10 to 20
+times** the solver effort of the stock one before the bound, without
+finishing. The 15.3x that stood here before was a lower bound from an
+interrupted run; this replaces it with a bound from a completed one.
+
+**What DOES close, and it is not nothing.** Section 18.4: the same
+property on the same substituted core **PASSES at check cycles 12, 15
+and 18** — 6 s, 15 s and 353 s — and times out at 21 and 23 as it does
+at 25. So the register file preserves the read-after-write property
+for every register, every stream position and every value **within
+eighteen cycles of reset**, which is deeper than a write and a read and
+shallower than one scrub pass. That is a bounded claim and section 17.3
+says how bounded.
+
+**What it would take to close it at 25, and the honest ranking.**
+
+1. **State the claim at 18 and stop.** It is proved there, it is
+   bounded there, and `docs/09` C.4 item 6 already governs how a
+   bounded result is reported. This costs nothing and is what this
+   document does.
+2. **A different property formulation.** riscv-formal's `reg` check
+   asks the solver to reason about the whole core between the write and
+   the read; a check that asked only the register file — write a word,
+   wait N cycles with the scrub running, read it back — would be the
+   size of `hw/soc/formal/regfile_secded.sby` and would close by
+   induction. It would prove the register file, not the core's use of
+   it, and it would be an honest and much stronger statement about the
+   scrub than anything here.
+3. **An abstraction of the codec.** Replace `secded_enc`/`secded_dec`
+   in the formal model with an uninterpreted encode/decode pair
+   constrained only by `dec(enc(x)) = x`, which C5-C7 of `docs/49`
+   already prove of the real ones. The solver then reasons about
+   storage and scrub timing without re-deriving the (40,32) code on
+   every visit. This is the standard move and it is the one most likely
+   to make cycle 25 tractable; it is also a second model to keep in
+   step with the first.
+4. **Wait longer or change engine.** Section 20 shows four of six
+   engines cannot close even the stock core's version in four hours,
+   and the two that can — `boolector`, `btormc` — are the two that
+   time out here. There is no evidence in any trace of convergence, and
+   no instrument in these engines that could show it, so "longer" is a
+   guess and is ranked last.
 
 ### 17.3 What it cannot prove, and one limit is sharper than it looks
 
@@ -1460,9 +1512,41 @@ lines (`depth`, `skip`, `RISCV_FORMAL_CHECK_CYCLE`) and nothing else.
 Every one of these ran alone or nearly alone rather than inside a `-j8`
 run, so they are comparable with each other and NOT with section 18.2.
 
-DEPTHSWEEP_TABLE
+| Check cycle | Stock register file (phase 1) | SECDED register file (phase 2) | Ratio |
+|---:|---:|---:|---:|
+| 12 | 5 s | 6 s | 1.2 |
+| 15 | 14 s | 15 s | 1.1 |
+| 18 | 31 s | **353 s** | **11.4** |
+| 21 | 66 s | **TIMEOUT** at 14,400 s | > 218 |
+| 23 | 411 s | **TIMEOUT** at 14,400 s | > 35 |
+| 25 | 189 s (alone); 399 s inside the `-j8` run | **TIMEOUT** at 14,400 s, six engines | > 36 |
 
-DEPTHSWEEP_PROSE
+**[fact, the `status` files under each tree's `regdepth/`, and section
+20 for the depth-25 cells].** The stock core's column is not monotonic
+— 411 s at 23 and 189 s at 25 — which is a reminder that these checks
+assert at ONE cycle (`skip` = check cycle) rather than at every cycle
+up to it, so a deeper check is a different SAT problem and not a
+superset of a shallower one; it is also a reminder that the column was
+measured with other solvers sharing the machine and carries noise of
+that order.
+
+**The cliff is between check cycle 15 and 18.** Up to 15 the two
+register files cost the same to within a second. At 18 the substituted
+one costs eleven times more, and at 21, 23 and 25 it does not finish in
+four hours while the stock one finishes in about a minute, seven minutes
+and three minutes. **Between cycle 18 and cycle 21 the substituted
+core's `reg_ch0` goes from six minutes to intractable-in-four-hours;
+the stock core's goes from 31 s to 66 s.**
+
+Why there and not elsewhere is a conjecture rather than a measurement,
+and it is labelled as one [estimate]: a register written early in the
+trace and read at the check cycle has, on the substituted core, been
+through the encoder, up to `check_cycle` scrub visits, and the decoder,
+and the solver has to reason about the (40,32) code's correction
+function once per visit rather than once. The stock file has nothing
+between the write and the read but a flip-flop. That the knee sits
+where the scrub pointer would first reach a low register after reset is
+consistent with this and is not a proof of it.
 
 ### 18.5 What this predicts for a phase 3
 
@@ -1470,7 +1554,14 @@ DEPTHSWEEP_PROSE
 resizer 5.6 times slower on a `SYNPRE` netlist. This is a milder effect
 of the same kind — protection logic in the read path costs downstream
 tools time — and the number to carry forward is **1.5 to 2 times, not
-5 times**, for solver work on this register file at these depths.
+5 times**, for solver work on this register file at these depths —
+**for checks that do not reason about a register held across many
+cycles.** For the one that does, `reg_ch0`, there is no multiplier to
+carry forward: section 18.4 measures a cliff between check cycle 18 and
+21, from six minutes to more than four hours, and a phase 3 that needs
+that property deeper than 18 cycles should start from the property
+reformulation or the codec abstraction of section 17.2 rather than from
+a budget.
 
 What it does NOT predict is the cost of the things phase 2 did not
 reach. The eight M-extension checks were already beyond the budget in
@@ -1507,7 +1598,11 @@ that passed on the stock core fails on the substituted one.**
   a verdict for six of them, and the two that have one have it against
   a defective model. If the substitution changed `mulh`, this
   experiment could not see it.
-- **REG_NOT_SETTLED**
+- **`reg_ch0` beyond check cycle 18.** Section 17.2. The read-after-
+  write property is proved on the substituted core to cycle 18 and
+  times out at 21, 23 and 25 under six engines. It is NOT proved at
+  the depth phase 1 proved it at, and the gap is the one that matters
+  for `docs/43`, because a scrub pass is 31 cycles.
 - **Everything section 6 excludes**, unchanged: no CSR is checked, PMP
   enforcement is not proved, bus errors and debug are assumed absent,
   the clock gate is a substitute, and nothing below the RTL is touched.
@@ -1535,3 +1630,141 @@ fail `reg_ch0` or one of the 62 instruction checks rather than passing
 elaboration silently. It is a net with eight instruction-sized holes in
 it and it is more than `docs/43` had.
 
+## 20. Solver diversity on `reg_ch0`, which neither run had
+
+Section 9.2 records that every result in Parts 1 and 2 was produced
+under `boolector` alone, and `docs/09` C.4 item 7 asks for a second
+engine family on key proofs. `reg_ch0` on the substituted core is the
+key proof of Part 2 and it did not close under `boolector`, so this is
+where diversity was spent. `RVF_SOLVER` (section 15 of the reproduction,
+one line in `checks.cfg.in`) selects the engine, and one work tree was
+generated per engine per register file — nothing else in the
+configuration differs, and `IBEX_REGFILE=secded`, `RVF_INSN_FIX=0` and
+`RVF_LIVENESS_DEPTH=50` are carried forward unchanged.
+
+**The bound, and why it is four hours.** Each engine was given
+14,400 s of wall clock under `timeout(1)`, on a 20-core machine with all
+twelve jobs of this section running at once. Phase 1 closed this same
+check in 6 min 39 s. Four hours is 36 times that, which is past the band
+in which "wait longer" is the right response and into the one where the
+question is whether the problem is tractable at all for the engine.
+**An engine that reaches the bound is reported as TIMEOUT, in that
+word, and never as a verdict.** No engine's result stands in for
+another's.
+
+**And the bound is a wall-clock bound on a shared machine, so here is
+the exchange rate.** The two engines that close the stock-core control
+were run twice: alone on an idle machine, and again inside this sweep
+with fourteen solver processes and one unrelated 7.5 GiB, ~96 %-CPU
+process of another project's sharing twenty cores. `boolector` went from
+189 s to 639 s and `btormc` from 205 s to 737 s — **3.4x and 3.6x**
+**[fact]**. The one-minute load average was sampled every sixty seconds
+for the whole sweep (`hw/soc/out/ENGINE_SWEEP_LOAD.log`, 219 samples):
+while the twelve jobs ran it stayed between **13.75 and 18.12**, memory
+available never fell below **6.5 GiB**, and the kernel log shows **no
+OOM kill** at any point [fact]. The single sample after the bound
+fired reads 10.75, which is the machine with the solvers gone and the
+foreign process still there. There is one gap of about a minute at
+01:51, when the sampler was killed by a `pkill` pattern that matched
+its own shell and had to be restarted; it is marked in the log.
+So a four-hour TIMEOUT in section 20.2 is worth about **1.1 to 1.2
+hours of solo solver time, or roughly ten times phase 1's 6 min 39 s —
+not the thirty-six the raw ratio suggests.** The owner's interactive
+workload, which the record was told to expect, did not arrive during
+the sweep: the load never moved off the plateau the solvers themselves
+set. Each engine's line below carries its own finish load and peak RSS
+so a reader can check that claim per job rather than take it on
+average.
+
+**One engine cannot be used at all.** ABC's `bmc3` refuses the generated
+job with `ERROR: Option skip is only valid for smtbmc and btor engines`
+[fact] — riscv-formal's generator emits `skip` so that only the check
+cycle is asserted, and the AIG engine has no such option. So the AIGER
+family is not available to this harness without changing the generator,
+and that is recorded rather than worked around.
+
+### 20.1 Stock register file, the control
+
+| Engine | Verdict | Wall |
+|---|---|---:|
+| `smtbmc boolector` | **PASS** | 189 s alone; **639 s** inside this sweep (peak RSS 1.25 GiB, load 17.1 at finish) |
+| `btor btormc` | **PASS** | 205 s alone; **737 s** inside this sweep (peak RSS 1.22 GiB, load 15.6 at finish) |
+| `smtbmc bitwuzla` | **TIMEOUT** | 14,400 s (peak RSS 2.07 GiB sampled) |
+| `smtbmc yices` | **TIMEOUT** | 14,400 s (0.28 GiB) |
+| `smtbmc z3` | **TIMEOUT** | 14,400 s (0.57 GiB) |
+| `smtbmc cvc5` | **TIMEOUT** | 14,400 s (2.49 GiB) |
+| `abc bmc3` | not runnable, see above | — |
+
+### 20.2 SECDED register file
+
+| Engine | Verdict | Wall |
+|---|---|---:|
+| `smtbmc boolector` | **TIMEOUT** | 14,400 s (peak RSS 1.26 GiB sampled, load 10.75 at the bound) |
+| `btor btormc` | **TIMEOUT** | 14,400 s (0.98 GiB) |
+| `smtbmc bitwuzla` | **TIMEOUT** | 14,400 s (2.26 GiB) |
+| `smtbmc yices` | **TIMEOUT** | 14,400 s (0.33 GiB) |
+| `smtbmc z3` | **TIMEOUT** | 14,400 s (0.72 GiB) |
+| `smtbmc cvc5` | **TIMEOUT** | 14,400 s (2.56 GiB) |
+| `abc bmc3` | not runnable, see above | — |
+
+**[fact, every row: the `.WALL`, `.TIMEOUT`, `.WALL.load` and
+`.PEAKRSS_SAMPLED` files under each `hw/soc/out/rvf-eng-*` tree.]**
+Peak RSS for a job that timed out is the largest value a sixty-second
+sampler saw, because `/usr/bin/time -v` reports nothing for a child it
+had to signal; for the two that finished it is `time`'s own figure. No
+job was killed by the kernel: the OOM count in the kernel log is zero
+before and after the sweep [fact].
+
+**Read the control first.** On the STOCK register file only two of six
+engines close this check at all — `boolector` and `btormc`, in about
+three and four minutes alone. `bitwuzla`, `yices`, `z3` and `cvc5` time
+out at four hours on a problem `boolector` finishes in 189 s. So four of
+the six rows in section 20.2 say less than they appear to: an engine
+that cannot close the easy case says nothing by failing the hard one.
+The two rows that matter are `boolector` and `btormc`, and both time
+out.
+
+**Why this is written up as a completed measurement and not re-run.**
+The stop at 04:10 that the coordinator's message reports was not a
+session kill: every logfile's last engine line is at 04:10:52, four
+hours to the second after the 00:10:52 start, and every runner wrote
+`rc=124`, which is `timeout(1)` reporting that IT sent the signal.
+The bound was reached. The question of whether an engine "had a
+realistic chance in the last 33 minutes" therefore does not arise, and
+if it did the traces could not answer it: an `smtbmc` engine makes one
+solver call at the check step and prints "waiting for solver" every
+five minutes until it returns, `btormc` sits inside one BMC call, and
+the sampled RSS of every engine had stopped growing more than an hour
+before the bound. There is no convergence signal in these tools to
+read. Re-running to get the same four hours and the same word would be
+theatre, and the twelve jobs already cost 48 core-hours.
+
+## 21. Ledger of solver time, including what was thrown away
+
+`docs/09` asks for the cost of a proof to be reported, and this
+document's cost is unusual in how much of it produced nothing. Every
+figure is wall-clock seconds of one solver process on one core, from
+timestamps in the logfiles; a job is "orphaned" when it was killed
+rather than reaped, so its usage never reached `/usr/bin/time`.
+
+| Work | Core-seconds | Core-hours | Verdicts produced |
+|---|---:|---:|---|
+| Phase 1 run, attributed (section 9.2) | 9,076 | 2.5 | 149 |
+| Phase 1, six M-extension checks stopped, orphaned | 13,553 | 3.8 | 0 |
+| Phase 1, corrected `div`/`rem` models (section 8.5), stopped | 5,375 | 1.5 | 0 |
+| Phase 2 run, attributed (section 18.1) | 14,027 | 3.9 | 148 |
+| Phase 2, six M-extension checks stopped, orphaned | 12,522 | 3.5 | 0 |
+| `reg_ch0` on SECDED, three attempts killed from outside (3,013 + 3,598 + 6,087 s) | 12,698 | 3.5 | 0 |
+| Engine sweep before the machine shutdown, eight jobs killed | 54,369 | 15.1 | 0 |
+| Depth sweep `d21`/`d23` on SECDED, killed by the shutdown | 7,290 | 2.0 | 0 |
+| Depth sweep, the eight points that finished (section 18.4) | 917 | 0.3 | 8 |
+| Engine sweep of section 20: ten TIMEOUTs at 14,400 s, two PASSes (658 + 764 s) | 145,422 | 40.4 | 2 |
+| Depth sweep `d21`/`d23` on SECDED, re-run to the four-hour bound, both TIMEOUT | 28,800 | 8.0 | 0 |
+| **Total** | **304,049** | **84.5** | **300** |
+
+**[fact for every row above the last two; the last two are filled from
+section 20's runs.]** Two things to read off it. About **92 %**
+of all solver time in this document produced no verdict at all, and
+almost all of that went into one check on one register file. And the
+two full runs — the part that produced 297 verdicts — are the smaller
+half.
