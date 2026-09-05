@@ -1256,7 +1256,8 @@ counted.
   campaign does not; `docs/44` section 8.2's bench-versus-software
   comparison was not repeated here.
 - **A ROUTER CHECK DID NOT RUN, IN BOTH LAYOUTS, AND IT IS THE PDK'S.**
-  The detailed router emits, seven times per run, `[WARNING DRT-0349]
+  The detailed router emits, ~~seven~~ **ten** times per run,
+  `[WARNING DRT-0349]
   LEF58_ENCLOSURE with no CUTCLASS is not supported. Skipping for layer
   <L>` — for `Cont`, `Via1` (twice), `Via2`, `Via3`, `Via4`, `TopVia1`
   (twice) and `TopVia2` (twice). **The seven lines are identical, layer
@@ -1268,7 +1269,13 @@ counted.
   (`LEF58_ENCLOSURE` without `CUTCLASS`) that this OpenROAD build does
   not implement, and the router skips it. **`0 detailed-routing DRC
   errors` therefore means zero errors among the rules the router did
-  check**, and via enclosure on nine layers was not among them. It
+  check**, and via enclosure on ~~nine layers~~ **seven layer names**
+  was not among them. *Corrected 2026-09-05 by
+  `docs/70-boot-hardening-placed.md` section 7: the enumeration in this
+  bullet sums to ten lines over seven layer names, `docs/68` section
+  9.3 stated it correctly, and four run directories —* `s67ecc`,
+  `s68base`, `s68boot` *and both of* `docs/70`*'s — give ten and
+  seven.* It
   belongs beside `docs/54`'s finding that this PDK's two DRC decks
   disagree about their own scope, and beside `docs/47` section 7.2's
   two checkers that gate nothing: this repository counts a check that

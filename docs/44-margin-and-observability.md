@@ -318,6 +318,16 @@ than the first and it is entirely the mapper's.
 > with the change under test** **[estimate, from the two controlled pairs
 > above]**.
 
+*Amended 2026-09-05 by `docs/70-boot-hardening-placed.md` section 5.3.
+This figure is a **synthesis** floor for **whole-core setup**, and
+`docs/61` section 9.1, `docs/62` section 1 and `docs/67` section 5.3
+have each quoted it after place-and-route because it was the only
+floor in the corpus. The same kind of control, run on two layouts of
+one design, gives **0.5031 ns** for slow-corner setup, **0.0198 ns**
+for fast-corner hold and **12,962 um2** for placed standard-cell area
+**[estimate, one pair, as this one is]**. No verdict in those three
+documents changes.*
+
 That is why section 5.4 measures the register file on its own, and why
 this document does not claim the whole-core numbers confirm anything at
 the scale of the effect.

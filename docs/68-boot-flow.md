@@ -983,6 +983,18 @@ is a checked result and not an unchecked one — but **0.07 ns is 3.5 % of
 a 2 ns library setup and the next block that lands near the clock tree
 should look at it before assuming there is room.**
 
+*Corrected 2026-09-05 by `docs/70-boot-hardening-placed.md` section
+5.3: the 29 % is not a measurement. That document placed a control
+pair — the same design on the same die and the same configuration,
+two netlists at an identical 5,822 flip-flops differing only by
+`docs/69` section 7.1's one-cell refactor of this block — and
+fast-corner hold moves by **0.0198 ns** between them, which is 67 % of
+the −0.0297 ns above. The direction may be right; the magnitude is
+inside the instrument. **The advice in the sentence stands and is what
+`docs/70` acted on**, and its answer, with `docs/69`'s 51 further
+flip-flops in this block, is that hold closes at all three corners and
+is 0.0104 ns better rather than worse.*
+
 **Setup got 0.11 ns better and that is not an improvement this work
 made.** The design does not close at 20 ns — `docs/47` section 8.2's
 43.10 MHz — and its binding path is the register file's read address,
