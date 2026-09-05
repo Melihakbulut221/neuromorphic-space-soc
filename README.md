@@ -141,6 +141,21 @@ counter no software can write in the BOOTREG slot the map has reserved
 since `docs/39`. The 28-check bring-up program now runs from RAM out of
 a flash image: **220,256 cycles for the program and 415,324 for the
 run**, against 217,630 for the identical program fetched from the ROM.
+*Added 2026-09-05:* **and the block that decides whether it boots again
+is now protected**, which `docs/68` section 16 asked for and
+`docs/69-boot-hardening.md` is the record of. Eighteen of that block's
+92 flip-flops are bundled into one word and tripled under the same
+proved voter the watchdog uses; the other 74 get nothing, and 64 of
+those are the boot report and the epoch — **69.6 % of the block's state
+with none of its consequence**, which is the ranking a flip-flop count
+would have got backwards. One bit moved onto the protected list because
+the campaign put it there: the system-reset sample is rewritten every
+clock, so it sheds an upset on its own, but the boot counter it
+increments is saturating and power-on-only and never comes back. **572
+injections, 276 of 276 into the protected word corrected and announced,
+against a first-ever baseline on the unprotected block where the boot
+counter was displaced by as much as 128 boots with nothing on the part
+saying so.** It costs 1.9 % of the Ibex core and zero cycles.
 
 **The subsystem has been laid out, and it fails setup at its 20 ns
 constraint.** `docs/45` synthesised `soc_top` whole for the first time —

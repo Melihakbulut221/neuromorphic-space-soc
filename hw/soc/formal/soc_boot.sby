@@ -1,8 +1,9 @@
 # SymbiYosys job for the boot flow's register block,
 # hw/soc/rtl/soc_boot.v (docs/68).
 #
-#   sby -f soc_boot.sby prove        k-induction proof of D1-D8
+#   sby -f soc_boot.sby prove        k-induction proof of D1-D10
 #   sby -f soc_boot.sby prove_full   the same at the shipped parameters
+#   sby -f soc_boot.sby prove_h0     the same at HARDEN = 0
 #   sby -f soc_boot.sby bmc          bounded check, depth 20
 #   sby -f soc_boot.sby cover        reachability of every proven behaviour
 #
@@ -19,11 +20,20 @@
 #
 # prove_full runs the whole set again at CNT_W = 8 without the
 # saturation cover.
+#
+# prove_h0 runs D1-D9 at HARDEN = 0, which is not a redundant task: B1
+# rewrote this block's next state as one combinational function shared
+# by both configurations, and the whole argument that the HARDEN = 0
+# area in docs/69 section 7 is a LIKE-FOR-LIKE baseline is that the two
+# configurations run identical policy. Proving the policy in both is
+# what makes that an established fact rather than an intention. D10 is
+# generated away there, because there is nothing to vote.
 
 [tasks]
 bmc
 prove
 prove_full
+prove_h0
 cover
 
 [options]
@@ -33,6 +43,8 @@ prove: mode prove
 prove: depth 10
 prove_full: mode prove
 prove_full: depth 10
+prove_h0: mode prove
+prove_h0: depth 10
 cover: mode cover
 cover: depth 24
 
@@ -40,11 +52,16 @@ cover: depth 24
 smtbmc yices
 
 [script]
-read_verilog -formal soc_boot.v
-~prove_full: chparam -set CNT_W 3 -set NSTRAP 4 -set LIMIT 3 soc_boot
-prove_full: chparam -set CNT_W 8 -set NSTRAP 4 -set LIMIT 3 soc_boot
+read_verilog -formal soc_boot.v soc_tmr_bank.v tmr_voter.v
+prove_full: chparam -set CNT_W 8 -set NSTRAP 4 -set LIMIT 3 -set HARDEN 1 soc_boot
+prove_h0: chparam -set CNT_W 3 -set NSTRAP 4 -set LIMIT 3 -set HARDEN 0 soc_boot
+bmc: chparam -set CNT_W 3 -set NSTRAP 4 -set LIMIT 3 -set HARDEN 1 soc_boot
+prove: chparam -set CNT_W 3 -set NSTRAP 4 -set LIMIT 3 -set HARDEN 1 soc_boot
+cover: chparam -set CNT_W 3 -set NSTRAP 4 -set LIMIT 3 -set HARDEN 1 soc_boot
 prep -top soc_boot
 
 [files]
 ../rtl/soc_boot.v
+../rtl/soc_tmr_bank.v
+../../rtl/tmr_voter.v
 soc_boot_props.v

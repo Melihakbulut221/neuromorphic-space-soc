@@ -46,8 +46,48 @@ for.
   last_off_by_one the LAST flag is computed against LIMIT rather than
                  LIMIT-1, so the loader's last attempt is one boot late.
 
+docs/69 adds five, and they are all mutations of B1. Each is a
+protection that LOOKS present -- three banks, a voter, a report -- and
+is not, which is the shape docs/41 section 6.6 counts and docs/43
+section 9.4 found twenty formal tasks staying green on:
+
+  vote_two       the voter is fed replica A twice, so it is a duplex
+                 with a spare. An upset in A now WINS the vote and one
+                 in C is invisible. Nothing about the flip-flop count
+                 changes, which is why this is a suite mutation and not
+                 a census one.
+  report_silent  the mismatch is corrected and never announced --
+                 docs/43 section 6.5's complaint, built.
+  report_clearable a write to BSTAT clears TMRERR and TMRCNT. docs/41
+                 section 5.3: a record software can erase is a record an
+                 upset can erase.
+  report_wraps   TMRCNT's saturation is removed, so a part with sixteen
+                 masked upsets reports fewer than a part with one.
+  sys_unprotected  sys_q goes back to being a plain flip-flop outside
+                 the word, which is the FIRST VERSION OF THIS DESIGN.
+                 It is here because the campaign is what rejected it and
+                 a mutation is the only way to keep that rejection
+                 checked. NOT caught by this suite, by construction --
+                 the consequence is a spurious boot count from an upset,
+                 and there is no upset in a functional run -- and, the
+                 surprise, NOT CAUGHT BY THE CAMPAIGN EITHER: its target
+                 list is derived from the same field layout, so a field
+                 that leaves the word leaves the target list too and the
+                 injection lands on a bit nothing reads. What catches it
+                 is a textual guard on the RTL's own declarations, in
+                 sw/tests/test_soc_boot_guards.py. See EXPECTED_UNCAUGHT.
+
 Every mutation is applied to the RTL text and asserted to have changed
 it; a mutation that does not apply is a hard failure, not a pass.
+
+ONE MUTATION IS EXPECTED TO SURVIVE and it is listed as such rather than
+quietly counted. `sys_unprotected` is a design this suite cannot tell
+apart from the shipped one, because the difference is what happens under
+an upset and there are no upsets in a functional run. Recording it here
+-- with the suite that DOES catch it named -- is the alternative to
+either deleting the mutation or letting the script's headline number be
+wrong about what was examined. docs/41 section 6.6's list of eight green
+checks read wider than what they examined is the reason.
 """
 
 import os
@@ -60,58 +100,64 @@ import xml.etree.ElementTree as ET
 HERE = os.path.dirname(os.path.abspath(__file__))
 RTL = os.path.normpath(os.path.join(HERE, "..", "..", "rtl", "soc_boot.v"))
 
-CNT_BLOCK = """      sys_q <= rst_ni;
-      if (rst_ni && !sys_q) begin
-        if (!armed_q)        armed_q <= 1'b1;
-        else if (~&cnt_q)    cnt_q   <= cnt_q + {{(CNT_W-1){1'b0}}, 1'b1};
-      end"""
+CNT_BLOCK = """    prot_n[P_SYS] = rst_ni;
+    if (rst_ni && !sys_q) begin
+      if (!armed_q)     prot_n[P_ARMED]        = 1'b1;
+      else if (~&cnt_q) prot_n[P_CNT +: CNT_W] =
+                            cnt_q + {{(CNT_W-1){1'b0}}, 1'b1};
+    end"""
 
-STRAP_BLOCK = """      if (!valid_q) begin
-        if (dly == 2'd2) begin
-          strap_q <= sync1;
-          wdis_q  <= wsync1;
-          valid_q <= 1'b1;
-        end else begin
-          dly <= dly + 2'd1;
-        end
-      end"""
+STRAP_BLOCK = """    if (!valid_q) begin
+      if (dly == 2'd2) begin
+        prot_n[P_STRAP +: NSTRAP] = sync1;
+        prot_n[P_WDIS]            = wsync1;
+        prot_n[P_VALID]           = 1'b1;
+      end else begin
+        prot_n[P_DLY +: 2] = dly + 2'd1;
+      end
+    end"""
+
+REPORT_BLOCK = """    prot_n[P_TMRERR] = tmr_err | prot_mismatch;
+    if (prot_mismatch && ~&tmr_count)
+      prot_n[P_TMRCNT +: TMC_W] = tmr_count + {{(TMC_W-1){1'b0}}, 1'b1};"""
 
 MUTATIONS = {
     "cnt_writable": [
         (CNT_BLOCK,
          CNT_BLOCK + """
-      if (wr && (paddr_i == REG_BSTAT)) cnt_q <= pwdata_i[CNT_W-1:0];"""),
+    if (wr && (paddr_i == REG_BSTAT))
+      prot_n[P_CNT +: CNT_W] = pwdata_i[CNT_W-1:0];"""),
     ],
     "cnt_wraps": [
-        ("        else if (~&cnt_q)    cnt_q   <= cnt_q + {{(CNT_W-1){1'b0}}, 1'b1};",
-         "        else                 cnt_q   <= cnt_q + {{(CNT_W-1){1'b0}}, 1'b1};"),
+        ("      else if (~&cnt_q) prot_n[P_CNT +: CNT_W] =",
+         "      else              prot_n[P_CNT +: CNT_W] ="),
     ],
     "cnt_por_zero": [
-        ("        if (!armed_q)        armed_q <= 1'b1;\n"
-         "        else if (~&cnt_q)    cnt_q   <= cnt_q + {{(CNT_W-1){1'b0}}, 1'b1};",
-         "        armed_q <= 1'b1;\n"
-         "        if (~&cnt_q)         cnt_q   <= cnt_q + {{(CNT_W-1){1'b0}}, 1'b1};"),
+        ("      if (!armed_q)     prot_n[P_ARMED]        = 1'b1;\n"
+         "      else if (~&cnt_q) prot_n[P_CNT +: CNT_W] =",
+         "      prot_n[P_ARMED] = 1'b1;\n"
+         "      if (~&cnt_q)      prot_n[P_CNT +: CNT_W] ="),
     ],
     "cnt_on_level": [
-        ("      if (rst_ni && !sys_q) begin",
-         "      if (!rst_ni) begin"),
+        ("    if (rst_ni && !sys_q) begin",
+         "    if (!rst_ni) begin"),
     ],
     "strap_live": [
         (STRAP_BLOCK,
-         """      strap_q <= sync1;
-      wdis_q  <= wsync1;
-      if (!valid_q) begin
-        if (dly == 2'd2) valid_q <= 1'b1;
-        else             dly <= dly + 2'd1;
-      end"""),
+         """    prot_n[P_STRAP +: NSTRAP] = sync1;
+    prot_n[P_WDIS]            = wsync1;
+    if (!valid_q) begin
+      if (dly == 2'd2) prot_n[P_VALID]    = 1'b1;
+      else             prot_n[P_DLY +: 2] = dly + 2'd1;
+    end"""),
     ],
     "strap_sysrst": [
         (STRAP_BLOCK,
-         """      if (!valid_q || !rst_ni) begin
-        strap_q <= sync1;
-        wdis_q  <= wsync1;
-        valid_q <= 1'b1;
-      end"""),
+         """    if (!valid_q || !rst_ni) begin
+      prot_n[P_STRAP +: NSTRAP] = sync1;
+      prot_n[P_WDIS]            = wsync1;
+      prot_n[P_VALID]           = 1'b1;
+    end"""),
     ],
     "rpt_sysrst": [
         ("""  reg [31:0] brpt_q, epoch_q;
@@ -125,6 +171,47 @@ MUTATIONS = {
         ("  wire last_attempt = (cnt_q >= (LIMIT_C - {{(CNT_W-1){1'b0}}, 1'b1}));",
          "  wire last_attempt = (cnt_q >= LIMIT_C);"),
     ],
+    # ---- docs/69, B1 --------------------------------------------------
+    "vote_two": [
+        ("        .in_c     (qc),", "        .in_c     (qa),"),
+    ],
+    "report_silent": [
+        (REPORT_BLOCK,
+         """    prot_n[P_TMRERR] = tmr_err;"""),
+    ],
+    "report_clearable": [
+        (REPORT_BLOCK,
+         REPORT_BLOCK + """
+    if (wr && (paddr_i == REG_BSTAT)) begin
+      prot_n[P_TMRERR]          = 1'b0;
+      prot_n[P_TMRCNT +: TMC_W] = {TMC_W{1'b0}};
+    end"""),
+    ],
+    "report_wraps": [
+        ("    if (prot_mismatch && ~&tmr_count)",
+         "    if (prot_mismatch)"),
+    ],
+    "sys_unprotected": [
+        ("  wire              sys_q     = prot[P_SYS];",
+         "  reg               sys_q;\n"
+         "  always @(posedge clk_i or negedge rst_por_ni)\n"
+         "    if (!rst_por_ni) sys_q <= 1'b0; else sys_q <= rst_ni;"),
+        ("    prot_n[P_SYS] = rst_ni;\n", ""),
+    ],
+}
+
+# Mutations this suite is expected NOT to catch, with what does catch
+# them. A mutation that moves out of this set is as much a finding as
+# one that moves into it, so the script checks BOTH directions.
+EXPECTED_UNCAUGHT = {
+    "sys_unprotected":
+        "sw/tests/test_soc_boot_guards.py::"
+        "test_every_flip_flop_outside_the_protected_word_is_one_that_"
+        "was_decided -- and NOT by the campaign, which was the first "
+        "answer and was wrong: running test_soc_boot_fi.py against this "
+        "mutant passes 4 of 4, because the campaign derives its targets "
+        "from the same field layout the mutation edits, so the injection "
+        "lands on a bit nothing reads and comes back CORRECTED",
 }
 
 
@@ -153,6 +240,7 @@ def main():
     text = open(RTL).read()
     tmp = tempfile.mkdtemp(prefix="mutate_soc_boot_")
     caught = 0
+    bad = []
     print("%-16s %6s  %s" % ("mutation", "tests", "failing tests"))
     for name, edits in MUTATIONS.items():
         mutant = text
@@ -172,9 +260,21 @@ def main():
         print("%-16s %6d  %s" % (name, n, ", ".join(failed) if failed else "NONE"))
         if failed:
             caught += 1
+        if name in EXPECTED_UNCAUGHT and failed:
+            print("  ** %s was expected to survive this suite and did not; "
+                  "the note in EXPECTED_UNCAUGHT is now wrong" % name)
+            bad.append(name)
+        elif name not in EXPECTED_UNCAUGHT and not failed:
+            bad.append(name)
     shutil.rmtree(tmp, ignore_errors=True)
-    print("caught %d of %d" % (caught, len(MUTATIONS)))
-    return 0 if caught == len(MUTATIONS) else 1
+    want = len(MUTATIONS) - len(EXPECTED_UNCAUGHT)
+    print("caught %d of %d; %d expected to survive this suite:" %
+          (caught, len(MUTATIONS), len(EXPECTED_UNCAUGHT)))
+    for k, v in EXPECTED_UNCAUGHT.items():
+        print("  %-16s caught instead by %s" % (k, v))
+    if bad:
+        print("UNEXPECTED: %s" % ", ".join(bad))
+    return 0 if (caught == want and not bad) else 1
 
 
 if __name__ == "__main__":

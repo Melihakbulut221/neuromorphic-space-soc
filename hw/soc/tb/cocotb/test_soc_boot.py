@@ -390,3 +390,133 @@ async def test_the_block_has_no_interrupt_and_the_map_agrees(dut):
     assert "BOOTREG" not in IRQ_SOURCES, (
         "BOOTREG has acquired an interrupt line; soc_boot.v has no irq_o")
     assert not hasattr(dut, "irq_o")
+
+
+# ----------------------------------------------------------------------
+# 5. B1: the protection, and its report (docs/69)
+# ----------------------------------------------------------------------
+#
+# These four are the only tests in this suite that reach into the
+# hierarchy, and they do it for the reason docs/16 section 1.2 allows:
+# the block has no port through which a fault can be injected, so a
+# masking claim cannot be made from the outside. The OBSERVATION is
+# still made entirely through the bus.
+#
+# What they are NOT is the campaign. hw/soc/tb/cocotb/test_soc_boot_fi.py
+# injects into every bit of every replica at seeded-random cycles, with
+# a golden model and a counterfactual build; these four are the directed
+# checks that the mechanism is wired up at all, and they run in the
+# functional suite so that a build which quietly lost it fails here
+# rather than only in a campaign somebody has to remember to run.
+
+STAT_TMRERR = 1 << 31
+STAT_TMRCNT = 0xF << 27
+
+
+def _replica(dut, which):
+    return getattr(getattr(dut.g_prot_tmr, "u_prot_" + which), "bits")
+
+
+@cocotb.test()
+async def test_the_mismatch_report_reads_zero_on_a_healthy_part(dut):
+    """docs/44 section 11's rule, and the precondition for every other
+    reading of this field: a report that was non-zero on a clean part
+    would make BSTAT.TMRCNT a counter of nothing in particular."""
+    await power_on(dut)
+    for _ in range(4):
+        await system_reset(dut)
+    v = await apb_read(dut, BSTAT)
+    assert v & (STAT_TMRERR | STAT_TMRCNT) == 0, (
+        "BSTAT reports a TMR mismatch on a part nothing has upset: "
+        "0x{:08x}".format(v))
+
+
+@cocotb.test()
+async def test_an_upset_in_one_replica_is_masked_and_counted(dut):
+    """B1's whole claim, directed: flip one bit of one replica and every
+    register read is unchanged, and the block says it happened.
+
+    The bit chosen is the top of the boot counter, which is the field
+    docs/68 section 16 item 1 ranks first -- an upset there is a part
+    that gives up early and stays that way, because the counter is
+    saturating and lives in the power-on domain."""
+    await power_on(dut)
+    await system_reset(dut)
+    before = await apb_read(dut, BSTAT)
+    assert before & 0xFF == 1
+
+    bank = _replica(dut, "a")
+    await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+    top = CNT_W - 1
+    # P_CNT: dly(2) + valid(1) + strap(NSTRAP) + wdis(1) + armed(1)
+    #        + sys(1). Recomputed, not copied, so a field inserted in
+    #        the middle of the word moves this with it.
+    p_cnt = 2 + 1 + NSTRAP + 1 + 1 + 1
+    bank.value = val(bank) ^ (1 << (p_cnt + top))
+    await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+
+    after = await apb_read(dut, BSTAT)
+    assert after & ~(STAT_TMRERR | STAT_TMRCNT) == \
+        before & ~(STAT_TMRERR | STAT_TMRCNT), (
+        "a flip of one replica's boot counter changed what a bus master "
+        "reads: 0x{:08x} -> 0x{:08x}".format(before, after))
+    assert after & STAT_TMRERR, "the mismatch was corrected and not reported"
+    assert (after >> 27) & 0xF == 1, (
+        "TMRCNT did not count the mismatch: 0x{:08x}".format(after))
+
+    # And the scrub: the corrected word goes back into all three
+    # replicas on the next edge, so the three agree again immediately.
+    # That is what bounds the exposure to a coincident second upset at
+    # one clock cycle rather than at the rest of the mission, and it is
+    # the property soc_tmr_bank.v's "no write enable" exists for.
+    assert val(_replica(dut, "a")) == val(_replica(dut, "a")), "read twice"
+    later = await apb_read(dut, BSTAT)
+    assert (later >> 27) & 0xF == 1, (
+        "TMRCNT kept counting after the fault was gone, so the scrub did "
+        "not restore the replica: 0x{:08x}".format(later))
+
+
+@cocotb.test()
+async def test_the_mismatch_report_cannot_be_cleared_by_software(dut):
+    """docs/41 section 5.3: a record software can erase is a record an
+    upset can erase. Neither field is clearable and no write reaches
+    either, which is D1's shape applied to the state B1 added."""
+    await power_on(dut)
+    bank = _replica(dut, "b")
+    await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+    bank.value = val(bank) ^ 1
+    for _ in range(3):
+        await RisingEdge(dut.clk_i)
+    await Timer(1, unit="ns")
+    seen = await apb_read(dut, BSTAT)
+    assert seen & STAT_TMRERR and (seen >> 27) & 0xF == 1
+
+    for addr in (BSTRAP, BSTAT, BRPT, EPOCH, 0x010, 0x020):
+        for data in (0x00000000, 0xFFFFFFFF, 0xF8000000):
+            await apb_write(dut, addr, data)
+    after = await apb_read(dut, BSTAT)
+    assert after & STAT_TMRERR, "a write cleared TMRERR"
+    assert (after >> 27) & 0xF == 1, "a write moved TMRCNT"
+
+
+@cocotb.test()
+async def test_the_mismatch_counter_saturates(dut):
+    """soc_busstat.v's rule for every counter in this design. A counter
+    that wrapped would let a part with many masked upsets report fewer
+    than a part with none."""
+    await power_on(dut)
+    bank = _replica(dut, "c")
+    for _ in range(20):
+        await RisingEdge(dut.clk_i)
+        await Timer(1, unit="ns")
+        bank.value = val(bank) ^ 1
+        await RisingEdge(dut.clk_i)
+        await RisingEdge(dut.clk_i)
+    v = await apb_read(dut, BSTAT)
+    assert (v >> 27) & 0xF == 0xF, (
+        "TMRCNT did not saturate after twenty mismatches: "
+        "0x{:08x}".format(v))
+    assert v & STAT_TMRERR

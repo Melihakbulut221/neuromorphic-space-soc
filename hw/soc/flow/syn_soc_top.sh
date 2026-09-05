@@ -180,6 +180,23 @@ if [ "$SOC_ROM_HARDEN" != "$SOC_MEM_HARDEN" ]; then
   TOP_CHPARAM="$TOP_CHPARAM
 chparam -set ROM_HARDEN $SOC_ROM_HARDEN soc_top"
 fi
+# docs/69's knob, on soc_boot's OWN parameter rather than on a soc_top
+# parameter, because soc_top does not forward it -- and it must not:
+# sw/tests/test_soc_boot_guards.py asserts that nothing in the design
+# sets HARDEN, so that the only way to build the unprotected block is
+# through a measurement knob like this one. Defaults to the design.
+#
+# The chparam is on a SUBMODULE and that works here for the same reason
+# IBEX_RF_SYNPRE's does: this script reads its sources without -defer, so
+# `hierarchy` has not yet derived a $paramod wrapper for soc_boot when
+# the chparam runs. hw/soc/flow/syn_soc.sh does use -defer and needs
+# SOC_CHPARAM's different spelling; docs/49 section 8 is the record of
+# what a chparam that silently matches nothing costs.
+SOC_BOOT_HARDEN=${SOC_BOOT_HARDEN:-1}
+if [ "$SOC_BOOT_HARDEN" != 1 ]; then
+  TOP_CHPARAM="$TOP_CHPARAM
+chparam -set HARDEN $SOC_BOOT_HARDEN soc_boot"
+fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -585,6 +602,6 @@ awk -v top=soc_top -v ge=7.2576 '
 ' "$OUT/$AREA_SUMMARY"
 
 echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE"
-echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  abc -D $PERIOD_NS"
+echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  abc -D $PERIOD_NS"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"

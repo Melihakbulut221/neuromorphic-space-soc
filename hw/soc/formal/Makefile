@@ -47,7 +47,7 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub boot bytesecded memecc clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub boot boot_tmr_params bytesecded memecc clean
 .DEFAULT_GOAL := all
 all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub boot bytesecded memecc
 
@@ -124,10 +124,41 @@ scrub:
 	done
 
 # The boot flow's register block docs/68 adds, at the two counter widths
-# soc_busstat is proved at and for the same reason.
-BOOT_TASKS := bmc prove prove_full cover
+# soc_busstat is proved at and for the same reason, plus docs/69's
+# HARDEN = 0 task -- which is not a duplicate: B1 rewrote the block's
+# next state as one combinational function shared by both
+# configurations, and proving the policy in both is what makes the
+# like-for-like area baseline an established fact.
+BOOT_TASKS := bmc prove prove_full prove_h0 cover
 
-boot:
+# soc_boot.v instantiates the SAME composition soc_wdog_tmr.sby proves
+# -- three soc_tmr_bank replicas under hw/rtl/tmr_voter.v, POL_A/B/C,
+# MIX off on A and on for B and C -- and at the shipped parameters its
+# banked word is 22 bits, which is one of the four widths that job runs
+# at. So the masking theorem is already proved for this block, and what
+# has to be guarded is that the block still instantiates what was
+# proved. Same shape as wdog_tmr_params, one file across, and it runs
+# FIRST in the boot target.
+BOOT_RTL := ../rtl/soc_boot.v
+
+boot_tmr_params:
+	@fail=0; \
+	for pat in \
+	  "localparam \[63:0\] POL_A = 64'h0000000000000000;" \
+	  "localparam \[63:0\] POL_B = 64'h5555555555555555;" \
+	  "localparam \[63:0\] POL_C = 64'hAAAAAAAAAAAAAAAA;" \
+	  ".POL(POL_A), .MIX(0))" \
+	  ".POL(POL_B), .MIX(1))" \
+	  ".POL(POL_C), .MIX(1))" ; do \
+	  grep -qF "$$(printf '%s' "$$pat" | sed 's/\\//g')" $(BOOT_RTL) || { \
+	    echo "soc_boot.v no longer instantiates the composition" \
+	         "soc_wdog_tmr.sby proves: $$pat"; fail=1; }; \
+	done; \
+	test $$fail -eq 0 || exit 1; \
+	echo "== soc_boot parameter guard: the masks and the MIX" \
+	     "assignments still match what soc_wdog_tmr.sby proves"
+
+boot: boot_tmr_params
 	@for t in $(BOOT_TASKS); do \
 	  echo "== soc_boot $$t"; \
 	  $(SBY) -f soc_boot.sby $$t || exit 1; \
@@ -206,7 +237,7 @@ wdog_tmr_params:
 	echo "== soc_wdog_tmr parameter guard: the masks and the MIX" \
 	     "assignments still match hw/soc/rtl/soc_wdog.v"
 
-WDOG_TMR_TASKS := prove prove_w4 prove_w5 prove_w21 prove_rst1 prove_abc \
+WDOG_TMR_TASKS := prove prove_w4 prove_w5 prove_w21 prove_w23 prove_rst1 prove_abc \
                   bmc cover
 
 wdogtmr: wdog_tmr_params

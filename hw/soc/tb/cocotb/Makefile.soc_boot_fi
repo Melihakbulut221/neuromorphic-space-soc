@@ -1,0 +1,109 @@
+# cocotb + Icarus FAULT INJECTION campaign against hw/soc/rtl/soc_boot.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_boot_fi
+#
+# This is the evidence for B1 in the header of hw/soc/rtl/soc_boot.v:
+# that an upset in the DECISION word is masked at every register read and
+# announced, and that an upset in the deliberately UNPROTECTED state --
+# the two synchronisers, the system-reset sample, the report and the
+# epoch -- fails in a way that can be named and counted.
+# docs/69-boot-hardening.md section 8 reports what it measured;
+# docs/16-fault-injection-campaign.md sections 1.2 to 1.6 are the method
+# it follows, and hw/soc/tb/cocotb/test_soc_wdog_fi.py and
+# test_soc_clint_fi.py are the two campaigns it is shaped after.
+#
+# THE COUNTERFACTUAL IS THE BASELINE HERE, and that is not true of either
+# of those two. docs/68 ran no campaign on this block at all, so the
+# SOC_BOOT_FI_UNHARDENED run is not "the design before the hardening" as
+# a remembered number -- it is the first measurement anyone has made of
+# what an upset in soc_boot.v does:
+#
+#   SOC_BOOT_FI_UNHARDENED=1 make -f Makefile.soc_boot_fi \
+#       EXTRA_COMPILE_ARGS=-Psoc_boot.HARDEN=0 \
+#       SIM_BUILD=sim_build_soc_boot_fi_h0 \
+#       COCOTB_RESULTS_FILE=results_soc_boot_fi_h0.xml
+#
+# Deliberately a SEPARATE suite and a separate build from
+# Makefile.soc_boot, for the reason docs/16 section 1.2 gives: a campaign
+# that shares a build with a functional suite shares its failures, and a
+# campaign is long enough that it should be runnable and skippable on its
+# own.
+#
+# THE PARAMETERS ARE THE SHIPPED ONES, unlike Makefile.soc_boot's, and
+# that is a decision. That file runs at CNT_W = 4 because its saturation
+# test has to be reachable in a suite that drives one reset release per
+# iteration. Nothing in this campaign needs the counter to saturate, only
+# to pass the attempt limit -- which takes three boots at any width -- so
+# there is no reason to measure four counter bits when the part has
+# eight. test_soc_boot_fi.py recomputes the protected word's field
+# offsets from NSTRAP and CNT_W, so a change here that is not made there
+# is a campaign injecting into bits that are not where it thinks they
+# are, and its control 6 asserts the total against the width of the bank
+# the DUT actually holds.
+#
+# Standalone by design, same structure and the same rootless tool
+# discovery as Makefile.soc_wdog_fi.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+# hw/rtl/tmr_voter.v is READ, never modified: it is the proved,
+# golden-vector-tested majority primitive B1 votes with, and docs/34
+# freezes the directory it lives in.
+PILOT_RTL = $(PWD)/../../../rtl
+
+SOC_BOOT_SRC ?= $(RTL)/soc_boot.v
+
+VERILOG_SOURCES = $(SOC_BOOT_SRC) $(RTL)/soc_tmr_bank.v \
+                  $(PILOT_RTL)/tmr_voter.v
+TOPLEVEL = soc_boot
+MODULE = test_soc_boot_fi
+
+SIM_BUILD ?= sim_build_soc_boot_fi
+COCOTB_RESULTS_FILE ?= results_soc_boot_fi.xml
+export COCOTB_RESULTS_FILE
+
+BOOT_CNT_W ?= 8
+BOOT_NSTRAP ?= 4
+BOOT_LIMIT ?= 3
+
+COMPILE_ARGS += -I$(RTL)
+
+# Parameters on the ROOT module, which is the one case Icarus's -P does
+# reach -- docs/49 section 8's finding is that -P is silently dropped for
+# anything BELOW a root, and soc_boot is the root here.
+COMPILE_ARGS += -Psoc_boot.CNT_W=$(BOOT_CNT_W)
+COMPILE_ARGS += -Psoc_boot.NSTRAP=$(BOOT_NSTRAP)
+COMPILE_ARGS += -Psoc_boot.LIMIT=$(BOOT_LIMIT)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) --top-module soc_boot \
+		$(SOC_BOOT_SRC) $(RTL)/soc_tmr_bank.v $(PILOT_RTL)/tmr_voter.v
+
+endif

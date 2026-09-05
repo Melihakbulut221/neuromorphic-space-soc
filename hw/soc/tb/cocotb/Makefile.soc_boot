@@ -31,9 +31,15 @@ else
 
 RTL = $(PWD)/../../rtl
 
+# hw/rtl/tmr_voter.v is READ, never modified: it is the proved,
+# golden-vector-tested majority primitive B1 votes with, and docs/34
+# freezes the directory it lives in.
+PILOT_RTL = $(PWD)/../../../rtl
+
 SOC_BOOT_SRC ?= $(RTL)/soc_boot.v
 
-VERILOG_SOURCES = $(SOC_BOOT_SRC)
+VERILOG_SOURCES = $(SOC_BOOT_SRC) $(RTL)/soc_tmr_bank.v \
+                  $(PILOT_RTL)/tmr_voter.v
 TOPLEVEL = soc_boot
 MODULE = test_soc_boot
 
@@ -45,6 +51,12 @@ BOOT_CNT_W ?= 4
 BOOT_NSTRAP ?= 4
 BOOT_LIMIT ?= 3
 
+# B1's parameter. 1 is what the design instantiates; the suite runs the
+# unprotected configuration too, so that every test written against the
+# specification is a genuine regression on the policy rather than a
+# description of the protected implementation.
+BOOT_HARDEN ?= 1
+
 COMPILE_ARGS += -I$(RTL)
 COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
 
@@ -54,6 +66,7 @@ COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
 COMPILE_ARGS += -Psoc_boot.CNT_W=$(BOOT_CNT_W)
 COMPILE_ARGS += -Psoc_boot.NSTRAP=$(BOOT_NSTRAP)
 COMPILE_ARGS += -Psoc_boot.LIMIT=$(BOOT_LIMIT)
+COMPILE_ARGS += -Psoc_boot.HARDEN=$(BOOT_HARDEN)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim
 
@@ -66,6 +79,7 @@ VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
 lint:
 	@test -n "$(VERILATOR)" || \
 		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
-	$(VERILATOR) --lint-only -I$(RTL) $(SOC_BOOT_SRC)
+	$(VERILATOR) --lint-only -I$(RTL) --top-module soc_boot \
+		$(SOC_BOOT_SRC) $(RTL)/soc_tmr_bank.v $(PILOT_RTL)/tmr_voter.v
 
 endif

@@ -368,3 +368,187 @@ def test_the_image_header_is_declared_once():
     assert "soc_boot.h" in gen, (
         "gen_boot_image.py no longer names the header it is a contract "
         "with")
+
+
+# ----------------------------------------------------------------------
+# 6. B1: what is in the protected word, and what is not (docs/69)
+# ----------------------------------------------------------------------
+#
+# The two checks below close a gap that neither the census nor the
+# campaign can, and finding that gap is what put them here.
+#
+# `hw/soc/tb/cocotb/mutate_soc_boot.py` has a mutation called
+# `sys_unprotected` which takes `sys_q` back out of the protected word --
+# the first version of this design, which the campaign rejected. The
+# functional suite cannot catch it, because the difference is what
+# happens under an upset. The netlist census cannot catch it either: it
+# would see 74 + 3 x 22 + 1 flip-flops, which is the same 143, and its
+# expectation is DERIVED from the same field list the mutation edits, so
+# the expectation moves with the design.
+#
+# And THE CAMPAIGN CANNOT CATCH IT, which was a surprise and is worth
+# recording: `test_soc_boot_fi.py` derives its target list from the same
+# field layout, so a field that leaves the word also leaves the target
+# list, and the injection lands on a bit nothing reads and comes back
+# CORRECTED. Running the campaign against the mutant is what established
+# that -- 4 of 4 tests passed on a design with the defect in it, which is
+# docs/43 section 9.4's shape and docs/41 section 6.6's list, one more
+# time.
+#
+# So the guard is TEXTUAL and it is on the RTL's own declarations: the
+# set of flip-flops soc_boot.v declares outside the bank is exactly the
+# four synchroniser stages and the two evidence words, and nothing else.
+
+BOOT_RTL = SOC_RTL / "soc_boot.v"
+
+# B1's second list, verbatim. A flip-flop outside the bank that is not
+# one of these is state nobody decided about.
+BOOT_UNPROTECTED_FLOPS = {
+    "sync0", "sync1",      # the strap synchronisers
+    "wsync0", "wsync1",    # the watchdog pin's
+    "brpt_q", "epoch_q",   # evidence, not authority
+    "plain",               # the HARDEN = 0 bank, measurement only
+}
+
+
+def _nonblocking_targets(text):
+    """Every signal assigned with `<=` in the file: the flip-flops.
+
+    Crude on purpose, and its one assumption is checked: this file uses
+    `>=` for both of its comparisons, so every `<=` in it outside a
+    comment is a non-blocking assignment. A future edit that introduced
+    a `<=` comparison would add a spurious name here and fail the test
+    below with a name that is obviously not a register, which is a
+    better failure than a silent miss.
+    """
+    src = _strip_comments(text)
+    return set(re.findall(r"([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*<=", src))
+
+
+def test_every_flip_flop_outside_the_protected_word_is_one_that_was_decided():
+    """THE GUARD THAT CATCHES A FIELD LEAVING THE WORD.
+
+    `soc_boot.v`'s B1 section ranks the block's state and puts eighteen
+    bits in a voted bank. Everything else it stores is listed above, and
+    a flip-flop that appears outside the bank without appearing in that
+    list is state that has acquired no ranking -- which is how `sys_q`
+    got left out of the first version of B1 and cost a campaign run to
+    find.
+    """
+    found = _nonblocking_targets(BOOT_RTL.read_text())
+    unexpected = found - BOOT_UNPROTECTED_FLOPS
+    assert not unexpected, (
+        "soc_boot.v stores {} outside the protected word. Either it "
+        "belongs in the word -- rank it in the B1 section and add it to "
+        "the layout -- or it belongs in BOOT_UNPROTECTED_FLOPS here with "
+        "the reason. Nothing catches this but this test: the census sees "
+        "the same total, the campaign derives its targets from the same "
+        "layout, and the functional suite sees no upsets.".format(
+            sorted(unexpected)))
+    missing = BOOT_UNPROTECTED_FLOPS - found
+    assert not missing, (
+        "{} is listed here as deliberately unprotected but soc_boot.v no "
+        "longer stores it. If it moved into the protected word, delete "
+        "the line; a list that names state the file does not have is a "
+        "list nobody is reading.".format(sorted(missing)))
+
+
+def test_the_decision_word_holds_everything_the_ranking_ranked():
+    """The other direction: every field B1's ranking names as protected
+    has an offset in the layout and is read from the voted word.
+
+    A field could be given a `localparam` offset and then quietly read
+    from somewhere else -- the shape docs/58 section 9.4 guards against
+    textually for the CLINT, where the raw register is readable beside
+    the corrected one. Here the raw storage is `prot_store` and the
+    named views are the only thing anything below them reads.
+    """
+    src = _strip_comments(BOOT_RTL.read_text())
+    for field, view in (("P_DLY", "dly"), ("P_VALID", "valid_q"),
+                        ("P_STRAP", "strap_q"), ("P_WDIS", "wdis_q"),
+                        ("P_ARMED", "armed_q"), ("P_SYS", "sys_q"),
+                        ("P_CNT", "cnt_q"), ("P_TMRERR", "tmr_err"),
+                        ("P_TMRCNT", "tmr_count")):
+        assert re.search(
+            r"wire\s+(?:\[[^\]]*\]\s*)?" + view + r"\s*=\s*prot\[" + field,
+            src), (
+            "{} is not read from the voted word at offset {}; a field "
+            "with an offset that is read from somewhere else is a field "
+            "the protection does not cover".format(view, field))
+    # And the bank is written from the combinational next state on every
+    # edge, which is the scrub. A write enable here would repair a
+    # corrupted replica only at the next write, and strap_q is written
+    # once in a power cycle -- docs/41 section 5.1.
+    assert src.count(".d_i(prot_n[PBANK_W-1:0])") == 3, (
+        "the three replicas are not all written from prot_n every clock; "
+        "soc_tmr_bank has no write enable and the unconditional write is "
+        "what makes the voter a continuous scrubber")
+
+
+def test_the_report_is_inside_the_protected_word_and_not_beside_it():
+    """docs/16 section 5.8 measured this repository's own safety-net
+    report and found it was the single point of failure: an upset could
+    erase the announcement of the event it caused. TMRERR and TMRCNT are
+    fields of the voted word, so the write that repairs a replica and
+    the write that records the repair are the same write on the same
+    edge."""
+    src = _strip_comments(BOOT_RTL.read_text())
+    assert re.search(r"P_TMRERR\s*=\s*P_CNT\s*\+\s*CNT_W", src), (
+        "TMRERR has left the end of the decision fields, so PDEC_W is no "
+        "longer the decision bits and the HARDEN = 0 baseline is no "
+        "longer the block docs/68 shipped")
+    assert re.search(r"prot_n\[P_TMRERR\]\s*=\s*tmr_err\s*\|\s*prot_mismatch",
+                     src), "the mismatch is not recorded into the word"
+    assert "PBANK_W  = (HARDEN != 0) ? PFULL_W : PDEC_W" in src, (
+        "the HARDEN = 0 bank no longer drops the report, so that "
+        "configuration is not the block docs/68 shipped and the area "
+        "baseline in docs/69 section 7 is not like for like")
+
+
+def test_the_hardening_parameter_is_not_set_anywhere_in_the_design():
+    """`HARDEN` is a measurement knob. docs/41 section 6.5's rule needs
+    a configuration that can be synthesised from the same file; nothing
+    may ship it."""
+    top = _strip_comments((SOC_RTL / "soc_top.v").read_text())
+    m = re.search(r"soc_boot\s*#\((.*?)\)\s*u_boot", top, re.S)
+    assert m, "soc_top.v no longer instantiates soc_boot as u_boot"
+    assert "HARDEN" not in m.group(1)
+
+
+def test_the_boot_block_reads_the_frozen_voter_in_every_flow_that_builds_it():
+    """`hw/rtl/tmr_voter.v` is read in place and never copied, which is
+    only true if every flow that elaborates soc_boot also reads it.
+    docs/57 and docs/59's defect was a source list that did not know
+    about a module a file had started instantiating."""
+    for name in ("sim_soc.sh", "syn_soc.sh", "syn_soc_top.sh",
+                 "pnr_soc_top.sh", "fi_core.sh", "fi_npu.sh"):
+        text = (SOC_FLOW / name).read_text()
+        assert "soc_boot" in text, name
+        assert "tmr_voter" in text, (
+            "{} builds soc_boot but does not read hw/rtl/tmr_voter.v, "
+            "which it now instantiates".format(name))
+        assert "soc_tmr_bank" in text, (
+            "{} builds soc_boot but does not read soc_tmr_bank.v".format(name))
+    for mk in ("Makefile.soc_boot", "Makefile.soc_boot_fi"):
+        text = (SOC_TB / "cocotb" / mk).read_text()
+        assert "tmr_voter.v" in text and "soc_tmr_bank.v" in text, mk
+
+
+def test_the_campaign_and_the_ranking_name_the_same_strata():
+    """The campaign's target list IS the B1 ranking, executable, and
+    this is what stops the two drifting apart.
+
+    Running the campaign against the `sys_unprotected` mutant showed
+    that the campaign cannot notice a field leaving the word, because
+    its targets are derived from the layout. It can, however, be held to
+    naming every field the layout has -- so a field added to the word
+    without a stratum is caught here.
+    """
+    src = _strip_comments(BOOT_RTL.read_text())
+    offsets = set(re.findall(r"localparam integer (P_\w+)\s*=", src))
+    fi = (SOC_TB / "cocotb" / "test_soc_boot_fi.py").read_text()
+    for off in offsets:
+        assert off in fi, (
+            "soc_boot.v declares {} and the campaign does not mention it; "
+            "either the field has no stratum or every injection after it "
+            "is landing one bit sideways".format(off))

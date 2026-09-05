@@ -2383,3 +2383,275 @@ def test_the_pnr_macro_blackboxes_cover_the_shipped_wrapper():
     for name in have:
         assert name + "_bb.v" in flow, (
             "flow/syn_soc_top.sh does not read {}_bb.v at SOC_MEM=sram".format(name))
+
+
+# =====================================================================
+# 9. the boot block's decision word, docs/69
+# =====================================================================
+#
+# `soc_boot.v`'s B1 triples eighteen bits and leaves seventy-four alone,
+# and this section is the only check in the repository that looks at
+# whether the three replicas are three replicas in the netlist. Every
+# functional test, the whole of hw/soc/formal/soc_boot.sby and all 572
+# injections of hw/soc/tb/cocotb/test_soc_boot_fi.py would pass on a
+# netlist in which yosys had hashed the three banks into one -- docs/43
+# section 9.4 found exactly that on a design where twenty formal tasks
+# stayed green -- because every one of them works against the RTL,
+# where the replicas exist whatever the mapper did with them.
+BOOT_RTL_FILE = SOC_RTL / "soc_boot.v"
+
+BOOT_SOURCES = [
+    BOOT_RTL_FILE,
+    SOC_RTL / "soc_tmr_bank.v",
+    PILOT_RTL / "tmr_voter.v",
+]
+
+BOOT_REPLICAS = ("g_prot_tmr.u_prot_a.",
+                 "g_prot_tmr.u_prot_b.",
+                 "g_prot_tmr.u_prot_c.")
+
+
+def _boot_geometry():
+    """soc_boot's flip-flop budget, DERIVED from its own parameters.
+
+    The field list is written out here on purpose, exactly as
+    `_geometry()` does for the watchdog: it is the specification of what
+    B1 protects, and if a field is added to the word without a line
+    appearing here the counts stop agreeing. The two widths that move it
+    are parameters of the module and are read out of it.
+    """
+    text = BOOT_RTL_FILE.read_text()
+
+    def p(name):
+        m = re.search(r"parameter\s+integer\s+" + name + r"\s*=\s*(\d+)", text)
+        assert m, "no integer parameter {} in soc_boot.v".format(name)
+        return int(m.group(1))
+
+    nstrap = p("NSTRAP")
+    cnt_w = p("CNT_W")
+    tmc_w = 4
+
+    # The decision word: everything written once per power cycle or
+    # maintained by hardware, and `sys_q`, which the campaign moved in.
+    decision = (2          # dly
+                + 1        # valid_q
+                + nstrap   # strap_q
+                + 1        # wdis_q
+                + 1        # armed_q
+                + 1        # sys_q
+                + cnt_w)   # cnt_q
+
+    # The report B1 added. Counted separately because it is the part of
+    # the word that only EXISTS when there is redundancy to report on:
+    # at HARDEN = 0 the banked width drops to the decision bits, so
+    # these five are not dead flip-flops the optimiser has to notice --
+    # they are never instantiated. docs/41 section 6.5's rule applied to
+    # the baseline's flip-flop count rather than to its area.
+    report = 1 + tmc_w
+
+    # Deliberately unprotected, B1's second list.
+    unprot = 2 * nstrap + 2 + 32 + 32   # sync0/1, wsync0/1, brpt, epoch
+
+    return decision, report, unprot
+
+
+BOOT_DEC_W, BOOT_REPORT_FF, BOOT_UNPROT_FF = _boot_geometry()
+BOOT_PROT_W = BOOT_DEC_W + BOOT_REPORT_FF
+
+
+def _boot_script(sources, force_flatten=False, chparam=""):
+    lib = _sg13g2_liberty()
+    script = "read_verilog -I {} {};".format(
+        SOC_RTL, " ".join(str(s) for s in sources))
+    script += " hierarchy -top soc_boot;"
+    if chparam:
+        script += " " + chparam
+    if force_flatten:
+        script += " attrmap -modattr -remove keep_hierarchy;"
+    script += " synth -top soc_boot -flatten;"
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+    script += " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;"
+    return script
+
+
+def _boot_sources_without_any_attribute(workdir):
+    dst = Path(workdir) / "boot_noattr"
+    dst.mkdir(exist_ok=True)
+    out = []
+    for src in BOOT_SOURCES:
+        text = src.read_text()
+        for attr in _ATTRS:
+            text = text.replace(attr, "")
+        target = dst / src.name
+        target.write_text(text)
+        out.append(target)
+    return out
+
+
+@pytest.fixture(scope="module")
+def boot_asic(workdir):
+    return _census(_boot_script(BOOT_SOURCES), workdir)
+
+
+@needs_yosys
+def test_the_boot_decision_word_is_three_banks_in_the_netlist(boot_asic):
+    found = {r: boot_asic.in_instance(r) for r in BOOT_REPLICAS}
+    assert all(v == BOOT_PROT_W for v in found.values()), (
+        "the boot block's decision word collapsed in the netlist: "
+        "expected {} flip-flops per replica, found {}. Three replicas "
+        "written from the same expression are one bank after opt_dff + "
+        "opt_merge, and the voter above them then votes three copies of "
+        "the same upset value. Total flip-flops in this netlist: "
+        "{}.".format(BOOT_PROT_W, found, boot_asic.total))
+
+
+@needs_yosys
+def test_the_boot_flip_flop_budget_is_the_unprotected_state_plus_three(
+        boot_asic):
+    """The total, against the two numbers B1 is a decision about: what
+    is protected, three times, plus what is deliberately not."""
+    expected = BOOT_UNPROT_FF + 3 * BOOT_PROT_W
+    assert boot_asic.total == expected, (
+        "soc_boot mapped to {} flip-flops, expected {} = {} unprotected "
+        "(the two synchronisers, the report and the epoch) + 3 x {} "
+        "protected".format(boot_asic.total, expected, BOOT_UNPROT_FF,
+                           BOOT_PROT_W))
+
+
+@needs_yosys
+def test_the_boot_word_survives_every_attribute_being_deleted(workdir):
+    """The POL/MIX storage transform on its own, with `keep` and
+    `keep_hierarchy` deleted from the TEXT of the sources so that no
+    pass can honour them and none can re-derive them.
+
+    A total and not a per-replica census, and that is forced rather than
+    chosen: with keep_hierarchy deleted the banks are flattened during
+    `synth` and the instance path they would be counted by no longer
+    exists."""
+    census = _census(
+        _boot_script(_boot_sources_without_any_attribute(workdir),
+                     force_flatten=True),
+        workdir)
+    expected = BOOT_UNPROT_FF + 3 * BOOT_PROT_W
+    assert census.total == expected, (
+        "with every keep and keep_hierarchy deleted from the text, "
+        "soc_boot mapped to {} flip-flops instead of {}. Something in "
+        "this block is held together by an attribute alone, and an "
+        "attribute is not portable to a front end that does not read "
+        "yosys's.".format(census.total, expected))
+
+
+@needs_yosys
+def test_boot_harden_zero_is_exactly_the_block_docs_68_shipped(workdir):
+    """`HARDEN = 0` is the baseline docs/69 section 7 prices B1 against,
+    and this is the check that it IS that baseline.
+
+    It has to hold the decision bits ONCE and hold the report NOT AT
+    ALL, which comes to 92 flip-flops -- the number docs/68 section 9.1
+    measured for the block before any of this. That the two agree is
+    what makes the area delta a measurement of B1 rather than of B1 plus
+    whatever else the refactor changed, and it is stronger than the
+    watchdog's version of the same check: soc_wdog.v leaves its report
+    fields in the bank at HARDEN = 0 and RELIES on the optimiser
+    noticing they are constant (docs/41 section 6.3's 53 rather than
+    58), whereas soc_boot.v narrows the banked width so they are never
+    instantiated. docs/55's own HARDEN = 0 measurement is the record of
+    that reliance not holding for a third block."""
+    census = _census(
+        _boot_script(BOOT_SOURCES, chparam="chparam -set HARDEN 0 soc_boot;"),
+        workdir)
+    expected = BOOT_UNPROT_FF + BOOT_DEC_W
+    assert census.total == expected, (
+        "HARDEN = 0 should leave one plain bank of the decision bits "
+        "only: {} unprotected + {} decision = {} flip-flops, found "
+        "{}".format(BOOT_UNPROT_FF, BOOT_DEC_W, expected, census.total))
+    assert expected == 92, (
+        "the HARDEN = 0 configuration is {} flip-flops and docs/68 "
+        "section 9.1 measured the unprotected block at 92. The baseline "
+        "the area delta is quoted against has stopped being the block "
+        "that document shipped.".format(expected))
+    for r in BOOT_REPLICAS:
+        assert census.in_instance(r) == 0
+
+
+@needs_yosys
+def test_removing_the_mix_transform_from_one_boot_replica_collapses_it(
+        workdir):
+    """A guard that cannot fail is not a guard.
+
+    With MIX off, a replica stores `v_i ^ POL[i]` -- one of the only two
+    storage functions a single bit has -- so on every bit where POL_C is
+    zero replica C stores exactly what replica A stores and structural
+    hashing merges the pair. `.MIX(0)` is functionally IDENTICAL RTL,
+    bit for bit at every port, so this mutation is invisible to every
+    simulation, every proof and the whole fault-injection campaign. Only
+    the census sees it."""
+    dst = Path(workdir) / "boot_mix0"
+    dst.mkdir(exist_ok=True)
+    sources = []
+    hit = 0
+    for src in BOOT_SOURCES:
+        text = src.read_text()
+        old = ".POL(POL_C), .MIX(1))"
+        if old in text:
+            hit += text.count(old)
+            text = text.replace(old, ".POL(POL_C), .MIX(0))")
+        for attr in _ATTRS:
+            text = text.replace(attr, "")
+        target = dst / src.name
+        target.write_text(text)
+        sources.append(target)
+    assert hit == 1, "the replica C instantiation moved in soc_boot.v"
+
+    census = _census(_boot_script(sources, force_flatten=True), workdir)
+    base = BOOT_UNPROT_FF + 3 * BOOT_PROT_W
+    # POL_C is 0xAAAA..., zero on every EVEN bit, and those are the bits
+    # on which replica C would then store what replica A stores.
+    merged = sum(1 for i in range(BOOT_PROT_W) if (0xAAAA_AAAA >> i) & 1 == 0)
+    assert census.total == base - merged, (
+        "turning MIX off on replica C left {} flip-flops; expected {} = "
+        "{} minus the {} even bits on which POL_C is zero and C "
+        "therefore stores exactly what A stores. If nothing was lost, "
+        "this file is not measuring the anti-merge transform.".format(
+            census.total, base - merged, base, merged))
+
+
+@needs_yosys
+def test_the_boot_block_instantiates_the_frozen_voter_and_three_banks():
+    """A second, TEXTUAL check on the same thing, because the census
+    cannot see a change of parameters at the instance: three replicas
+    given the same POL and MIX would census as three banks under
+    keep_hierarchy and collapse without it. docs/41 section 6.6 lists
+    that gap and pairs the same two checks for the watchdog."""
+    boot = BOOT_RTL_FILE.read_text()
+    assert "tmr_voter #(.WIDTH(PBANK_W)) u_prot_vote" in boot
+    banks = re.findall(
+        r"soc_tmr_bank\s*#\(\.W\(PBANK_W\),\s*\.RST_VAL\(64'd0\),"
+        r"\s*\.POL\((POL_[ABC])\),\s*\.MIX\((\d)\)\)", boot)
+    assert len(banks) == 3, (
+        "soc_boot.v instantiates {} soc_tmr_bank replicas, expected "
+        "three".format(len(banks)))
+    assert len(set(banks)) == 3, (
+        "two of the boot block's replicas have the same (POL, MIX): {}. "
+        "They would present the same stored function to opt_merge and "
+        "hash away.".format(banks))
+    assert ("POL_A", "0") in banks
+    assert ("POL_B", "1") in banks and ("POL_C", "1") in banks
+    assert "POL_B = 64'h5555555555555555" in boot
+    assert "POL_C = 64'hAAAAAAAAAAAAAAAA" in boot
+
+
+def test_nothing_in_the_design_instantiates_the_boot_block_unhardened():
+    """`HARDEN` exists to be measured against, not to be shipped at
+    zero. soc_top.v must not set it and no flow may override it."""
+    top = (SOC_RTL / "soc_top.v").read_text()
+    m = re.search(r"soc_boot\s*#\((.*?)\)\s*u_boot", top, re.S)
+    assert m, "soc_top.v no longer instantiates soc_boot as u_boot"
+    assert "HARDEN" not in m.group(1), (
+        "soc_top.v sets soc_boot's HARDEN parameter; that parameter is a "
+        "measurement knob and the design ships at its default of 1")
+    for name in ("sim_soc.sh", "syn_soc_top.sh", "pnr_soc_top.sh"):
+        text = (SOC_FLOW / name).read_text()
+        assert "soc_boot.HARDEN" not in text, (
+            "{} overrides soc_boot's HARDEN".format(name))

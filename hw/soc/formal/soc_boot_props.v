@@ -39,13 +39,46 @@
 //   D8  BSTAT's two derived flags are exactly the comparisons a loader
 //       would otherwise write down a second time.
 //
+// docs/69 adds two, both about B1:
+//
+//   D9  THE REPORT IS A RECORD AND NOT A REGISTER. No APB write of any
+//       value to any offset changes TMRERR or TMRCNT; TMRERR never
+//       falls; TMRCNT never decreases and saturates. It is D1's shape
+//       applied to the state B1 added, and it is stated because docs/41
+//       section 5.3's rule -- "a record software can erase is a record
+//       an upset can erase" -- is a property of the write decode and
+//       nothing else checks the write decode exhaustively.
+//   D10 THE THREE REPLICAS AGREE, and the voted word is what every read
+//       above is written against. THIS IS A REGRESSION STATEMENT AND
+//       NOT A REDUNDANCY STATEMENT, and it cannot be one: soc_boot has
+//       no port through which a fault can be injected, so in this job
+//       the replicas are always in agreement and the voter is proved to
+//       be a wire. What it does catch is the failure docs/41 section
+//       9.3 describes as silent in the one direction that matters -- a
+//       transform that did not round-trip would make one replica
+//       permanently present a different value, the voter would mask it,
+//       and every other property here would still pass while the
+//       triple redundancy had quietly become a duplex. The MASKING
+//       theorem, with a fault model, is hw/soc/formal/soc_wdog_tmr.sby,
+//       which proves T1-T6 over soc_tmr_bank and tmr_voter at four
+//       widths including 22 -- this block's PBANK_W at the shipped
+//       parameters -- and `make -C hw/soc/formal boot_tmr_params` is
+//       what checks that the composition proved there is the
+//       composition instantiated here.
+//
 // WHAT THEY DO NOT COVER. Nothing here says the straps are CONNECTED to
 // anything (sw/tests/test_soc_boot_guards.py does, and the answer is
 // that in hardware they are connected to nothing, which is the design);
 // nothing says the boot counter counts BOOTS rather than reset releases
 // -- the equivalence is soc_top.v's wiring of rst_sys_n and a whole-SoC
-// run is the evidence; and there is no fault model over this block's
-// own state, which section 9 of docs/68 lists as unprotected.
+// run is the evidence; and THERE IS STILL NO FAULT MODEL OVER THIS
+// BLOCK'S OWN STATE IN THIS JOB. B1 makes a claim about what happens
+// when a replica is corrupted and this file cannot state it, for
+// exactly docs/41 section 9.3's reason. The claim is measured instead,
+// by hw/soc/tb/cocotb/test_soc_boot_fi.py, and the redundancy's
+// SURVIVAL THROUGH SYNTHESIS -- which no proof can see, docs/43 section
+// 9.4 -- is measured a third time by
+// sw/tests/test_soc_synthesis_guards.py.
 
 `ifdef FORMAL
 
@@ -158,6 +191,42 @@
     // wrong, and this is what makes that true.
     if (over_limit) assert (last_attempt);
   end
+
+  // ---- D9. The report is a record and not a register ---------------
+  //
+  // Written over `wr` and not over a particular offset, D1's shape, so
+  // it holds for every offset the decode has and every offset it does
+  // not. In the absence of a fault the two fields never move at all,
+  // which the first two assertions say; the monotonicity assertions are
+  // what would still hold if they did.
+  always @(posedge clk_i)
+    if (f_past_valid && $past(rst_por_ni) && rst_por_ni) begin
+      if ($past(wr) && !$past(prot_mismatch)) begin
+        assert (tmr_err   == $past(tmr_err));
+        assert (tmr_count == $past(tmr_count));
+      end
+      // Sticky, saturating, and never clearable by anything.
+      if ($past(tmr_err)) assert (tmr_err);
+      assert (tmr_count >= $past(tmr_count));
+      if ($past(tmr_count) == {TMC_W{1'b1}})
+        assert (tmr_count == {TMC_W{1'b1}});
+    end
+
+  // ---- D10. The replicas agree, and the voter is a wire -------------
+  generate
+    if (HARDEN != 0) begin : g_f_tmr
+      // The round trip. If mix_enc and mix_dec were not inverses, or
+      // the polarity were applied on one side only, or the reset image
+      // were stored unencoded, one of these would fail -- and NOTHING
+      // ELSE IN THIS FILE WOULD, because the voter would mask it.
+      always @(*) begin
+        assert (g_prot_tmr.qa == g_prot_tmr.qb);
+        assert (g_prot_tmr.qa == g_prot_tmr.qc);
+        assert (prot_store == g_prot_tmr.qa);
+        assert (!prot_mismatch);
+      end
+    end
+  endgenerate
 
   // ---- vacuity -----------------------------------------------------
   always @(posedge clk_i) begin
