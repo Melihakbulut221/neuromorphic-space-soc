@@ -52,6 +52,13 @@
 //        with no third-party dependency before any bus bridge is
 //        written. The pins leave this module as three wires per pin
 //        because there is no pad ring.
+//   HAS  the one interface the NPU itself needs, as of docs/66: a
+//        register-mode QSPI flash controller with two chip selects
+//        (soc_qspi.v) in the QSPICTL slot on fast line 9. Software
+//        drives flash transactions through it and the bring-up program
+//        loads the NPU's weight image from a modelled flash through
+//        it. The two execute-in-place windows QSPI3 and QSPI4 stay
+//        reserved and faulting; soc_qspi.v's header says why.
 //   IS   a NEUROMORPHIC SoC, as of docs/51-npu-integration.md.
 //        soc_npu.v instantiates hw/rtl/pilot_top.v -- the frozen
 //        TTIHP26b submission, unmodified -- reaches its register bank
@@ -103,7 +110,11 @@ module soc_top #(
 
     // The GPIO port width. 16 is what the frozen map's slot description
     // and docs/01 section 4 say; soc_gpio.v accepts 2..32.
-    parameter integer GPIO_NBITS = 16
+    parameter integer GPIO_NBITS = 16,
+
+    // QSPI chip selects. Two, as GR801 has (docs/03 section 2.2); the
+    // second one's cost is measured in docs/66 section 8.
+    parameter integer QSPI_NCS = 2
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -125,6 +136,18 @@ module soc_top #(
     output wire [GPIO_NBITS-1:0] gpio_o,
     output wire [GPIO_NBITS-1:0] gpio_oe_o,
     output wire        gpio_irq_o,     // GPIO IFLAG AND IMASK, a level
+
+    // ---- the QSPI flash pins, docs/66 ----
+    // SCK and the chip selects are outputs; each of the four IO lanes
+    // is three wires, as the GPIO pins are, because there is no pad
+    // ring. hw/soc/tb/tb_soc.v resolves them on a pulled-up net and
+    // hangs a modelled flash on chip select 0.
+    output wire        qspi_sck_o,
+    output wire [QSPI_NCS-1:0] qspi_cs_no,
+    output wire [3:0]  qspi_io_o,
+    output wire [3:0]  qspi_io_oe_o,
+    input  wire [3:0]  qspi_io_i,
+    output wire        qspi_irq_o,     // QSPI IEN AND (DONE OR DR), a level
 
     // ---- observation, for the testbench and for pins later ----
     output wire        wdog_no,        // watchdog stage 3, active low
@@ -195,7 +218,7 @@ module soc_top #(
   // them and the blocks that drive them are instantiated further down.
   wire        clint_irq_timer, clint_irq_soft;
   wire        gptimer_irq, uart_irq, wdog_nmi, busstat_irq, npu_irq;
-  wire        gpio_irq;
+  wire        gpio_irq, qspi_irq;
   // The fault lines soc_busstat counts. docs/44.
   wire [2:0]  rf_ecc_err;      // from the register file, via ibex_top
   wire        wdog_tmr_ev;     // from the watchdog's voter
@@ -255,6 +278,14 @@ module soc_top #(
     // whole-SoC run of docs/56 is cycle-identical with this block
     // present and the program unchanged.
     irq_fast[SOC_IRQLINE_GPIO]    = gpio_irq;
+    // The QSPI controller's line, connected here for the first time
+    // (docs/66). docs/40 assigned source 21 and line 9 before the block
+    // existed. Its level is IEN AND (DONE OR DR) and IEN resets to
+    // zero, so the wire is low until software asks for it -- the same
+    // discipline as every line above, and the reason the whole-SoC run
+    // of docs/65 is cycle-identical with this block present and the
+    // program unchanged.
+    irq_fast[SOC_IRQLINE_QSPICTL] = qspi_irq;
   end
 
 
@@ -491,19 +522,21 @@ module soc_top #(
 
   wire sel_uart0  = psel && (slot == SOC_APBSLOT_UART0);
   wire sel_gpio   = psel && (slot == SOC_APBSLOT_GPIO);
+  wire sel_qspi   = psel && (slot == SOC_APBSLOT_QSPICTL);
   wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
   wire sel_busstat = psel && (slot == SOC_APBSLOT_BUSSTAT);
   wire sel_npucfg = psel && (slot == SOC_APBSLOT_NPUCFG);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
-  wire sel_none   = psel && !sel_uart0 && !sel_gpio && !sel_timer0
-                         && !sel_busstat && !sel_npucfg && !sel_apbpnp;
+  wire sel_none   = psel && !sel_uart0 && !sel_gpio && !sel_qspi
+                         && !sel_timer0 && !sel_busstat && !sel_npucfg
+                         && !sel_apbpnp;
 
   wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat,
-              prdata_npucfg, prdata_gpio;
+              prdata_npucfg, prdata_gpio, prdata_qspi;
   wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat,
-              pready_npucfg, pready_gpio;
+              pready_npucfg, pready_gpio, pready_qspi;
   wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat,
-              pslverr_npucfg, pslverr_gpio;
+              pslverr_npucfg, pslverr_gpio, pslverr_qspi;
 
   soc_uart u_uart0 (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
@@ -527,6 +560,21 @@ module soc_top #(
       .pslverr_o (pslverr_gpio),
       .gpio_i (gpio_i), .gpio_o (gpio_o), .gpio_oe_o (gpio_oe_o),
       .irq_o (gpio_irq)
+  );
+
+  // The QSPI flash controller, docs/66. Register mode, two chip
+  // selects, in the QSPICTL slot the map has reserved since docs/39;
+  // the XIP windows in front of it stay reserved. Its lanes leave this
+  // module as three wires each and meet a modelled flash in tb_soc.v.
+  soc_qspi #(.NCS(QSPI_NCS)) u_qspi (
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
+      .psel_i (sel_qspi), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_qspi), .pready_o (pready_qspi),
+      .pslverr_o (pslverr_qspi),
+      .sck_o (qspi_sck_o), .cs_no (qspi_cs_no),
+      .io_o (qspi_io_o), .io_oe_o (qspi_io_oe_o), .io_i (qspi_io_i),
+      .irq_o (qspi_irq)
   );
 
   // GRLIB GPTIMER register map, two general timers, and the watchdog as
@@ -597,6 +645,7 @@ module soc_top #(
   // read of zero that looks like a working register.
   assign prdata  = sel_uart0   ? prdata_uart0
                  : sel_gpio    ? prdata_gpio
+                 : sel_qspi    ? prdata_qspi
                  : sel_timer0  ? prdata_timer0
                  : sel_busstat ? prdata_busstat
                  : sel_npucfg  ? prdata_npucfg
@@ -604,6 +653,7 @@ module soc_top #(
                  : 32'h0;
   assign pready  = sel_uart0   ? pready_uart0
                  : sel_gpio    ? pready_gpio
+                 : sel_qspi    ? pready_qspi
                  : sel_timer0  ? pready_timer0
                  : sel_busstat ? pready_busstat
                  : sel_npucfg  ? pready_npucfg
@@ -611,6 +661,7 @@ module soc_top #(
                  : 1'b1;
   assign pslverr = sel_uart0   ? pslverr_uart0
                  : sel_gpio    ? pslverr_gpio
+                 : sel_qspi    ? pslverr_qspi
                  : sel_timer0  ? pslverr_timer0
                  : sel_busstat ? pslverr_busstat
                  : sel_npucfg  ? pslverr_npucfg
@@ -694,6 +745,7 @@ module soc_top #(
 
   assign uart_irq_o     = uart_irq;
   assign gpio_irq_o     = gpio_irq;
+  assign qspi_irq_o     = qspi_irq;
   assign npu_irq_o      = npu_irq;
   assign gptimer_irq_o  = gptimer_irq;
   assign nmi_o          = wdog_nmi;

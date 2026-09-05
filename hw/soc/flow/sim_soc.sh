@@ -215,6 +215,8 @@ fi
   "$SOC_DIR/rtl/soc_apb_pnp.v" \
   "$SOC_DIR/rtl/soc_uart.v" \
   "$SOC_DIR/rtl/soc_gpio.v" \
+  "$SOC_DIR/rtl/soc_qspi.v" \
+  "$SOC_DIR/tb/flash_w25q128jv.v" \
   "$SOC_DIR/rtl/soc_clint.v" \
   "$SOC_DIR/rtl/soc_gptimer.v" \
   "$SOC_DIR/rtl/soc_wdog.v" \
@@ -275,7 +277,11 @@ else
 fi
 
 echo "== elaborated; running"
-"$VVP" "$OUT/tb_soc.vvp" 2>&1 | tee "$OUT/sim.log"
+# The flash image on chip select 0, written by build_sw_soc.sh through
+# flow/gen_flash_image.py alongside the ROM image it is checked against.
+# tb_soc.v loads it into the modelled W25Q128JV with $readmemh; a run
+# without it would see an erased device and fail checks 29 and 30.
+"$VVP" "$OUT/tb_soc.vvp" +flash0="$OUT/flash0.hex" 2>&1 | tee "$OUT/sim.log"
 
 grep -q "^\[TB\] PASS" "$OUT/sim.log" || {
   echo "== SoC SIMULATION FAILED" >&2; exit 1; }

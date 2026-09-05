@@ -42,9 +42,18 @@ run_one() {
     # guessing the name reports a passing suite as missing. Collect every
     # XML written during this run instead, which is exact because the run is
     # serial.
-    local before
-    before=$(date +%s)
+    # A marker file, touched AFTER the pause, is what "written during this
+    # run" is measured against. It used to be `date +%s` taken BEFORE the
+    # pause and compared with -newermt at one-second granularity, and
+    # docs/66 measured what that costs: the previous suite's XML, written
+    # in the same second the timestamp was taken, was counted again under
+    # this suite's name -- soc_qspi reported 47 tests for a 16-test suite
+    # because soc_npu's 31 had landed 3 s earlier. A fast suite after a
+    # slow one is exactly the shape the race needed.
+    local marker
+    marker=$(mktemp "$dir/.run_cocotb.XXXXXX")
     sleep 1
+    touch "$marker"
     local log
     log=$(cd "$dir" && timeout 900 make -f "$mk" 2>&1)
     local rc=$?
@@ -53,7 +62,8 @@ run_one() {
     # between runs -- soc_gptimer once read 10, then 3 -- while "0 failed"
     # stayed true. Sum them.
     local xmls
-    xmls=$(find "$dir" -maxdepth 1 -name 'results_*.xml' -newermt "@$before" -print 2>/dev/null)
+    xmls=$(find "$dir" -maxdepth 1 -name 'results_*.xml' -newer "$marker" -print 2>/dev/null)
+    rm -f "$marker"
     if [ -z "$xmls" ]; then
         printf '  %-28s NO XML (make rc=%s)\n' "$name" "$rc"
         suite_fail=$((suite_fail + 1))

@@ -51,11 +51,27 @@
 
 #include <stdint.h>
 
+/* THE QSPI DEMONSTRATION IS A SECOND IMAGE, and the reason is the size
+   of the boot ROM. The map gives it 8 KiB and the image is linked at
+   the reset vector, 8,064 bytes; the 28-check program is 7,794 of them
+   and checks 29 and 30 need about 1,800 more (docs/66 section 6). So
+   with -DQSPI_DEMO the build keeps check 1, check 26 -- the inference
+   from the ROM's weight arrays -- checks 29 and 30, and check 11, and
+   compiles out the rest; without it the program is the 28-check one
+   every document since docs/40 quotes, and hw/soc/flow/sim_soc.sh
+   builds either from this one file, exactly as it builds the watchdog
+   escalation demonstration with -DWDOG_RESET_DEMO. */
+#ifdef QSPI_DEMO
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+
 #ifdef SOC_PLATFORM
 #include "soc_memmap.h"
 #include "soc_timers.h"
 #include "soc_npucfg.h"
 #include "soc_gpio.h"
+#include "soc_qspi.h"
 /* Both generated into the build directory by
    hw/soc/flow/gen_npu_vectors.py, which build_sw_soc.sh runs first:
    npu_regs.h is the node register map from regmap/regmap.yaml, and
@@ -64,6 +80,12 @@
    the hardware against the second and never against itself. */
 #include "npu_regs.h"
 #include "npu_vectors.h"
+#ifdef QSPI_DEMO
+/* Also generated into the build directory, by
+   hw/soc/flow/gen_flash_image.py: what the modelled flash on chip
+   select 0 holds and the sample words check 29 compares against. */
+#include "qspi_image.h"
+#endif
 
 // GRLIB APBUART register offsets and bits (grip.pdf table 126, adopted
 // by docs/08 section 3 row 9 and implemented as a subset in
@@ -239,7 +261,11 @@ static int npu_wait_idle(int limit) {
    state clear, configure, load weights, enable. Configuration registers
    are LOCKED while BUSY (docs/10 section 6), so the enable is last and
    the state clear has to complete before the configuration starts. */
-static int npu_bring_up(void) {
+/* THE WEIGHT WORDS ARE A PARAMETER, as of docs/66: check 26 passes the
+   arrays the ROM image carries and check 30 passes the words it read
+   out of the flash through the QSPI controller. The sequence, and the
+   read-backs, are the same for both. */
+static int npu_bring_up(const uint32_t *wlo, const uint32_t *whi) {
   int ok = 1;
   npu_wr(NPU_CTRL, 1u << NPU_BIT_CTRL_STATE_CLR);
   if (!npu_wait_idle(64)) { ok = 0; puts_("  npu: state clear never ended\n"); }
@@ -308,8 +334,8 @@ static int npu_bring_up(void) {
      so it is written once. */
   npu_wr(NPU_W_ADDR, 0u);
   for (int w = 0; w < NPUV_N_WWORDS; w++) {
-    npu_wr(NPU_W_DATA_LO, npuv_wlo[w]);
-    npu_wr(NPU_W_DATA_HI, npuv_whi[w]);
+    npu_wr(NPU_W_DATA_LO, wlo[w]);
+    npu_wr(NPU_W_DATA_HI, whi[w]);
   }
   {
     uint32_t wa = npu_rd(NPU_W_ADDR), sec = npu_rd(NPU_CNT_SEC),
@@ -362,6 +388,143 @@ static int npu_run(uint16_t *got, int cap) {
   }
   return n;
 }
+
+/* ONE INFERENCE, checked against the golden model. The body of check
+   26 since docs/51, made a function by docs/66 so that check 30 can run
+   the same inference with weights that came from the flash instead of
+   from the ROM image. Everything is in the loop: the fabric, the APB
+   bridge, the slot decode, the serial transport, the die's frozen
+   register bank, its ECC-checked weight loader, its event queues, its
+   LIF datapath, the parallel AER pins on the way in and the serial
+   EVQ_OUT register on the way out -- and the answer is
+   sw/golden/lif_core.py's, computed at BUILD time, never the
+   hardware's. */
+static int npu_inference(const uint32_t *wlo, const uint32_t *whi,
+                         const char *tag) {
+static uint16_t got[NPUV_N_EXPECT + 8];
+/* The event counters are not cleared between inferences; what one
+   inference adds to them is what is checked. */
+uint32_t cnt0 = cfg_rd(NPUCFG_CNT);
+int ok = npu_bring_up(wlo, whi);
+
+  cfg_wr(NPUCFG_CTRL, NPUCFG_IN_EN | NPUCFG_OUT_EN);
+  int n = npu_run(got, (int)(sizeof(got) / sizeof(got[0])));
+
+  if (n != NPUV_N_EXPECT) {
+    ok = 0;
+    puts_("  npu stream length "); puthex((uint32_t)n);
+    puts_(" want "); puthex((uint32_t)NPUV_N_EXPECT); putc_('\n');
+    /* Print what did come back. A length mismatch with no stream is a
+       report that says nothing about which event was extra or
+       missing, and this program's whole convention is that a failure
+       should be locatable from the log. */
+    puts_("  got ");
+    for (int i = 0; i < n && i < (int)(sizeof(got)/sizeof(got[0])); i++) {
+      puthex(got[i]); putc_(' ');
+    }
+    putc_('\n');
+    puts_("  want ");
+    for (int i = 0; i < NPUV_N_EXPECT; i++) {
+      puthex(npuv_expect[i]); putc_(' ');
+    }
+    putc_('\n');
+  } else {
+    for (int i = 0; i < NPUV_N_EXPECT; i++) {
+      if (got[i] != npuv_expect[i]) {
+        ok = 0;
+        puts_("  npu event "); puthex((uint32_t)i);
+        puts_(" got "); puthex(got[i]);
+        puts_(" want "); puthex(npuv_expect[i]); putc_('\n');
+      }
+    }
+  }
+
+  /* The whole neuron state file afterwards, against the same model.
+     The spike stream says the outputs matched; this says the internal
+     trajectory did too, which is a strictly stronger statement and is
+     the one that catches an error that happened to cancel. */
+  for (int j = 0; j < NPUV_N_NEURONS; j++) {
+    npu_wr(NPU_N_ADDR, (uint32_t)j);
+    uint32_t w = npu_rd(NPU_N_DATA) & 0x000FFFFFu;
+    if (w != npuv_state[j]) {
+      ok = 0;
+      puts_("  npu state "); puthex((uint32_t)j);
+      puts_(" got "); puthex(w);
+      puts_(" want "); puthex(npuv_state[j]); putc_('\n');
+    }
+  }
+
+  /* Nothing may have been lost or faulted on the way. */
+  uint32_t st = cfg_rd(NPUCFG_STATUS);
+  uint32_t cnt = cfg_rd(NPUCFG_CNT);
+  uint32_t cause = cfg_rd(NPUCFG_IRQCAUSE);
+  uint32_t drop = cfg_rd(NPUCFG_CNT_DROP);
+  uint32_t ovf = npu_rd(NPU_CNT_EVQ_OVF);
+  uint32_t oor = npu_rd(NPU_CNT_AXON_OOR);
+  if ((cause & (NPUCFG_C_ERR | NPUCFG_C_DED | NPUCFG_C_INJ_OVF
+                | NPUCFG_C_FETCH_ER)) || drop || ovf || oor) {
+    ok = 0;
+    puts_("  npu: cause="); puthex(cause);
+    puts_(" drop="); puthex(drop);
+    puts_(" evq_ovf="); puthex(ovf);
+    puts_(" axon_oor="); puthex(oor); putc_('\n');
+  }
+  /* Every injected word reached the node and every expected word came
+     back out of it, counted by the hardware independently of the
+     stream this program collected. */
+  ok &= (((cnt - cnt0) & 0xFFFFu) == (uint32_t)NPUV_N_INJECT);
+  ok &= ((((cnt >> 16) - (cnt0 >> 16)) & 0xFFFFu) == (uint32_t)NPUV_N_EXPECT);
+
+  puts_(tag); puthex((uint32_t)n);
+  puts_(" events, cnt="); puthex(cnt);
+  puts_(" status="); puthex(st); putc_('\n');
+  return ok;
+}
+
+#ifdef QSPI_DEMO
+/* ---- QSPI flash access, docs/66 ------------------------------------
+   The controller is register mode: software describes one transaction
+   in CMD (writing it starts the frame), and pulls each word out of RX
+   at DR or pushes it into TX at TXE. Every wait is bounded, for the
+   reason every wait loop in this file is. */
+static int qspi_wait(uint32_t mask) {
+  for (int i = 0; i < 20000; i++)
+    if (cfg_rd(QSPI_STAT) & mask) return 1;
+  return 0;
+}
+
+/* A read-type transaction: `n` bytes into `out` words, little-endian
+   lanes, through the DR pause at every word. Returns 1 if every wait
+   ended and DONE arrived. */
+static int qspi_read(uint32_t cmdw, uint32_t addr, uint32_t *out, int n) {
+  int ok = 1;
+  cfg_wr(QSPI_ADDR, addr);
+  cfg_wr(QSPI_CMD, cmdw | QSPI_CMD_LEN(n));
+  for (int w = 0; w < (n + 3) / 4; w++) {
+    ok &= qspi_wait(QSPI_ST_DR);
+    out[w] = cfg_rd(QSPI_RX);
+  }
+  ok &= qspi_wait(QSPI_ST_DONE);
+  cfg_wr(QSPI_STAT, QSPI_ST_DONE);
+  return ok;
+}
+
+/* A write-type or opcode-only transaction with at most one TX word. */
+static int qspi_cmd(uint32_t op, uint32_t txw, int n) {
+  if (n) cfg_wr(QSPI_TX, txw);
+  cfg_wr(QSPI_CMD, QSPI_CMD_OP(op) | QSPI_CMD_WRITE | QSPI_CMD_LEN(n));
+  int ok = qspi_wait(QSPI_ST_DONE);
+  cfg_wr(QSPI_STAT, QSPI_ST_DONE);
+  return ok;
+}
+
+static uint32_t flash_sr(uint32_t op) {
+  uint32_t v = 0;
+  (void)qspi_read(QSPI_CMD_OP(op), 0, &v, 1);
+  return v & 0xFFu;
+}
+#endif /* QSPI_DEMO */
+
 #endif
 
 #define CSRR(name)      ({ uint32_t v_; __asm__ volatile ("csrr %0, " #name : "=r"(v_)); v_; })
@@ -500,6 +663,7 @@ int main(void) {
   alive = 0xA5A5A5A5u;
   check(1, alive == 0xA5A5A5A5u);
 
+#ifndef QSPI_DEMO
   // 2 ----------------------------------------------------------------
   {
     volatile int32_t  x = -8;
@@ -723,7 +887,9 @@ int main(void) {
   // recorded that every Ibex interrupt input was tied off, so until now
   // the vectored-only mtvec of docs/38 section 7.5 defect 3 had never
   // been exercised at all.
+#endif /* !QSPI_DEMO */
 #ifdef SOC_PLATFORM
+#ifndef QSPI_DEMO
   {
     /* 15: mtime runs, and the 64-bit read sequence is stable.
        The read is high, low, high again, repeated while the two highs
@@ -1095,6 +1261,7 @@ int main(void) {
     check(25, ok);
   }
 
+#endif /* !QSPI_DEMO */
   {
     /* 26: THE DEMONSTRATION. A program on Ibex, out of the boot ROM,
        over the real fabric, configures the NPU, feeds it events and
@@ -1107,83 +1274,11 @@ int main(void) {
        ECC-checked weight loader, its event queues, its LIF datapath,
        the parallel AER pins on the way in and the serial EVQ_OUT
        register on the way out. */
-    static uint16_t got[NPUV_N_EXPECT + 8];
-    int ok = npu_bring_up();
-
-    cfg_wr(NPUCFG_CTRL, NPUCFG_IN_EN | NPUCFG_OUT_EN);
-    int n = npu_run(got, (int)(sizeof(got) / sizeof(got[0])));
-
-    if (n != NPUV_N_EXPECT) {
-      ok = 0;
-      puts_("  npu stream length "); puthex((uint32_t)n);
-      puts_(" want "); puthex((uint32_t)NPUV_N_EXPECT); putc_('\n');
-      /* Print what did come back. A length mismatch with no stream is a
-         report that says nothing about which event was extra or
-         missing, and this program's whole convention is that a failure
-         should be locatable from the log. */
-      puts_("  got ");
-      for (int i = 0; i < n && i < (int)(sizeof(got)/sizeof(got[0])); i++) {
-        puthex(got[i]); putc_(' ');
-      }
-      putc_('\n');
-      puts_("  want ");
-      for (int i = 0; i < NPUV_N_EXPECT; i++) {
-        puthex(npuv_expect[i]); putc_(' ');
-      }
-      putc_('\n');
-    } else {
-      for (int i = 0; i < NPUV_N_EXPECT; i++) {
-        if (got[i] != npuv_expect[i]) {
-          ok = 0;
-          puts_("  npu event "); puthex((uint32_t)i);
-          puts_(" got "); puthex(got[i]);
-          puts_(" want "); puthex(npuv_expect[i]); putc_('\n');
-        }
-      }
-    }
-
-    /* The whole neuron state file afterwards, against the same model.
-       The spike stream says the outputs matched; this says the internal
-       trajectory did too, which is a strictly stronger statement and is
-       the one that catches an error that happened to cancel. */
-    for (int j = 0; j < NPUV_N_NEURONS; j++) {
-      npu_wr(NPU_N_ADDR, (uint32_t)j);
-      uint32_t w = npu_rd(NPU_N_DATA) & 0x000FFFFFu;
-      if (w != npuv_state[j]) {
-        ok = 0;
-        puts_("  npu state "); puthex((uint32_t)j);
-        puts_(" got "); puthex(w);
-        puts_(" want "); puthex(npuv_state[j]); putc_('\n');
-      }
-    }
-
-    /* Nothing may have been lost or faulted on the way. */
-    uint32_t st = cfg_rd(NPUCFG_STATUS);
-    uint32_t cnt = cfg_rd(NPUCFG_CNT);
-    uint32_t cause = cfg_rd(NPUCFG_IRQCAUSE);
-    uint32_t drop = cfg_rd(NPUCFG_CNT_DROP);
-    uint32_t ovf = npu_rd(NPU_CNT_EVQ_OVF);
-    uint32_t oor = npu_rd(NPU_CNT_AXON_OOR);
-    if ((cause & (NPUCFG_C_ERR | NPUCFG_C_DED | NPUCFG_C_INJ_OVF
-                  | NPUCFG_C_FETCH_ER)) || drop || ovf || oor) {
-      ok = 0;
-      puts_("  npu: cause="); puthex(cause);
-      puts_(" drop="); puthex(drop);
-      puts_(" evq_ovf="); puthex(ovf);
-      puts_(" axon_oor="); puthex(oor); putc_('\n');
-    }
-    /* Every injected word reached the node and every expected word came
-       back out of it, counted by the hardware independently of the
-       stream this program collected. */
-    ok &= ((cnt & 0xFFFFu) == (uint32_t)NPUV_N_INJECT);
-    ok &= (((cnt >> 16) & 0xFFFFu) == (uint32_t)NPUV_N_EXPECT);
-
-    puts_("npu: "); puthex((uint32_t)n);
-    puts_(" events, cnt="); puthex(cnt);
-    puts_(" status="); puthex(st); putc_('\n');
+    int ok = npu_inference(npuv_wlo, npuv_whi, "npu: ");
     check(26, ok);
   }
 
+#ifndef QSPI_DEMO
   {
     /* 27: the NPU raises its interrupt, on the fast local line the
        frozen map assigns it, at its own vector.
@@ -1337,6 +1432,187 @@ int main(void) {
                puts_(" fl="); puthex(fl); putc_('\n'); }
     check(28, ok);
   }
+
+#endif /* !QSPI_DEMO */
+#ifdef QSPI_DEMO
+  {
+    /* 29: THE FLASH, through the real fabric.
+
+       docs/65 section 13 named QSPI the next block and docs/66 built
+       it: a register-mode controller in the QSPICTL slot on fast line
+       9, with a modelled W25Q128JV on chip select 0 in tb_soc.v. Every
+       word below travels core, fabric, APB bridge, slot decode, the
+       block's sequencer, the four IO lanes, the model's datasheet
+       timing checks and back. The expected words come from
+       qspi_image.h, computed at build time from the pattern the image
+       was written from, and never from anything the simulation
+       produced. */
+    int ok = 1;
+    uint32_t w[4];
+    cfg_wr(QSPI_CONF, QSPI_CONF_DIV(0) | QSPI_CONF_CS(0));
+
+    /* The part identifies itself: 9Fh returns EF 40 18 (8.2.27). */
+    ok &= qspi_read(QSPI_CMD_OP(FLASH_OP_JEDEC), 0, w, 3);
+    ok &= (w[0] == FLASH_JEDEC_WORD);
+    uint32_t id = w[0];
+
+    /* Single-lane reads of the sample words, 03h, including the one at
+       an unaligned address. */
+    for (int i = 0; i < QSPI_IMG_N_SAMPLES; i++) {
+      ok &= qspi_read(FLASH_CMD_READ, qspi_img_sample_addr[i], w, 4);
+      if (w[0] != qspi_img_sample_cs0[i]) {
+        ok = 0;
+        puts_("  qspi 03h at "); puthex(qspi_img_sample_addr[i]);
+        puts_(" read "); puthex(w[0]);
+        puts_(" want "); puthex(qspi_img_sample_cs0[i]); putc_('\n');
+      }
+    }
+
+    /* Quad I/O needs QE (8.2.11): SR2 reads 0 out of the box, and a
+       volatile write (50h, 31h; 8.2.5) sets it without a busy time. */
+    uint32_t sr2_before = flash_sr(FLASH_OP_RDSR2);
+    ok &= (sr2_before == 0u);
+    ok &= qspi_cmd(FLASH_OP_VWREN, 0, 0);
+    ok &= qspi_cmd(FLASH_OP_WRSR2, FLASH_SR2_QE, 1);
+    uint32_t sr2_after = flash_sr(FLASH_OP_RDSR2);
+    ok &= (sr2_after == FLASH_SR2_QE);
+
+    /* The aligned samples again, on four lanes: EBh with the mode
+       byte and four dummy clocks, and 6Bh with eight. */
+    for (int i = 0; i < QSPI_IMG_N_SAMPLES; i++) {
+      if (qspi_img_sample_addr[i] & 3u) continue;
+      ok &= qspi_read(FLASH_CMD_QIO, qspi_img_sample_addr[i], w, 4);
+      if (w[0] != qspi_img_sample_cs0[i]) {
+        ok = 0;
+        puts_("  qspi EBh at "); puthex(qspi_img_sample_addr[i]);
+        puts_(" read "); puthex(w[0]); putc_('\n');
+      }
+      ok &= qspi_read(FLASH_CMD_QOUT, qspi_img_sample_addr[i], w, 4);
+      if (w[0] != qspi_img_sample_cs0[i]) {
+        ok = 0;
+        puts_("  qspi 6Bh at "); puthex(qspi_img_sample_addr[i]);
+        puts_(" read "); puthex(w[0]); putc_('\n');
+      }
+    }
+
+    /* A multi-word frame, 0Bh with its eight dummy clocks: the first
+       two samples are consecutive words. */
+    ok &= qspi_read(FLASH_CMD_FAST, qspi_img_sample_addr[0], w, 8);
+    ok &= (w[0] == qspi_img_sample_cs0[0] && w[1] == qspi_img_sample_cs0[1]);
+
+    /* Chip select 1 goes to nothing on this board: the lanes read as
+       their pull-ups. */
+    cfg_wr(QSPI_CONF, QSPI_CONF_DIV(0) | QSPI_CONF_CS(1));
+    ok &= qspi_read(QSPI_CMD_OP(FLASH_OP_JEDEC), 0, w, 3);
+    ok &= (w[0] == 0x00FFFFFFu);
+    cfg_wr(QSPI_CONF, QSPI_CONF_DIV(0) | QSPI_CONF_CS(0));
+
+    /* A CMD write while a frame is paused at DR is refused and flagged
+       LOST; the frame runs on with the values it captured. */
+    cfg_wr(QSPI_ADDR, qspi_img_sample_addr[0]);
+    cfg_wr(QSPI_CMD, FLASH_CMD_READ | QSPI_CMD_LEN(8));
+    ok &= qspi_wait(QSPI_ST_DR);
+    cfg_wr(QSPI_CMD, QSPI_CMD_OP(FLASH_OP_JEDEC) | QSPI_CMD_LEN(3));
+    uint32_t st = cfg_rd(QSPI_STAT);
+    ok &= ((st & QSPI_ST_LOST) != 0u);
+    cfg_wr(QSPI_STAT, QSPI_ST_LOST);
+    w[0] = cfg_rd(QSPI_RX);
+    ok &= qspi_wait(QSPI_ST_DR);
+    w[1] = cfg_rd(QSPI_RX);
+    ok &= qspi_wait(QSPI_ST_DONE);
+    cfg_wr(QSPI_STAT, QSPI_ST_DONE);
+    ok &= (w[0] == qspi_img_sample_cs0[0] && w[1] == qspi_img_sample_cs0[1]);
+    ok &= ((cfg_rd(QSPI_STAT) & QSPI_ST_LOST) == 0u);
+
+    /* The interrupt: a level of DONE or DR under IEN, on the fast local
+       line the frozen map assigns, at its own vector. The first event
+       of a read is DR, so the handler (which masks the line in mie and
+       touches no register) is entered once, and the word is still
+       there afterwards. */
+    irq_marker = 0; irq_mcause = 0; irq_count = 0;
+    csr_set_mie(1u << (16 + SOC_IRQLINE_QSPICTL));
+    csr_set_mstatus(0x8u);                       /* MIE */
+    cfg_wr(QSPI_CTRL, QSPI_CTRL_IEN);
+    cfg_wr(QSPI_CMD, QSPI_CMD_OP(FLASH_OP_JEDEC) | QSPI_CMD_LEN(3));
+    int spun = 0;
+    while (irq_count == 0u && spun < 20000) spun++;
+    csr_clr_mstatus(0x8u);
+    ok &= (irq_count == 1u);
+    ok &= (irq_mcause == SOC_IRQ_QSPICTL);
+    ok &= (irq_marker == (SOC_FAST_IRQ_BASE + SOC_IRQLINE_QSPICTL));
+    ok &= ((cfg_rd(QSPI_STAT) & QSPI_ST_DR) != 0u);
+    w[0] = cfg_rd(QSPI_RX);
+    ok &= (w[0] == FLASH_JEDEC_WORD);
+    ok &= qspi_wait(QSPI_ST_DONE);
+    cfg_wr(QSPI_STAT, QSPI_ST_DONE);
+    cfg_wr(QSPI_CTRL, 0);
+
+    if (!ok) { puts_("  qspi id="); puthex(id);
+               puts_(" sr2="); puthex(sr2_before); putc_(' '); puthex(sr2_after);
+               puts_(" st="); puthex(st);
+               puts_(" irq cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker);
+               puts_(" n="); puthex(irq_count); putc_('\n'); }
+    check(29, ok);
+  }
+
+  {
+    /* 30: THE NPU FED FROM THE FLASH.
+
+       docs/51 section 14 item 4: "there is no QSPI controller; weights
+       are loaded a register at a time" from arrays in the ROM image.
+       This is the first time the NPU has been fed from where a flight
+       part would feed it. The weight image sits in the modelled flash
+       at QSPI_IMG_WIMG_OFF -- a 16-byte header, then the docs/51
+       weight words -- written by hw/soc/flow/gen_flash_image.py from
+       the SAME generator that fills the ROM's arrays. The program
+       reads it on four lanes through the QSPI controller into RAM,
+       checks the header, the checksum and (as a diagnostic) equality
+       with the ROM's copy, and then runs THE SAME INFERENCE as check
+       26 with the flash-loaded words. The pass criterion is the golden
+       model's answer, not agreement with check 26. */
+    int ok = 1;
+    static uint32_t hdr[4];
+    static uint32_t fw_lo[NPUV_N_WWORDS], fw_hi[NPUV_N_WWORDS];
+    ok &= qspi_read(FLASH_CMD_QIO, QSPI_IMG_WIMG_OFF, hdr, 16);
+    ok &= (hdr[0] == QSPI_IMG_WIMG_MAGIC);
+    ok &= (hdr[1] == (uint32_t)NPUV_N_WWORDS);
+    ok &= (hdr[2] == ((uint32_t)NPUV_N_AXONS << 16 | (uint32_t)NPUV_N_NEURONS));
+    ok &= (hdr[2] == QSPI_IMG_WIMG_GEOM);
+
+    /* The words, one frame, pulled through DR one word at a time. */
+    uint32_t csum = 0;
+    if (ok) {
+      cfg_wr(QSPI_ADDR, QSPI_IMG_WIMG_OFF + 16u);
+      cfg_wr(QSPI_CMD, FLASH_CMD_QIO | QSPI_CMD_LEN(8u * NPUV_N_WWORDS));
+      for (int i = 0; i < NPUV_N_WWORDS; i++) {
+        ok &= qspi_wait(QSPI_ST_DR);
+        fw_lo[i] = cfg_rd(QSPI_RX);
+        ok &= qspi_wait(QSPI_ST_DR);
+        fw_hi[i] = cfg_rd(QSPI_RX);
+        csum += fw_lo[i]; csum += fw_hi[i];
+      }
+      ok &= qspi_wait(QSPI_ST_DONE);
+      cfg_wr(QSPI_STAT, QSPI_ST_DONE);
+    }
+    ok &= (csum == hdr[3]);
+    ok &= (hdr[3] == QSPI_IMG_WIMG_CSUM);
+    int same = 1;
+    for (int i = 0; i < NPUV_N_WWORDS; i++)
+      same &= (fw_lo[i] == npuv_wlo[i] && fw_hi[i] == npuv_whi[i]);
+    if (!same) {
+      ok = 0;
+      puts_("  weight image differs from the ROM copy\n");
+    }
+    if (!ok) { puts_("  qspi wimg hdr="); puthex(hdr[0]); putc_(' ');
+               puthex(hdr[1]); putc_(' '); puthex(hdr[2]); putc_(' ');
+               puthex(hdr[3]); puts_(" csum="); puthex(csum); putc_('\n'); }
+
+    /* And the inference, with what the flash delivered. */
+    if (ok) ok &= npu_inference(fw_lo, fw_hi, "npu from flash: ");
+    check(30, ok);
+  }
+#endif /* QSPI_DEMO */
 #endif
 
   check(11, trap_saw_rvc == 0u);   /* handler never had to guess a width */

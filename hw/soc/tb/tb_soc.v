@@ -134,6 +134,50 @@ module tb_soc;
     end
   endgenerate
 
+  // -------------------------------------------------------------------
+  // The QSPI flash on the board (docs/66).
+  //
+  // The controller's four IO lanes leave soc_top as three wires each,
+  // as the GPIO pins do, and meet here on a pulled-up net: `tri1`, the
+  // pull-up a board carries on /WP and /HOLD so that a released lane
+  // is not a floating one. A W25Q128JV model hangs on chip select 0
+  // and is loaded from +flash0=<hex>, which flow/sim_soc.sh passes and
+  // flow/gen_flash_image.py writes: the byte pattern checks 29 reads
+  // through the controller, and the weight image check 30 loads the
+  // NPU from. Chip select 1 goes to nothing, so a frame the program
+  // sent there would read the pull-ups: all ones.
+  //
+  // The model's busy times are scaled from milliseconds to two
+  // microseconds, as in tb_soc_qspi.v, and it counts every departure
+  // from the part's datasheet in `violations`; the count is printed at
+  // the end and is part of the pass criterion.
+  // -------------------------------------------------------------------
+  wire        qspi_sck;
+  wire [1:0]  qspi_cs_n;
+  wire [3:0]  qspi_io_o, qspi_io_oe;
+  wire        qspi_irq;
+  tri1 [3:0]  qspi_io;
+  genvar ql;
+  generate
+    for (ql = 0; ql < 4; ql = ql + 1) begin : g_qspi_lane
+      assign qspi_io[ql] = qspi_io_oe[ql] ? qspi_io_o[ql] : 1'bz;
+    end
+  endgenerate
+
+  flash_w25q128jv #(.T_W_NS(2000.0), .T_PP_NS(2000.0), .T_SE_NS(2000.0),
+                    .T_RST_NS(2000.0)) u_flash0 (
+      .cs_n (qspi_cs_n[0]), .sck (qspi_sck), .io (qspi_io)
+  );
+
+  reg [8*256-1:0] flash_fname;
+  initial begin
+    #1;   // after the model's own fill with FFh at time zero
+    if ($value$plusargs("flash0=%s", flash_fname))
+      $readmemh(flash_fname, u_flash0.mem);
+    else
+      $display("[TB] no +flash0= image: the flash is erased");
+  end
+
   // The watchdog bootstrap pin is held LOW, which is the armed state.
   // A run with it high would have no watchdog at all and every watchdog
   // check in the program would pass vacuously, so it is a constant here
@@ -149,6 +193,12 @@ module tb_soc;
       .gpio_o     (gpio_o),
       .gpio_oe_o  (gpio_oe),
       .gpio_irq_o (gpio_irq),
+      .qspi_sck_o   (qspi_sck),
+      .qspi_cs_no   (qspi_cs_n),
+      .qspi_io_o    (qspi_io_o),
+      .qspi_io_oe_o (qspi_io_oe),
+      .qspi_io_i    (qspi_io),
+      .qspi_irq_o   (qspi_irq),
       .wdog_no       (wdog_n),
       .wdog_rst_o    (wdog_rst),
       .nmi_o         (nmi),
@@ -373,6 +423,13 @@ module tb_soc;
              wdog_stage1, wdog_stage2, wdog_stage3);
     $display("[TB] gpio: pads 0x%04x, driven 0x%04x, irq %b",
              gpio_pad, gpio_oe, gpio_irq);
+    $display("[TB] qspi: %0d frames on CS0, %0d datasheet violations, irq %b",
+             u_flash0.frames, u_flash0.violations, qspi_irq);
+    if (u_flash0.violations != 0) begin
+      $display("[TB] FAIL: the flash model counted %0d datasheet violations",
+               u_flash0.violations);
+      errors = errors + 1;
+    end
     if (rx_chars == 0) begin
       $display("[TB] FAIL: nothing came out of the UART");
       errors = errors + 1;

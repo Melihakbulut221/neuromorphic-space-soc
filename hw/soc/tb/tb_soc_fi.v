@@ -205,6 +205,16 @@ module tb_soc_fi;
       .gpio_o     (),
       .gpio_oe_o  (),
       .gpio_irq_o (),
+      // The QSPI pins (docs/66): a board with pull-ups and no flash.
+      // The campaign program never touches the block and CTRL.IEN
+      // resets to zero, so its line is low throughout; the lanes read
+      // as pulled up so that no X enters the shift register.
+      .qspi_sck_o   (),
+      .qspi_cs_no   (),
+      .qspi_io_o    (),
+      .qspi_io_oe_o (),
+      .qspi_io_i    (4'hF),
+      .qspi_irq_o   (),
       .wdog_no       (wdog_n),
       .wdog_rst_o    (wdog_rst),
       .nmi_o         (nmi),

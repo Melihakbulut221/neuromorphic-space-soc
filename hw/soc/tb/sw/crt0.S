@@ -191,7 +191,7 @@ trap_vectors:
   j     vec_spurious      // 22
   j     vec_spurious      // 23
   j     vec_spurious      // 24
-  j     vec_spurious      // 25
+  j     vec_fast9         // 25  fast line 9, QSPICTL
   j     vec_spurious      // 26
   j     vec_spurious      // 27
   j     vec_fast12        // 28  fast line 12, NPUCFG
@@ -214,6 +214,7 @@ vec_mtimer:   li t0, 7    ; j irq_common
 vec_fast0:    li t0, 16   ; j irq_common
 vec_fast2:    li t0, 18   ; j irq_common
 vec_fast3:    li t0, 19   ; j irq_common
+vec_fast9:    li t0, 25   ; j irq_common
 vec_fast12:   li t0, 28   ; j irq_common
 
 // ---------------------------------------------------------------------

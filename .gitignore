@@ -92,6 +92,9 @@ hw/soc/formal/soc_npu_ser/
 hw/soc/formal/soc_npu_ser_*/
 hw/soc/formal/soc_gpio/
 hw/soc/formal/soc_gpio_*/
+hw/soc/formal/soc_qspi/
+hw/soc/formal/soc_qspi_*/
+hw/soc/tb/cocotb/mutants_soc_qspi/
 
 # docs/47: the place-and-route flow. Generated and fetched, never
 # vendored -- the rule docs/38 section 11 states. The state file names

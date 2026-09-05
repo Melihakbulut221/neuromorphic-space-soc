@@ -177,9 +177,11 @@ an unbuffered 2,328-fanout reset net.
 *Does not exist.* No silicon. ~~No spacecraft interfaces.~~ One
 spacecraft interface since 2026-09-05: a 16-pin GPIO port, built,
 proved and driven through the pins by the bring-up program
-(`docs/65-gpio-and-the-interface-ip-assessment.md`); SpaceWire, CAN,
-SPI, I2C and QSPI are fetched, pinned and priced there and still not
-built. No radiation
+(`docs/65-gpio-and-the-interface-ip-assessment.md`); and a
+register-mode QSPI flash controller with two chip selects that feeds
+the NPU its weight image from a modelled flash
+(`docs/66-qspi-flash-controller.md`). SpaceWire, CAN, SPI and I2C are
+fetched, pinned and priced in `docs/65` and still not built. No radiation
 test data. No gate-level result for anything under `hw/soc/`. No DRC,
 LVS or XOR on the laid-out SoC, and that one is a PDK property rather
 than a schedule: `docs/12` measured 1,106,478 Magic errors inside a

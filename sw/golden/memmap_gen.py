@@ -59,7 +59,7 @@ APB_SLOTS = {
     "CAN": (0xFF911000, 0x011, 18, "reserved"),
     "SPI": (0xFF912000, 0x012, 19, "reserved"),
     "I2C": (0xFF913000, 0x013, 20, "reserved"),
-    "QSPICTL": (0xFF914000, 0x014, 21, "reserved"),
+    "QSPICTL": (0xFF914000, 0x014, 21, "implemented"),
     "BUSSTAT": (0xFF915000, 0x015, 22, "implemented"),
     "SCRUB": (0xFF916000, 0x016, 23, "reserved"),
     "BOOTREG": (0xFF917000, 0x017, 0, "reserved"),

@@ -79,7 +79,7 @@ interrupt controller and the drivers cannot disagree
 | `0xFF911000` | `0x011` | CAN | 18 | 6 | reserved | CAN 2.0B, SJA1000-shaped; documented divergence from GRCANFD |
 | `0xFF912000` | `0x012` | SPI | 19 | 7 | reserved | SPICTRL-shaped SPI master |
 | `0xFF913000` | `0x013` | I2C | 20 | 8 | reserved | I2CMST, the OpenCores I2C master register map |
-| `0xFF914000` | `0x014` | QSPICTL | 21 | 9 | reserved | QSPI flash controller registers behind the XIP windows |
+| `0xFF914000` | `0x014` | QSPICTL | 21 | 9 | implemented | QSPI flash controller, register mode, two chip selects; docs/66 |
 | `0xFF915000` | `0x015` | BUSSTAT | 22 | 10 | implemented | Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name |
 | `0xFF916000` | `0x016` | SCRUB | 23 | 11 | reserved | Memory scrubber control, MEMSCRUB-like |
 | `0xFF917000` | `0x017` | BOOTREG | - | - | reserved | Bootstrap pin readback and boot report register, GRGPREG-like |

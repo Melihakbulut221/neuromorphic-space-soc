@@ -8,6 +8,8 @@
 #                                       prove_w16, cover
 #   cd hw/soc/formal && make gpio       soc_gpio: bmc, prove, prove_w16,
 #                                       cover
+#   cd hw/soc/formal && make qspi       soc_qspi: bmc, prove, prove_full,
+#                                       cover
 #   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, prove_w0,
 #                                       cover
 #   cd hw/soc/formal && make npuser     the NPU serial transport: bmc,
@@ -38,9 +40,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser gpio
+all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi
 
 include $(REPO)/tools.mk
 
@@ -90,6 +92,18 @@ gpio:
 	@for t in $(GPIO_TASKS); do \
 	  echo "== soc_gpio $$t"; \
 	  $(SBY) -f soc_gpio.sby $$t || exit 1; \
+	done
+
+# The QSPI controller docs/66 adds, at the two widths it is proved at:
+# LEN_W = 3 and DIV_W = 2 so that a whole frame, a pause and a resume
+# are reachable in a bounded model, and LEN_W = 16, DIV_W = 4 because
+# that is what soc_top.v instantiates.
+QSPI_TASKS := bmc prove prove_full cover
+
+qspi:
+	@for t in $(QSPI_TASKS); do \
+	  echo "== soc_qspi $$t"; \
+	  $(SBY) -f soc_qspi.sby $$t || exit 1; \
 	done
 
 WDOG_TASKS := bmc prove prove_w0 cover
@@ -160,4 +174,5 @@ clean:
 	       soc_clint soc_clint_bmc soc_clint_prove soc_clint_cover \
 	       $(addprefix soc_wdog_,$(WDOG_TASKS)) soc_wdog \
 	       $(addprefix regfile_secded_,$(REGFILE_TASKS)) regfile_secded \
-	       $(addprefix soc_gpio_,$(GPIO_TASKS)) soc_gpio
+	       $(addprefix soc_gpio_,$(GPIO_TASKS)) soc_gpio \
+	       $(addprefix soc_qspi_,$(QSPI_TASKS)) soc_qspi

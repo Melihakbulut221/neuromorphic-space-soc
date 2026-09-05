@@ -17,8 +17,9 @@
 #                        RTL and the tests.
 #   -I $SW               so #include "soc_memmap.h", also generated,
 #                        resolves.
-#   -I $OUT              so the two headers gen_npu_vectors.py emits
-#                        into the build directory resolve: npu_regs.h,
+#   -I $OUT              so the headers gen_npu_vectors.py and
+#                        gen_flash_image.py emit into the build
+#                        directory resolve: npu_regs.h,
 #                        the node register map from regmap/regmap.yaml,
 #                        and npu_vectors.h, this build's NPU stimulus
 #                        together with the answer sw/golden computes for
@@ -53,6 +54,12 @@ mkdir -p "$OUT"
 # before the program that will be checked against it is compiled. Nothing
 # in this step reads any RTL or any simulation output.
 python3 "$SOC_DIR/flow/gen_npu_vectors.py" "$OUT"
+# And the flash images (docs/66): the pattern the program reads through
+# the QSPI controller and the SAME weight words as a flash-resident
+# image, with qspi_image.h carrying the expected sample words. Both
+# come from the same generators as the ROM's own copies, so the two
+# inferences in checks 26 and 30 are the same inference.
+python3 "$SOC_DIR/flow/gen_flash_image.py" "$OUT"
 
 "$GCC" \
   -march=rv32imc_zicsr_zifencei -mabi=ilp32 -mcmodel=medlow \

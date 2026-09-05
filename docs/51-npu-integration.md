@@ -862,6 +862,12 @@ second harness, before believing the first.
 4. **No QSPI weight path.** `docs/10` section 9's `W_BASE` is not
    implemented in the pilot at all and there is no QSPI controller;
    weights are loaded a register at a time.
+   *Corrected 2026-09-05:* there is a QSPI controller, and the
+   bring-up program's check 30 loads the same weight words from a
+   modelled flash through it and runs this inference with them
+   (`docs/66-qspi-flash-controller.md`). The words still enter the
+   node a register at a time, because that is the die's only weight
+   port; what changed is where they come from.
 5. **No multi-pass sequencing.** `PASS_TILE_OFF` is written once, to
    zero. `docs/10` section 9's E9 tiling is exercised by the pilot's own
    suite and by nothing here.

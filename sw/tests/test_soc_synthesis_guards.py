@@ -1489,7 +1489,7 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
     ibex.append(genp)
     soc = [SOC_RTL / n for n in (
         "prim_clock_gating.v", "ibex_regfile_secded.v", "soc_bus.v",
-        "soc_apb_bridge.v", "soc_uart.v", "soc_gpio.v", "soc_pnp.v",
+        "soc_apb_bridge.v", "soc_uart.v", "soc_gpio.v", "soc_qspi.v", "soc_pnp.v",
         "soc_apb_pnp.v", "soc_clint.v", "soc_gptimer.v", "soc_wdog.v",
         "soc_busstat.v", "soc_tmr_bank.v", "soc_npu.v", "soc_npu_ser.v")]
     # This list is a FIFTH copy of the four the flow-list guard below

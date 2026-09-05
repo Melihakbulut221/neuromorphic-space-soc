@@ -1,0 +1,53 @@
+# SymbiYosys job for the QSPI flash controller.
+#
+#   sby -f soc_qspi.sby prove       k-induction proof of Q1-Q8, narrow
+#   sby -f soc_qspi.sby prove_full  the same at the widths soc_top.v
+#                                   instantiates
+#   sby -f soc_qspi.sby bmc         bounded check, depth 40, narrow
+#   sby -f soc_qspi.sby cover       reachability of every proven
+#                                   behaviour, depth 110, narrow
+#
+# Properties live in soc_qspi_props.v, textually included at the end of
+# the soc_qspi module body under `ifdef FORMAL -- the arrangement every
+# other job in this directory uses. They reconstruct the register file
+# from the APB port and the frame from the pins, and were written from
+# the block's header and the flash datasheet, not from the RTL.
+#
+# THE WIDTHS ARE NARROWED IN THE DEFAULT TASKS, for the reason
+# soc_busstat.sby and soc_gpio.sby give: LEN_W = 3 keeps a whole data
+# phase inside a bounded model so that the covers -- a complete quad I/O
+# frame, a pause and a resume -- are reachable, and DIV_W = 2 keeps a
+# half SCK period to at most four clocks. prove_full runs the same
+# property set at LEN_W = 16, DIV_W = 4 and NCS = 2, so the shipped
+# configuration is proved and nothing is claimed at a width where the
+# covers were not run. Nothing in the properties mentions any of these
+# numbers; every one is written against the parameters.
+
+[tasks]
+bmc
+prove
+prove_full
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 40
+prove: mode prove
+prove: depth 12
+prove_full: mode prove
+prove_full: depth 12
+cover: mode cover
+cover: depth 110
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_qspi.v
+~prove_full: chparam -set LEN_W 3 -set DIV_W 2 -set NCS 2 soc_qspi
+prove_full: chparam -set LEN_W 16 -set DIV_W 4 -set NCS 2 soc_qspi
+prep -top soc_qspi
+
+[files]
+../rtl/soc_qspi.v
+soc_qspi_props.v

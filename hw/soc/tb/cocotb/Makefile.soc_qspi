@@ -1,0 +1,92 @@
+# cocotb + Icarus suite for hw/soc/rtl/soc_qspi.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_qspi        run the suite
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_qspi lint   Verilator lint
+#
+# The top level is hw/soc/tb/tb_soc_qspi.v -- the controller on a board
+# with two modelled W25Q128JV devices -- and not the controller alone,
+# because the block's contract on the pin side is the flash datasheet
+# and only a device on the wire can hold it to that. The expectations
+# in test_soc_qspi.py come from that datasheet (through the model's
+# violation counters), from soc_qspi.v's register map as its header
+# states it, from the AMBA 3 APB slave contract the sibling blocks obey,
+# and from the generated memory map for the slot and the line.
+#
+# The flash images are generated INTO THE BUILD DIRECTORY on every run by
+# hw/soc/flow/gen_flash_image.py, from the same pattern function the
+# suite imports its expectations from, so the two cannot drift.
+#
+# Same rootless tool discovery as the sibling Makefiles: iverilog from
+# PATH, cocotb from the project venv hw/.venv.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+TB  = $(PWD)/..
+
+# SOC_QSPI_SRC exists so a mutation run can point the same suite at a
+# modified copy of the RTL without editing the tree
+# (make -f Makefile.soc_qspi SOC_QSPI_SRC=/path/to/mutant.v SIM_BUILD=... ).
+SOC_QSPI_SRC ?= $(RTL)/soc_qspi.v
+
+VERILOG_SOURCES = $(SOC_QSPI_SRC) $(TB)/flash_w25q128jv.v $(TB)/tb_soc_qspi.v
+TOPLEVEL = tb_soc_qspi
+MODULE = test_soc_qspi
+
+# The configuration soc_top.v instantiates. test_soc_qspi.py reads these
+# from the same place this file exports them -- the environment.
+NCS ?= 2
+DIV_W ?= 4
+LEN_W ?= 16
+COMPILE_ARGS += -Ptb_soc_qspi.NCS=$(NCS) -Ptb_soc_qspi.DIV_W=$(DIV_W) \
+                -Ptb_soc_qspi.LEN_W=$(LEN_W)
+export NCS DIV_W LEN_W
+
+SIM_BUILD ?= sim_build_soc_qspi
+COCOTB_RESULTS_FILE ?= results_soc_qspi.xml
+export COCOTB_RESULTS_FILE
+
+# The images, regenerated before every run.
+IMG_DIR := $(abspath $(SIM_BUILD))
+PLUSARGS += +flash0=$(IMG_DIR)/flash0.hex +flash1=$(IMG_DIR)/flash1.hex
+export QSPI_IMG_DIR = $(IMG_DIR)
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# Generated before the simulator is built: the plusargs name the files.
+.PHONY: flash_images
+flash_images:
+	@mkdir -p $(SIM_BUILD)
+	python3 $(PWD)/../../flow/gen_flash_image.py $(IMG_DIR)
+
+$(SIM_BUILD)/sim.vvp: flash_images
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -Wall -I$(RTL) $(SOC_QSPI_SRC)
+
+endif

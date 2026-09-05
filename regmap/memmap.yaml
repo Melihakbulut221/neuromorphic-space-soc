@@ -169,6 +169,17 @@ regions:
     desc: On-chip boot ROM, 8 KiB. Holds the reset vector and .text
     source: ROM at 0xC0000000 (NOELVSYS, GR740 UM 5.7.4)
 
+  # The QSPI controller behind the QSPICTL slot is REGISTER-MODE ONLY
+  # as of docs/66: software drives one flash transaction at a time and
+  # pulls the data through RX. These two windows are what an
+  # execute-in-place front end would map the flash into, and they stay
+  # reserved and faulting until one is built. docs/66 section 2 is the
+  # argument for deferring it: XIP makes the controller a fabric slave
+  # as well as an APB one -- a port on soc_bus.v and a re-proof of it --
+  # and a quad read without a cache is tens of system clocks per fetch
+  # on a core docs/50 measured at 25 % of run time per extra cycle of
+  # memory latency. The addresses are frozen so that building it later
+  # renumbers nothing.
   - name: QSPI3
     base: 0xD0000000
     size: 0x02000000
@@ -291,8 +302,8 @@ apb_slots:
      desc: "SPICTRL-shaped SPI master", source: "SPICTRL (GR740 bridge 1) remapped"}
   - {name: I2C,     slot: 0x013, irq: 20, line: 8,  status: reserved, device_id: 0x028,
      desc: "I2CMST, the OpenCores I2C master register map", source: "family style"}
-  - {name: QSPICTL, slot: 0x014, irq: 21, line: 9,  status: reserved, device_id: 0x045,
-     desc: "QSPI flash controller registers behind the XIP windows", source: "family style"}
+  - {name: QSPICTL, slot: 0x014, irq: 21, line: 9,  status: implemented, device_id: 0x045,
+     desc: "QSPI flash controller, register mode, two chip selects; docs/66", source: "family style"}
   - {name: BUSSTAT, slot: 0x015, irq: 22, line: 10, status: implemented, device_id: 0x052,
      desc: "Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
   - {name: SCRUB,   slot: 0x016, irq: 23, line: 11, status: reserved, device_id: 0x057,
