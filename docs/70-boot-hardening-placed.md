@@ -66,7 +66,7 @@ directory. Section 13.
 | **Is the boot block on the path?** | **No, and not on any violating path at all.** `violator_census.py` resolves every violating endpoint in both runs and **`u_boot` appears zero times in either** **[fact]**. The binding path is `raddr_b_i` — the register file's read address, `docs/43` section 7.4's prediction, measured for the sixth time. The worst hold path in both runs ends at a boot **ROM macro** pin and starts nowhere near the block. Sections 5.2 and 6.1 |
 | **So what is the mechanism?** | **The timing resizer did a fifth of the setup repair.** 519 setup repair buffers in the baseline against **102** in the protected run **[fact]**, and the divergence is localised: post-CTS the two runs are **0.0922 ns** apart, after global routing and post-GRT repair they are **4.0739 ns** apart. Section 6.2 |
 | **Is DRT-0349 unchanged?** | **Yes, exactly.** Ten `[WARNING DRT-0349]` lines over seven layer names — `Cont`, `Via1`×2, `Via2`, `Via3`, `Via4`, `TopVia1`×2, `TopVia2`×2 — **layer for layer and count for count in both runs**, and the same ten as `s67ecc`, `s68base` and `s68boot` **[fact]**. It is the PDK's. Section 7 |
-| **Did the checkers keep watching?** | **17 of 19, the same seventeen and the same two, in both runs**, recomputed from the installed LibreLane's own step classes against each run's own `resolved.json`; `checker_audit.py` exits 0 on both. The four corner checkers each examined **three corners**. Section 8 |
+| **Did the checkers keep watching?** | **17 of 19, the same seventeen and the same two, in both runs**, recomputed from the installed LibreLane's own step classes against each run's own `resolved.json`; `checker_audit.py` ~~exits 0~~ exits 1 on both (corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9). The four corner checkers each examined **three corners**. Section 8 |
 | **Did both source-list guards fire and pass?** | **Both pass, and both were shown to be live rather than assumed to be.** `soc_boot` is one of the **13** modules the flow-list guard checks, and the check is live on all four flows; the fifth-list elaboration fails with `Module \soc_boot referenced in module \soc_top in cell \u_boot is not part of the design` when `soc_boot.v` is withheld. Section 9 |
 | **Did the instrument reproduce before it moved?** | **Yes, seven ways, and two of them are byte-identical netlists.** Section 2 |
 | **May a frequency be published?** | **No.** `docs/53` section 9.2's three grounds and `docs/05` section 4 rule 5 bind, none of the three has moved, and this run is **further** from the constraint than any before it. Slack against **20 ns** is what this document reports. Section 6.4 |
@@ -397,6 +397,15 @@ was not; the resume restores the step's own `state_out.json`, so the
 comparison should be of netlists, but **that is an argument and not a
 measurement**.
 
+*Measured 2026-09-05 by `docs/71-layout-reproducibility.md` sections 5 to 7.
+`s70boot2`'s netlist laid out again, uninterrupted, is byte-identical to
+`s70boot2` in `final/metrics.json` and in every design view, so this
+control pair measured **netlist sensitivity** and not tool noise; its
+0.5031 ns, 0.0198 ns and 12,962 um2 stand under that name. And the
+resume form loses nothing: the uninterrupted run and this resumed one
+agree at every step from 38 on, so the sentence above is a measurement
+now.*
+
 ---
 
 ## 6. Setup, which is the regression
@@ -589,7 +598,13 @@ GATES  Checker.MaxCapViolations  [corners] MAX_CAP_VIOLATION_CORNERS = ["*"];
 ```
 
 **[fact, identical output for `runs/s70base2` and `runs/s70boot2`;
-both exit 0]**
+both ~~exit 0~~ exit 1]**
+
+*Corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9:
+`checker_audit.py` exits **1** on both runs, as its own docstring says it
+must whenever any in-flow checker is NO-GATE; with `LintWarnings` and
+`WireLength` abstaining by policy it has exited 1 on every run since
+`docs/47`. The 17-of-19 count stands.*
 
 **Seventeen of nineteen, the same seventeen and the same two**, as
 `docs/47` 7.3, `docs/48` 9, `docs/49` 10, `docs/50` 9, `docs/61` 10,
@@ -687,7 +702,7 @@ verified on the netlist that was actually placed.
 | The die does not grow; fill absorbs the block | `docs/67` 5.3, `docs/68` 9.3 | **Survives**, a third time: 0 um2, identical bounding box, fill ±8,700 um2 |
 | 0 detailed-routing DRC on this floorplan | `docs/47` 8, `docs/61`, `docs/67`, `docs/68` | **Survives**, both runs |
 | Hold closes at all three corners | `docs/67` 5.3, `docs/68` 9.3 | **Survives**, both runs, with the checker bound to three corners |
-| 17 of 19 in-flow checkers gate | every physical document since `docs/47` | **Survives**, both runs, `checker_audit.py` exit 0 |
+| 17 of 19 in-flow checkers gate | every physical document since `docs/47` | **Survives**, both runs, `checker_audit.py` ~~exit 0~~ exit 1 (corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9) |
 | The binding path is the register file's read address | `docs/43` 7.4, `docs/45`, `docs/61`, `docs/62`, `docs/67` | **Survives**, both runs, sixth measurement |
 | DRT-0349 is the PDK's and identical across runs | `docs/67` 11, `docs/68` 9.3 | **Survives**, and the count is corrected to ten lines over seven layers |
 | The block's cost is +5,255.9010 um2, +51 flops | `docs/69` 7 | **Survives**, reproduced exactly, and it remains the number to quote |
@@ -752,7 +767,9 @@ items it must repeat because they are the largest.
   that the same netlist twice gives the same layout. That assumption
   has not been checked, it is cheap to check, and until it is, section
   5.3's numbers are an upper bound on netlist sensitivity and a lower
-  bound on nothing.
+  bound on nothing. *Closed 2026-09-05 by
+  `docs/71-layout-reproducibility.md`: tested, and the same netlist gives a
+  byte-identical layout.*
 - **ONE FLOORPLAN, ONE DENSITY, ONE CLOCK, ONE MODE.** `config-ecc.json`
   is `docs/67`'s single point; `docs/48` measured two alternatives and
   both were worse, but neither was sized for the design that now
@@ -879,8 +896,8 @@ print(sorted(k for k in set(a)|set(b) if a.get(k)!=b.get(k)))"   # []
 
 # 4. the reports
 $V hw/openlane/signoff_report.py hw/soc/pnr/runs/s70base2 hw/soc/pnr/runs/s70boot2
-$V hw/openlane/checker_audit.py  hw/soc/pnr/runs/s70base2   # 17 of 19, exit 0
-$V hw/openlane/checker_audit.py  hw/soc/pnr/runs/s70boot2   # 17 of 19, exit 0
+$V hw/openlane/checker_audit.py  hw/soc/pnr/runs/s70base2   # 17 of 19, exit 1 (docs/71)
+$V hw/openlane/checker_audit.py  hw/soc/pnr/runs/s70boot2   # 17 of 19, exit 1 (docs/71)
 python3 hw/soc/pnr/violator_census.py hw/soc/pnr/runs/s70boot2 --top 6
 grep -c u_boot hw/soc/pnr/runs/s70boot2/12-openroad-stapostpnr/*/violator_list.rpt
 
@@ -936,7 +953,8 @@ for the same reason.
    same layout. **One re-run of `s70boot`'s netlist under a second tag
    settles it**, it costs one layout, and it decides whether section
    6.1's −4.3009 ns is a property of a netlist or a draw. Nothing else
-   in this list is worth as much per hour.
+   in this list is worth as much per hour. *Closed 2026-09-05 by
+   `docs/71-layout-reproducibility.md`: it is a property of the netlist.*
 2. **Find out what the post-GRT resizer did.** Section 6.2 localises
    the regression to one stage and one observable — 102 setup repair
    buffers against 519 — and stops there. `repair_timing`'s own report

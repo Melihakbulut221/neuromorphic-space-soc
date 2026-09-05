@@ -66,7 +66,7 @@ the second and is being spent on the first.
 | post-CTS, before the timing resizer | `docs/48` 5: **−10.7556** | **−10.7556** |
 | standard-cell placement span | `docs/48` 2: **1,849.3 × 792.2 um** over **27,558** synthesised cells at (390.4, 587.1) | **1,849.3 × 792.2** over **27,558** at **(390.4, 587.1)** |
 | the four launch points of the 2,003 violators | `docs/48` 6.1: **444 / 868 / 509 / 181**, worst **−3.2029 / −2.0227 / −1.7387 / −1.5937** | **every count and every slack**, resolved against the netlist independently |
-| checker audit | `docs/47` 7.3 and `docs/48` 9: **17 of 19 in-flow checkers gate fully** | **17 of 19**, exit 0 |
+| checker audit | `docs/47` 7.3 and `docs/48` 9: **17 of 19 in-flow checkers gate fully** | **17 of 19**, ~~exit 0~~ exit 1 *(~~exit 0~~ exit 1; corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9)* |
 | **`docs/44` section 5.4's register file, all six rows** | 94,153.1094 / 93,469.9878 / 113,987.9412 / 126,842.2470 / 128,043.7956 / **159,272.9082** um2 | **all six, to four decimal places** |
 | **`docs/44` section 5.4's read-path arrivals** | 5.5014 / 5.5282 / 7.8891 / 8.3210 / 8.0617 / **6.4533** ns at the slow corner | **all six** |
 | the whole-SoC behavioural invariant | `docs/43` 9.1 and `docs/44` 8.1: 22 checks, fail mask 0, watchdog stage 1 at cycle **174,128**, core asleep after **185,443** cycles, **587** console characters, 0 framing errors | **every one** |
@@ -657,7 +657,7 @@ GATES  Checker.MaxCapViolations  [corners] MAX_CAP_VIOLATION_CORNERS = ["*"];
     NOT gating in full: Checker.LintWarnings, Checker.WireLength
 ```
 
-**[fact, `checker_audit.py hw/soc/pnr/runs/syn2`, exit 0]** — **17 of
+**[fact, `checker_audit.py hw/soc/pnr/runs/syn2`, ~~exit 0~~ exit 1]** *(~~exit 0~~ exit 1; corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9)* — **17 of
 19, the same as `docs/47`'s `full3` and `docs/48`'s `cap2`**, and the
 same two exceptions: `Checker.WireLength` with no threshold in either
 PDK and `Checker.LintWarnings` behind `ERROR_ON_LINTER_WARNINGS`.

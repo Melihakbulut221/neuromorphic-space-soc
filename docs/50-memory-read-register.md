@@ -1003,7 +1003,7 @@ GATES  Checker.MaxCapViolations  [corners] MAX_CAP_VIOLATION_CORNERS = ["*"];
     NOT gating in full: Checker.LintWarnings, Checker.WireLength
 ```
 
-**[fact, `checker_audit.py hw/soc/pnr/runs/rdreg1`, exit 0]** — **17 of
+**[fact, `checker_audit.py hw/soc/pnr/runs/rdreg1`, ~~exit 0~~ exit 1]** *(~~exit 0~~ exit 1; corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9)* — **17 of
 19, the same as `docs/47`'s `full3`, `docs/48`'s `cap2` and `docs/49`'s
 `syn2`**, and the same two exceptions: `Checker.WireLength` with no
 threshold in either PDK and `Checker.LintWarnings` behind

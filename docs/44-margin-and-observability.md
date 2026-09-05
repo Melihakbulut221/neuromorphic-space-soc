@@ -328,6 +328,14 @@ for fast-corner hold and **12,962 um2** for placed standard-cell area
 **[estimate, one pair, as this one is]**. No verdict in those three
 documents changes.*
 
+*Amended again 2026-09-05 by `docs/71-layout-reproducibility.md` section 7. The same
+netlist laid out twice through the same flow gives a **byte-identical**
+sign-off report — 199 metrics, the DEF and the OpenDB database — so
+neither this 0.4 ns nor `docs/70`'s post-layout figures is instrument
+noise: they are the flow's **sensitivity to a changed netlist**,
+deterministic and repeatable. They stand as the threshold for reading a
+delta between two netlists and do not apply to a re-run of one.*
+
 That is why section 5.4 measures the register file on its own, and why
 this document does not claim the whole-core numbers confirm anything at
 the scale of the effect.

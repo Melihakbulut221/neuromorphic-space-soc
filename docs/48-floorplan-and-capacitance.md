@@ -52,7 +52,7 @@ against `docs/47`'s published figures.
 | pre-layout `setup_sync`, slow | 5.3: **+3.8711** | **+3.8711** |
 | standard-cell placement span | 8.4: **1,851.8 × 790.0 um** over **27,558** cells | **1,851.8 × 790.0** over **27,558**, at origin (388.8, 582.1) |
 | sign-off, slow corner | 8.2: **−3.2029 ns on 2,003 endpoints, 43.10 MHz** | **−3.2029 / 2,003**, `hw/openlane/signoff_report.py` |
-| checker audit | 7.3: **17 of 19 in-flow checkers gate fully** | **17 of 19**, exit 0 |
+| checker audit | 7.3: **17 of 19 in-flow checkers gate fully** | **17 of 19**, ~~exit 0~~ exit 1 *(~~exit 0~~ exit 1; corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9)* |
 | summed step runtime, `full2` | 8.6: **22.2 min** | **22.2 min** |
 
 **[fact for every row]**
@@ -796,7 +796,7 @@ GATES  Checker.MaxCapViolations  [corners] MAX_CAP_VIOLATION_CORNERS = ["*"];
     NOT gating in full: Checker.LintWarnings, Checker.WireLength
 ```
 
-**[fact, `checker_audit.py hw/soc/pnr/runs/cap2`, exit 0]** — **17 of
+**[fact, `checker_audit.py hw/soc/pnr/runs/cap2`, ~~exit 0~~ exit 1]** *(~~exit 0~~ exit 1; corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9)* — **17 of
 19, the same as `docs/47`'s `full3`**, and the same two exceptions,
 which are `Checker.WireLength` with no threshold in either PDK and
 `Checker.LintWarnings` behind `ERROR_ON_LINTER_WARNINGS`.

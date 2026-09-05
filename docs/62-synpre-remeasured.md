@@ -705,7 +705,7 @@ GATES  Checker.MaxCapViolations  [corners] MAX_CAP_VIOLATION_CORNERS = ["*"];
                                             Checker.KLayoutDensity
 ```
 
-**[fact, `checker_audit.py hw/soc/pnr/runs/syp1`, exit 0]**
+**[fact, `checker_audit.py hw/soc/pnr/runs/syp1`, ~~exit 0~~ exit 1]** *(~~exit 0~~ exit 1; corrected 2026-09-05 by `docs/71-layout-reproducibility.md` section 9)*
 
 **Seventeen of nineteen, the same seventeen and the same two**, as
 `docs/47` section 7.3, `docs/48` section 9, `docs/49` section 10,
