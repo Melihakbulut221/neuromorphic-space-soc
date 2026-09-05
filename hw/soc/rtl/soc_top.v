@@ -22,12 +22,19 @@
 //        counts what those two mechanisms absorb (docs/44); and the NPU
 //        connection carries bounded waits on its transport and its
 //        register window plus a triple-redundant control and cause bank
-//        (docs/55). What is NOT: soc_mem.v is still a behavioural array
-//        with no ECC, the core is still SecureIbex = 0 with no lockstep,
-//        the fabric, the CLINT and the timers are unprotected, the SCRUB
-//        slot in the map is still reserved and empty, and the NPU's
-//        transport, event engine and queue storage are single points by
-//        the decision docs/52 measured and docs/55 section 6 records.
+//        (docs/55); the time base is a SECDED codeword (docs/58); and
+//        as of docs/67 EVERY ROW OF THE RAM AND THE BOOT ROM carries a
+//        SECDED check field, is corrected on read, answers an
+//        uncorrectable word with a bus error, and is walked by a
+//        scrubber -- soc_mem_ecc.v, under both soc_mem.v and
+//        soc_mem_sram.v, reporting into the SCRUB slot the map reserved
+//        for it (soc_scrub.v). What is NOT: the core is still
+//        SecureIbex = 0 with no lockstep, the fabric and the timers are
+//        unprotected, and the NPU's transport, event engine and queue
+//        storage are single points by the decision docs/52 measured
+//        and docs/55 section 6 records. THE RAM IS 32 KiB, not 64: the
+//        same four macros hold one protected word per row, and docs/67
+//        section 3 is why that was cheaper than a seventh.
 //   IS   interruptible, and the interrupts are real. soc_clint.v drives
 //        irq_timer_i and irq_software_i, soc_gptimer.v and soc_uart.v
 //        drive fast local interrupt lines the generated map assigns, and
@@ -79,9 +86,13 @@
 // alert_major_bus_o on the first fetch without them -- docs/38 section
 // 7.4 is the bring-up record of exactly that failure, where it presented
 // as a catastrophic lockstep mismatch and was a missing testbench
-// feature. soc_mem.v stores no check bits, so SecureIbex here would need
-// a memory subsystem that does. The integrity inputs are tied to zero
-// and are unused at SecureIbex = 0.
+// feature. The memories store check bits since docs/67, but NOT Ibex's:
+// theirs are per BYTE LANE (four (16,8) codewords per RAM row) and per
+// word for the ROM, corrected inside the memory and never carried
+// across the fabric, whereas MemECC wants Ibex's own (39,32) delivered
+// end to end on the bus. The integrity inputs stay tied to zero and are
+// unused at SecureIbex = 0; docs/67 section 9 says what end-to-end
+// integrity would still cost.
 
 `timescale 1ns / 1ps
 
@@ -107,6 +118,31 @@ module soc_top #(
     // grant in the cycle a response returns -- is unreachable in this
     // SoC because Ibex's own NUM_REQS equals the fabric's MAX_OUT.
     parameter MEM_RDREG = 1'b0,
+
+    // ---- the memory codec and the scrubber, docs/67 ----
+    //
+    // MEM_HARDEN puts hw/soc/rtl/soc_mem_ecc.v under both memories: a
+    // SECDED check field on every row, correction on read, a bus error
+    // on an uncorrectable word, and a scrubber. IT DEFAULTS TO 1 AND
+    // NOTHING IN THE DESIGN MAY SET IT TO 0; sw/tests enforces that, as
+    // it does for the watchdog's and the CLINT's HARDEN. The unprotected
+    // configuration exists so that the codec's cost can be measured
+    // from the same files (docs/41 section 6.5's rule) and for the
+    // fault-injection counterfactual, and for nothing else.
+    //
+    // ROM_HARDEN follows MEM_HARDEN and exists for one measurement:
+    // the ROM's check-bit macros have no place in docs/61's floorplan,
+    // so the layout of docs/67 section 5 is taken with the RAM
+    // protected and the ROM as docs/47 built it. A flow that sets it
+    // is a measurement configuration and not the design.
+    parameter integer MEM_HARDEN = 1,
+    parameter integer ROM_HARDEN = MEM_HARDEN,
+    // The scrubbers' interval at reset: idle cycles between scrub
+    // reads. 255 walks the 8,192-row RAM in about 2.1 million cycles
+    // when the bus is idle and costs one macro read in 256 cycles;
+    // soc_scrub.v's header says why it ships enabled. A campaign sets
+    // 0 through the same parameter.
+    parameter [15:0] SCRUB_IVL_RST = 16'd255,
 
     // The GPIO port width. 16 is what the frozen map's slot description
     // and docs/01 section 4 say; soc_gpio.v accepts 2..32.
@@ -232,6 +268,16 @@ module soc_top #(
   // codeword this cycle. One event per cycle by construction at the
   // source, because the codeword is re-encoded on every edge.
   wire        clint_mt_ecc_ev;
+  // The memories', added by docs/67: repaired by the scrubber, read
+  // corrected, and uncorrectable, with the offset of the last of those.
+  // They go to soc_scrub.v and not to soc_busstat.v, whose sticky field
+  // is full; soc_scrub.v's header says so.
+  wire        ram_sec_ev, ram_rd_ev, ram_ded_ev;
+  wire        rom_sec_ev, rom_rd_ev, rom_ded_ev;
+  wire [31:0] ram_ded_addr, rom_ded_addr;
+  wire        scrub_ram_en, scrub_rom_en;
+  wire [15:0] scrub_ivl;
+  wire        scrub_irq;
 
   // -------------------------------------------------------------------
   // The fast local interrupt vector
@@ -286,6 +332,12 @@ module soc_top #(
     // of docs/65 is cycle-identical with this block present and the
     // program unchanged.
     irq_fast[SOC_IRQLINE_QSPICTL] = qspi_irq;
+    // The memory scrubber's line, connected here for the first time
+    // (docs/67). docs/40 assigned source 23 and line 11 before the
+    // block existed. Its level is |(sticky & IRQEN) and IRQEN resets to
+    // zero, so the wire is low until software asks for it -- the same
+    // discipline as every line above.
+    irq_fast[SOC_IRQLINE_SCRUB]   = scrub_irq;
   end
 
 
@@ -467,21 +519,34 @@ module soc_top #(
   // -------------------------------------------------------------------
   // Slave 0: RAM.  Slave 1: boot ROM.
   // -------------------------------------------------------------------
-  soc_mem #(.WORDS(RAM_WORDS), .RO(1'b0), .RDREG(MEM_RDREG)) u_ram (
+  //
+  // The RAM holds four (16,8) byte codewords per row and the ROM one
+  // (39,32) word codeword; soc_mem_ecc.v says why the two differ and
+  // soc_mem_sram.v says which macros hold which. Both scrub under
+  // soc_scrub.v's control and report into it.
+  soc_mem #(.WORDS(RAM_WORDS), .RO(1'b0), .RDREG(MEM_RDREG),
+            .HARDEN(MEM_HARDEN), .ECC_BYTE(1'b1)) u_ram (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[0]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[0]), .rvalid_o (s_rvalid[0]),
-      .rdata_o (s_rdata_ram), .err_o (s_err[0])
+      .rdata_o (s_rdata_ram), .err_o (s_err[0]),
+      .scrub_en_i (scrub_ram_en), .scrub_ivl_i (scrub_ivl),
+      .sec_o (ram_sec_ev), .rd_o (ram_rd_ev), .ded_o (ram_ded_ev),
+      .evt_addr_o (ram_ded_addr)
   );
 
   soc_mem #(.WORDS(ROM_WORDS), .RO(1'b1), .RDREG(MEM_RDREG),
-            .INIT_FILE(ROM_INIT), .INIT_WORD(ROM_INIT_WORD)) u_rom (
+            .INIT_FILE(ROM_INIT), .INIT_WORD(ROM_INIT_WORD),
+            .HARDEN(ROM_HARDEN), .ECC_BYTE(1'b0)) u_rom (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
       .req_i (s_req[1]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[1]), .rvalid_o (s_rvalid[1]),
-      .rdata_o (s_rdata_rom), .err_o (s_err[1])
+      .rdata_o (s_rdata_rom), .err_o (s_err[1]),
+      .scrub_en_i (scrub_rom_en), .scrub_ivl_i (scrub_ivl),
+      .sec_o (rom_sec_ev), .rd_o (rom_rd_ev), .ded_o (rom_ded_ev),
+      .evt_addr_o (rom_ded_addr)
   );
 
   // -------------------------------------------------------------------
@@ -525,18 +590,19 @@ module soc_top #(
   wire sel_qspi   = psel && (slot == SOC_APBSLOT_QSPICTL);
   wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
   wire sel_busstat = psel && (slot == SOC_APBSLOT_BUSSTAT);
+  wire sel_scrub  = psel && (slot == SOC_APBSLOT_SCRUB);
   wire sel_npucfg = psel && (slot == SOC_APBSLOT_NPUCFG);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
   wire sel_none   = psel && !sel_uart0 && !sel_gpio && !sel_qspi
-                         && !sel_timer0 && !sel_busstat && !sel_npucfg
-                         && !sel_apbpnp;
+                         && !sel_timer0 && !sel_busstat && !sel_scrub
+                         && !sel_npucfg && !sel_apbpnp;
 
   wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat,
-              prdata_npucfg, prdata_gpio, prdata_qspi;
+              prdata_npucfg, prdata_gpio, prdata_qspi, prdata_scrub;
   wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat,
-              pready_npucfg, pready_gpio, pready_qspi;
+              pready_npucfg, pready_gpio, pready_qspi, pready_scrub;
   wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat,
-              pslverr_npucfg, pslverr_gpio, pslverr_qspi;
+              pslverr_npucfg, pslverr_gpio, pslverr_qspi, pslverr_scrub;
 
   soc_uart u_uart0 (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
@@ -632,6 +698,26 @@ module soc_top #(
       .irq_o (busstat_irq)
   );
 
+  // The memory codec's counters and the scrubbers' control, docs/67, in
+  // the SCRUB slot the map has reserved since docs/39. The same two
+  // reset domains as BUSSTAT, for the same reasons, and the control
+  // register in the system domain so a watchdog reset restores the
+  // scrubbers' defaults.
+  soc_scrub #(.IVL_RST(SCRUB_IVL_RST)) u_scrub (
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .psel_i (sel_scrub), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_scrub), .pready_o (pready_scrub),
+      .pslverr_o (pslverr_scrub),
+      .ram_sec_i (ram_sec_ev), .ram_rd_i (ram_rd_ev),
+      .ram_ded_i (ram_ded_ev), .ram_addr_i (ram_ded_addr),
+      .rom_sec_i (rom_sec_ev), .rom_rd_i (rom_rd_ev),
+      .rom_ded_i (rom_ded_ev), .rom_addr_i (rom_ded_addr),
+      .ram_en_o (scrub_ram_en), .rom_en_o (scrub_rom_en),
+      .ivl_o (scrub_ivl),
+      .irq_o (scrub_irq)
+  );
+
   soc_apb_pnp u_apbpnp (
       .psel_i (sel_apbpnp), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
@@ -648,6 +734,7 @@ module soc_top #(
                  : sel_qspi    ? prdata_qspi
                  : sel_timer0  ? prdata_timer0
                  : sel_busstat ? prdata_busstat
+                 : sel_scrub   ? prdata_scrub
                  : sel_npucfg  ? prdata_npucfg
                  : sel_apbpnp  ? prdata_apbpnp
                  : 32'h0;
@@ -656,6 +743,7 @@ module soc_top #(
                  : sel_qspi    ? pready_qspi
                  : sel_timer0  ? pready_timer0
                  : sel_busstat ? pready_busstat
+                 : sel_scrub   ? pready_scrub
                  : sel_npucfg  ? pready_npucfg
                  : sel_apbpnp  ? pready_apbpnp
                  : 1'b1;
@@ -664,6 +752,7 @@ module soc_top #(
                  : sel_qspi    ? pslverr_qspi
                  : sel_timer0  ? pslverr_timer0
                  : sel_busstat ? pslverr_busstat
+                 : sel_scrub   ? pslverr_scrub
                  : sel_npucfg  ? pslverr_npucfg
                  : sel_apbpnp  ? pslverr_apbpnp
                  : sel_none;

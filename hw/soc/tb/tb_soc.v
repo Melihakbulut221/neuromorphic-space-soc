@@ -430,6 +430,22 @@ module tb_soc;
                u_flash0.violations);
       errors = errors + 1;
     end
+    // docs/67: the memory codec's six counters, read hierarchically as
+    // the exit code is. A clean run reports NOTHING -- a scrubber that
+    // walks every row of both memories for the whole run and repairs
+    // none, a read path that corrects none -- and a nonzero count here
+    // is either a stored row that was not a codeword or a report line
+    // pulsing on healthy traffic, both of which are failures.
+    $display("[TB] scrub: ram sec/rd/ded %0d/%0d/%0d, rom sec/rd/ded %0d/%0d/%0d",
+             dut.u_scrub.g_src[0].cnt_q, dut.u_scrub.g_src[1].cnt_q,
+             dut.u_scrub.g_src[2].cnt_q, dut.u_scrub.g_src[3].cnt_q,
+             dut.u_scrub.g_src[4].cnt_q, dut.u_scrub.g_src[5].cnt_q);
+    if (dut.u_scrub.g_src[0].cnt_q != 0 || dut.u_scrub.g_src[1].cnt_q != 0 ||
+        dut.u_scrub.g_src[2].cnt_q != 0 || dut.u_scrub.g_src[3].cnt_q != 0 ||
+        dut.u_scrub.g_src[4].cnt_q != 0 || dut.u_scrub.g_src[5].cnt_q != 0) begin
+      $display("[TB] FAIL: the memory codec reported an event on a clean run");
+      errors = errors + 1;
+    end
     if (rx_chars == 0) begin
       $display("[TB] FAIL: nothing came out of the UART");
       errors = errors + 1;

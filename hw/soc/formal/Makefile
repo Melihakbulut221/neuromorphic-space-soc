@@ -10,6 +10,13 @@
 #                                       cover
 #   cd hw/soc/formal && make qspi       soc_qspi: bmc, prove, prove_full,
 #                                       cover
+#   cd hw/soc/formal && make scrub      soc_scrub: bmc, prove, prove_w16,
+#                                       cover (docs/67)
+#   cd hw/soc/formal && make bytesecded the (16,8) byte shortening the
+#                                       memory codec stores: bmc, prove,
+#                                       prove_abc, cover (docs/67)
+#   cd hw/soc/formal && make memecc     soc_mem_ecc over a four-row
+#                                       array: bmc, prove, cover (docs/67)
 #   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, prove_w0,
 #                                       cover
 #   cd hw/soc/formal && make npuser     the NPU serial transport: bmc,
@@ -40,9 +47,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub bytesecded memecc clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi
+all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub bytesecded memecc
 
 include $(REPO)/tools.mk
 
@@ -104,6 +111,38 @@ qspi:
 	@for t in $(QSPI_TASKS); do \
 	  echo "== soc_qspi $$t"; \
 	  $(SBY) -f soc_qspi.sby $$t || exit 1; \
+	done
+
+# The memory codec's counters docs/67 adds, at the two widths
+# soc_busstat is proved at and for the same reason.
+SCRUB_TASKS := bmc prove prove_w16 cover
+
+scrub:
+	@for t in $(SCRUB_TASKS); do \
+	  echo "== soc_scrub $$t"; \
+	  $(SBY) -f soc_scrub.sby $$t || exit 1; \
+	done
+
+# The BYTE shortening of the (72,64) codec, four of which make one RAM
+# row (docs/67): the same four tasks regfile_secded runs for the word
+# shortening.
+BYTE_TASKS := bmc prove prove_abc cover
+
+bytesecded:
+	@for t in $(BYTE_TASKS); do \
+	  echo "== byte_secded $$t"; \
+	  $(SBY) -f byte_secded.sby $$t || exit 1; \
+	done
+
+# The codec and the scrubber over a four-row array, docs/67: the stored
+# rows are codewords in every reachable state, the codec is invisible in
+# a fault-free machine, and the protocol is soc_mem's.
+MEMECC_TASKS := bmc prove cover
+
+memecc:
+	@for t in $(MEMECC_TASKS); do \
+	  echo "== soc_mem_ecc $$t"; \
+	  $(SBY) -f soc_mem_ecc.sby $$t || exit 1; \
 	done
 
 WDOG_TASKS := bmc prove prove_w0 cover
@@ -175,4 +214,7 @@ clean:
 	       $(addprefix soc_wdog_,$(WDOG_TASKS)) soc_wdog \
 	       $(addprefix regfile_secded_,$(REGFILE_TASKS)) regfile_secded \
 	       $(addprefix soc_gpio_,$(GPIO_TASKS)) soc_gpio \
-	       $(addprefix soc_qspi_,$(QSPI_TASKS)) soc_qspi
+	       $(addprefix soc_qspi_,$(QSPI_TASKS)) soc_qspi \
+	       $(addprefix soc_scrub_,$(SCRUB_TASKS)) soc_scrub \
+	       $(addprefix byte_secded_,$(BYTE_TASKS)) byte_secded \
+	       $(addprefix soc_mem_ecc_,$(MEMECC_TASKS)) soc_mem_ecc

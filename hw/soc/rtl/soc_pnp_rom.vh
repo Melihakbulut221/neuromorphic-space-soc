@@ -12,7 +12,7 @@ case (word_addr)
   10'h008: pnp_data = 32'h0900B020;
   // ---- slave records ----
   10'h200: pnp_data = 32'h09001020;
-  10'h201: pnp_data = 32'h00010000;
+  10'h201: pnp_data = 32'h00008000;
   10'h202: pnp_data = 32'h00000001;
   10'h204: pnp_data = 32'h0001FFF2;
   10'h208: pnp_data = 32'h09010020;

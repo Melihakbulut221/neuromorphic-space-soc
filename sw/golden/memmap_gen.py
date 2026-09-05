@@ -8,7 +8,7 @@ BASE_ALIGNMENT = 0x100
 
 # name -> (base, size, type, attr, status, port or None)
 REGIONS = {
-    "RAM": (0x00000000, 0x00010000, "memory", "rwx", "implemented", "ram"),
+    "RAM": (0x00000000, 0x00008000, "memory", "rwx", "implemented", "ram"),
     "NPU": (0x10000000, 0x10000000, "memory", "rw", "implemented", "npu"),
     "ROM": (0xC0000000, 0x00002000, "memory", "rx", "implemented", "rom"),
     "QSPI3": (0xD0000000, 0x02000000, "memory", "rx", "reserved", None),
@@ -22,7 +22,7 @@ REGIONS = {
 
 # name -> prefix-compare mask; addr & MASK == base
 MASKS = {
-    "RAM": 0xFFFF0000,
+    "RAM": 0xFFFF8000,
     "NPU": 0xF0000000,
     "ROM": 0xFFFFE000,
     "QSPI3": 0xFE000000,
@@ -61,7 +61,7 @@ APB_SLOTS = {
     "I2C": (0xFF913000, 0x013, 20, "reserved"),
     "QSPICTL": (0xFF914000, 0x014, 21, "implemented"),
     "BUSSTAT": (0xFF915000, 0x015, 22, "implemented"),
-    "SCRUB": (0xFF916000, 0x016, 23, "reserved"),
+    "SCRUB": (0xFF916000, 0x016, 23, "implemented"),
     "BOOTREG": (0xFF917000, 0x017, 0, "reserved"),
     "CLKGATE": (0xFF918000, 0x018, 0, "reserved"),
     "NPUCFG": (0xFF919000, 0x019, 24, "implemented"),
@@ -108,7 +108,7 @@ PNP_ROM = {
     0x000: 0x0900A020,
     0x008: 0x0900B020,
     0x200: 0x09001020,
-    0x201: 0x00010000,
+    0x201: 0x00008000,
     0x202: 0x00000001,
     0x204: 0x0001FFF2,
     0x208: 0x09010020,

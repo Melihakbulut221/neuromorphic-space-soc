@@ -121,7 +121,14 @@ The rest of the SoC is still **almost entirely unhardened** — no ECC on
 the 72 KiB of memory, no scrubbing outside the register file, no TMR
 outside the watchdog's protected word, and nothing on the CLINT's
 `mtime`, which `docs/41` section 7.4 ranked next and which two documents
-have since deferred with the reason written down each time. That is a
+have since deferred with the reason written down each time.
+*Corrected 2026-09-05:* `mtime` is protected since
+`docs/58-clint-time-base-hardening.md`, and the memories since
+`docs/67-memory-protection.md` — every row of the RAM and the boot ROM
+carries a SECDED check field, is corrected on read, answers an
+uncorrectable word with a bus error and is walked by a scrubber, at
+the price of the RAM being 32 KiB rather than 64; that document says
+why that was cheaper than a seventh macro. That is a
 deliberate ordering, not an oversight: the fabric is being made correct
 before it is made survivable.
 

@@ -1,0 +1,69 @@
+# SymbiYosys job for the memory codec and scrubber, hw/soc/rtl/
+# soc_mem_ecc.v, over a four-row array the harness owns (docs/67).
+#
+#   sby -f soc_mem_ecc.sby prove    k-induction proof of M1-M6
+#   sby -f soc_mem_ecc.sby bmc      bounded check, depth 10 (a four-row
+#                                   array of 64-bit codewords under
+#                                   sixteen XOR trees is a slow SMT
+#                                   problem; docs/67 section 9 records
+#                                   what the depths cost)
+#   sby -f soc_mem_ecc.sby cover    the scrubber reads, examines and
+#                                   moves on; the response arrives; a
+#                                   byte write lands in one lane
+#
+# WHAT IS PROVED, over a free bus and a fault-free array:
+#
+#   M1  every row the array holds is a codeword in every reachable
+#       state -- its check field is the frozen encoder's over its data,
+#       lane by lane -- which is soc_clint.v H6's E1 for a memory and
+#       the invariant that makes the induction close
+#   M2  the codec is invisible: a read returns exactly the word the
+#       last write to that row left (byte lanes honoured), and in a
+#       fault-free machine sec_o, rd_o and ded_o never rise, err_o
+#       never rises on a read, and the scrubber never writes
+#   M3  the protocol is soc_mem's: gnt_o = req_i, rvalid_o exactly one
+#       cycle after every grant, err_o only with rvalid_o
+#   M4  the scrubber never takes the port from the bus: a bus request
+#       always owns row_addr_o, row_din_o and row_bm_o in its cycle
+#   M5  the scrubber only ever writes back a lane the decoder corrected,
+#       so in this machine it writes back nothing at all
+#   M6  the pointer only moves on an examined row
+#
+# WHAT IS NOT PROVED HERE, and it is the important half: the correction.
+# Nothing in this harness injects a fault, because a formal harness that
+# deposits into a row is proving a property of the harness (docs/58
+# section 10.3's position). M1 and M2 are statements about the
+# fault-free machine; the correction is measured in test_soc_mem.py and
+# in docs/67 section 7's campaign, and the code itself is proved in
+# byte_secded.sby and formal/secded.sby. The array is FOUR rows so the
+# induction is tractable; nothing in the properties names the size.
+
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 10
+prove: mode prove
+prove: depth 4
+cover: mode cover
+cover: depth 14
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
+read_verilog -formal soc_mem_ecc.v
+read_verilog -formal soc_mem_ecc_props.v
+prep -top soc_mem_ecc_props
+
+[files]
+../../rtl/secded_enc.v
+../../rtl/secded_dec.v
+../rtl/soc_mem_ecc.v
+soc_mem_ecc_props.v
+soc_mem_ecc_int_props.v

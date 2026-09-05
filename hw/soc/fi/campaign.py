@@ -582,7 +582,7 @@ def main():
     # =================================================================
     # CONTROL 4: the injector reaches the design, in both directions
     # =================================================================
-    # Positive: bit 20 of x2, the stack pointer.  RAM is 64 KiB at zero
+    # Positive: bit 20 of x2, the stack pointer.  RAM is 32 KiB at zero
     # (regmap/memmap.yaml), so setting bit 20 puts every subsequent
     # stack access outside every mapped region and the machine cannot
     # continue as if nothing happened.  A campaign in which this comes

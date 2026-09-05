@@ -86,6 +86,12 @@ hw/soc/formal/soc_wdog/
 hw/soc/formal/soc_wdog_*/
 hw/soc/formal/regfile_secded/
 hw/soc/formal/regfile_secded_*/
+hw/soc/formal/soc_scrub/
+hw/soc/formal/soc_scrub_*/
+hw/soc/formal/byte_secded/
+hw/soc/formal/byte_secded_*/
+hw/soc/formal/soc_mem_ecc/
+hw/soc/formal/soc_mem_ecc_*/
 hw/soc/formal/soc_busstat/
 hw/soc/formal/soc_busstat_*/
 hw/soc/formal/soc_npu_ser/

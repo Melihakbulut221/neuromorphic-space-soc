@@ -10,9 +10,9 @@
    getting it wrong. */
 MEMORY {
   rom (rx)  : ORIGIN = 0xC0000080, LENGTH = 0x1F80
-  ram (rwx) : ORIGIN = 0x00000000, LENGTH = 0x10000
+  ram (rwx) : ORIGIN = 0x00000000, LENGTH = 0x8000
 }
 
 __soc_reset_vector = 0xC0000080;
 __soc_ram_base     = 0x00000000;
-__soc_ram_top      = 0x00010000;
+__soc_ram_top      = 0x00008000;

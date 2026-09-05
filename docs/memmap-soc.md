@@ -28,7 +28,7 @@ implemented, and refuses any region base that is not
 
 | Base | Last | Size | Name | Type | Attr | Status | Port | Description |
 |---|---|---|---|---|---|---|---|---|
-| `0x00000000` | `0x0000FFFF` | 64 KiB | RAM | memory | rwx | implemented | ram | System SRAM, 64 KiB. Data, stack and relocated .data live here |
+| `0x00000000` | `0x00007FFF` | 32 KiB | RAM | memory | rwx | implemented | ram | System SRAM, 32 KiB, SECDED per byte lane and scrubbed (docs/67). Data, stack and relocated .data live here |
 | `0x10000000` | `0x1FFFFFFF` | 256 MiB | NPU | memory | rw | implemented | npu | NPU fabric window; per-node register windows and descriptor rings |
 | `0xC0000000` | `0xC0001FFF` | 8 KiB | ROM | memory | rx | implemented | rom | On-chip boot ROM, 8 KiB. Holds the reset vector and .text |
 | `0xD0000000` | `0xD1FFFFFF` | 32 MiB | QSPI3 | memory | rx | reserved | - | QSPI flash execute-in-place window, 3-byte addressing |
@@ -81,7 +81,7 @@ interrupt controller and the drivers cannot disagree
 | `0xFF913000` | `0x013` | I2C | 20 | 8 | reserved | I2CMST, the OpenCores I2C master register map |
 | `0xFF914000` | `0x014` | QSPICTL | 21 | 9 | implemented | QSPI flash controller, register mode, two chip selects; docs/66 |
 | `0xFF915000` | `0x015` | BUSSTAT | 22 | 10 | implemented | Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name |
-| `0xFF916000` | `0x016` | SCRUB | 23 | 11 | reserved | Memory scrubber control, MEMSCRUB-like |
+| `0xFF916000` | `0x016` | SCRUB | 23 | 11 | implemented | Memory codec counters, scrubber control and the last uncorrectable address, MEMSCRUB-like; docs/67 |
 | `0xFF917000` | `0x017` | BOOTREG | - | - | reserved | Bootstrap pin readback and boot report register, GRGPREG-like |
 | `0xFF918000` | `0x018` | CLKGATE | - | - | reserved | Clock gate enable and status for NPU nodes and heavy peripherals |
 | `0xFF919000` | `0x019` | NPUCFG | 24 | 12 | implemented | NPU fabric-level global configuration and status, and the AER event port; docs/51 |
@@ -167,7 +167,7 @@ address register compares `addr[31:20]`, so its granularity is
 1 MiB. These regions are smaller and their `mask` field is rounded
 up to 1 MiB:
 
-- RAM, 64 KiB at `0x00000000`
+- RAM, 32 KiB at `0x00000000`
 - ROM, 8 KiB at `0xC0000000`
 - CLINT, 64 KiB at `0xE0000000`
 - PNP, 4 KiB at `0xFFFFF000`

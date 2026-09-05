@@ -267,6 +267,9 @@ the two groups is not a difference anybody should have to remember
   area. For a part that claims fault tolerance this is the largest open
   item in the subsystem and it is now blocking a specific thing rather
   than a general one.
+  *Corrected 2026-09-05:* built in `docs/67-memory-protection.md`,
+  and not with 39-bit rows: the 64-bit row keeps its geometry and
+  holds one word as four byte codewords, at the price of half the RAM.
 - **The ROM has no contents, and that is an architecture question this
   layout has made unavoidable.** `INIT_FILE` and `INIT_WORD` are
   accepted so `soc_top.v`'s instantiation is unchanged, and they are

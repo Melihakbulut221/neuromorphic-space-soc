@@ -146,6 +146,8 @@ sym () {
   "$SOC_DIR/rtl/soc_bus.v" \
   "$SOC_DIR/rtl/soc_apb_bridge.v" \
   "$SOC_DIR/rtl/soc_mem.v" \
+  "$SOC_DIR/rtl/soc_mem_ecc.v" \
+  "$SOC_DIR/rtl/soc_scrub.v" \
   "$SOC_DIR/rtl/soc_pnp.v" \
   "$SOC_DIR/rtl/soc_apb_pnp.v" \
   "$SOC_DIR/rtl/soc_uart.v" \

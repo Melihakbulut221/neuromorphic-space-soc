@@ -20,8 +20,8 @@ localparam [31:0] SOC_BOOT_ADDR    = 32'hC0000000;
 localparam [31:0] SOC_RESET_VECTOR = 32'hC0000080;
 
 localparam [31:0] SOC_BASE_RAM      = 32'h00000000;
-localparam [31:0] SOC_SIZE_RAM      = 32'h00010000;
-localparam [31:0] SOC_MASK_RAM      = 32'hFFFF0000;
+localparam [31:0] SOC_SIZE_RAM      = 32'h00008000;
+localparam [31:0] SOC_MASK_RAM      = 32'hFFFF8000;
 localparam [31:0] SOC_BASE_NPU      = 32'h10000000;
 localparam [31:0] SOC_SIZE_NPU      = 32'h10000000;
 localparam [31:0] SOC_MASK_NPU      = 32'hF0000000;

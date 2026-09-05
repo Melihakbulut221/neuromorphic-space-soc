@@ -1,0 +1,60 @@
+# SymbiYosys job for the BYTE shortening of the SECDED code, the four
+# (16,8) codewords hw/soc/rtl/soc_mem_ecc.v stores in every RAM row
+# (docs/67).
+#
+#   sby -f byte_secded.sby prove      exhaustive over the combinational cone
+#   sby -f byte_secded.sby prove_abc  the same on a different engine family
+#   sby -f byte_secded.sby bmc        bounded, depth 4
+#   sby -f byte_secded.sby cover      every case the properties distinguish
+#
+# WHY THIS JOB EXISTS BESIDE regfile_secded.sby
+#
+# regfile_secded.sby proves the (40,32) shortening -- the codec with its
+# upper 32 data bits tied to zero. The memory ties FIFTY-SIX of them to
+# zero and keeps eight, which is a different subset of H's columns and
+# a different argument: over eight data bits, three of the eight check
+# rows are identically zero, so the code that is stored is a (13,8)
+# plus three constant bits, and what has to be shown is that the
+# thirteen columns left are still distinct, nonzero and of odd weight
+# -- one error corrected, two detected and never miscorrected -- and
+# that a flip in one of the three constant check bits is corrected as
+# a check-bit error and not miscorrected into the data. Nothing else in
+# this repository states that; soc_mem_ecc.v's header argues it and a
+# comment is not a check.
+#
+# WHAT IT DOES NOT COVER. The harness is one codeword and not a row, a
+# memory or a scrubber: no storage, no lanes beside this one, no bus.
+# Those are hw/soc/tb/cocotb/test_soc_mem.py and docs/67 section 7's
+# campaign. The fault model is one error vector over the sixteen stored
+# bits, nothing about transients in the codec's own gates.
+
+[tasks]
+bmc
+prove
+prove_abc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 4
+prove: mode prove
+prove: depth 4
+prove_abc: mode prove
+prove_abc: depth 4
+cover: mode cover
+cover: depth 4
+
+[engines]
+prove_abc: abc pdr
+~prove_abc: smtbmc yices
+
+[script]
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
+read_verilog -formal byte_secded_props.v
+prep -top byte_secded_props
+
+[files]
+../../rtl/secded_enc.v
+../../rtl/secded_dec.v
+byte_secded_props.v

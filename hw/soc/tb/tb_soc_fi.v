@@ -70,11 +70,15 @@
 //
 // WHAT THIS TESTBENCH DOES NOT DO
 //
-//   * it does not inject into anything outside `u_ibex`.  The fabric,
-//     the memories, the CLINT, the timers and the watchdog itself are
-//     not targets here; the watchdog's own state is the subject of
-//     docs/41 section 8 and the memories are unhardened by construction
-//     (soc_top.v's header).
+//   * it does not inject into anything outside `u_ibex` EXCEPT, since
+//     docs/67, one word of one memory: +mem, +midx and +mbit name a
+//     stored bit of the RAM or the boot ROM -- a data bit or, in the
+//     hardened build, a check bit -- and the deposit lands there at
+//     +cycle exactly as a core deposit would. hw/soc/fi/mem_campaign.py
+//     draws those by region of the program's own link map. The fabric,
+//     the CLINT, the timers and the watchdog itself are still not
+//     targets here; the watchdog's own state is the subject of docs/41
+//     section 8.
 //   * it does not model a transient in combinational logic, a multi-bit
 //     strike, or anything at gate level.
 //   * it has no notion of a correct answer.  The golden run is the
@@ -171,6 +175,16 @@ module tb_soc_fi;
   integer arg_armed  = 1;
   integer arg_budget = `FI_DEFAULT_BUDGET;
   integer dump_sites = 0;
+  // docs/67: a memory target. -1 means none; 0 the RAM, 1 the boot ROM.
+  // +midx is the word index inside the region, +mbit the bit of the
+  // stored row: 0..31 the data word, 32.. the check field (32 bits on the
+  // RAM's byte code, 7 on the ROM's word code), which exists only in the
+  // build fi_core.sh made with SOC_MEM_HARDEN=1.
+  integer arg_mem    = -1;
+  integer arg_midx   = 0;
+  integer arg_mbit   = 0;
+  reg [31:0] mem_before = 32'h0;
+  reg [31:0] mem_after  = 32'h0;
 
   // The watchdog bootstrap pin.  soc_wdog.v W1 samples it ONCE when
   // power-on reset releases and ignores it for ever after, so driving it
@@ -424,6 +438,31 @@ module tb_soc_fi;
   reg saw_awake = 1'b0;
   always @(posedge clk) if (rst_n && !core_sleep) saw_awake <= 1'b1;
 
+  // docs/67: in the hardened build every word this bench reads out of
+  // the RAM goes through soc_mem.v's `observe`, which decodes it as a
+  // bus read would. The raw array would show a deposited-and-not-yet-
+  // read flip as a changed answer, and a flip in the exit magic would
+  // look like a run that never finished. A task and not a function,
+  // because `observe` takes a zero-delay step to let the decoders
+  // settle and a function may not call it.
+  task ram_word;
+    input  [31:0] addr;
+    output [31:0] w;
+    begin
+`ifdef FI_MEM_HARDENED
+      dut.u_ram.g_ecc.observe(addr[31:2], w);
+`else
+      w = dut.u_ram.mem[addr[31:2]];
+`endif
+    end
+  endtask
+
+  // The termination condition still reads the RAW array, on purpose:
+  // the program's last act is to store the magic, so no deposit drawn
+  // inside the window can survive into it, and reading it through a
+  // sampled `observe` moved docs/42's 18,682-cycle clean run by one
+  // cycle. The RECORD fields below are what a deposit can survive into,
+  // and those go through the codec.
   wire finished = saw_awake && core_sleep &&
                   (dut.u_ram.mem[EXIT_MAGIC_ADDR[31:2]] == EXIT_MAGIC);
 
@@ -460,6 +499,50 @@ module tb_soc_fi;
     end
   endtask
 
+  // The memory deposit, docs/67. The data array is `mem` in both builds;
+  // the check array exists only under g_ecc and only in the hardened
+  // build, so a check-bit request against the other build reports a
+  // miss rather than depositing nowhere -- mem_campaign.py refuses a
+  // record whose hit is 0.
+  task do_mem_deposit;
+    begin
+      fi_hit = 1'b0;
+      fi_w   = 0;
+      if (arg_mem == 0) begin
+        if (arg_mbit < 32) begin
+          mem_before = dut.u_ram.mem[arg_midx];
+          dut.u_ram.mem[arg_midx] = mem_before ^ (32'd1 << arg_mbit);
+          mem_after  = dut.u_ram.mem[arg_midx];
+          fi_hit = 1'b1; fi_w = 32;
+        end
+`ifdef FI_MEM_HARDENED
+        else if (arg_mbit < 64) begin
+          mem_before = dut.u_ram.g_ecc.chk[arg_midx];
+          dut.u_ram.g_ecc.chk[arg_midx] = mem_before ^ (32'd1 << (arg_mbit - 32));
+          mem_after  = dut.u_ram.g_ecc.chk[arg_midx];
+          fi_hit = 1'b1; fi_w = 64;
+        end
+`endif
+      end else if (arg_mem == 1) begin
+        if (arg_mbit < 32) begin
+          mem_before = dut.u_rom.mem[arg_midx];
+          dut.u_rom.mem[arg_midx] = mem_before ^ (32'd1 << arg_mbit);
+          mem_after  = dut.u_rom.mem[arg_midx];
+          fi_hit = 1'b1; fi_w = 32;
+        end
+`ifdef FI_MEM_HARDENED
+        else if (arg_mbit < 39) begin
+          mem_before = {25'h0, dut.u_rom.g_ecc.chk[arg_midx]};
+          dut.u_rom.g_ecc.chk[arg_midx] = mem_before[6:0] ^ (7'd1 << (arg_mbit - 32));
+          mem_after  = {25'h0, dut.u_rom.g_ecc.chk[arg_midx]};
+          fi_hit = 1'b1; fi_w = 39;
+        end
+`endif
+      end
+      fi_done = 1'b1;
+    end
+  endtask
+
   // The deposit lands one quarter of a cycle after the edge: after every
   // flip-flop in the design has taken its new value and well before the
   // next edge samples it.  A deposit ON the edge would race the design's
@@ -479,16 +562,20 @@ module tb_soc_fi;
 
   initial begin
     wait (args_ready);
-    if (arg_site >= 0) begin
+    if (arg_site >= 0 || arg_mem >= 0) begin
       @(posedge rst_n);
       while (cycles < arg_cycle) @(posedge clk);
       #(CLK_HALF / 2);
-      do_deposit;
+      if (arg_site >= 0) do_deposit;
+      else               do_mem_deposit;
     end
   end
 
   // ------------------------------------------------------------------
   integer exit_code, exit_magic;
+  reg [31:0] rec_sig, rec_mask, rec_rounds, rec_traps, rec_mcause, rec_nmis,
+             rec_bst_sec, rec_bst_rd, rec_bst_ded, rec_bst_tmr;
+  integer rec_cycles;
 
   initial begin
     if (!$value$plusargs("site=%d",   arg_site))   arg_site   = -1;
@@ -496,6 +583,9 @@ module tb_soc_fi;
     if (!$value$plusargs("cycle=%d",  arg_cycle))  arg_cycle  = 0;
     if (!$value$plusargs("armed=%d",  arg_armed))  arg_armed  = 1;
     if (!$value$plusargs("budget=%d", arg_budget)) arg_budget = `FI_DEFAULT_BUDGET;
+    if (!$value$plusargs("mem=%d",    arg_mem))    arg_mem    = -1;
+    if (!$value$plusargs("midx=%d",   arg_midx))   arg_midx   = 0;
+    if (!$value$plusargs("mbit=%d",   arg_mbit))   arg_mbit   = 0;
     dump_sites = $test$plusargs("dumpsites") ? 1 : 0;
     args_ready = 1'b1;
 
@@ -535,21 +625,50 @@ module tb_soc_fi;
     // do with the injection.
     #(BIT_TIME * 24);
 
-    exit_code  = dut.u_ram.mem[EXIT_CODE_ADDR[31:2]];
-    exit_magic = dut.u_ram.mem[EXIT_MAGIC_ADDR[31:2]];
+    // The cycle count is captured BEFORE the corrected reads: `observe`
+    // takes zero-delay steps, the console drain ends exactly on a
+    // clock edge, and reading `cycles` after those steps reports the
+    // edge's increment where the raw read did not -- one cycle, and a
+    // published number (docs/42's 18,682).
+    rec_cycles = cycles;
+    ram_word(EXIT_CODE_ADDR,   exit_code);
+    ram_word(EXIT_MAGIC_ADDR,  exit_magic);
+    ram_word(FI_SIG_ADDR,      rec_sig);
+    ram_word(FI_MASK_ADDR,     rec_mask);
+    ram_word(FI_ROUNDS_ADDR,   rec_rounds);
+    ram_word(TRAP_COUNT_ADDR,  rec_traps);
+    ram_word(TRAP_MCAUSE_ADDR, rec_mcause);
+    ram_word(NMI_COUNT_ADDR,   rec_nmis);
+    ram_word(FI_BST_SEC_ADDR,  rec_bst_sec);
+    ram_word(FI_BST_RD_ADDR,   rec_bst_rd);
+    ram_word(FI_BST_DED_ADDR,  rec_bst_ded);
+    ram_word(FI_BST_TMR_ADDR,  rec_bst_tmr);
 
     $display("RECORD site=%0d bit=%0d cycle=%0d armed=%0d",
              arg_site, arg_bit, arg_cycle, arg_armed);
     $display("RECORD hit=%0d width=%0d before=%032x after=%032x",
              fi_hit, fi_w, fi_before, fi_after);
+    // docs/67: the memory deposit, and what the SCRUB block counted.
+    // The counters are read hierarchically, as the register file's are
+    // above, and the same caveat applies: in silicon they are read over
+    // the peripheral bus, and the program in this campaign does not.
+    $display("RECORD mem=%0d midx=%0d mbit=%0d mem_before=%08x mem_after=%08x",
+             arg_mem, arg_midx, arg_mbit, mem_before, mem_after);
+    $display({"RECORD scr_ramsec=%0d scr_ramrd=%0d scr_ramded=%0d ",
+              "scr_romsec=%0d scr_romrd=%0d scr_romded=%0d ",
+              "scr_ramaddr=%08x scr_romaddr=%08x"},
+             dut.u_scrub.g_src[0].cnt_q, dut.u_scrub.g_src[1].cnt_q,
+             dut.u_scrub.g_src[2].cnt_q, dut.u_scrub.g_src[3].cnt_q,
+             dut.u_scrub.g_src[4].cnt_q, dut.u_scrub.g_src[5].cnt_q,
+             dut.u_scrub.ram_addr_q, dut.u_scrub.rom_addr_q);
     $display("RECORD done=%0d cycles=%0d budget=%0d",
-             done_q, cycles, arg_budget);
+             done_q, rec_cycles, arg_budget);
     $display("RECORD slept=%0d expired=%0d",
-             core_sleep, (cycles >= arg_budget));
+             core_sleep, (rec_cycles >= arg_budget));
     $display("RECORD sig=%08x mask=%08x rounds=%0d",
-             dut.u_ram.mem[FI_SIG_ADDR[31:2]],
-             dut.u_ram.mem[FI_MASK_ADDR[31:2]],
-             dut.u_ram.mem[FI_ROUNDS_ADDR[31:2]]);
+             rec_sig,
+             rec_mask,
+             rec_rounds);
     $display("RECORD exit=%08x magic=%08x", exit_code, exit_magic);
     $display("RECORD console_chars=%0d console_hash=%08x console_framing=%0d",
              rx_chars, rx_hash, rx_framing_errors);
@@ -557,9 +676,9 @@ module tb_soc_fi;
     $display("RECORD wdog1=%0d wdog2=%0d wdog3=%0d wdog_first=%0d",
              wdog_stage1, wdog_stage2, wdog_stage3, wdog_first_cycle);
     $display("RECORD traps=%0d mcause=%08x nmis=%0d",
-             dut.u_ram.mem[TRAP_COUNT_ADDR[31:2]],
-             dut.u_ram.mem[TRAP_MCAUSE_ADDR[31:2]],
-             dut.u_ram.mem[NMI_COUNT_ADDR[31:2]]);
+             rec_traps,
+             rec_mcause,
+             rec_nmis);
     $display("RECORD alert_minor=%0d alert_int=%0d alert_bus=%0d dblfault=%0d",
              saw_alert_minor, saw_alert_major_int,
              saw_alert_major_bus, saw_double_fault);
@@ -590,10 +709,10 @@ module tb_soc_fi;
     if (FI_BST_SEC_ADDR != 32'h0)
       $display({"RECORD sw_bst_sec=%0d sw_bst_rd=%0d sw_bst_ded=%0d ",
                 "sw_bst_tmr=%0d sw_bst_at=%08x"},
-               dut.u_ram.mem[FI_BST_SEC_ADDR[31:2]],
-               dut.u_ram.mem[FI_BST_RD_ADDR[31:2]],
-               dut.u_ram.mem[FI_BST_DED_ADDR[31:2]],
-               dut.u_ram.mem[FI_BST_TMR_ADDR[31:2]],
+               rec_bst_sec,
+               rec_bst_rd,
+               rec_bst_ded,
+               rec_bst_tmr,
                FI_BST_SEC_ADDR);
     $display("RECORD end");
 

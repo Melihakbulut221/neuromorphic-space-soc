@@ -35,6 +35,14 @@
 //       docs/49's SYNPRE, and the one thing C5 does not cover
 //   C7  and therefore the hoisted read path returns the same word,
 //       stated directly rather than left as a corollary of C5 and C6
+//   C8  (docs/67) the FLAGS re-derived from the syndrome alone -- sec
+//       as 'some live column matched or the syndrome is one-hot', ded
+//       as 'nonzero and not sec' -- equal the frozen decoder's sec and
+//       ded for every error of weight 0, 1 or 2. hw/soc/rtl/
+//       soc_mem_ecc.v's word code for the boot ROM derives its flags
+//       this way, because they drive a macro's write mask and the
+//       frozen decoder's 64-wide match was measured on that path;
+//       byte_secded.sby B6 is the same statement for the byte code.
 //
 // C4 is the odd one out and it is here because it is a MEASUREMENT this
 // document would otherwise have to take on trust. H_ROW7 is
@@ -157,6 +165,12 @@ module regfile_secded_props (
 
     wire [31:0] fast_out = stored_data ^ mask;
 
+    // ---- the fast flags, as soc_mem_ecc.v g_dec_word derives them ----
+    wire f_syn_nz = |syn;
+    wire f_onehot = f_syn_nz && ((syn & (syn - 8'd1)) == 8'd0);
+    wire f_sec    = (|mask) || f_onehot;
+    wire f_ded    = f_syn_nz && !f_sec;
+
     // ---- the hoisted syndrome, exactly as SYNPRE builds it ----------
     // One encoder beside the storage, over the stored data, and the
     // stored check bits XORed in. This is g_synpre's `rf_syn[gj]` with
@@ -230,6 +244,12 @@ module regfile_secded_props (
         //     is not.
         assert (pre_syn == syn);
 
+        // C8. The fast flags are the decoder's flags, up to weight 2.
+        if (w <= 7'd2) begin
+            assert (f_sec == sec);
+            assert (f_ded == ded);
+        end
+
         // C7. And therefore the register file's read port returns the
         //     same word with the tree in front of the multiplexer as it
         //     does with the tree behind it. This follows from C5 and
@@ -258,6 +278,9 @@ module regfile_secded_props (
         // and C7 proves nothing if the hoisted mask never corrects.
         cover (pre_syn != 8'h0);
         cover (pre_mask != 32'h0);
+        // C8's stated limit, witnessed: a triple error on which the
+        // frozen decoder says sec and the fast flags say ded
+        cover (w == 7'd3 && sec && f_ded);
     end
 
 endmodule

@@ -12,6 +12,9 @@
 #       flow/syn_soc.sh soc_pnp
 #       flow/syn_soc.sh soc_apb_pnp
 #       flow/syn_soc.sh soc_clint
+#       flow/syn_soc.sh soc_scrub
+#       flow/syn_soc.sh soc_mem_ecc         (the memory codec alone;
+#                                            docs/67 section 5)
 #       flow/syn_soc.sh soc_gptimer          (includes soc_wdog)
 #       flow/syn_soc.sh soc_wdog
 #       flow/syn_soc.sh soc_fabric_meas      (see below)
@@ -194,7 +197,8 @@ read_verilog -I$RTL -I$PILOT_RTL -defer $RTL/soc_bus.v $RTL/soc_apb_bridge.v \
                           $RTL/soc_uart.v $RTL/soc_gpio.v $RTL/soc_qspi.v \
                           $RTL/soc_pnp.v $RTL/soc_apb_pnp.v \
                           $RTL/soc_clint.v $RTL/soc_gptimer.v $RTL/soc_wdog.v \
-                          $RTL/soc_busstat.v \
+                          $RTL/soc_busstat.v $RTL/soc_scrub.v \
+                          $RTL/soc_mem_ecc.v \
                           $RTL/soc_tmr_bank.v $RTL/soc_npu.v \
                           $RTL/soc_npu_ser.v \
                           $PILOT_RTL/pilot_top.v $PILOT_RTL/lif_core.v \

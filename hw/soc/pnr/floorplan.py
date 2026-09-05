@@ -80,6 +80,32 @@ TOP = [(RAM, "u_ram.g_ram_2048x64.u_b2", 0),
        (RAM, "u_ram.g_ram_2048x64.u_b3", 1),
        (ROM, "u_rom.g_rom_1024x32.u_b1", 2)]
 
+# docs/67: the SAME four RAM macros, in the SAME places, under the
+# generate label of soc_mem_sram.v's codec arm. The instance path is a
+# property of that file -- `u_ram.<generate label>.<macro instance>` --
+# and the label changed when the arm did, so a floorplan for the
+# protected design names the same silicon by a different path. The ROM
+# keeps docs/47's label: docs/67 section 5's layout is taken with the
+# ROM as docs/47 built it, because its two check-bit macros have no
+# place in this floorplan (docs/67 section 8).
+LABELS = {
+    "docs47": {},
+    "ecc": {"u_ram.g_ram_2048x64.u_b0": "u_ram.g_ram_2048x64_ecc.u_b0",
+            "u_ram.g_ram_2048x64.u_b1": "u_ram.g_ram_2048x64_ecc.u_b1",
+            "u_ram.g_ram_2048x64.u_b2": "u_ram.g_ram_2048x64_ecc.u_b2",
+            "u_ram.g_ram_2048x64.u_b3": "u_ram.g_ram_2048x64_ecc.u_b3"},
+}
+
+# The ROM's check-bit macro (docs/67). The RTL as it ships instantiates
+# two of these under u_rom.g_rom_1024x32_ecc, and LibreLane's
+# Yosys.JsonHeader elaborates the RTL -- not the netlist this flow
+# hardens -- so it has to know the module even in a run whose netlist
+# was synthesised with ROM_HARDEN = 0 and contains none. It is entered
+# with NO instances: the LEF and Liberty are read, nothing is placed,
+# and OpenROAD.CheckMacroInstances has nothing to check. Placing it is
+# docs/67 section 8's open item.
+ROM_CHK = "RM_IHPSG13_1P_512x16_c2_bm_bist"
+
 # docs/47 section 6.1: the lower row is FS, which mirrors about X and
 # puts its pin edge at its TOP; the upper row is N, which leaves its pin
 # edge at its BOTTOM.  Both face the channel.
@@ -132,6 +158,25 @@ NARROW_COL_SITES = (125, 1843)       # the two RAM columns, as before
 NARROW_CORE_SITES = 3605             # core width, 1730.40 um
 ROM_COL_SITES = (125, 2611)          # the two ROM islands
 ROM_GAP_ROWS = 58                    # rows of clear channel below an island
+
+
+def _relabel_pdn(line, relabel):
+    """One PDN_MACRO_CONNECTIONS entry -- a regular expression over the
+    instance path, then the nets -- with docs/47's generate label
+    replaced by the codec arm's. The expression is rewritten by the
+    same table that renames the instances, so the two cannot disagree."""
+    pattern, nets = line.split(" ", 1)
+    # One replacement per distinct label, not per instance: four
+    # instances share one label and the first version of this function
+    # rewrote the label four times over.
+    prefixes = {(old.rsplit(".", 1)[0], new.rsplit(".", 1)[0])
+                for old, new in relabel.items()}
+    for old_p, new_p in sorted(prefixes):
+        old_re = old_p.replace(".", "\\.")
+        new_re = new_p.replace(".", "\\.")
+        if old_re in pattern:
+            pattern = pattern.replace(old_re, new_re)
+    return pattern + " " + nets
 
 
 def snap_channel(want):
@@ -288,6 +333,11 @@ def main():
                     help="rows3 = docs/47's two rows of RAM, RAM, ROM; "
                          "islands = two RAM columns with the ROMs inside "
                          "the channel and a narrower die")
+    ap.add_argument("--memory", choices=sorted(LABELS), default="docs47",
+                    help="which soc_mem_sram.v arm the RAM instances are "
+                         "named for: docs47 = two words per row, ecc = "
+                         "docs/67's one protected word per row. Same "
+                         "macros, same places, different instance paths")
     ap.add_argument("--write", metavar="PATH", default=None,
                     help="write a whole variant of config.json to PATH; the "
                          "path must be inside hw/soc/pnr/, because "
@@ -305,18 +355,56 @@ def main():
         density = int(round(fp["util"] * 100)) + 18
     fp["density_pct"] = density
 
+    relabel = LABELS[a.memory]
+    if relabel:
+        for kind in fp["macros"]:
+            fp["macros"][kind] = {relabel.get(inst, inst): spec
+                                  for inst, spec in fp["macros"][kind].items()}
+        fp["macros"][ROM_CHK] = {}
+        # And the RTL the JSON header elaborates is told to build the ROM
+        # as docs/47 did, so that the instances it finds are the instances
+        # this floorplan places: soc_top.v's ROM_HARDEN measurement knob,
+        # applied through LibreLane's own chparam list.
+        fp["synth_parameters"] = ["ROM_HARDEN=0"]
+
     if a.write:
         base = json.load(open(CONFIG))
         out = json.loads(json.dumps(base))
         out["DIE_AREA"] = fp["die"]
         out["CORE_AREA"] = fp["core"]
         for kind, insts in fp["macros"].items():
-            out["MACROS"][kind]["instances"] = insts
+            if kind not in out["MACROS"]:
+                # the ROM's check-bit macro, known and unplaced; see ROM_CHK
+                out["MACROS"][kind] = {
+                    "gds": ["pdk_dir::libs.ref/sg13g2_sram/gds/%s.gds" % kind],
+                    "lef": ["pdk_dir::libs.ref/sg13g2_sram/lef/%s.lef" % kind],
+                    "vh": ["dir::%s_bb.v" % kind],
+                    "lib": {
+                        "nom_typ_1p20V_25C": [
+                            "pdk_dir::libs.ref/sg13g2_sram/lib/%s_typ_1p20V_25C.lib" % kind],
+                        "nom_slow_1p08V_125C": [
+                            "pdk_dir::libs.ref/sg13g2_sram/lib/%s_slow_1p08V_125C.lib" % kind],
+                        "nom_fast_1p32V_m40C": [
+                            "pdk_dir::libs.ref/sg13g2_sram/lib/%s_fast_1p32V_m55C.lib" % kind],
+                    },
+                    "instances": {},
+                }
+            else:
+                out["MACROS"][kind]["instances"] = insts
         out["PL_TARGET_DENSITY_PCT"] = density
+        if fp.get("synth_parameters"):
+            out["SYNTH_PARAMETERS"] = fp["synth_parameters"]
+        # The PDN hookup names the macro instances by regular expression,
+        # so a relabelled instance path has to be relabelled there too or
+        # OpenROAD.Floorplan finds no macro to power and stops.
+        if relabel:
+            out["PDN_MACRO_CONNECTIONS"] = [
+                _relabel_pdn(line, relabel)
+                for line in base["PDN_MACRO_CONNECTIONS"]]
         out["//floorplan48"] = (
             "GENERATED BY hw/soc/pnr/floorplan.py --arrangement "
             f"{a.arrangement} --channel {channel} --density {density} "
-            f"--cell-area {a.cell_area}. This file differs from "
+            f"--cell-area {a.cell_area} --memory {a.memory}. This file differs from "
             "config.json in FOUR keys and the generator asserts it: "
             "DIE_AREA, CORE_AREA, MACROS (the six instance LOCATIONS only "
             "-- same macros, same orientations, same x origins) and "
@@ -332,23 +420,37 @@ def main():
         # is a generator whose output cannot be attributed.
         added = set(out) - set(base)
         changed = {k for k in base if base[k] != out[k]}
-        assert added == {"//floorplan48"}, f"generator added {added}"
+        allowed_added = {"//floorplan48"}
+        if fp.get("synth_parameters"):
+            allowed_added.add("SYNTH_PARAMETERS")
+        assert added == allowed_added, f"generator added {added}"
         # `<=` and not `==` on purpose: at --channel 700.08 --density 40
         # this generator reproduces config.json exactly and `changed` is
         # EMPTY, which is the strongest self-check available -- the tool
         # that emits the new floorplan also emits docs/47's, from the
         # LEF, without being told what it should come out as.
-        assert changed <= {"DIE_AREA", "CORE_AREA", "MACROS",
-                           "PL_TARGET_DENSITY_PCT"}, \
-            f"generator changed {changed}"
+        allowed_changed = {"DIE_AREA", "CORE_AREA", "MACROS",
+                           "PL_TARGET_DENSITY_PCT"}
+        if relabel:
+            allowed_changed.add("PDN_MACRO_CONNECTIONS")
+        assert changed <= allowed_changed, f"generator changed {changed}"
         for kind in out["MACROS"]:
+            if kind == ROM_CHK and kind not in base["MACROS"]:
+                assert out["MACROS"][kind]["instances"] == {}, \
+                    "the ROM check macro is entered unplaced, by design"
+                continue
             assert set(out["MACROS"][kind]) == set(base["MACROS"][kind]), \
                 "generator changed a MACROS sub-key"
             for k in out["MACROS"][kind]:
                 if k != "instances":
                     assert out["MACROS"][kind][k] == base["MACROS"][kind][k]
+            # The instance SET is config.json's unless --memory asked for
+            # the codec arm's labels, in which case it is that arm's,
+            # applied to config.json's set by the table above and nothing
+            # else: a renamed instance is still the same macro in the
+            # same place.
             assert set(out["MACROS"][kind]["instances"]) == \
-                set(base["MACROS"][kind]["instances"]), \
+                {relabel.get(i, i) for i in base["MACROS"][kind]["instances"]}, \
                 "generator renamed a macro instance"
         with open(a.write, "w") as fh:
             json.dump(out, fh, indent=4)
@@ -374,7 +476,7 @@ def main():
         print(f"island clearance below/above {fp['islands'][0]:.2f} / "
               f"{fp['islands'][1]:.2f} um")
     for kind in (RAM, ROM):
-        for inst, spec in sorted(fp["macros"][kind].items()):
+        for inst, spec in sorted(fp["macros"].get(kind, {}).items()):
             print(f"    {inst:32s} {spec['location'][0]:9.2f} "
                   f"{spec['location'][1]:9.2f}  {spec['orientation']}")
 

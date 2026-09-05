@@ -164,6 +164,22 @@ TOP_CHPARAM="# SOC_MEM_RDREG=0: no soc_top chparam"
 if [ "$SOC_MEM_RDREG" != 0 ]; then
   TOP_CHPARAM="chparam -set MEM_RDREG $SOC_MEM_RDREG soc_top"
 fi
+# docs/67's knobs, on soc_top's own parameters for the reason above.
+# SOC_MEM_HARDEN=0 is the codec-off control of the SAME netlist (one
+# word per row, the same four RAM macros, no check bits, no scrubber);
+# SOC_ROM_HARDEN=0 keeps the RAM protected and builds the ROM as docs/47
+# did, which is the configuration docs/61's floorplan can place. Both
+# default to the design.
+SOC_MEM_HARDEN=${SOC_MEM_HARDEN:-1}
+SOC_ROM_HARDEN=${SOC_ROM_HARDEN:-$SOC_MEM_HARDEN}
+if [ "$SOC_MEM_HARDEN" != 1 ]; then
+  TOP_CHPARAM="$TOP_CHPARAM
+chparam -set MEM_HARDEN $SOC_MEM_HARDEN soc_top"
+fi
+if [ "$SOC_ROM_HARDEN" != "$SOC_MEM_HARDEN" ]; then
+  TOP_CHPARAM="$TOP_CHPARAM
+chparam -set ROM_HARDEN $SOC_ROM_HARDEN soc_top"
+fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -183,7 +199,7 @@ IBEX_SRCS=$(ibex_sources "$SOC_DIR" | tr '\n' ' ')
 SOC_SRCS="$RTL/soc_bus.v $RTL/soc_apb_bridge.v $RTL/soc_uart.v \
 $RTL/soc_gpio.v $RTL/soc_qspi.v $RTL/soc_pnp.v $RTL/soc_apb_pnp.v $RTL/soc_clint.v \
 $RTL/soc_gptimer.v \
-$RTL/soc_wdog.v $RTL/soc_busstat.v $RTL/soc_tmr_bank.v \
+$RTL/soc_wdog.v $RTL/soc_busstat.v $RTL/soc_scrub.v $RTL/soc_tmr_bank.v \
 $PILOT_RTL/tmr_voter.v"
 
 # ---- THE ACCELERATOR, WHICH WAS MISSING ------------------------------
@@ -234,7 +250,7 @@ MEM_RELEASE=""
 PNR=$SOC_DIR/pnr
 case "$SOC_MEM" in
   array)
-    MEM_READ="read_verilog -I$RTL -defer $RTL/soc_mem.v"
+    MEM_READ="read_verilog -I$RTL -defer $RTL/soc_mem_ecc.v $RTL/soc_mem.v"
     ;;
   sram)
     # The macro DECLARATIONS first, with -lib, so `soc_mem` resolves
@@ -244,7 +260,8 @@ case "$SOC_MEM" in
     # and the bank multiplexers inside soc_mem_sram.v are all measured.
     MEM_READ="read_verilog -lib $PNR/RM_IHPSG13_1P_2048x64_c2_bm_bist_bb.v
 read_verilog -lib $PNR/RM_IHPSG13_1P_1024x32_c2_bm_bist_bb.v
-read_verilog -I$RTL -defer $RTL/soc_mem_sram.v"
+read_verilog -lib $PNR/RM_IHPSG13_1P_512x16_c2_bm_bist_bb.v
+read_verilog -I$RTL -defer $RTL/soc_mem_ecc.v $RTL/soc_mem_sram.v"
     ;;
   blackbox)
     # A port declaration and nothing else. read_verilog -lib makes it a
@@ -260,7 +277,9 @@ module soc_mem #(
     parameter         RO        = 1'b0,
     parameter         INIT_FILE = "",
     parameter integer INIT_WORD = 0,
-    parameter         RDREG     = 1'b0
+    parameter         RDREG     = 1'b0,
+    parameter integer HARDEN    = 1,
+    parameter         ECC_BYTE  = 1'b1
 ) (
     input  wire        clk_i, rst_ni,
     input  wire        req_i,
@@ -271,7 +290,13 @@ module soc_mem #(
     output wire        gnt_o,
     output wire        rvalid_o,
     output wire [31:0] rdata_o,
-    output wire        err_o
+    output wire        err_o,
+    input  wire        scrub_en_i,
+    input  wire [15:0] scrub_ivl_i,
+    output wire        sec_o,
+    output wire        rd_o,
+    output wire        ded_o,
+    output wire [31:0] evt_addr_o
 );
 endmodule
 EOF
@@ -314,7 +339,12 @@ module soc_mem #(
     // every other timing property of soc_mem is: at RDREG = 1 a path out
     // of a memory starts one flip-flop LATER, and a stand-in that did
     // not follow would time the wrong boundary.
-    parameter         RDREG     = 1'b0
+    parameter         RDREG     = 1'b0,
+    // docs/67's codec. The stand-in has no code and no scrubber: its
+    // reports are constant and its control is unused, so a path into
+    // the SCRUB block from a memory does not exist in this netlist.
+    parameter integer HARDEN    = 1,
+    parameter         ECC_BYTE  = 1'b1
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -326,8 +356,18 @@ module soc_mem #(
     output wire        gnt_o,
     output wire        rvalid_o,
     output wire [31:0] rdata_o,
-    output wire        err_o
+    output wire        err_o,
+    input  wire        scrub_en_i,
+    input  wire [15:0] scrub_ivl_i,
+    output wire        sec_o,
+    output wire        rd_o,
+    output wire        ded_o,
+    output wire [31:0] evt_addr_o
 );
+  assign sec_o      = 1'b0;
+  assign rd_o       = 1'b0;
+  assign ded_o      = 1'b0;
+  assign evt_addr_o = 32'h0;
   reg [31:0] row;
   reg [29:0] a_q;
   reg [3:0]  be_q;
@@ -544,6 +584,6 @@ awk -v top=soc_top -v ge=7.2576 '
 ' "$OUT/$AREA_SUMMARY"
 
 echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE"
-echo "  mem_rdreg=$SOC_MEM_RDREG  abc -D $PERIOD_NS"
+echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  abc -D $PERIOD_NS"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"

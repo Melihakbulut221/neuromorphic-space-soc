@@ -1,0 +1,54 @@
+# cocotb + Icarus suite for hw/soc/rtl/soc_scrub.v, the memory codec's
+# counters and the scrubbers' control (docs/67).
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_scrub
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_scrub lint
+#
+# Standalone by design, same structure and the same rootless tool
+# discovery as Makefile.soc_busstat, whose block this one is modelled on.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+SOC_SCRUB_SRC ?= $(RTL)/soc_scrub.v
+
+VERILOG_SOURCES = $(SOC_SCRUB_SRC)
+TOPLEVEL = soc_scrub
+MODULE = test_soc_scrub
+
+SIM_BUILD ?= sim_build_soc_scrub
+COCOTB_RESULTS_FILE ?= results_soc_scrub.xml
+export COCOTB_RESULTS_FILE
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) $(SOC_SCRUB_SRC)
+
+endif

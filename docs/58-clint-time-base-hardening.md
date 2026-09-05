@@ -1289,6 +1289,10 @@ design and not a reconstruction of it.
    left, by two orders of magnitude over anything in section 9.1. The
    codec this document instantiates is (72,64) and the RAM macro is 64
    bits wide.
+   *Corrected 2026-09-05:* done in `docs/67-memory-protection.md`, and
+   the width coincidence was not the answer: (72,64) needs eight bits
+   the row does not have, and what fits is four (16,8) shortenings of
+   the same code.
 4. **Timing, for the first time on this block.** Section 11's fourth
    bullet. A decoder in front of a 64-bit incrementer is exactly the
    shape `docs/43` put in front of the register file's read port and

@@ -131,13 +131,19 @@ meta:
 regions:
   - name: RAM
     base: 0x00000000
-    size: 0x00010000
+    # 32 KiB since docs/67, from 64: the same four RM_IHPSG13_1P_2048x64
+    # macros now hold ONE protected word per 64-bit row -- four (16,8)
+    # SECDED byte codewords -- instead of two unprotected ones. docs/67
+    # section 3 costs the alternatives (a seventh macro for the check
+    # bits, a different code) and section 3.4 measures what the program
+    # uses: 192 bytes of static data and a stack, out of either size.
+    size: 0x00008000
     type: memory
     attr: rwx
     port: ram
     status: implemented
     device_id: 0x001
-    desc: System SRAM, 64 KiB. Data, stack and relocated .data live here
+    desc: System SRAM, 32 KiB, SECDED per byte lane and scrubbed (docs/67). Data, stack and relocated .data live here
     source: RAM at 0x0 (NOELVSYS grip.pdf table 2293, GR740 UM 2.3)
 
   # docs/51 reaches this window. The low 64 KiB of it is sixteen 4 KiB
@@ -306,8 +312,8 @@ apb_slots:
      desc: "QSPI flash controller, register mode, two chip selects; docs/66", source: "family style"}
   - {name: BUSSTAT, slot: 0x015, irq: 22, line: 10, status: implemented, device_id: 0x052,
      desc: "Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
-  - {name: SCRUB,   slot: 0x016, irq: 23, line: 11, status: reserved, device_id: 0x057,
-     desc: "Memory scrubber control, MEMSCRUB-like", source: "MEMSCRUB (GR740) remapped"}
+  - {name: SCRUB,   slot: 0x016, irq: 23, line: 11, status: implemented, device_id: 0x057,
+     desc: "Memory codec counters, scrubber control and the last uncorrectable address, MEMSCRUB-like; docs/67", source: "MEMSCRUB (GR740) remapped"}
   - {name: BOOTREG, slot: 0x017, irq: 0,  status: reserved, device_id: 0x087,
      desc: "Bootstrap pin readback and boot report register, GRGPREG-like", source: "GRGPREG 0xFFA09000 (GR740)"}
   - {name: CLKGATE, slot: 0x018, irq: 0,  status: reserved, device_id: 0x02C,

@@ -63,14 +63,23 @@
 // WHAT THIS DOES NOT DO, stated here rather than in a document, because
 // a reader of this file is the person it matters to:
 //
-//   * NO ECC AND NO SCRUBBING. soc_mem.v's header already says this of
-//     the behavioural model and it is not fixed by making the storage
-//     real. A macro word is 32 bits of data and nothing else. docs/38
-//     section 7 and soc_top.v's own header carry the consequence:
-//     SecureIbex is fixed at 0 because MemECC would require seven SECDED
-//     check bits per word that no memory in this design stores. Adding
-//     them means 39-bit rows, which means a different macro geometry
-//     and a different area, and it is not done here.
+//   * ECC AND SCRUBBING, as of docs/67, at HARDEN = 1 -- and the reason
+//     the RAM is now HALF the macro it was. A 64-bit row holds ONE
+//     32-bit word as four (16,8) byte codewords, so 64 KiB of
+//     RM_IHPSG13_1P_2048x64 holds 32 KiB of protected words and the
+//     map says 32 KiB; the ROM keeps its two 1024x32 data macros and
+//     gains a 512x16 check macro per bank for the (39,32) word code.
+//     hw/soc/rtl/soc_mem_ecc.v is the codec, the correction, the error
+//     response and the scrubber, shared with soc_mem.v; this file only
+//     puts macros under its row port. docs/67 section 3 costs the
+//     alternatives -- a seventh 2048x64 for check bits at +25.0 % of
+//     the macro area with a read-modify-write on every sb and sh, or a
+//     4096x16 at +13.1 % with one on every store -- and section 8
+//     says what the ROM's check bits are worth on a macro nothing in
+//     this design can write. At HARDEN = 0 with WORDS = 8192 the same
+//     four macros hold one word per row with no code at all, which is
+//     the baseline docs/67 measures the codec against; WORDS = 16384
+//     is docs/47's two-words-per-row mapping, kept unchanged.
 //
 //   * NO INITIAL CONTENTS. INIT_FILE and INIT_WORD are accepted so that
 //     soc_top.v's instantiation is unchanged, and they are IGNORED. An
@@ -79,7 +88,10 @@
 //     writes it, and this design contains nothing that can. docs/47
 //     section 4.4 states this as an open architectural item -- it needs
 //     either a mask ROM, a serial load path, or a boot from an external
-//     interface -- and it is not a layout question.
+//     interface -- and it is not a layout question. THE ROM'S CHECK
+//     MACROS ARE IN THE SAME POSITION: whatever loads the two data
+//     macros loads the two check macros, through the same row port and
+//     the same encoder, or the first fetch traps. docs/67 section 8.
 //
 //   * NO BIST. Every macro's A_BIST_* port set is parked: A_BIST_EN is
 //     tied low and the rest are tied to zero, which is what makes the
@@ -127,7 +139,10 @@ module soc_mem #(
     parameter         INIT_FILE = "",
     parameter integer INIT_WORD = 0,
     // One extra response stage. See the header.
-    parameter         RDREG     = 1'b0
+    parameter         RDREG     = 1'b0,
+    // The code and the scrubber; soc_mem.v and soc_mem_ecc.v.
+    parameter integer HARDEN    = 1,
+    parameter         ECC_BYTE  = 1'b1
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -140,77 +155,116 @@ module soc_mem #(
     output wire        gnt_o,
     output wire        rvalid_o,
     output wire [31:0] rdata_o,
-    output wire        err_o
+    output wire        err_o,
+
+    // The scrubber's control and the codec's reports; soc_mem_ecc.v.
+    // Unused and tied off in the HARDEN = 0 arms.
+    input  wire        scrub_en_i,
+    input  wire [15:0] scrub_ivl_i,
+    output wire        sec_o,
+    output wire        rd_o,
+    output wire        ded_o,
+    output wire [31:0] evt_addr_o
 );
 
-  // Protocol, unchanged from soc_mem.v: soc_bus.v rules S1-S4, always
-  // ready, fixed response latency, in order by construction. RDREG
-  // changes the latency and nothing else; gnt_o is combinational from
-  // req_i in both arms, so this memory still accepts one request per
-  // cycle.
-  assign gnt_o = req_i;
+  // ===================================================================
+  // WHICH ARMS ELABORATE
+  //
+  //   WORDS = 16384              docs/47's mapping, two words per 64-bit
+  //                              row, no code. HARDEN must be 0.
+  //   WORDS = 8192               one word per row through soc_mem_ecc:
+  //                              the byte code at HARDEN = 1, the same
+  //                              four macros with no code at HARDEN = 0
+  //                              (the control docs/67 measures against).
+  //   WORDS = 2048, HARDEN = 0   docs/47's ROM, two 1024x32 macros.
+  //   WORDS = 2048, HARDEN = 1   the same two, plus one 512x16 check
+  //                              macro per bank for the (39,32) code.
+  //
+  // PLAIN is the pair that keeps docs/47's response logic and instance
+  // paths byte for byte; the codec arms take their response from
+  // soc_mem_ecc.v and drive the ports from there.
+  // ===================================================================
+  localparam PLAIN = (WORDS == 16384) || (WORDS == 2048 && HARDEN == 0);
 
+  // The raw read return of the PLAIN arms, driven by whichever of them
+  // has a mapping for WORDS and read by g_rsp. Declared at module scope
+  // because the arms that drive it and the block that reads it are
+  // siblings; the codec arms leave it undriven and unread.
+  wire [31:0] rd_raw;
+
+  // The bus write, as the PLAIN arms decode it; the codec arms decode
+  // their own inside soc_mem_ecc.
   wire write_attempt = req_i && we_i;
   wire do_write      = write_attempt && !RO;
 
-  // The raw read return, driven by whichever generate branch below has a
-  // mapping for WORDS. rv0 and er0 are the one-cycle response this file
-  // had before RDREG existed.
-  wire [31:0] rd_raw;
-
-  reg rv0;
-  reg er0;
-
-  always @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      rv0 <= 1'b0;
-      er0 <= 1'b0;
-    end else begin
-      rv0 <= req_i;
-      er0 <= write_attempt && RO;
-    end
-  end
-
-  // ---- the response, with or without the extra stage ------------------
-  //
-  // The two arm names are soc_mem.v's, deliberately: the compiled-object
-  // check in hw/soc/flow/sim_soc.sh and the netlist check in docs/50 look
-  // for the same string whichever memory model is in the build.
   generate
-  if (!RDREG) begin : g_rd1
+  if (PLAIN) begin : g_rsp
+    assign sec_o      = 1'b0;
+    assign rd_o       = 1'b0;
+    assign ded_o      = 1'b0;
+    assign evt_addr_o = 32'h0;
+    wire _unused_scrub = &{1'b0, scrub_en_i, scrub_ivl_i, 1'b0};
 
-    assign rvalid_o = rv0;
-    assign rdata_o  = rd_raw;
-    assign err_o    = er0;
+    // Protocol, unchanged from soc_mem.v: soc_bus.v rules S1-S4, always
+    // ready, fixed response latency, in order by construction. RDREG
+    // changes the latency and nothing else; gnt_o is combinational from
+    // req_i in both arms, so this memory still accepts one request per
+    // cycle.
+    assign gnt_o = req_i;
 
-  end
-  if (RDREG) begin : g_rd2
-
-    reg        rv1;
-    reg        er1;
-    reg [31:0] rd1;
+    reg rv0;
+    reg er0;
 
     always @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni) begin
-        rv1 <= 1'b0;
-        rd1 <= 32'h0;
-        er1 <= 1'b0;
+        rv0 <= 1'b0;
+        er0 <= 1'b0;
       end else begin
-        rv1 <= rv0;
-        er1 <= er0;
-        // rv0 is the cycle in which this request's word is on A_DOUT and
-        // the bank and half selects captured with the request are
-        // driving the multiplexers, so this is the edge that has the
-        // word to capture. Gating on it also holds rdata_o between
-        // responses, as the unregistered arm's A_DOUT does.
-        if (rv0) rd1 <= rd_raw;
+        rv0 <= req_i;
+        er0 <= write_attempt && RO;
       end
     end
 
-    assign rvalid_o = rv1;
-    assign rdata_o  = rd1;
-    assign err_o    = er1;
+    // ---- the response, with or without the extra stage ------------------
+    //
+    // The two arm names are soc_mem.v's, deliberately: the compiled-object
+    // check in hw/soc/flow/sim_soc.sh and the netlist check in docs/50 look
+    // for the same string whichever memory model is in the build.
+    if (!RDREG) begin : g_rd1
 
+      assign rvalid_o = rv0;
+      assign rdata_o  = rd_raw;
+      assign err_o    = er0;
+
+    end
+    if (RDREG) begin : g_rd2
+
+      reg        rv1;
+      reg        er1;
+      reg [31:0] rd1;
+
+      always @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+          rv1 <= 1'b0;
+          rd1 <= 32'h0;
+          er1 <= 1'b0;
+        end else begin
+          rv1 <= rv0;
+          er1 <= er0;
+          // rv0 is the cycle in which this request's word is on A_DOUT and
+          // the bank and half selects captured with the request are
+          // driving the multiplexers, so this is the edge that has the
+          // word to capture. Gating on it also holds rdata_o between
+          // responses, as the unregistered arm's A_DOUT does.
+          if (rv0) rd1 <= rd_raw;
+        end
+      end
+
+      assign rvalid_o = rv1;
+      assign rdata_o  = rd1;
+      assign err_o    = er1;
+
+    end
   end
   endgenerate
 
@@ -324,7 +378,7 @@ module soc_mem #(
   // header.
   // -------------------------------------------------------------------
   end
-  if (WORDS == 2048) begin : g_rom_1024x32
+  if (WORDS == 2048 && HARDEN == 0) begin : g_rom_1024x32
 
     wire [10:0] widx = addr_i[12:2];
     wire        bank = widx[10];
@@ -357,21 +411,215 @@ module soc_mem #(
         .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(10'h0),
         .A_BIST_DIN(32'h0), .A_BIST_BM(32'h0));
 
+  end
+
+  // -------------------------------------------------------------------
+  // 32 KiB of protected RAM: the SAME 4 x RM_IHPSG13_1P_2048x64_c2_bm_bist,
+  // one word per row, through soc_mem_ecc.v (docs/67).
+  //
+  //   row[12:11]  bank        4 banks x 2048 rows
+  //   row[10:0]   macro row   2048 rows of 64 bits, one word and its
+  //                           four byte-lane check fields each
+  //
+  // At HARDEN = 0 the codec is absent and the upper 32 bits of every
+  // row are never written and never read: the one-word-per-row control
+  // against which the codec's own cost is measured.
+  // -------------------------------------------------------------------
+  if (WORDS == 8192) begin : g_ram_2048x64_ecc
+
+    wire        row_en, row_we;
+    wire [12:0] row_addr;
+    wire [63:0] row_din, row_bm, row_dout;
+
+    soc_mem_ecc #(
+        .WORDS (8192), .RO (RO), .HARDEN (HARDEN), .ECC_BYTE (1'b1),
+        .RDREG (RDREG), .RW (64)
+    ) u_ecc (
+        .clk_i (clk_i), .rst_ni (rst_ni),
+        .req_i (req_i), .addr_i (addr_i), .we_i (we_i), .be_i (be_i),
+        .wdata_i (wdata_i), .gnt_o (gnt_o), .rvalid_o (rvalid_o),
+        .rdata_o (rdata_o), .err_o (err_o),
+        .row_en_o (row_en), .row_we_o (row_we), .row_addr_o (row_addr),
+        .row_din_o (row_din), .row_bm_o (row_bm), .row_dout_i (row_dout),
+        .scrub_en_i (scrub_en_i), .scrub_ivl_i (scrub_ivl_i),
+        .sec_o (sec_o), .rd_o (rd_o), .ded_o (ded_o), .evt_addr_o (evt_addr_o)
+    );
+
+    wire [1:0]  bank = row_addr[12:11];
+    wire [10:0] mrow = row_addr[10:0];
+    wire        rden = row_en && !row_we;
+
+    wire [63:0] dout0, dout1, dout2, dout3;
+
+    // The bank select is captured on a READ and held across writes, so
+    // the multiplexer follows A_DOUT, which itself holds across a write.
+    reg [1:0] bank_q;
+    always @(posedge clk_i or negedge rst_ni)
+      if (!rst_ni)      bank_q <= 2'b00;
+      else if (rden)    bank_q <= bank;
+
+    reg [63:0] dsel;
+    always @(*) begin
+      case (bank_q)
+        2'd0:    dsel = dout0;
+        2'd1:    dsel = dout1;
+        2'd2:    dsel = dout2;
+        default: dsel = dout3;
+      endcase
+    end
+    assign row_dout = dsel;
+
+    RM_IHPSG13_1P_2048x64_c2_bm_bist u_b0 (
+        .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd0)),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
+        .A_DOUT(dout0),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
+        .A_BIST_DIN(64'h0), .A_BIST_BM(64'h0));
+
+    RM_IHPSG13_1P_2048x64_c2_bm_bist u_b1 (
+        .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd1)),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
+        .A_DOUT(dout1),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
+        .A_BIST_DIN(64'h0), .A_BIST_BM(64'h0));
+
+    RM_IHPSG13_1P_2048x64_c2_bm_bist u_b2 (
+        .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd2)),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
+        .A_DOUT(dout2),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
+        .A_BIST_DIN(64'h0), .A_BIST_BM(64'h0));
+
+    RM_IHPSG13_1P_2048x64_c2_bm_bist u_b3 (
+        .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd3)),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
+        .A_DOUT(dout3),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
+        .A_BIST_DIN(64'h0), .A_BIST_BM(64'h0));
+
+  end
+
+  // -------------------------------------------------------------------
+  // 8 KiB of protected boot ROM: docs/47's 2 x RM_IHPSG13_1P_1024x32 for
+  // the words, plus 2 x RM_IHPSG13_1P_512x16_c2_bm_bist for the seven
+  // check bits of the (39,32) word code, one per bank (docs/67).
+  //
+  //   row[10]    bank         2 banks x 1024 words
+  //   row[9:0]   macro row    1024 rows of 32 bits in the data macro
+  //   row[9]     half         which 7-bit field of the 512x16's 16-bit
+  //   row[8:0]   check row    row holds this word's check bits
+  //
+  // The check macro has 512 rows of 16 bits: rows 0..511 keep their
+  // check field in bits [6:0], rows 512..1023 in bits [13:7], selected
+  // by row[9]. Bits [15:14] are never written. The ROM is read-only to
+  // the bus, so the only writer of all four macros is the scrubber's
+  // write-back of a corrected word, through A_BM.
+  // -------------------------------------------------------------------
+  if (WORDS == 2048 && HARDEN != 0) begin : g_rom_1024x32_ecc
+
+    wire        row_en, row_we;
+    wire [10:0] row_addr;
+    wire [38:0] row_din, row_bm, row_dout;
+
+    soc_mem_ecc #(
+        .WORDS (2048), .RO (RO), .HARDEN (1), .ECC_BYTE (1'b0),
+        .RDREG (RDREG), .RW (39)
+    ) u_ecc (
+        .clk_i (clk_i), .rst_ni (rst_ni),
+        .req_i (req_i), .addr_i (addr_i), .we_i (we_i), .be_i (be_i),
+        .wdata_i (wdata_i), .gnt_o (gnt_o), .rvalid_o (rvalid_o),
+        .rdata_o (rdata_o), .err_o (err_o),
+        .row_en_o (row_en), .row_we_o (row_we), .row_addr_o (row_addr),
+        .row_din_o (row_din), .row_bm_o (row_bm), .row_dout_i (row_dout),
+        .scrub_en_i (scrub_en_i), .scrub_ivl_i (scrub_ivl_i),
+        .sec_o (sec_o), .rd_o (rd_o), .ded_o (ded_o), .evt_addr_o (evt_addr_o)
+    );
+
+    wire       bank = row_addr[10];
+    wire [9:0] mrow = row_addr[9:0];
+    wire       half = row_addr[9];
+    wire       rden = row_en && !row_we;
+
+    wire [31:0] dout0, dout1;
+    wire [15:0] cout0, cout1;
+    wire [15:0] cdin = {2'b00, row_din[38:32], row_din[38:32]};
+    wire [15:0] cbm  = half ? {2'b00, row_bm[38:32], 7'h00}
+                            : {9'h000, row_bm[38:32]};
+
+    reg bank_q, half_q;
+    always @(posedge clk_i or negedge rst_ni)
+      if (!rst_ni) begin
+        bank_q <= 1'b0;
+        half_q <= 1'b0;
+      end else if (rden) begin
+        bank_q <= bank;
+        half_q <= half;
+      end
+
+    wire [15:0] csel = bank_q ? cout1 : cout0;
+    wire [6:0]  chk  = half_q ? csel[13:7] : csel[6:0];
+    assign row_dout = {chk, bank_q ? dout1 : dout0};
+
+    RM_IHPSG13_1P_1024x32_c2_bm_bist u_b0 (
+        .A_CLK(clk_i), .A_MEN(row_en && !bank),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow), .A_DIN(row_din[31:0]), .A_BM(row_bm[31:0]),
+        .A_DLY(dly), .A_DOUT(dout0),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(10'h0),
+        .A_BIST_DIN(32'h0), .A_BIST_BM(32'h0));
+
+    RM_IHPSG13_1P_1024x32_c2_bm_bist u_b1 (
+        .A_CLK(clk_i), .A_MEN(row_en && bank),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow), .A_DIN(row_din[31:0]), .A_BM(row_bm[31:0]),
+        .A_DLY(dly), .A_DOUT(dout1),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(10'h0),
+        .A_BIST_DIN(32'h0), .A_BIST_BM(32'h0));
+
+    RM_IHPSG13_1P_512x16_c2_bm_bist u_c0 (
+        .A_CLK(clk_i), .A_MEN(row_en && !bank),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow[8:0]), .A_DIN(cdin), .A_BM(cbm),
+        .A_DLY(dly), .A_DOUT(cout0),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(9'h0),
+        .A_BIST_DIN(16'h0), .A_BIST_BM(16'h0));
+
+    RM_IHPSG13_1P_512x16_c2_bm_bist u_c1 (
+        .A_CLK(clk_i), .A_MEN(row_en && bank),
+        .A_WEN(row_we), .A_REN(!row_we),
+        .A_ADDR(mrow[8:0]), .A_DIN(cdin), .A_BM(cbm),
+        .A_DLY(dly), .A_DOUT(cout1),
+        .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
+        .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(9'h0),
+        .A_BIST_DIN(16'h0), .A_BIST_BM(16'h0));
+
+  end
+
   // -------------------------------------------------------------------
   // Anything else is a mapping that does not exist. Loudly, at
   // elaboration, rather than quietly with a wrong address decode.
   // -------------------------------------------------------------------
-  end
-  if (WORDS != 16384 && WORDS != 2048) begin : g_unsupported
+  if (!PLAIN && WORDS != 8192 && WORDS != 2048) begin : g_unsupported
 
     // synthesis translate_off
     initial begin
-      $display("soc_mem_sram.v: no macro mapping for WORDS=%0d", WORDS);
+      $display("soc_mem_sram.v: no macro mapping for WORDS=%0d HARDEN=%0d",
+               WORDS, HARDEN);
       $finish;
     end
     // synthesis translate_on
     UNSUPPORTED_SOC_MEM_SRAM_WORDS u_unsupported ();
-    assign rd_raw = 32'h0;
 
   end
   endgenerate

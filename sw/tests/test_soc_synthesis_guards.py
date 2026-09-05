@@ -1190,11 +1190,18 @@ def test_nothing_in_the_design_instantiates_the_watchdog_unhardened():
     text = (SOC_RTL / "soc_wdog.v").read_text()
     assert re.search(r"parameter\s+integer\s+HARDEN\s*=\s*1", text), (
         "soc_wdog.v's HARDEN parameter no longer defaults to 1")
-    for name in ("soc_gptimer.v", "soc_top.v"):
-        body = (SOC_RTL / name).read_text()
-        assert ".HARDEN" not in body, (
-            "{} overrides soc_wdog's HARDEN parameter. Nothing in the "
-            "design may: HARDEN = 0 is the unprotected block.".format(name))
+    assert ".HARDEN" not in (SOC_RTL / "soc_gptimer.v").read_text(), (
+        "soc_gptimer.v overrides soc_wdog's HARDEN parameter. Nothing in "
+        "the design may: HARDEN = 0 is the unprotected block.")
+    # soc_top.v's GPTIMER instantiation and not the whole file: since
+    # docs/67 the memories take `.HARDEN(MEM_HARDEN)` from soc_top's own
+    # defaulted parameter, which test_soc_memory_guards.py guards.
+    top = (SOC_RTL / "soc_top.v").read_text()
+    m = re.search(r"soc_gptimer\s*#\((.*?)\)\s*u_timer0", top, re.S)
+    assert m, "soc_top.v no longer instantiates soc_gptimer with parameters"
+    assert ".HARDEN" not in m.group(1), (
+        "soc_top.v overrides the watchdog's HARDEN through soc_gptimer. "
+        "Nothing in the design may: HARDEN = 0 is the unprotected block.")
 
 
 def test_the_voter_is_the_blob_the_pilot_freeze_pins():
@@ -1491,7 +1498,8 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
         "prim_clock_gating.v", "ibex_regfile_secded.v", "soc_bus.v",
         "soc_apb_bridge.v", "soc_uart.v", "soc_gpio.v", "soc_qspi.v", "soc_pnp.v",
         "soc_apb_pnp.v", "soc_clint.v", "soc_gptimer.v", "soc_wdog.v",
-        "soc_busstat.v", "soc_tmr_bank.v", "soc_npu.v", "soc_npu_ser.v")]
+        "soc_busstat.v", "soc_scrub.v", "soc_tmr_bank.v", "soc_npu.v",
+        "soc_npu_ser.v")]
     # This list is a FIFTH copy of the four the flow-list guard below
     # checks, and docs/65 found it the way docs/57 found the other four:
     # soc_gpio.v was added to every flow and this test still failed,
@@ -2193,3 +2201,185 @@ def test_the_clint_corrects_on_every_path_that_reads_the_counter():
             "mtime_q -- the RAW, possibly corrupt register -- is read "
             "somewhere the correction does not cover:\n  {}".format(
                 stripped.strip()))
+
+
+# =====================================================================
+# 9. The memory codec and the scrubber, docs/67
+#
+# hw/soc/rtl/soc_mem_ecc.v under hw/soc/rtl/soc_mem_sram.v, with the
+# six macros as blackboxes: the census the whole-SoC synthesis cannot
+# give, because the flattened netlist loses every instance path but the
+# macros'. The scope is the RAM wrapper alone at WORDS = 8192 -- the
+# arm the design instantiates -- and the ROM wrapper at WORDS = 2048.
+# =====================================================================
+MEM_ECC = SOC_RTL / "soc_mem_ecc.v"
+MEM_SRAM = SOC_RTL / "soc_mem_sram.v"
+MEM_BB = [SOC_PNR / "RM_IHPSG13_1P_2048x64_c2_bm_bist_bb.v",
+          SOC_PNR / "RM_IHPSG13_1P_1024x32_c2_bm_bist_bb.v",
+          SOC_PNR / "RM_IHPSG13_1P_512x16_c2_bm_bist_bb.v"]
+MEM_SOURCES = [MEM_ECC, MEM_SRAM, SECDED_ENC, SECDED_DEC]
+
+
+def _mem_script(sources, words, harden, ro, ecc_byte):
+    """The recipe hw/soc/flow/syn_soc.sh runs, restricted to the memory
+    wrapper with the macros read as blackboxes, the way
+    flow/syn_soc_top.sh reads them at SOC_MEM=sram."""
+    lib = _sg13g2_liberty()
+    script = "".join("read_verilog -lib {}; ".format(b) for b in MEM_BB)
+    script += " read_verilog -I {} -I {} {};".format(
+        SOC_RTL, PILOT_RTL, " ".join(str(s) for s in sources))
+    script += (" chparam -set WORDS {} -set HARDEN {} -set RO {} "
+               "-set ECC_BYTE {} soc_mem;".format(words, harden, ro, ecc_byte))
+    script += " hierarchy -top soc_mem; synth -top soc_mem -flatten;"
+    if lib is not None:
+        script += " dfflibmap -liberty {0}; abc -liberty {0};".format(lib)
+    script += " attrmap -modattr -remove keep_hierarchy; flatten; opt_clean;"
+    return script
+
+
+def _mem_geometry(words, ecc_byte):
+    """The wrapper's flip-flop budget at HARDEN = 1, DERIVED from the RTL:
+
+      soc_mem_ecc   rv0, er0, rd0        3   (er0 is a constant at RO = 0
+                                              and is removed, so 2)
+                    row_q                AW
+                    sptr, stick, srd_q   AW + 16 + 1
+      the wrapper   bank_q               2 (RAM) or 1 + half_q (ROM)
+    """
+    aw = int(math.log2(words))
+    ecc = 2 + aw + aw + 16 + 1      # rv0, rd0, row_q, sptr, stick, srd_q
+    if ecc_byte:
+        return ecc, 2               # bank_q[1:0]
+    return ecc + 1, 2               # er0 is live at RO = 1; bank_q, half_q
+
+
+def _mem_census(workdir, tag, **kw):
+    return _census(_mem_script(MEM_SOURCES, **kw), workdir)
+
+
+@needs_yosys
+def test_the_ram_codec_and_scrubber_survive_synthesis(workdir):
+    """The RAM wrapper at the design's parameters: the scrubber's state
+    and the response registers are in the netlist, and BOTH codec cones
+    -- four encoders and four decoders by instance path -- are there
+    after the post-mapping flatten. The encoder is the half a reader
+    would expect to disappear (docs/58 section 9.4's argument, one
+    memory over); nothing in this flow proves the sequential invariant
+    that would license deleting it, and this is the measurement that
+    says it held."""
+    census = _mem_census(workdir, "ram", words=8192, harden=1, ro=0, ecc_byte=1)
+    ecc, wrap = _mem_geometry(8192, True)
+    assert census.total == ecc + wrap, (
+        "expected {} flip-flops of codec state plus {} of wrapper state, "
+        "found {}".format(ecc, wrap, census.total))
+    text = (Path(workdir) / "census.json").read_text()
+    for lane in range(4):
+        for inst in ("g_enc_byte.g_lane[%d].u_enc" % lane,
+                     "g_dec_byte.g_lane[%d].u_dec" % lane):
+            assert inst in text, (
+                "no cell in the mapped netlist lies under {}: a codec cone "
+                "was optimised away".format(inst))
+    assert "g_scrub" in text, "the scrubber left no cell in the netlist"
+
+
+@needs_yosys
+def test_the_rom_codec_and_scrubber_survive_synthesis(workdir):
+    """The ROM wrapper: one encoder, one decoder, four macros, and the
+    scrubber's state -- with er0 live, because a write to a ROM is
+    answered with err."""
+    census = _mem_census(workdir, "rom", words=2048, harden=1, ro=1, ecc_byte=0)
+    ecc, wrap = _mem_geometry(2048, False)
+    assert census.total == ecc + wrap, (
+        "expected {} + {} flip-flops, found {}".format(ecc, wrap, census.total))
+    text = (Path(workdir) / "census.json").read_text()
+    assert "g_enc_word.u_enc" in text and "g_dec_word.u_dec" in text
+    for leaf in ("u_b0", "u_b1", "u_c0", "u_c1"):
+        assert "g_rom_1024x32_ecc." + leaf in text, (
+            "the ROM's {} macro is not in the netlist".format(leaf))
+
+
+@needs_yosys
+def test_harden_zero_removes_the_codec_and_the_scrubber_and_nothing_else(workdir):
+    """The baseline docs/67 measures the codec against: the SAME files
+    with HARDEN = 0 hold one word per row in the same four macros with no
+    code and no scrubber -- the response registers and the bank select
+    and nothing more. docs/41 section 6.5's rule, and the proof that the
+    two guards above can fail."""
+    census = _mem_census(workdir, "ram0", words=8192, harden=0, ro=0, ecc_byte=1)
+    # rv0, row_q (evt_addr_o still reports the last row at HARDEN = 0,
+    # so the register that feeds it is live), bank_q[1:0]; rd0 and er0
+    # feed nothing and are removed.
+    aw = int(math.log2(8192))
+    assert census.total == 1 + aw + 2, (
+        "the unhardened RAM wrapper should hold {} flip-flops, found "
+        "{}".format(1 + aw + 2, census.total))
+    text = (Path(workdir) / "census.json").read_text()
+    assert "u_enc" not in text and "u_dec" not in text and "g_scrub" not in text
+
+
+@needs_yosys
+def test_docs47s_arm_is_still_the_wrapper_it_was(workdir):
+    """WORDS = 16384 at HARDEN = 0 is the mapping docs/47 through docs/66
+    hardened -- two words per row, a half select, no codec -- and
+    hw/soc/pnr/config.json still names its instances. It has to keep
+    elaborating, with its four macros and its five flip-flops (rv0,
+    er0 is constant, bank_q[1:0], half_q), because the day it does not
+    is the day docs/47's floorplan can no longer be reproduced."""
+    census = _mem_census(workdir, "docs47", words=16384, harden=0, ro=0, ecc_byte=1)
+    assert census.total == 4, (
+        "docs/47's RAM wrapper should hold 4 flip-flops, found {}".format(
+            census.total))
+    text = (Path(workdir) / "census.json").read_text()
+    for leaf in ("u_b0", "u_b1", "u_b2", "u_b3"):
+        assert "g_ram_2048x64." + leaf in text
+
+
+@needs_yosys
+def test_the_census_cannot_tell_a_corrector_from_a_launderer(workdir):
+    """WHAT THIS FILE DOES NOT COVER, measured rather than claimed, in
+    the shape docs/58 section 9.4 established for the CLINT.
+
+    The mutation below makes the scrubber write back the RAW row instead
+    of the corrected one: the syndrome is re-encoded into a valid
+    codeword over the wrong value, and the memory becomes soc_clint.v
+    H6's "ECC counter that silently does nothing" -- an upset is
+    corrected on every read until the scrubber reaches it, and then it
+    is made permanent. It costs the same flip-flops and the same cones,
+    and this test asserts that it does. The check that fails on it is
+    hw/soc/tb/cocotb/mutate_soc_mem.py's `wb_raw`, in the suite, and
+    sw/tests/test_soc_memory_guards.py, in the text."""
+    dst = Path(workdir) / "mem_wb_raw"
+    dst.mkdir(exist_ok=True)
+    mutated = []
+    for src in MEM_SOURCES:
+        text = src.read_text()
+        if src == MEM_ECC:
+            old = "  wire [31:0] enc_in = req_i ? wdata_i : rd_word;"
+            assert old in text
+            text = text.replace(
+                old, "  wire [31:0] enc_in = req_i ? wdata_i : row_dout_i[31:0];")
+        target = dst / src.name
+        target.write_text(text)
+        mutated.append(target)
+    census = _census(_mem_script(mutated, words=8192, harden=1, ro=0, ecc_byte=1),
+                     workdir)
+    ecc, wrap = _mem_geometry(8192, True)
+    assert census.total == ecc + wrap, (
+        "the launderer mutation changed the flip-flop count, so this test "
+        "is no longer measuring what it says it measures")
+
+
+def test_the_pnr_macro_blackboxes_cover_the_shipped_wrapper():
+    """Three blackboxes for three macro types, and every type the RTL
+    instantiates in any arm has one, or synthesis at SOC_MEM=sram and the
+    JSON header of the layout die on an unknown module."""
+    sram = MEM_SRAM.read_text()
+    used = set(re.findall(r"\b(RM_IHPSG13_1P_\w+_bm_bist)\s+u_", sram))
+    have = {b.name[:-len("_bb.v")] for b in MEM_BB}
+    assert used == have, (
+        "the wrapper instantiates {} but hw/soc/pnr/ has blackboxes for "
+        "{}".format(sorted(used), sorted(have)))
+    flow = (SOC_FLOW / "syn_soc_top.sh").read_text()
+    for name in have:
+        assert name + "_bb.v" in flow, (
+            "flow/syn_soc_top.sh does not read {}_bb.v at SOC_MEM=sram".format(name))

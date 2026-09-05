@@ -52,6 +52,7 @@ Run with the repository-root suite::
     .venv/bin/python -m pytest sw/tests/test_soc_memory_guards.py
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -213,3 +214,229 @@ def test_the_fabric_probe_is_an_observer_and_nothing_else():
         "counters".format(sorted(lhs - declared)))
     assert "SOC_PROBE" in (SOC_FLOW / "sim_soc.sh").read_text(), (
         "flow/sim_soc.sh no longer has a way to compile the probe in")
+
+
+# =====================================================================
+# docs/67: the codec, the scrubber and the SCRUB block
+# =====================================================================
+#
+# Textual guards, complementary to the census in
+# test_soc_synthesis_guards.py rather than a weaker version of it. The
+# census proves the encoders, the decoders and the scrubber's state
+# EXIST in the mapped netlist; these prove they are wired the way round
+# that protects, that the protection cannot be switched off by an
+# instantiation, and that the reports reach the block that counts them.
+# Every wrong-way-round edit below is functionally invisible in a
+# fault-free machine, which is why a text check and not a simulation is
+# what stands between it and silicon.
+
+SOC_TB = ROOT / "hw" / "soc" / "tb"
+PILOT_RTL = ROOT / "hw" / "rtl"
+
+
+def _ecc_text():
+    return (SOC_RTL / "soc_mem_ecc.v").read_text()
+
+
+def test_the_codec_is_read_from_hw_rtl_and_not_copied_into_the_memory():
+    """One SECDED codec in this repository. The memory files instantiate
+    hw/rtl/secded_enc.v and secded_dec.v and carry no H row of their
+    own; every flow that builds them reads the two files out of hw/rtl/,
+    which docs/34 freezes and nothing here modifies."""
+    for name in ("soc_mem_ecc.v", "soc_mem.v", "soc_mem_sram.v", "soc_scrub.v"):
+        text = "\n".join(l.split("//")[0] for l in
+                         (SOC_RTL / name).read_text().splitlines())
+        assert "H_ROW" not in text, (
+            "{} carries an H row of its own: the codec is read from "
+            "hw/rtl/ and never copied".format(name))
+    ecc = _ecc_text()
+    assert "secded_enc u_enc" in ecc and "secded_dec u_dec" in ecc
+    assert "secded_enc u_init_enc" in (SOC_RTL / "soc_mem.v").read_text(), (
+        "soc_mem.v no longer derives the ROM's check bits from the frozen "
+        "encoder at load")
+    for flow in ("sim_soc.sh", "fi_core.sh", "fi_npu.sh"):
+        text = (SOC_FLOW / flow).read_text()
+        assert "soc_mem_ecc.v" in text and "soc_scrub.v" in text, (
+            "hw/soc/flow/{} does not read the memory codec or the SCRUB "
+            "block".format(flow))
+    for name in ("secded_enc.v", "secded_dec.v"):
+        assert not (SOC_RTL / name).exists(), (
+            "a copy of {} appeared under hw/soc/rtl/".format(name))
+
+
+def test_the_memory_protection_defaults_on_and_nothing_turns_it_off():
+    """The same rule the watchdog's, the CLINT's and the NPU's HARDEN
+    carry: a parameter that can turn a defence off is a parameter
+    someone turns off. MEM_HARDEN defaults to 1 in soc_top.v, both
+    memory files default HARDEN to 1, soc_top passes MEM_HARDEN through
+    and nothing else, and no committed flow, config or test hard-codes
+    it to 0 outside the three measurement knobs."""
+    top = (SOC_RTL / "soc_top.v").read_text()
+    assert re.search(r"parameter\s+integer\s+MEM_HARDEN\s*=\s*1\b", top)
+    assert re.search(r"parameter\s+integer\s+ROM_HARDEN\s*=\s*MEM_HARDEN\b", top)
+    assert ".HARDEN(MEM_HARDEN), .ECC_BYTE(1'b1)) u_ram" in top
+    assert ".HARDEN(ROM_HARDEN), .ECC_BYTE(1'b0)) u_rom" in top
+    for name in ("soc_mem.v", "soc_mem_sram.v", "soc_mem_ecc.v"):
+        text = (SOC_RTL / name).read_text()
+        assert re.search(r"parameter\s+integer\s+HARDEN\s*=\s*1\b", text), (
+            "{}'s HARDEN no longer defaults to 1".format(name))
+    allowed = {SOC_FLOW / "syn_soc_top.sh", SOC_FLOW / "sim_soc.sh",
+               SOC_FLOW / "fi_core.sh"}
+    pattern = re.compile(r"SOC_MEM_HARDEN\s*=\s*0|SOC_ROM_HARDEN\s*=\s*0"
+                         r"|MEM_HARDEN\s*\(\s*0\s*\)|ROM_HARDEN\s*\(\s*0\s*\)"
+                         r"|MEM_HARDEN\s*=\s*0")
+    offenders = []
+    for path in (list(ROOT.glob("hw/**/*.sh")) + list(ROOT.glob("hw/**/*.v"))
+                 + list(ROOT.glob("sw/**/*.py"))):
+        if path in allowed or "/runs/" in str(path) or "/out/" in str(path) \
+                or "/ext/" in str(path) or "/gen" in str(path):
+            continue
+        if path == Path(__file__):
+            continue
+        body = "\n".join(
+            line for line in path.read_text(errors="ignore").split("\n")
+            if not line.lstrip().startswith(("#", "//")))
+        if pattern.search(body):
+            offenders.append(str(path.relative_to(ROOT)))
+    assert not offenders, (
+        "these files turn the memory protection off: {}".format(offenders))
+    # hw/soc/pnr/config-ecc.json is the one configuration that names
+    # ROM_HARDEN=0, and it says why in the generator that wrote it.
+    cfg = json.loads((ROOT / "hw" / "soc" / "pnr" / "config-ecc.json").read_text())
+    assert cfg.get("SYNTH_PARAMETERS") == ["ROM_HARDEN=0"]
+
+
+def test_the_codec_corrects_on_every_path_that_reads_a_row():
+    """The wrong-way-round edits, forbidden by text.
+
+      * the encoders cover `enc_in`, which is the bus word on a bus
+        cycle and the CORRECTED word on a scrub write-back -- encoding
+        the raw row would launder an upset into a valid wrong codeword;
+      * the read path returns the corrected word, never the raw row;
+      * the scrubber writes back only lanes the decoder corrected and
+        never an uncorrectable one;
+      * an uncorrectable read answers with err;
+      * every report line is derived, none is tied off."""
+    ecc = _ecc_text()
+    assert "wire [31:0] enc_in = req_i ? wdata_i : rd_word;" in ecc
+    assert ".data_in   ({56'h0, enc_in[8*l +: 8]})," in ecc
+    assert ".data_in   ({32'h0, enc_in})," in ecc
+    assert "assign rd_word[8*l +: 8] = row_dout_i[8*l +: 8] ^ mask;" in ecc
+    assert "assign rd_word  = row_dout_i[31:0] ^ mask;" in ecc
+    assert "assign bm_wb[8*l +: 8]        = {8{sec[l]}};" in ecc
+    assert "assign bm_wb[32+8*l +: 8]     = {8{sec[l]}};" in ecc
+    assert "assign s_wb   = s_hit && sec_any;" in ecc
+    assert "wire err0 = er0 || (rsp_rd && ded_any);" in ecc
+    assert "assign sec_o      = s_wb;" in ecc
+    assert "assign rd_o       = rsp_rd && sec_any;" in ecc
+    assert "assign ded_o      = (rsp_rd || s_hit) && ded_any;" in ecc
+    # The raw row reaches nothing but the decoders, the correction XOR
+    # and the plain arm.
+    for line in ecc.splitlines():
+        code = line.split("//")[0]
+        if "row_dout_i" not in code or "input" in code:
+            continue
+        assert ("secded_dec" in code or ".code_in" in code
+                or "^ mask" in code or "g_dec_plain" in code
+                or "assign rd_word = row_dout_i[31:0];" in code), (
+            "the raw row is read somewhere the correction does not "
+            "cover:\n  " + code.strip())
+
+
+def test_the_scrubber_never_takes_the_port_from_the_bus():
+    """The back-door port's whole argument: a scrub read only in an idle
+    cycle, a write-back only in an idle cycle, and the bus's request
+    owning every row-port signal in its own cycle."""
+    ecc = _ecc_text()
+    assert "assign s_go   = s_due && idle && !srd_q;" in ecc
+    assert "assign s_hit  = srd_q && idle;" in ecc
+    assert "assign row_addr_o = req_i ? bus_row : sptr_w;" in ecc
+    assert "assign row_bm_o   = req_i ? bm_bus  : bm_wb;" in ecc
+    assert "assign gnt_o = req_i;" in ecc
+    assert "if (s_hit) sptr <= sptr +" in ecc
+
+
+def test_the_reports_reach_the_scrub_block_and_its_line_is_wired():
+    """Every event line of both memories arrives at soc_scrub.v, the
+    scrubbers' control comes from it, and its interrupt is on the line
+    the map assigns. pilot_top.v shipped four unconnected ECC status
+    wires once; this is the check that neither memory does."""
+    top = (SOC_RTL / "soc_top.v").read_text()
+    for port, wire in (("sec_o", "ram_sec_ev"), ("rd_o", "ram_rd_ev"),
+                       ("ded_o", "ram_ded_ev"), ("evt_addr_o", "ram_ded_addr"),
+                       ("scrub_en_i", "scrub_ram_en"), ("scrub_ivl_i", "scrub_ivl")):
+        assert re.search(r"\.%s\s*\(%s\)" % (port, wire), top), (
+            "u_ram's {} is not wired to {}".format(port, wire))
+    for port, wire in (("sec_o", "rom_sec_ev"), ("rd_o", "rom_rd_ev"),
+                       ("ded_o", "rom_ded_ev"), ("evt_addr_o", "rom_ded_addr"),
+                       ("scrub_en_i", "scrub_rom_en")):
+        assert re.search(r"\.%s\s*\(%s\)" % (port, wire), top), (
+            "u_rom's {} is not wired to {}".format(port, wire))
+    for port, wire in (("ram_sec_i", "ram_sec_ev"), ("ram_rd_i", "ram_rd_ev"),
+                       ("ram_ded_i", "ram_ded_ev"), ("ram_addr_i", "ram_ded_addr"),
+                       ("rom_sec_i", "rom_sec_ev"), ("rom_rd_i", "rom_rd_ev"),
+                       ("rom_ded_i", "rom_ded_ev"), ("rom_addr_i", "rom_ded_addr"),
+                       ("ram_en_o", "scrub_ram_en"), ("rom_en_o", "scrub_rom_en"),
+                       ("ivl_o", "scrub_ivl"), ("irq_o", "scrub_irq")):
+        assert re.search(r"\.%s\s*\(%s\)" % (port, wire), top), (
+            "u_scrub's {} is not wired to {}".format(port, wire))
+    assert "irq_fast[SOC_IRQLINE_SCRUB]   = scrub_irq;" in top
+    assert "soc_scrub #(.IVL_RST(SCRUB_IVL_RST)) u_scrub" in top
+
+
+def test_the_scrubbers_ship_enabled():
+    """docs/44 section 11's rule as a check: both enables reset to 1 in
+    soc_scrub.v, the interval at reset is a named parameter soc_top.v
+    sets, and the register that can stop a scrubber is in the system
+    reset domain so a watchdog reset restores it."""
+    scrub = (SOC_RTL / "soc_scrub.v").read_text()
+    assert "ram_en_q <= 1'b1;" in scrub and "rom_en_q <= 1'b1;" in scrub
+    assert "ivl_q    <= IVL_RST;" in scrub
+    top = (SOC_RTL / "soc_top.v").read_text()
+    assert re.search(r"parameter\s+\[15:0\]\s+SCRUB_IVL_RST\s*=\s*16'd255", top)
+    assert "soc_scrub" in (SOC_FLOW / "syn_soc.sh").read_text()
+
+
+def test_the_software_header_matches_the_block():
+    """hw/soc/tb/sw/soc_scrub.h carries the offsets and bit numbers of
+    soc_scrub.v; the two are compared here so a driver cannot read the
+    wrong register."""
+    scrub = (SOC_RTL / "soc_scrub.v").read_text()
+    hdr = (SOC_TB / "sw" / "soc_scrub.h").read_text()
+    regs = dict(re.findall(r"localparam \[11:0\] REG_(\w+)\s*=\s*12'h([0-9A-Fa-f]+);", scrub))
+    for name, off in regs.items():
+        m = re.search(r"#define SCR_%s\s+\(SOC_SCRUB_BASE \+ 0x([0-9A-Fa-f]+)u\)" % name, hdr)
+        assert m, "soc_scrub.h has no SCR_{}".format(name)
+        assert int(m.group(1), 16) == int(off, 16), (
+            "SCR_{} is at 0x{} in the header and 0x{} in the RTL".format(
+                name, m.group(1), off))
+    bits = dict(re.findall(r"localparam integer S_(\w+)\s*=\s*(\d+);", scrub))
+    for name, idx in bits.items():
+        m = re.search(r"#define SCR_S_%s\s+\(1u << (\d+)\)" % name, hdr)
+        assert m and int(m.group(1)) == int(idx), (
+            "SCR_S_{} disagrees between the header and the RTL".format(name))
+
+
+def test_the_pnr_floorplans_name_the_arms_the_rtl_has():
+    """Two floorplans, two sets of instance paths, one wrapper. docs/47's
+    config.json names the two-words-per-row arm; docs/67's
+    config-ecc.json names the codec arm for the RAM and docs/47's for the
+    ROM, plus the ROM's check macro known and unplaced. Every path must
+    be an arm soc_mem_sram.v still has, because a floorplan that names a
+    label the RTL lost dies 35 steps into a run."""
+    sram = (SOC_RTL / "soc_mem_sram.v").read_text()
+    labels = set(re.findall(r"begin\s*:\s*(g_r[ao]m_\w+)", sram))
+    for cfg in ("config.json", "config-npu.json", "config-ecc.json"):
+        c = json.loads((ROOT / "hw" / "soc" / "pnr" / cfg).read_text())
+        for macro, spec in c["MACROS"].items():
+            for inst in spec["instances"]:
+                outer, block, leaf = inst.split(".")
+                assert block in labels, (
+                    "{} places {} but soc_mem_sram.v has no arm {}".format(
+                        cfg, inst, block))
+                body = sram.split("begin : " + block, 1)[1].split("\n  end", 1)[0]
+                assert re.search(re.escape(macro) + r"\s+" + re.escape(leaf) + r"\b", body)
+    ecc = json.loads((ROOT / "hw" / "soc" / "pnr" / "config-ecc.json").read_text())
+    chk = ecc["MACROS"]["RM_IHPSG13_1P_512x16_c2_bm_bist"]
+    assert chk["instances"] == {}, "the ROM check macro is placed nowhere yet, by design"
+    assert (ROOT / "hw" / "soc" / "pnr" / "RM_IHPSG13_1P_512x16_c2_bm_bist_bb.v").is_file()

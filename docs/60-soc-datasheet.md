@@ -600,6 +600,12 @@ group from **−60.6191 ns to +4.3006 ns** on an identical memory model
 | RAM | 64 KiB | `0x00000000` | read, write, execute |
 | ROM | 8 KiB | `0xC0000000` | read, execute; holds the reset vector at `0xC0000080` |
 
+*Corrected 2026-09-05:* the RAM is **32 KiB** since
+`docs/67-memory-protection.md`: the same four macros hold one
+SECDED-protected word per 64-bit row instead of two unprotected ones,
+and both memories are corrected on read and scrubbed. The map is
+`regmap/memmap.yaml` as generated.
+
 **[measured, `regmap/memmap.yaml`]**
 
 There are **two implementations of the same module name**, and which
@@ -1438,6 +1444,10 @@ hang-class faults, where the window caught **0 of 4**.
   peripheral slot is a reserved address; there is no memory scrubber.
   The 72 KiB of RAM and ROM are the largest storage in the design and
   **nothing checks a word read out of them**.
+  *Corrected 2026-09-05:* done in `docs/67-memory-protection.md` — four
+  (16,8) byte codewords per RAM row, one (39,32) word codeword per ROM
+  word, a scrubber under each memory and the SCRUB slot implemented as
+  their counters.
 - **The fabric and the APB bridge**, other than the error slave's
   refusal to alias.
 - **The die's own event path, queue storage and register-bank
@@ -1726,6 +1736,12 @@ corner.
 |---|---|
 | RAM, 64 KiB | **four `RM_IHPSG13_1P_2048x64_c2_bm_bist`** |
 | ROM, 8 KiB | **two `RM_IHPSG13_1P_1024x32_c2_bm_bist`** |
+
+*Corrected 2026-09-05:* the same four RAM macros now hold 32 KiB of
+protected words, and the protected ROM adds two
+`RM_IHPSG13_1P_512x16_c2_bm_bist` for its check bits, which
+`docs/67-memory-protection.md` section 5 costs from the LEF and has
+not placed.
 | Macro area against standard cells | **2,246,899.85 um2 against 523,809.64 um2 — the memory is 4.29 times the logic** |
 
 **[measured, LEF `SIZE`, `docs/47` section 4]**

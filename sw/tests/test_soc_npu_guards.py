@@ -532,7 +532,12 @@ def test_nothing_instantiates_the_npu_unhardened():
     m = re.search(r"parameter\s+integer\s+HARDEN\s*=\s*(\d+)", NPU)
     assert m and int(m.group(1)) == 1, (
         "soc_npu.v's HARDEN no longer defaults to 1")
-    assert ".HARDEN" not in TOP, (
+    # The NPU's instantiation and not the whole file: since docs/67 the
+    # memories take `.HARDEN(MEM_HARDEN)` from soc_top's own defaulted
+    # parameter, which sw/tests/test_soc_memory_guards.py guards.
+    m = re.search(r"soc_npu\s*#\((.*?)\)\s*u_npu", TOP, re.S)
+    assert m, "soc_top.v no longer instantiates soc_npu with parameters"
+    assert ".HARDEN" not in m.group(1), (
         "soc_top.v overrides soc_npu's HARDEN; the only configuration "
         "this SoC ships is the hardened one")
 
