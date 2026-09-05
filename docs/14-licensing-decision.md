@@ -22,7 +22,11 @@ repository cannot be made public until the decision below is taken.**
 
 The chain is short and every link is a fact:
 
-1. There is **no `LICENSE` file at HEAD** `ed51de0` **[fact]**.
+1. There is **no `LICENSE` file at the repository root** — checked at
+   `ed51de0` and again at `fc252b9`, the commit that landed this
+   revision **[fact, `ls`]**. Nothing below changes that; `fc252b9`
+   discharged an ISC *notice* obligation on two files (section 2.1) and
+   granted nothing on this project's own sources.
 2. `tt/LICENSE.PENDING.md` — a generated file in the submission tree —
    refuses to carry one, and says why in its own words: publishing the
    design sources with no licence "grants nothing at all, which is worse
@@ -83,7 +87,8 @@ recommends.
 
 ## 2. Where the repository stands today
 
-Re-read 2026-09-05 at HEAD `ed51de0`. **[fact]** for every item.
+Re-read 2026-09-05 at HEAD `ed51de0`, with section 2.1's one closed
+item re-checked at `fc252b9`. **[fact]** for every item.
 
 - **No `LICENSE` file at the repository root.** The repository is
   private.
@@ -108,7 +113,7 @@ the "before anything attaches" argument can no longer be made.
 | What | Where | Upstream | Licence | State |
 |---|---|---|---|---|
 | Tiny Tapeout template scaffolding: `.github/`, `.devcontainer/`, `.vscode/`, `src/config.json`, `test/Makefile`, `test/tb.v`, `test/requirements.txt` | tracked under `tt/` | `TinyTapeout/ttihp-verilog-template` at commit `6598bef4d3159f19fe471a2a2225df52e6f5ad25`; `src/config.json` is **byte-identical** to upstream | Apache-2.0 | Provenance is already recorded in `tt/README.md` and is **machine-checkable** — `scripts/gen_tt_submission.py --diff-template` re-fetches the template and proves the claim for every file that carries it. What is missing is the notice, which cannot be added until a licence exists |
-| `insn_div.v` and `insn_rem.v` — **corrected copies** of riscv-formal's own instruction models | tracked under `hw/soc/rvformal/insns/` | `YosysHQ/riscv-formal` at commit `c992aa61fdfe0846c5ed90324c596202a1c69b76` | **ISC** (`ext/riscv-formal/COPYING`, Claire Xenia Wolf, 2017) | 109 and 110 lines against upstream's 66. `docs/63` section 7.5 records why they exist: upstream's models compute an **unsigned** division and remainder, confirmed on four counterexamples from two runs. Upstream ships no per-file notice, so ISC's "the above copyright notice and this permission notice appear in all copies" is discharged by shipping `COPYING` or an equivalent notice — **and this repository ships neither**. That is an action item, not a blocker |
+| `insn_div.v` and `insn_rem.v` — **corrected copies** of riscv-formal's own instruction models | tracked under `hw/soc/rvformal/insns/` | `YosysHQ/riscv-formal` at commit `c992aa61fdfe0846c5ed90324c596202a1c69b76` | **ISC** (`ext/riscv-formal/COPYING`, Claire Xenia Wolf, 2017) | 109 and 110 lines against upstream's 66. `docs/63` section 7.5 records why they exist: upstream's models compute an **unsigned** division and remainder, confirmed on four counterexamples from two runs. Upstream ships no per-file notice, so ISC's "the above copyright notice and this permission notice appear in all copies" is discharged by shipping `COPYING` or an equivalent notice. ~~And this repository ships neither. That is an action item, not a blocker.~~ **Closed 2026-09-05 in `fc252b9`, the same commit that landed this revision**: both files now carry the SPDX tag, Claire Xenia Wolf's copyright and the full ISC permission notice inline, with a comment saying why it is inline — `hw/soc/ext/` is gitignored, so these tracked copies travel without upstream's `COPYING`. **This was an obligation, not a decision, which is why it was not left for the signature to release** |
 
 ### 2.2 Everything else third-party is fetched, not vendored
 
@@ -327,7 +332,7 @@ Re-read 2026-09-05 by opening each licence file in the working tree.
 | Dependency | How it enters | Pinned at | Licence, and where it was read | What it forces |
 |---|---|---|---|---|
 | **Ibex** (the management core) | `git clone` into `hw/soc/ext/ibex`, gitignored; sv2v output into `hw/soc/gen/` and `hw/soc/genrvfi/`, also gitignored | commit `34b0705760ef3dfa00e99637432473d2be8f22f3` | **Apache-2.0** — `hw/soc/ext/ibex/LICENSE` is the Apache 2.0 text | Nothing restrictive; inbound-compatible with a permissive or a reciprocal outbound licence. Note that the **sv2v output is a derivative of Ibex** and would carry Apache-2.0 if it were ever shipped. Today it is regenerated on every build and is gitignored, so nothing is redistributed. If a release ever ships a pre-converted tree, it ships under Apache-2.0 with notices |
-| **riscv-formal** | `git clone` into `hw/soc/ext/riscv-formal`, gitignored — **plus two corrected copies tracked** in `hw/soc/rvformal/insns/` (section 2.1) | commit `c992aa61fdfe0846c5ed90324c596202a1c69b76` | **ISC** — `hw/soc/ext/riscv-formal/COPYING`, "Copyright (C) 2017 Claire Xenia Wolf", the ISC permission text | Permissive. Requires the copyright notice and the permission notice in **all copies**, which the two tracked files do not currently carry. **Action: add an ISC notice header to both, or ship `COPYING` beside them.** Small, and it must happen before the repository is public |
+| **riscv-formal** | `git clone` into `hw/soc/ext/riscv-formal`, gitignored — **plus two corrected copies tracked** in `hw/soc/rvformal/insns/` (section 2.1) | commit `c992aa61fdfe0846c5ed90324c596202a1c69b76` | **ISC** — `hw/soc/ext/riscv-formal/COPYING`, "Copyright (C) 2017 Claire Xenia Wolf", the ISC permission text | Permissive. Requires the copyright notice and the permission notice in **all copies**. ~~The two tracked files do not currently carry it. Action: add an ISC notice header to both, or ship `COPYING` beside them.~~ **Done 2026-09-05 in `fc252b9`** — see section 2.1. Nothing here now blocks publication |
 | **sv2v** | release binary downloaded into `hw/soc/tools/sv2v-Linux`, gitignored, pinned by tag **and** sha256 `552799a1…` | v0.0.13 | **BSD 3-Clause** — `hw/soc/tools/sv2v-Linux/LICENSE`, "Copyright 2019-2024 Zachary Snow / Copyright 2011-2015 Tom Hawkins" | A translator. Its licence governs the tool, not the tool's output — the output's licence comes from the input, which is Ibex's. Nothing to do unless the binary is redistributed, which it is not |
 | **riscv-none-elf-gcc** (xpack) | release archive downloaded into `hw/soc/tools/rvgcc`, gitignored, pinned by tag **and** sha256 `aaaa8060…` | 15.2.0-1 | GCC and its components, per-component texts under `hw/soc/tools/rvgcc/distro-info/licenses/` | A compiler. GCC's runtime-library exception is why compiled output carries no copyleft obligation. Nothing to do unless the toolchain is redistributed, which it is not |
 | **OpenTitan** (`spi_host`, assessed only) | sparse `git clone` into `hw/soc/ext/opentitan`, gitignored — `hw/ip/spi_host`, `prim`, `prim_generic`, `tlul`, `spi_device/rtl`, `top_earlgrey/rtl`, `dv/sv/dv_utils` | commit `1e1dace7680251f88ab11adedd8766222f333962` | **Apache-2.0** — `hw/soc/ext/opentitan/LICENSE` | Inbound-compatible. **Nothing under `hw/soc/rtl/` instantiates it**; `docs/65` converted and priced it at 65.05 kGE and then recommended QSPI from scratch instead, which `docs/66` built at 2.713 kGE |
@@ -614,7 +619,7 @@ it.
 | By | Action | Owner |
 |---|---|---|
 | **now** | **Sign section 11.** Everything below is mechanical | developer |
-| +1 day | Add `LICENSES/` with the three full texts; add SPDX headers to `hw/rtl/*.v` and `*.vh`; add the ISC notice to `hw/soc/rvformal/insns/insn_div.v` and `insn_rem.v` (section 2.1) | engineering |
+| +1 day | Add `LICENSES/` with the three full texts; add SPDX headers to `hw/rtl/*.v` and `*.vh`. ~~Add the ISC notice to `hw/soc/rvformal/insns/insn_div.v` and `insn_rem.v`.~~ **That half is already done, 2026-09-05, `fc252b9`** (section 2.1) | engineering |
 | +1 day | Re-pin `docs/34`'s freeze record against the new RTL blob hashes, and say in that document that the change is headers only | engineering |
 | +2 days | Regenerate `tt/`: `LICENSE` in place of `LICENSE.PENDING.md`, the scaffolding note in `README.md`, `MANIFEST.sha256` refreshed | engineering |
 | +3 days | Draw the scope boundary: one table, every path in and every path out, including the `docs/` answer of section 4 and the upstream-contribution boundary of section 6.5 | engineering |
