@@ -100,7 +100,14 @@ hw/soc/formal/soc_gpio/
 hw/soc/formal/soc_gpio_*/
 hw/soc/formal/soc_qspi/
 hw/soc/formal/soc_qspi_*/
+hw/soc/formal/soc_boot/
+hw/soc/formal/soc_boot_*/
 hw/soc/tb/cocotb/mutants_soc_qspi/
+# docs/68: the boot register block's mutation harness builds and its
+# per-mutant result files, and the loader's own build products.
+hw/soc/tb/cocotb/sim_build_mutb_*/
+hw/soc/tb/cocotb/results_mutb_*.xml
+hw/soc/pnr/state/
 
 # docs/47: the place-and-route flow. Generated and fetched, never
 # vendored -- the rule docs/38 section 11 states. The state file names

@@ -991,7 +991,11 @@ is in this PDK.** `docs/47` section 11 item 2 named them:
 **So the ROM's protection story is the boot flow's story**, and this
 document does the part of it that is a memory problem — the code, the
 macro, the wrapper, the model — and leaves the part that is a system
-problem to the block `docs/66` already named next. What it does not do
+problem to the block `docs/66` already named next.
+*Answered 2026-09-05 by `docs/68-boot-flow.md` section 3:* the flight
+part's ROM is candidate 1, a mask ROM holding a loader, and its
+protection story is that a via cannot be upset. The 8 KiB macro pair is
+a stand-in, and what this section says about it is unchanged. What it does not do
 is pretend: section 9's table lists the ROM's contents as unprotected
 in the flight part until one of the three exists.
 
@@ -1453,6 +1457,13 @@ uninterrupted invocation, and are quoted as such.
 2. **Place the ROM's check macros**, in the pockets or on a grown die,
    and route them. Section 8's last paragraph is the geometry; the
    answer is one run.
+   *Reprioritised 2026-09-05 by `docs/68-boot-flow.md` section 3:* that
+   document decides the flight part's boot ROM is a mask-programmed
+   array, whose bit is a via and which therefore has no stored-upset
+   mechanism for a code to catch. **On that decision the check macros
+   protect the SRAM STAND-IN and not the design**, and this item becomes
+   conditional on which candidate a part takes rather than owed. The
+   macros stay in the RTL and stay unplaced.
 3. **`docs/50`'s response register, re-asked on this design.** Section
    5.3 measured the read return at **14.0728 ns from `A_DOUT` to a
    flip-flop**, with a macro arc, a memory decoder, the fabric and the

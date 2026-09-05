@@ -587,6 +587,15 @@ The fix is that a stage-2 reset restores the reload to the maximum. Every
 reset stage of GR716B's boot flow (`docs/08` section 2.4) starts from the
 boot timeout for the same reason: **whatever the last software
 configured, the next boot gets the whole budget.**
+
+*Extended 2026-09-05 by `docs/68-boot-flow.md` section 6.3:* the boot
+loader's give-up path deliberately shortens the reload and stops
+kicking, so that the reset comes promptly rather than after a full
+10.5 ms of doing nothing. **That is safe only because of the fix in this
+section**, and `sw/tests/test_soc_boot_guards.py` checks both halves
+together — the shortening in the loader and the restore in
+`soc_wdog.v` — because the safety of the first is entirely a property of
+the second.
 `test_the_reload_is_restored_to_the_maximum_by_a_reset` is the check, and
 the mutation that removes the restore fails it.
 

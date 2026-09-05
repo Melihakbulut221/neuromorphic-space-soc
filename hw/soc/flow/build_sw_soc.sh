@@ -27,10 +27,35 @@
 #                        the golden model, so the program cannot be
 #                        checking yesterday's answer.
 #
-# The output binary is the ROM contents: .text, .trapvec, .rodata and the
-# load image of .data, in that order. .bss and the PMP buffer are NOLOAD
-# and are not in it -- crt0.S zeroes the first and the second is never
-# initialised.
+# =====================================================================
+# TWO PROGRAMS SINCE docs/68, AND THE ROM NO LONGER HOLDS THE BIG ONE
+# =====================================================================
+#
+# docs/66 section 7.1 measured that the bring-up program had OUTGROWN
+# the boot ROM: 7,826 of the 8,064 bytes above the reset vector, with
+# the two flash checks needing 1,800 more, so the flash demonstration
+# had to be a second image built from the same file with most of the
+# program compiled out. docs/68 ends that. This script now builds:
+#
+#   app.elf       hw/soc/tb/sw/crt0.S + test_ibex.c, linked with
+#                 link_app.ld so that EVERYTHING is in RAM. This is the
+#                 program; it is bounded by the 32 KiB of RAM, not by
+#                 the 8 KiB of ROM, and `objcopy -O binary` over it is
+#                 exactly the bytes the loader copies.
+#   test_soc.elf  hw/soc/tb/sw/boot_crt0.S + boot.c, linked with
+#                 link_boot.ld into the ROM. This is what the boot ROM
+#                 holds, and test_soc.hex -- the name every flow and
+#                 testbench already knows -- is its $readmemh image.
+#
+# BOOT_CORRUPT selects gen_boot_image.py's counterfactual: which of the
+# two image slots in the flash is broken, and how. It defaults to
+# `none`, which is the design; every other value is a demonstration of
+# one branch of the loader's escalation (docs/68 section 6).
+#
+# The ROM image is the LOADER's contents: .text, .trapvec, .rodata and
+# the load image of its .data. Its .bss is NOLOAD and is not in it --
+# boot_crt0.S's RAM sweep is what zeroes it, and that sweep is why there
+# is no .bss loop.
 
 set -euo pipefail
 
@@ -61,15 +86,40 @@ python3 "$SOC_DIR/flow/gen_npu_vectors.py" "$OUT"
 # inferences in checks 26 and 30 are the same inference.
 python3 "$SOC_DIR/flow/gen_flash_image.py" "$OUT"
 
-"$GCC" \
-  -march=rv32imc_zicsr_zifencei -mabi=ilp32 -mcmodel=medlow \
-  -Os -g -ffreestanding -fno-builtin -nostdlib -nostartfiles \
-  -Wall -Wextra -Werror \
-  -DSOC_PLATFORM -DHAVE_PMP \
-  -I "$SW" -I "$OUT" -L "$SW" \
-  -T "$SW/link_soc.ld" \
-  "$@" \
+CFLAGS=(-march=rv32imc_zicsr_zifencei -mabi=ilp32 -mcmodel=medlow
+        -Os -g -ffreestanding -fno-builtin -nostdlib -nostartfiles
+        -Wall -Wextra -Werror
+        -DSOC_PLATFORM -DHAVE_PMP
+        -I "$SW" -I "$OUT" -L "$SW")
+
+# ---- 1. the application, linked to run from RAM ---------------------
+# --no-warn-rwx-segments: the whole application is in one RAM region
+# that the map marks rwx, so the single load segment is necessarily
+# writable and executable. That is a property of a part with one RAM and
+# no MMU, not of this link; the PMP is where execution permission is
+# expressed on this core (test_ibex.c's HAVE_PMP checks).
+"$GCC" "${CFLAGS[@]}" -Wl,--no-warn-rwx-segments -T "$SW/link_app.ld" "$@" \
   "$SW/crt0.S" "$SW/test_ibex.c" \
+  -o "$OUT/app.elf" -lgcc
+
+"$OBJDUMP" -d -S "$OUT/app.elf" > "$OUT/app.dis"
+"$OBJCOPY" -O binary "$OUT/app.elf" "$OUT/app.bin"
+echo "== app: $(stat -c%s "$OUT/app.bin") bytes of RAM image"
+
+# ---- 2. the image into the flash, and the header the loader uses ----
+#
+# It reads the load address and the entry point OUT OF THE ELF rather
+# than being told them, so a program that moved cannot be loaded to
+# where it used to be. The two slots are 16 KiB apart in the modelled
+# device; gen_boot_image.py says why two.
+python3 "$SOC_DIR/flow/gen_boot_image.py" "$OUT" \
+  --app "$OUT/app.bin" --elf "$OUT/app.elf" \
+  --nm "$SOC_DIR/tools/rvgcc/bin/riscv-none-elf-nm" \
+  --corrupt "${BOOT_CORRUPT:-none}"
+
+# ---- 3. the loader, into the boot ROM -------------------------------
+"$GCC" "${CFLAGS[@]}" -T "$SW/link_boot.ld" "$@" \
+  "$SW/boot_crt0.S" "$SW/boot.c" \
   -o "$OUT/test_soc.elf" -lgcc
 
 "$OBJDUMP" -d -S "$OUT/test_soc.elf" > "$OUT/test_soc.dis"
@@ -97,4 +147,4 @@ with open(sys.argv[2], "w") as f:
         f.write("%08x\n" % w)
 PY
 
-echo "== sw: $(stat -c%s "$OUT/test_soc.bin") bytes of ROM image"
+echo "== sw: $(stat -c%s "$OUT/test_soc.bin") bytes of ROM image (the loader)"

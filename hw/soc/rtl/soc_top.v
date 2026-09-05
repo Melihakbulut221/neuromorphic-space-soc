@@ -59,6 +59,17 @@
 //        with no third-party dependency before any bus bridge is
 //        written. The pins leave this module as three wires per pin
 //        because there is no pad ring.
+//   BOOTS FROM FLASH, as of docs/68. The boot ROM holds a LOADER, not
+//        a program: it initialises every word of the RAM so the codec's
+//        check bits exist before anything reads them, copies a
+//        checksummed image out of the QSPI flash through soc_qspi.v,
+//        and jumps to it. soc_boot.v is the BOOTREG slot the map has
+//        carried reserved since docs/39 -- the bootstrap pins as they
+//        were sampled, a boot counter no software can write, and a boot
+//        report and an epoch word that survive the reset they describe.
+//        The escalation when an image cannot be loaded is the
+//        WATCHDOG's, reached by the loader declining to kick it; there
+//        is no second ladder. docs/68 is the argument.
 //   HAS  the one interface the NPU itself needs, as of docs/66: a
 //        register-mode QSPI flash controller with two chip selects
 //        (soc_qspi.v) in the QSPICTL slot on fast line 9. Software
@@ -150,7 +161,20 @@ module soc_top #(
 
     // QSPI chip selects. Two, as GR801 has (docs/03 section 2.2); the
     // second one's cost is measured in docs/66 section 8.
-    parameter integer QSPI_NCS = 2
+    parameter integer QSPI_NCS = 2,
+
+    // ---- the boot flow, docs/68 ----
+    //
+    // Bootstrap pins into soc_boot.v, sampled once when power-on reset
+    // releases and reported through BOOTREG.BSTRAP. Four of them, and
+    // the boot flow's software convention for what each one means is in
+    // hw/soc/tb/sw/soc_boot.h -- nothing in the hardware acts on any of
+    // them, which is soc_boot.v's header's point.
+    parameter integer BOOT_NSTRAP = 4,
+    // The boot attempt limit, reported through BOOTREG.BSTAT and
+    // reachable by no register. Three, and soc_boot.v says why that
+    // number and WDOG_ESCALATE = 2 go together.
+    parameter integer BOOT_LIMIT = 3
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -160,6 +184,11 @@ module soc_top #(
     // Watchdog bootstrap pin. Held low in this SoC; a board that ties it
     // high has no watchdog and WDOGSTAT.DISABLED says so.
     input  wire        wdog_dis_i,
+
+    // Boot bootstrap pins, docs/68. Sampled once by soc_boot.v when
+    // power-on reset releases and reported, never acted on in hardware.
+    // tb_soc.v ties them to the board's configuration.
+    input  wire [BOOT_NSTRAP-1:0] strap_i,
 
     output wire        uart_tx_o,
     output wire        uart_irq_o,
@@ -591,18 +620,22 @@ module soc_top #(
   wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
   wire sel_busstat = psel && (slot == SOC_APBSLOT_BUSSTAT);
   wire sel_scrub  = psel && (slot == SOC_APBSLOT_SCRUB);
+  wire sel_bootreg = psel && (slot == SOC_APBSLOT_BOOTREG);
   wire sel_npucfg = psel && (slot == SOC_APBSLOT_NPUCFG);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
   wire sel_none   = psel && !sel_uart0 && !sel_gpio && !sel_qspi
                          && !sel_timer0 && !sel_busstat && !sel_scrub
-                         && !sel_npucfg && !sel_apbpnp;
+                         && !sel_bootreg && !sel_npucfg && !sel_apbpnp;
 
   wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat,
-              prdata_npucfg, prdata_gpio, prdata_qspi, prdata_scrub;
+              prdata_npucfg, prdata_gpio, prdata_qspi, prdata_scrub,
+              prdata_bootreg;
   wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat,
-              pready_npucfg, pready_gpio, pready_qspi, pready_scrub;
+              pready_npucfg, pready_gpio, pready_qspi, pready_scrub,
+              pready_bootreg;
   wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat,
-              pslverr_npucfg, pslverr_gpio, pslverr_qspi, pslverr_scrub;
+              pslverr_npucfg, pslverr_gpio, pslverr_qspi, pslverr_scrub,
+              pslverr_bootreg;
 
   soc_uart u_uart0 (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
@@ -718,6 +751,27 @@ module soc_top #(
       .irq_o (scrub_irq)
   );
 
+  // The boot flow's register block, docs/68, in the BOOTREG slot the map
+  // has reserved since docs/39.
+  //
+  // Two resets again, and this block is the extreme case of the split
+  // soc_busstat.v and soc_scrub.v use: EVERYTHING in it is in the
+  // power-on domain, because everything in it is either a pin sampled
+  // once at power-on or a record that has to survive the reset it
+  // describes. The system reset is an INPUT to the logic and resets
+  // nothing -- its release is what the boot counter counts. soc_boot.v's
+  // header is the argument, and the reason this cannot be docs/40
+  // section 7.2's brick is that no output of this block reaches the
+  // watchdog, the memories or the fabric.
+  soc_boot #(.NSTRAP(BOOT_NSTRAP), .LIMIT(BOOT_LIMIT)) u_boot (
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .psel_i (sel_bootreg), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_bootreg), .pready_o (pready_bootreg),
+      .pslverr_o (pslverr_bootreg),
+      .strap_i (strap_i), .wdog_dis_i (wdog_dis_i)
+  );
+
   soc_apb_pnp u_apbpnp (
       .psel_i (sel_apbpnp), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
@@ -735,6 +789,7 @@ module soc_top #(
                  : sel_timer0  ? prdata_timer0
                  : sel_busstat ? prdata_busstat
                  : sel_scrub   ? prdata_scrub
+                 : sel_bootreg ? prdata_bootreg
                  : sel_npucfg  ? prdata_npucfg
                  : sel_apbpnp  ? prdata_apbpnp
                  : 32'h0;
@@ -744,6 +799,7 @@ module soc_top #(
                  : sel_timer0  ? pready_timer0
                  : sel_busstat ? pready_busstat
                  : sel_scrub   ? pready_scrub
+                 : sel_bootreg ? pready_bootreg
                  : sel_npucfg  ? pready_npucfg
                  : sel_apbpnp  ? pready_apbpnp
                  : 1'b1;
@@ -753,6 +809,7 @@ module soc_top #(
                  : sel_timer0  ? pslverr_timer0
                  : sel_busstat ? pslverr_busstat
                  : sel_scrub   ? pslverr_scrub
+                 : sel_bootreg ? pslverr_bootreg
                  : sel_npucfg  ? pslverr_npucfg
                  : sel_apbpnp  ? pslverr_apbpnp
                  : sel_none;

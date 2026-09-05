@@ -139,7 +139,23 @@ extern uint32_t trap_mcause, trap_mepc, trap_count, trap_saw_rvc;
    and vector, and one of them spun long enough for the watchdog's stage
    2 to reset the SoC underneath it. */
 extern volatile uint32_t irq_marker, irq_mcause, irq_count, nmi_count;
-extern char __pmp_buf[];
+/* ALIGNED(64), AND THAT ATTRIBUTE IS LOAD-BEARING.
+   link_soc.ld and link_app.ld both place this buffer on a 64-byte
+   boundary and both ASSERT it, but a bare `extern char[]` tells the
+   compiler its alignment is 1 -- and test 10 then dereferences it as a
+   `volatile uint32_t *`, which on a RISC-V target that does not permit
+   unaligned access is undefined behaviour. The compiler is entitled to
+   expand it into byte accesses, and it does.
+   docs/68 section 10 is where that stopped being harmless: when the
+   program moved out of the boot ROM and into RAM the register
+   allocation around test 10 changed, the byte accesses were emitted
+   through a base register the surrounding code had since loaded with
+   something else, and three of the four bytes went to an unmapped
+   address and took bus errors. The symptom was `mcause 5` inside a PMP
+   test, which reads exactly like a PMP failure and is not one.
+   Declaring the alignment the linker script already guarantees removes
+   the undefined behaviour and the access becomes one aligned word. */
+extern char __pmp_buf[] __attribute__((aligned(64)));
 extern char trap_vectors[];
 
 static void puts_(const char *s) { while (*s) putc_(*s++); }
@@ -810,8 +826,14 @@ int main(void) {
     ok &= (trap_count == before + 1);
     ok &= (trap_mcause == 7u);              /* store access fault       */
     ok &= (p[0] == 0x5eed5eedu);            /* and must not have landed */
+    /* mepc as well as mcause, added by docs/68: this check first failed
+       when the program moved from the boot ROM into RAM, and "a load
+       access fault somewhere" is not a diagnosis. The faulting PC is. */
     if (!ok) { puts_("  pmp mcause="); puthex(trap_mcause);
-               puts_(" cnt="); puthex(trap_count); putc_('\n'); }
+               puts_(" mepc="); puthex(trap_mepc);
+               puts_(" cnt="); puthex(trap_count);
+               puts_(" buf="); puthex(base);
+               puts_(" val="); puthex(p[0]); putc_('\n'); }
     check(10, ok);
   pmp_done: ;
   }
@@ -1468,10 +1490,19 @@ int main(void) {
       }
     }
 
-    /* Quad I/O needs QE (8.2.11): SR2 reads 0 out of the box, and a
-       volatile write (50h, 31h; 8.2.5) sets it without a busy time. */
+    /* Quad I/O needs QE (8.2.11), and SINCE docs/68 IT IS ALREADY SET
+       WHEN THIS PROGRAM STARTS -- the boot loader sets it, because it
+       reads the image on four lanes, and the volatile write (50h, 31h;
+       8.2.5) it uses is not undone by anything short of a power cycle.
+       docs/66 checked that SR2 reads 0 "out of the box" and that was
+       true of a part nothing had touched; it is now a check that the
+       loader did NOT run, and it failed for exactly that reason the
+       first time this program was loaded rather than fetched.
+       What is checked instead is the property that still holds and
+       that the application actually depends on: QE is set on entry,
+       and setting it again is idempotent. */
     uint32_t sr2_before = flash_sr(FLASH_OP_RDSR2);
-    ok &= (sr2_before == 0u);
+    ok &= (sr2_before == FLASH_SR2_QE);
     ok &= qspi_cmd(FLASH_OP_VWREN, 0, 0);
     ok &= qspi_cmd(FLASH_OP_WRSR2, FLASH_SR2_QE, 1);
     uint32_t sr2_after = flash_sr(FLASH_OP_RDSR2);

@@ -208,6 +208,11 @@ module tb_soc_fi;
       .clk_i  (clk),
       .rst_ni (rst_n),
       .wdog_dis_i (wdog_dis),
+      // The bootstrap pins, docs/68. Tied to the board this campaign
+      // models: boot from the flash on chip select 0, which is what
+      // soc_boot.v samples once and reports. Nothing in this bench
+      // reads them back; they are here because soc_top has the port.
+      .strap_i    (4'h0),
       .uart_tx_o  (uart_tx),
       .uart_irq_o (uart_irq),
       // The GPIO pins (docs/65): a board with nothing on them. The

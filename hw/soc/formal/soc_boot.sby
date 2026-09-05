@@ -1,0 +1,50 @@
+# SymbiYosys job for the boot flow's register block,
+# hw/soc/rtl/soc_boot.v (docs/68).
+#
+#   sby -f soc_boot.sby prove        k-induction proof of D1-D8
+#   sby -f soc_boot.sby prove_full   the same at the shipped parameters
+#   sby -f soc_boot.sby bmc          bounded check, depth 20
+#   sby -f soc_boot.sby cover        reachability of every proven behaviour
+#
+# Properties live in soc_boot_props.v, textually included at the end of
+# the soc_boot module body under `ifdef FORMAL, the arrangement
+# soc_scrub, soc_gpio and the other fabric blocks use.
+#
+# CNT_W IS 3 AND LIMIT IS 3 HERE, 8 AND 3 IN THE DESIGN, for
+# soc_busstat.sby's reason: the saturation cover has to be reachable
+# inside a bounded model, and a counter that needs 255 reset releases
+# cannot be driven to its top in twenty-four steps. LIMIT is the shipped
+# value in both, because the two flags D8 proves are about LIMIT and a
+# proof at a different limit would prove a different part.
+#
+# prove_full runs the whole set again at CNT_W = 8 without the
+# saturation cover.
+
+[tasks]
+bmc
+prove
+prove_full
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 20
+prove: mode prove
+prove: depth 10
+prove_full: mode prove
+prove_full: depth 10
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_boot.v
+~prove_full: chparam -set CNT_W 3 -set NSTRAP 4 -set LIMIT 3 soc_boot
+prove_full: chparam -set CNT_W 8 -set NSTRAP 4 -set LIMIT 3 soc_boot
+prep -top soc_boot
+
+[files]
+../rtl/soc_boot.v
+soc_boot_props.v

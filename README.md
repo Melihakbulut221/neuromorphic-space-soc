@@ -131,6 +131,16 @@ the price of the RAM being 32 KiB rather than 64; that document says
 why that was cheaper than a seventh macro. That is a
 deliberate ordering, not an oversight: the fabric is being made correct
 before it is made survivable.
+*Corrected again 2026-09-05:* **the SoC boots.**
+`docs/68-boot-flow.md` puts a loader in the boot ROM that initialises
+every word of the RAM before anything reads it — an SRAM whose rows
+carry check bits powers up with an uncorrectable in every word, not a
+zero — copies a checksummed image out of the QSPI flash, verifies it by
+reading the RAM back, and jumps to it, with a boot report and a boot
+counter no software can write in the BOOTREG slot the map has reserved
+since `docs/39`. The 28-check bring-up program now runs from RAM out of
+a flash image: **220,256 cycles for the program and 415,324 for the
+run**, against 217,630 for the identical program fetched from the ROM.
 
 **The subsystem has been laid out, and it fails setup at its 20 ns
 constraint.** `docs/45` synthesised `soc_top` whole for the first time —

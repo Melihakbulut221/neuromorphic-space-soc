@@ -62,7 +62,7 @@ APB_SLOTS = {
     "QSPICTL": (0xFF914000, 0x014, 21, "implemented"),
     "BUSSTAT": (0xFF915000, 0x015, 22, "implemented"),
     "SCRUB": (0xFF916000, 0x016, 23, "implemented"),
-    "BOOTREG": (0xFF917000, 0x017, 0, "reserved"),
+    "BOOTREG": (0xFF917000, 0x017, 0, "implemented"),
     "CLKGATE": (0xFF918000, 0x018, 0, "reserved"),
     "NPUCFG": (0xFF919000, 0x019, 24, "implemented"),
     "APBPNP": (0xFF9FF000, 0x0FF, 0, "implemented"),

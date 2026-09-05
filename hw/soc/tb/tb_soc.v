@@ -17,6 +17,21 @@
 //     and executes WFI.
 //   * the alert outputs and double_fault_seen_o, latched, as
 //     tb_ibex_min.v does.
+//   * since docs/68, WHERE THE CORE IS FETCHING FROM. The ROM holds a
+//     loader and the program is copied into RAM out of the flash, so
+//     the cycle at which instruction fetch first crosses into the RAM
+//     region is the hand-over, and it splits the run into the loader's
+//     cycles and the program's. Nothing gates on it; it is reported
+//     because a boot flow whose cost is not attributable is a boot flow
+//     nobody can argue about.
+//
+// AND IT MODELS A POWER-UP, WHICH IS NEW AND IS THE POINT OF docs/68
+// SECTION 4. +ram_random=<seed> fills the RAM's data AND ITS SECDED
+// CHECK FIELD with pseudo-random bits before reset is released, which is
+// what an SRAM does. Without it soc_mem.v's model comes up all-zero with
+// a valid check field derived by the frozen encoder -- a memory that is
+// already initialised, which is exactly the assumption the boot flow
+// exists to remove. The shipped run uses it.
 //
 // THE PASS CRITERION, and what it does not cover. A run passes only if
 // ALL of these hold:
@@ -93,6 +108,12 @@ module tb_soc;
   reg clk   = 1'b0;
   reg rst_n = 1'b0;
   always #CLK_HALF clk = ~clk;
+
+  // Declared here rather than beside the pass criterion because the
+  // power-up model and the hand-over detector below both report in
+  // cycles and Verilog wants the declaration first.
+  integer cycles = 0;
+  always @(posedge clk) if (rst_n) cycles = cycles + 1;
 
   wire uart_tx, uart_irq;
   wire wdog_n, wdog_rst, nmi, irq_timer, irq_soft, gptimer_irq;
@@ -178,6 +199,21 @@ module tb_soc;
       $display("[TB] no +flash0= image: the flash is erased");
   end
 
+  // -------------------------------------------------------------------
+  // The bootstrap pins (docs/68).
+  //
+  // A board's static wiring, so a register here and not a driver: it is
+  // set from +strap=<n> before reset is released and never moves again,
+  // which is exactly what soc_boot.v samples. Zero is the board this
+  // repository models -- boot from the flash on chip select 0 -- and the
+  // NOBOOT demonstration passes 4.
+  // -------------------------------------------------------------------
+  reg [3:0] strap = 4'h0;
+  integer   strap_arg;
+  initial begin
+    if ($value$plusargs("strap=%d", strap_arg)) strap = strap_arg[3:0];
+  end
+
   // The watchdog bootstrap pin is held LOW, which is the armed state.
   // A run with it high would have no watchdog at all and every watchdog
   // check in the program would pass vacuously, so it is a constant here
@@ -187,6 +223,7 @@ module tb_soc;
       .clk_i  (clk),
       .rst_ni (rst_n),
       .wdog_dis_i (1'b0),
+      .strap_i    (strap),
       .uart_tx_o  (uart_tx),
       .uart_irq_o (uart_irq),
       .gpio_i     (gpio_pad),
@@ -211,6 +248,94 @@ module tb_soc;
       .double_fault_seen_o    (double_fault_seen),
       .core_sleep_o           (core_sleep)
   );
+
+  // -------------------------------------------------------------------
+  // THE POWER-UP, and the one fault this testbench can inject
+  //
+  // +ram_random=<seed> writes pseudo-random bits into every word of the
+  // RAM's data array AND its check field, at time 1 ns -- after
+  // soc_mem.v's own initial blocks have zeroed the array and derived a
+  // valid check field from the frozen encoder, and long before reset is
+  // released 20 clocks later. That is what an SRAM comes up as, and it
+  // is what makes the boot loader's RAM sweep load-bearing rather than
+  // decorative: without the sweep, the first 32-bit read of a word
+  // nobody has written finds three or four byte lanes that are not
+  // codewords, and soc_mem_ecc.v answers it with a bus error.
+  //
+  // +ded_word=<index> is the other half: it flips TWO check bits of one
+  // byte lane of one RAM word, on the edge after the loader writes that
+  // word, which is an uncorrectable planted inside the image the loader
+  // has just copied. That is the fault docs/68 section 6 escalates as
+  // BOOT_CAUSE_ECC, and triggering it on the WRITE rather than at a
+  // cycle number is what makes it reproducible across builds.
+  //
+  // +ded_skip=<n> is how many writes to that word to let past first,
+  // and it DEFAULTS TO 1 rather than 0 for a reason the first run of
+  // this found: the RAM SWEEP writes every word before the copy does,
+  // so an injector that fired on the first write corrupted a word the
+  // copy then overwrote, and the run passed while appearing to have
+  // injected a fault. One skip puts the corruption after the copy's
+  // write, which is where an uncorrectable in a loaded image is.
+  //
+  // Both reach into the codec arm's `chk` array, which does not exist
+  // when the codec is off, so the whole block is behind a define that
+  // flow/sim_soc.sh sets from SOC_MEM_HARDEN. A hierarchical name that
+  // does not resolve is an elaboration error, not a skipped feature.
+  // -------------------------------------------------------------------
+  integer ram_seed;
+  integer ram_i;
+  reg     ram_randomised = 1'b0;
+  integer ded_word = -1;
+  integer ded_skip = 1;
+  integer ded_seen = 0;
+  reg     ded_done = 1'b0;
+
+  initial begin
+    #1;
+    if ($value$plusargs("ram_random=%d", ram_seed)) begin
+`ifdef RAM_POWERUP_ECC
+      for (ram_i = 0; ram_i < dut.RAM_WORDS; ram_i = ram_i + 1) begin
+        dut.u_ram.mem[ram_i]          = $random(ram_seed);
+        dut.u_ram.g_ecc.chk[ram_i]    = $random(ram_seed);
+      end
+`else
+      for (ram_i = 0; ram_i < dut.RAM_WORDS; ram_i = ram_i + 1)
+        dut.u_ram.mem[ram_i] = $random(ram_seed);
+`endif
+      ram_randomised = 1'b1;
+      $display("[TB] RAM powered up undefined: %0d words of data%s, seed %0d",
+               dut.RAM_WORDS,
+`ifdef RAM_POWERUP_ECC
+               " and check bits",
+`else
+               " (no check field in this configuration)",
+`endif
+               ram_seed);
+    end
+  end
+
+  initial begin
+    if (!$value$plusargs("ded_word=%d", ded_word)) ded_word = -1;
+    if (!$value$plusargs("ded_skip=%d", ded_skip)) ded_skip = 1;
+  end
+
+`ifdef RAM_POWERUP_ECC
+  always @(posedge clk) begin
+    if (rst_n && (ded_word >= 0) && !ded_done
+        && dut.u_ram.g_ecc.row_en && dut.u_ram.g_ecc.row_we
+        && (dut.u_ram.g_ecc.row_addr == ded_word[12:0])) begin
+      if (ded_seen < ded_skip) begin
+        ded_seen = ded_seen + 1;
+      end else begin
+      ded_done = 1'b1;
+      @(posedge clk);
+      dut.u_ram.g_ecc.chk[ded_word] = dut.u_ram.g_ecc.chk[ded_word] ^ 32'h3;
+      $display("[TB] injected a double error into RAM word %0d at cycle %0d",
+               ded_word, cycles);
+      end
+    end
+  end
+`endif
 
   // -------------------------------------------------------------------
   // Latched alerts. They are pulses; a run must fail if one ever fired,
@@ -258,8 +383,32 @@ module tb_soc;
   wire finished = saw_awake && core_sleep &&
                   (dut.u_ram.mem[EXIT_MAGIC_ADDR[31:2]] == EXIT_MAGIC);
 
-  integer cycles = 0;
-  always @(posedge clk) if (rst_n) cycles = cycles + 1;
+  // -------------------------------------------------------------------
+  // The hand-over (docs/68).
+  //
+  // The core resets into the boot ROM and the loader runs there; the
+  // image runs from RAM. So the first granted instruction fetch inside
+  // the RAM region is the jump at the end of boot_crt0.S, and the cycle
+  // it happens on splits the run. Recorded per boot, because the SoC can
+  // reset itself and each boot runs the loader again.
+  // -------------------------------------------------------------------
+  integer handover_cycle = -1;
+  integer handovers      = 0;
+  reg     in_rom         = 1'b1;
+  always @(posedge clk) if (rst_n) begin
+    if (dut.instr_req && dut.instr_gnt) begin
+      if (in_rom && (dut.instr_addr >= dut.SOC_BASE_RAM)
+                 && (dut.instr_addr <  dut.SOC_BASE_RAM + dut.SOC_SIZE_RAM)) begin
+        in_rom = 1'b0;
+        handovers = handovers + 1;
+        handover_cycle = cycles;
+        $display("[TB] boot: handed over to RAM at cycle %0d (fetch 0x%08x)",
+                 cycles, dut.instr_addr);
+      end else if (!in_rom && (dut.instr_addr >= dut.SOC_BASE_ROM)) begin
+        in_rom = 1'b1;     // a reset put the core back in the ROM
+      end
+    end
+  end
 
   // -------------------------------------------------------------------
   // Watchdog escalation, reported as it happens.
@@ -305,6 +454,56 @@ module tb_soc;
     if (rst_n && $test$plusargs("trace") && (cycles % 20000 == 0))
       $display("[TB] cycle %0d  fetch=0x%08x  data=0x%08x",
                cycles, last_instr_addr, last_data_addr);
+
+  // -------------------------------------------------------------------
+  // Every bus error, with the address that caused it.
+  //
+  // Not part of any pass criterion, and it costs nothing when nothing
+  // errors. It exists because a bus error and a PMP violation arrive at
+  // software as THE SAME `mcause` -- 5 for a load, 7 for a store -- and
+  // from inside the program they are indistinguishable. This line is the
+  // discriminator: a PMP violation never reaches the fabric, so an
+  // `mcause 5` with no line here is the core's own permission check and
+  // one with a line here is the memory or the decode. docs/68 section 10
+  // needed exactly that distinction and did not have it.
+  //
+  // The address is the one the master issued in the cycle of the GRANT,
+  // held until the response, which is what soc_bus.v's ownership queue
+  // guarantees for a single outstanding request per port.
+  // -------------------------------------------------------------------
+  always @(posedge clk) if (rst_n && $test$plusargs("errtrace")) begin
+    if (dut.data_rvalid && dut.data_err)
+      $display("[ERR] cycle %0d: data error, last data address 0x%08x",
+               cycles, last_data_addr);
+    if (dut.instr_rvalid && dut.instr_err)
+      $display("[ERR] cycle %0d: fetch error, last fetch address 0x%08x",
+               cycles, last_instr_addr);
+  end
+
+  // A WINDOWED FETCH AND DATA TRACE.
+  //
+  // +ftrace_from=<cycle> +ftrace_to=<cycle> prints every granted
+  // instruction fetch and every granted data access in that window.
+  // Off by default and part of no criterion. It exists because the one
+  // question a console log cannot answer is "which instructions
+  // actually ran", and docs/68 section 10 needed exactly that: a check
+  // that had passed from the boot ROM failed from RAM with a bus error
+  // at an address no source line names, and the execution path is the
+  // only thing that distinguishes a wrong pointer from a wrong branch.
+  integer ftrace_from = -1, ftrace_to = -1;
+  initial begin
+    if (!$value$plusargs("ftrace_from=%d", ftrace_from)) ftrace_from = -1;
+    if (!$value$plusargs("ftrace_to=%d", ftrace_to)) ftrace_to = -1;
+  end
+  always @(posedge clk)
+    if (rst_n && ftrace_from >= 0 && cycles >= ftrace_from
+        && cycles <= ftrace_to) begin
+      if (dut.instr_req && dut.instr_gnt)
+        $display("[FT] %0d I 0x%08x", cycles, dut.instr_addr);
+      if (dut.data_req && dut.data_gnt)
+        $display("[FT] %0d D %s 0x%08x be=%b", cycles,
+                 dut.data_we ? "W" : "R", dut.data_addr, dut.data_be);
+    end
 
   // +bustrace dumps every fabric handshake for the first BUSTRACE_CYCLES
   // cycles. Off by default and not part of any pass criterion: it is
@@ -417,6 +616,19 @@ module tb_soc;
       end
     end
 
+    $display("[TB] boot: %0d hand-over%s, the last at cycle %0d; %0d cycles in the image",
+             handovers, (handovers == 1) ? "" : "s", handover_cycle,
+             (handover_cycle >= 0) ? (cycles - handover_cycle) : 0);
+    $display("[TB] bootreg: bstrap 0x%08x bstat 0x%08x brpt 0x%08x epoch 0x%08x",
+             {dut.u_boot.valid_q, 3'h0, dut.u_boot.NSTRAP_B, 7'h0,
+              dut.u_boot.wdis_q, dut.u_boot.strap_w},
+             {8'h0, dut.u_boot.LIMIT_B, 6'h0, dut.u_boot.over_limit,
+              dut.u_boot.last_attempt, dut.u_boot.cnt_w},
+             dut.u_boot.brpt_q, dut.u_boot.epoch_q);
+    if (handovers == 0) begin
+      $display("[TB] FAIL: the loader never handed over to an image in RAM");
+      errors = errors + 1;
+    end
     $display("[TB] console: %0d characters decoded, %0d framing errors",
              rx_chars, rx_framing_errors);
     $display("[TB] watchdog: stage1 %0d, stage2 %0d, stage3 %0d",
@@ -440,12 +652,22 @@ module tb_soc;
              dut.u_scrub.g_src[0].cnt_q, dut.u_scrub.g_src[1].cnt_q,
              dut.u_scrub.g_src[2].cnt_q, dut.u_scrub.g_src[3].cnt_q,
              dut.u_scrub.g_src[4].cnt_q, dut.u_scrub.g_src[5].cnt_q);
-    if (dut.u_scrub.g_src[0].cnt_q != 0 || dut.u_scrub.g_src[1].cnt_q != 0 ||
-        dut.u_scrub.g_src[2].cnt_q != 0 || dut.u_scrub.g_src[3].cnt_q != 0 ||
-        dut.u_scrub.g_src[4].cnt_q != 0 || dut.u_scrub.g_src[5].cnt_q != 0) begin
+    // A RUN WITH AN INJECTED FAULT IS NOT A CLEAN RUN, and this
+    // criterion is about clean runs. +ded_word plants an uncorrectable
+    // in a word the loader has just written (docs/68 section 6), so the
+    // counters are SUPPOSED to move and the loader's report of what it
+    // found is the evidence. Without this exemption the one run that
+    // demonstrates the codec catching something reports a failure for
+    // catching it.
+    if (ded_word < 0 &&
+        (dut.u_scrub.g_src[0].cnt_q != 0 || dut.u_scrub.g_src[1].cnt_q != 0 ||
+         dut.u_scrub.g_src[2].cnt_q != 0 || dut.u_scrub.g_src[3].cnt_q != 0 ||
+         dut.u_scrub.g_src[4].cnt_q != 0 || dut.u_scrub.g_src[5].cnt_q != 0)) begin
       $display("[TB] FAIL: the memory codec reported an event on a clean run");
       errors = errors + 1;
     end
+    if (ded_word >= 0)
+      $display("[TB] note: an uncorrectable was injected; the counters above are expected to be non-zero");
     if (rx_chars == 0) begin
       $display("[TB] FAIL: nothing came out of the UART");
       errors = errors + 1;

@@ -314,8 +314,8 @@ apb_slots:
      desc: "Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name", source: "AHBSTAT 0xFFA06000 (GR740) remapped"}
   - {name: SCRUB,   slot: 0x016, irq: 23, line: 11, status: implemented, device_id: 0x057,
      desc: "Memory codec counters, scrubber control and the last uncorrectable address, MEMSCRUB-like; docs/67", source: "MEMSCRUB (GR740) remapped"}
-  - {name: BOOTREG, slot: 0x017, irq: 0,  status: reserved, device_id: 0x087,
-     desc: "Bootstrap pin readback and boot report register, GRGPREG-like", source: "GRGPREG 0xFFA09000 (GR740)"}
+  - {name: BOOTREG, slot: 0x017, irq: 0,  status: implemented, device_id: 0x087,
+     desc: "Bootstrap pin readback, the hardware boot counter and the boot report and epoch words that survive a reset, GRGPREG-like; docs/68", source: "GRGPREG 0xFFA09000 (GR740)"}
   - {name: CLKGATE, slot: 0x018, irq: 0,  status: reserved, device_id: 0x02C,
      desc: "Clock gate enable and status for NPU nodes and heavy peripherals", source: "GRCLKGATE (GR740, GR716B)"}
   - {name: NPUCFG,  slot: 0x019, irq: 24, line: 12, status: implemented, device_id: 0x013,

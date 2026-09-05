@@ -47,9 +47,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub bytesecded memecc clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub boot bytesecded memecc clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub bytesecded memecc
+all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub boot bytesecded memecc
 
 include $(REPO)/tools.mk
 
@@ -121,6 +121,16 @@ scrub:
 	@for t in $(SCRUB_TASKS); do \
 	  echo "== soc_scrub $$t"; \
 	  $(SBY) -f soc_scrub.sby $$t || exit 1; \
+	done
+
+# The boot flow's register block docs/68 adds, at the two counter widths
+# soc_busstat is proved at and for the same reason.
+BOOT_TASKS := bmc prove prove_full cover
+
+boot:
+	@for t in $(BOOT_TASKS); do \
+	  echo "== soc_boot $$t"; \
+	  $(SBY) -f soc_boot.sby $$t || exit 1; \
 	done
 
 # The BYTE shortening of the (72,64) codec, four of which make one RAM
@@ -216,5 +226,6 @@ clean:
 	       $(addprefix soc_gpio_,$(GPIO_TASKS)) soc_gpio \
 	       $(addprefix soc_qspi_,$(QSPI_TASKS)) soc_qspi \
 	       $(addprefix soc_scrub_,$(SCRUB_TASKS)) soc_scrub \
+	       $(addprefix soc_boot_,$(BOOT_TASKS)) soc_boot \
 	       $(addprefix byte_secded_,$(BYTE_TASKS)) byte_secded \
 	       $(addprefix soc_mem_ecc_,$(MEMECC_TASKS)) soc_mem_ecc

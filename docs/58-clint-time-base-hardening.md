@@ -491,6 +491,12 @@ measured here:
 - `mcountinhibit` can stop it, and nothing in this SoC stops software
   from setting it.
 
+*Partly answered 2026-09-05 by `docs/68-boot-flow.md` section 7.4:*
+the epoch's IDENTITY now exists in hardware — a word in the power-on
+domain that the boot loader increments once per boot — so a re-epoch is
+at least detectable. The reconstruction of elapsed time from `mcycle` is
+still [planned].
+
 **This is [planned] and not [fact].** No program in this repository
 reconstructs `mtime` from `mcycle`, and this document does not add one:
 adding one would change the workload and cost the 215,428-cycle

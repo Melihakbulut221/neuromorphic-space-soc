@@ -502,6 +502,12 @@ demonstration program. The finding stands on its own: **the bring-up
 program has outgrown the boot ROM**, and any further check will either
 displace one or be a second image.
 
+*Corrected 2026-09-05 by `docs/68-boot-flow.md`:* it no longer has to
+fit. The boot ROM holds a 3,104-byte loader and the program is bounded
+by the 32 KiB of RAM it is loaded into, so a further check displaces
+nothing. The demonstration images remain, because they demonstrate
+different things and not because of a size limit.
+
 ### 7.2 Check 29: the flash through the real fabric
 
 Every word here travels core, fabric, APB bridge, slot decode, the
@@ -514,6 +520,11 @@ written from, and never from anything the simulation produced.
 2. 03h reads seven sample words, including one at an unaligned byte
    address, and every one matches the header.
 3. SR2 reads 0; 50h then 31h sets QE; SR2 reads 2.
+   *Corrected 2026-09-05 by `docs/68-boot-flow.md` section 10.4:* since
+   the boot flow exists, the LOADER sets QE before this program runs, so
+   "SR2 reads 0" had become a check that the loader did not run and it
+   failed for exactly that reason. The check is now that QE is already
+   set on entry and that setting it again is idempotent.
 4. EBh and 6Bh read the aligned samples on four lanes; every one
    matches.
 5. 0Bh reads two consecutive words in one frame through the `DR` pause.
@@ -606,6 +617,14 @@ than absolutes: +48 cycles, none of it in the
 block. **Every document after this one should quote 217,682
 for the 28-check image**, and the demonstration image carries its own
 number.
+
+*Corrected 2026-09-05 by `docs/68-boot-flow.md` section 8:* the program
+is no longer fetched from the boot ROM. The ROM holds a loader, the
+program is copied into RAM from a flash image, and the number becomes
+**220,256 for the program and 415,324 for the run**, against **217,630**
+for the identical program from the ROM — the difference being that
+instruction fetch and data access now share one slave port. That
+document's section 8 carries every step of the move, each measured.
 
 ---
 

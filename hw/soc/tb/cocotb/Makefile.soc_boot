@@ -1,0 +1,71 @@
+# cocotb + Icarus suite for hw/soc/rtl/soc_boot.v, the bootstrap pins,
+# the boot counter and the record that survives a reset (docs/68).
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_boot
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_boot lint
+#
+# Standalone by design, same structure and the same rootless tool
+# discovery as Makefile.soc_scrub.
+#
+# CNT_W IS 4 HERE AND 8 IN THE DESIGN, for Makefile.soc_busstat's
+# reason: the saturation test has to be reachable in a suite that drives
+# one reset release per iteration, and 255 of them is a slow way to
+# prove a comparator. hw/soc/formal/soc_boot.sby proves the same
+# properties at the shipped width. NSTRAP and LIMIT are soc_top.v's.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+SOC_BOOT_SRC ?= $(RTL)/soc_boot.v
+
+VERILOG_SOURCES = $(SOC_BOOT_SRC)
+TOPLEVEL = soc_boot
+MODULE = test_soc_boot
+
+SIM_BUILD ?= sim_build_soc_boot
+COCOTB_RESULTS_FILE ?= results_soc_boot.xml
+export COCOTB_RESULTS_FILE
+
+BOOT_CNT_W ?= 4
+BOOT_NSTRAP ?= 4
+BOOT_LIMIT ?= 3
+
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+# Parameters on the ROOT module, which is the one case Icarus's -P does
+# reach -- docs/49 section 8's finding is that -P is silently dropped for
+# anything BELOW a root, and soc_boot is the root here.
+COMPILE_ARGS += -Psoc_boot.CNT_W=$(BOOT_CNT_W)
+COMPILE_ARGS += -Psoc_boot.NSTRAP=$(BOOT_NSTRAP)
+COMPILE_ARGS += -Psoc_boot.LIMIT=$(BOOT_LIMIT)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) $(SOC_BOOT_SRC)
+
+endif

@@ -132,6 +132,34 @@ SOC_SCRUB_IVL=${SOC_SCRUB_IVL:-}
 # for and its own header says why. Off by default, because a run that
 # prints counters is not the run whose log is diffed against the
 # invariant.
+# ---- the boot flow, docs/68 ----------------------------------------
+#
+# SOC_RAM_RANDOM is the POWER-UP MODEL and it is on by default. The RAM
+# is an SRAM: it comes up undefined, and since docs/67 so does its SECDED
+# check field, so a word nobody has written reads back as an
+# UNCORRECTABLE rather than as a zero. tb_soc.v's +ram_random fills both
+# arrays with pseudo-random bits before reset is released. Set it to 0
+# to get the pre-docs/68 model, in which soc_mem.v's own initial block
+# has already left every row a valid all-zero codeword -- which is a
+# memory that is already initialised, and therefore a run in which the
+# loader's RAM sweep proves nothing.
+SOC_RAM_RANDOM=${SOC_RAM_RANDOM:-1}
+
+# SOC_STRAP is the board's bootstrap wiring, tb_soc.v's +strap. 0 is the
+# board this repository models: boot from the flash on chip select 0.
+# 4 sets NOBOOT (hw/soc/tb/sw/soc_boot.h).
+SOC_STRAP=${SOC_STRAP:-0}
+
+# SOC_DED_WORD plants an uncorrectable in one RAM word on the edge after
+# the loader writes it -- the fault BOOT_CAUSE_ECC exists for. Empty
+# means none.
+SOC_DED_WORD=${SOC_DED_WORD:-}
+
+# BOOT_CORRUPT reaches flow/gen_boot_image.py through build_sw_soc.sh
+# and breaks one thing in one of the two image slots. `none` is the
+# design; see that script for the modes.
+export BOOT_CORRUPT=${BOOT_CORRUPT:-none}
+
 SOC_PROBE=${SOC_PROBE:-0}
 PROBE_ROOT=()
 PROBE_SRC=()
@@ -179,6 +207,29 @@ eval "$(make --no-print-directory -f "$SOC_DIR/tools.soc.mk" printvars)"
 
 mkdir -p "$OUT"
 
+# tb_soc.v's power-up model and its fault injector reach into the RAM's
+# CHECK FIELD, which exists only in the codec arm. A hierarchical name
+# that does not resolve is an elaboration error, so the block is behind
+# a define and the define follows SOC_MEM_HARDEN rather than being set
+# by hand.
+if [ "$SOC_MEM_HARDEN" != 0 ]; then
+  RAM_POWERUP_DEF=-DRAM_POWERUP_ECC
+else
+  RAM_POWERUP_DEF=
+fi
+
+# The testbench's own give-up bound. It defaults to tb_soc.v's 5,000,000
+# and is set down for the runs docs/68 expects NOT to terminate -- the
+# NOBOOT strap and the unbootable device, both of which end in a reset
+# loop that is the CORRECT behaviour and would otherwise cost an hour of
+# simulation to observe.
+SOC_TIMEOUT_CYCLES=${SOC_TIMEOUT_CYCLES:-}
+if [ -n "$SOC_TIMEOUT_CYCLES" ]; then
+  TIMEOUT_DEF="-DTIMEOUT_CYCLES=$SOC_TIMEOUT_CYCLES"
+else
+  TIMEOUT_DEF=
+fi
+
 SW_DEFINES=${SW_DEFINES:-}
 # shellcheck disable=SC2086
 "$SOC_DIR/flow/build_sw_soc.sh" "$OUT" "-DUART_SCALER_VAL=${UART_SCALER}u" $SW_DEFINES
@@ -186,10 +237,15 @@ SW_DEFINES=${SW_DEFINES:-}
 # Symbol addresses come out of the ELF that was just built rather than
 # being written down here, so neither file carries a constant that goes
 # stale the next time the program is edited.
+#
+# THEY COME OUT OF THE APPLICATION'S ELF AND NOT THE ROM'S, since
+# docs/68. exit_code, exit_magic and the trap records are the PROGRAM's
+# symbols and the program now runs from RAM out of a flash image; the
+# ROM holds the loader, whose symbols the testbench never reads.
 NM=$SOC_DIR/tools/rvgcc/bin/riscv-none-elf-nm
 sym () {
   local a
-  a=$("$NM" "$OUT/test_soc.elf" | awk -v s="$1" '$3 == s { print $1 }')
+  a=$("$NM" "$OUT/app.elf" | awk -v s="$1" '$3 == s { print $1 }')
   [ -n "$a" ] || { echo "symbol not found: $1" >&2; exit 1; }
   echo "32'h$a"
 }
@@ -217,6 +273,8 @@ fi
   -I "$PILOT_RTL" \
   -DSG13G2_ICG_BEHAVIOURAL \
   -DROM_HEX="\"$OUT/test_soc.hex\"" \
+  ${TIMEOUT_DEF} \
+  ${RAM_POWERUP_DEF} \
   -DUART_BIT_CYCLES="$UART_BIT_CYCLES" \
   -DEXIT_CODE_ADDR="$(sym exit_code)" \
   -DEXIT_MAGIC_ADDR="$(sym exit_magic)" \
@@ -235,6 +293,7 @@ fi
   "$SOC_DIR/rtl/soc_mem.v" \
   "$SOC_DIR/rtl/soc_mem_ecc.v" \
   "$SOC_DIR/rtl/soc_scrub.v" \
+  "$SOC_DIR/rtl/soc_boot.v" \
   "$SOC_DIR/rtl/soc_pnp.v" \
   "$SOC_DIR/rtl/soc_apb_pnp.v" \
   "$SOC_DIR/rtl/soc_uart.v" \
@@ -306,7 +365,19 @@ echo "== elaborated; running"
 # flow/gen_flash_image.py alongside the ROM image it is checked against.
 # tb_soc.v loads it into the modelled W25Q128JV with $readmemh; a run
 # without it would see an erased device and fail checks 29 and 30.
-"$VVP" "$OUT/tb_soc.vvp" +flash0="$OUT/flash0.hex" 2>&1 | tee "$OUT/sim.log"
+VVP_ARGS=(+flash0="$OUT/flash0.hex" +strap="$SOC_STRAP")
+if [ "$SOC_RAM_RANDOM" != 0 ]; then
+  VVP_ARGS+=(+ram_random="$SOC_RAM_RANDOM")
+fi
+if [ -n "$SOC_DED_WORD" ]; then
+  VVP_ARGS+=(+ded_word="$SOC_DED_WORD")
+fi
+# Anything else the testbench understands, unparsed: +errtrace, +trace,
+# +bustrace, +vcd. They are observations and none of them changes the
+# design, so they get one pass-through rather than one variable each.
+# shellcheck disable=SC2206
+[ -n "${SOC_VVP_ARGS:-}" ] && VVP_ARGS+=(${SOC_VVP_ARGS})
+"$VVP" "$OUT/tb_soc.vvp" "${VVP_ARGS[@]}" 2>&1 | tee "$OUT/sim.log"
 
 grep -q "^\[TB\] PASS" "$OUT/sim.log" || {
   echo "== SoC SIMULATION FAILED" >&2; exit 1; }

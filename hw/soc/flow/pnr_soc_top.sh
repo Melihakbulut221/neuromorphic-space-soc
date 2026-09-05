@@ -164,7 +164,7 @@ SRCS=$(
   echo "$RTL/prim_clock_gating.v"
   ibex_sources "$SOC_DIR"
   for f in soc_bus soc_apb_bridge soc_uart soc_gpio soc_qspi soc_pnp soc_apb_pnp \
-           soc_clint soc_gptimer soc_wdog soc_busstat soc_scrub \
+           soc_clint soc_gptimer soc_wdog soc_busstat soc_scrub soc_boot \
            soc_mem_ecc soc_tmr_bank; do
     echo "$RTL/$f.v"
   done
@@ -252,12 +252,23 @@ PY
 #       -S Yosys.Synthesis -S Checker.YosysUnmappedCells \
 #       -S Checker.YosysSynthChecks -S Checker.NetlistAssignStatements \
 #       -i hw/soc/pnr/state/syn_soc_top.state.json
+#
+# PNR_STATE names the file that is written, and it defaults to the path
+# the command above passes. It exists because that path is SHARED: two
+# runs of this script started together -- a change and its baseline, the
+# comparison docs/61, docs/62 and docs/67 all needed -- would race on
+# one file and the second would silently harden the first one's netlist.
+# docs/68 ran exactly that pair and gives each its own state file. The
+# default is unchanged, so every command in every earlier document still
+# means what it said.
 SYN_NETLIST=${SYN_NETLIST:-$SOC_DIR/out/s47-sram/soc_top.netlist.v}
+PNR_STATE=${PNR_STATE:-$PNR/state/syn_soc_top.state.json}
 if [ -f "$SYN_NETLIST" ]; then
-  mkdir -p "$PNR/state"
+  mkdir -p "$(dirname "$PNR_STATE")"
   "$VENV/bin/python" -c "import json,os,sys; json.dump({'nl': os.path.abspath(sys.argv[1]), 'metrics': {}}, open(sys.argv[2],'w'), indent=1)" \
-      "$SYN_NETLIST" "$PNR/state/syn_soc_top.state.json"
+      "$SYN_NETLIST" "$PNR_STATE"
   echo "netlist:   $SYN_NETLIST"
+  echo "state:     $PNR_STATE"
 else
   echo "netlist:   $SYN_NETLIST not found; run flow/syn_soc_top.sh first"
   echo "           (needed only for the -i form above)"
