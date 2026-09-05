@@ -181,7 +181,7 @@ rm -rf "$OUT"; mkdir -p "$OUT"
 IBEX_SRCS=$(ibex_sources "$SOC_DIR" | tr '\n' ' ')
 
 SOC_SRCS="$RTL/soc_bus.v $RTL/soc_apb_bridge.v $RTL/soc_uart.v \
-$RTL/soc_pnp.v $RTL/soc_apb_pnp.v $RTL/soc_clint.v $RTL/soc_gptimer.v \
+$RTL/soc_gpio.v $RTL/soc_pnp.v $RTL/soc_apb_pnp.v $RTL/soc_clint.v $RTL/soc_gptimer.v \
 $RTL/soc_wdog.v $RTL/soc_busstat.v $RTL/soc_tmr_bank.v \
 $PILOT_RTL/tmr_voter.v"
 

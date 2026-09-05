@@ -163,8 +163,8 @@ done
 SRCS=$(
   echo "$RTL/prim_clock_gating.v"
   ibex_sources "$SOC_DIR"
-  for f in soc_bus soc_apb_bridge soc_uart soc_pnp soc_apb_pnp soc_clint \
-           soc_gptimer soc_wdog soc_busstat soc_tmr_bank; do
+  for f in soc_bus soc_apb_bridge soc_uart soc_gpio soc_pnp soc_apb_pnp \
+           soc_clint soc_gptimer soc_wdog soc_busstat soc_tmr_bank; do
     echo "$RTL/$f.v"
   done
   # READ from the pilot's directory and never modified, exactly as

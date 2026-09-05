@@ -40,10 +40,18 @@
 //        and from the watchdog's stage-2 request, so the SoC can reset
 //        its own core while the watchdog keeps the evidence. See the
 //        reset section below.
-//   IS NOT the whole map. Four regions and eleven peripheral slots are
+//   IS NOT the whole map. Four regions and ten peripheral slots are
 //        reserved and unimplemented. An access to any of them takes a
 //        bus error, on purpose: docs/39-soc-bus-and-memory-map.md
 //        section 8 lists them.
+//   HAS  one spacecraft interface, as of docs/65: a GRGPIO-shaped
+//        16-pin GPIO port (soc_gpio.v) in the slot the map reserved for
+//        it since docs/39, on the fast interrupt line docs/40 assigned
+//        it. It is this project's own RTL and it is here first so that
+//        the slot-to-driver-to-program path was walked once on a block
+//        with no third-party dependency before any bus bridge is
+//        written. The pins leave this module as three wires per pin
+//        because there is no pad ring.
 //   IS   a NEUROMORPHIC SoC, as of docs/51-npu-integration.md.
 //        soc_npu.v instantiates hw/rtl/pilot_top.v -- the frozen
 //        TTIHP26b submission, unmodified -- reaches its register bank
@@ -91,7 +99,11 @@ module soc_top #(
     // docs/50 section 3 measures that its one conservatism -- refusing a
     // grant in the cycle a response returns -- is unreachable in this
     // SoC because Ibex's own NUM_REQS equals the fabric's MAX_OUT.
-    parameter MEM_RDREG = 1'b0
+    parameter MEM_RDREG = 1'b0,
+
+    // The GPIO port width. 16 is what the frozen map's slot description
+    // and docs/01 section 4 say; soc_gpio.v accepts 2..32.
+    parameter integer GPIO_NBITS = 16
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -104,6 +116,15 @@ module soc_top #(
 
     output wire        uart_tx_o,
     output wire        uart_irq_o,
+
+    // ---- the GPIO pins, docs/65 ----
+    // Three wires per pin, because there is no pad ring: what the pad
+    // sees, what it should drive, and whether it should drive.
+    // hw/soc/tb/tb_soc.v models the pad and a board with a loopback.
+    input  wire [GPIO_NBITS-1:0] gpio_i,
+    output wire [GPIO_NBITS-1:0] gpio_o,
+    output wire [GPIO_NBITS-1:0] gpio_oe_o,
+    output wire        gpio_irq_o,     // GPIO IFLAG AND IMASK, a level
 
     // ---- observation, for the testbench and for pins later ----
     output wire        wdog_no,        // watchdog stage 3, active low
@@ -174,6 +195,7 @@ module soc_top #(
   // them and the blocks that drive them are instantiated further down.
   wire        clint_irq_timer, clint_irq_soft;
   wire        gptimer_irq, uart_irq, wdog_nmi, busstat_irq, npu_irq;
+  wire        gpio_irq;
   // The fault lines soc_busstat counts. docs/44.
   wire [2:0]  rf_ecc_err;      // from the register file, via ibex_top
   wire        wdog_tmr_ev;     // from the watchdog's voter
@@ -225,6 +247,14 @@ module soc_top #(
     // for it -- the same discipline BUSSTAT follows and the reason the
     // pre-NPU whole-SoC run is reproducible with this block present.
     irq_fast[SOC_IRQLINE_NPUCFG]  = npu_irq;
+    // The GPIO's line, connected here for the first time (docs/65).
+    // docs/40 assigned source 4 and line 2 before the block existed;
+    // nothing spare is spent. Its level is |(IFLAG & IMASK) and IMASK
+    // resets to zero, so the wire is low until software asks for it --
+    // the same discipline BUSSTAT and NPUCFG follow, and the reason the
+    // whole-SoC run of docs/56 is cycle-identical with this block
+    // present and the program unchanged.
+    irq_fast[SOC_IRQLINE_GPIO]    = gpio_irq;
   end
 
 
@@ -460,19 +490,20 @@ module soc_top #(
   wire [7:0] slot = paddr[19:12];
 
   wire sel_uart0  = psel && (slot == SOC_APBSLOT_UART0);
+  wire sel_gpio   = psel && (slot == SOC_APBSLOT_GPIO);
   wire sel_timer0 = psel && (slot == SOC_APBSLOT_TIMER0);
   wire sel_busstat = psel && (slot == SOC_APBSLOT_BUSSTAT);
   wire sel_npucfg = psel && (slot == SOC_APBSLOT_NPUCFG);
   wire sel_apbpnp = psel && (slot == SOC_APBSLOT_APBPNP);
-  wire sel_none   = psel && !sel_uart0 && !sel_timer0 && !sel_busstat
-                         && !sel_npucfg && !sel_apbpnp;
+  wire sel_none   = psel && !sel_uart0 && !sel_gpio && !sel_timer0
+                         && !sel_busstat && !sel_npucfg && !sel_apbpnp;
 
   wire [31:0] prdata_uart0, prdata_timer0, prdata_apbpnp, prdata_busstat,
-              prdata_npucfg;
+              prdata_npucfg, prdata_gpio;
   wire        pready_uart0, pready_timer0, pready_apbpnp, pready_busstat,
-              pready_npucfg;
+              pready_npucfg, pready_gpio;
   wire        pslverr_uart0, pslverr_timer0, pslverr_apbpnp, pslverr_busstat,
-              pslverr_npucfg;
+              pslverr_npucfg, pslverr_gpio;
 
   soc_uart u_uart0 (
       .clk_i (clk_i), .rst_ni (rst_sys_n),
@@ -481,6 +512,21 @@ module soc_top #(
       .prdata_o (prdata_uart0), .pready_o (pready_uart0),
       .pslverr_o (pslverr_uart0),
       .tx_o (uart_tx_o), .irq_o (uart_irq)
+  );
+
+  // The GPIO port, docs/65. GRGPIO's register map (grip.pdf table 923)
+  // in the slot the map has reserved for it since docs/39. Its input
+  // path is two synchroniser flops from gpio_i and nothing else: DATA
+  // reads the pad, not the OUTPUT register, so a read-back goes through
+  // whatever is outside this module -- soc_gpio.v's header says why.
+  soc_gpio #(.NBITS(GPIO_NBITS)) u_gpio (
+      .clk_i (clk_i), .rst_ni (rst_sys_n),
+      .psel_i (sel_gpio), .penable_i (penable), .paddr_i (paddr[11:0]),
+      .pwrite_i (pwrite), .pwdata_i (pwdata),
+      .prdata_o (prdata_gpio), .pready_o (pready_gpio),
+      .pslverr_o (pslverr_gpio),
+      .gpio_i (gpio_i), .gpio_o (gpio_o), .gpio_oe_o (gpio_oe_o),
+      .irq_o (gpio_irq)
   );
 
   // GRLIB GPTIMER register map, two general timers, and the watchdog as
@@ -550,18 +596,21 @@ module soc_top #(
   // reserved peripheral slot is a bus error at the core rather than a
   // read of zero that looks like a working register.
   assign prdata  = sel_uart0   ? prdata_uart0
+                 : sel_gpio    ? prdata_gpio
                  : sel_timer0  ? prdata_timer0
                  : sel_busstat ? prdata_busstat
                  : sel_npucfg  ? prdata_npucfg
                  : sel_apbpnp  ? prdata_apbpnp
                  : 32'h0;
   assign pready  = sel_uart0   ? pready_uart0
+                 : sel_gpio    ? pready_gpio
                  : sel_timer0  ? pready_timer0
                  : sel_busstat ? pready_busstat
                  : sel_npucfg  ? pready_npucfg
                  : sel_apbpnp  ? pready_apbpnp
                  : 1'b1;
   assign pslverr = sel_uart0   ? pslverr_uart0
+                 : sel_gpio    ? pslverr_gpio
                  : sel_timer0  ? pslverr_timer0
                  : sel_busstat ? pslverr_busstat
                  : sel_npucfg  ? pslverr_npucfg
@@ -644,6 +693,7 @@ module soc_top #(
   );
 
   assign uart_irq_o     = uart_irq;
+  assign gpio_irq_o     = gpio_irq;
   assign npu_irq_o      = npu_irq;
   assign gptimer_irq_o  = gptimer_irq;
   assign nmi_o          = wdog_nmi;

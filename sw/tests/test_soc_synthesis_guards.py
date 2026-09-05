@@ -1489,9 +1489,16 @@ def test_the_whole_soc_elaborates_as_one_design(workdir):
     ibex.append(genp)
     soc = [SOC_RTL / n for n in (
         "prim_clock_gating.v", "ibex_regfile_secded.v", "soc_bus.v",
-        "soc_apb_bridge.v", "soc_uart.v", "soc_pnp.v", "soc_apb_pnp.v",
-        "soc_clint.v", "soc_gptimer.v", "soc_wdog.v", "soc_busstat.v",
-        "soc_tmr_bank.v", "soc_npu.v", "soc_npu_ser.v")]
+        "soc_apb_bridge.v", "soc_uart.v", "soc_gpio.v", "soc_pnp.v",
+        "soc_apb_pnp.v", "soc_clint.v", "soc_gptimer.v", "soc_wdog.v",
+        "soc_busstat.v", "soc_tmr_bank.v", "soc_npu.v", "soc_npu_ser.v")]
+    # This list is a FIFTH copy of the four the flow-list guard below
+    # checks, and docs/65 found it the way docs/57 found the other four:
+    # soc_gpio.v was added to every flow and this test still failed,
+    # because nothing checks this list against soc_top.v. It is kept
+    # explicit rather than derived so that the guard cannot pass on a
+    # list generated from the file it is guarding; the price is that a
+    # new peripheral is a one-line edit here as well.
     # THE FROZEN PILOT IS PART OF THE DESIGN AS OF docs/51. soc_npu.v
     # instantiates hw/rtl/pilot_top.v unmodified, so this elaboration
     # reads it and the four blocks it is built from out of the directory

@@ -277,7 +277,7 @@ apb_slots:
      source: "APBUART0 0xFF900000 (GR740, NOELVSYS console)"}
   - {name: UART1,   slot: 0x001, irq: 3,  line: 1,  status: reserved, device_id: 0x00C,
      desc: "Second UART", source: "APBUART1 0xFF901000 (GR740)"}
-  - {name: GPIO,    slot: 0x002, irq: 4,  line: 2,  status: reserved, device_id: 0x01A,
+  - {name: GPIO,    slot: 0x002, irq: 4,  line: 2,  status: implemented, device_id: 0x01A,
      desc: "GRGPIO-style general purpose I/O, 16 pins", source: "GRGPIO0 0xFF902000 (GR740)"}
   - {name: TIMER0,  slot: 0x008, irq: 8,  line: 3,  status: implemented, device_id: 0x011,
      desc: "GPTIMER, last timer is the watchdog and is armed at reset", source: "GPTIMER0 0xFF908000 (GR740, NOELVSYS)"}

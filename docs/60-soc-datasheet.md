@@ -231,6 +231,10 @@ disagreement**.
 - **No spacecraft interfaces of any kind.** No SpaceWire, CAN, SPI,
   I2C, QSPI or GPIO. **Eleven of the sixteen peripheral slots are
   reserved addresses with nothing behind them.** Section 4
+  *Corrected 2026-09-05:* a 16-pin GPIO port is built and verified in
+  `docs/65-gpio-and-the-interface-ip-assessment.md`, so the count is
+  **ten of sixteen**; SpaceWire, CAN, SPI, I2C and QSPI remain absent
+  and that document prices each
 - **No DMA, no descriptor rings, no third bus master.** Section 4
 - **No clock gating, no power domains, no retention, no sleep mode.**
   One clock, one mode. Section 4 and section 11.3
@@ -359,6 +363,13 @@ face value will over-estimate the design in four specific ways.
 
 There is **no SpaceWire, no CAN, no SPI, no I2C, no QSPI and no
 GPIO**, in the sense that matters: there is no RTL for any of them.
+*Corrected 2026-09-05:* there is RTL for GPIO — `hw/soc/rtl/soc_gpio.v`,
+GRGPIO-shaped, 16 pins, in slot `0x002` on fast line 2, with sixteen
+pins on `soc_top` and check 28 of the bring-up program driving them
+(`docs/65-gpio-and-the-interface-ip-assessment.md`). The paragraphs
+below describe the design at revision 0.1 and are left as written; the
+slot table's GPIO row moves to the implemented line and the reserved
+count becomes ten.
 `hw/soc/rtl/` contains twenty-two files and none of them is a link
 layer, a serial controller or a pin multiplexer
 **[measured, the directory listing]**.
@@ -2054,6 +2065,7 @@ if that stops being true. **This document modifies nothing.**
 | Date | Revision | Changes |
 |---|---|---|
 | 2026-09-05 | **0.1a** | Section 14: the seven disagreements are resolved in the documents that own them, each correction left visible in place, and recorded in `docs/64-document-reconciliation.md`. No figure in this datasheet changed; section 9 already followed the committed campaign log. |
+| 2026-09-05 | **0.1b** | Sections 1 and 4.1: the "no GPIO" statements are corrected in place. `docs/65-gpio-and-the-interface-ip-assessment.md` builds the GPIO port; the whole-SoC invariant this datasheet quotes at 215,428 cycles is 217,634 with that document's check 28 in the program, and unchanged with the block present and the program as it was. |
 | 2026-09-03 | **0.1** | Initial release. Covers `soc_top` at commit `7721719`: the management core, the fabric, the memory subsystem, the CLINT, the GPTIMER and watchdog, BUSSTAT, the UART, the device tables and the NPU subsystem with the frozen pilot inside it. Physical and timing data are from the `full3` place-and-route run of `docs/47`, which does **not** contain the NPU subsystem. Power is `report_power` without activity annotation and is tagged [in flux]. No frequency figure is published. No DRC, LVS or XOR result exists. |
 
 ---

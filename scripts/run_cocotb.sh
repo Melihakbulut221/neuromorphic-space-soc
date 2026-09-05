@@ -39,7 +39,7 @@ run_one() {
     (cd "$dir" && timeout 300 make -f "$mk" clean >/dev/null 2>&1)
     # The results file is NOT always results_<makefile-suffix>.xml: the
     # hw/tb suites set COCOTB_RESULTS_FILE to results_<module>_<TAG>.xml, so
-    # guessing the name reports a passing suite as missing. Take the newest
+    # guessing the name reports a passing suite as missing. Collect every
     # XML written during this run instead, which is exact because the run is
     # serial.
     local before
@@ -48,25 +48,30 @@ run_one() {
     local log
     log=$(cd "$dir" && timeout 900 make -f "$mk" 2>&1)
     local rc=$?
-    local xml
-    xml=$(find "$dir" -maxdepth 1 -name 'results_*.xml' -newermt "@$before" -print 2>/dev/null | head -1)
-    if [ -z "$xml" ]; then
+    # ALL XMLs written during this run, not the newest one: a parameterised
+    # suite (TAG=...) writes several, and taking one made the total drift
+    # between runs -- soc_gptimer once read 10, then 3 -- while "0 failed"
+    # stayed true. Sum them.
+    local xmls
+    xmls=$(find "$dir" -maxdepth 1 -name 'results_*.xml' -newermt "@$before" -print 2>/dev/null)
+    if [ -z "$xmls" ]; then
         printf '  %-28s NO XML (make rc=%s)\n' "$name" "$rc"
         suite_fail=$((suite_fail + 1))
         printf '%s\n' "$log" | tail -3 | sed 's/^/      /'
         return
     fi
-    read -r t f < <(python3 - "$xml" <<'PY'
+    read -r t f < <(printf '%s\n' "$xmls" | python3 -c '
 import sys, xml.etree.ElementTree as ET
-try:
-    r = ET.parse(sys.argv[1]).getroot()
-    cases = [e for e in r.iter() if e.tag.endswith("testcase")]
-    bad = [c for c in cases if any(ch.tag.endswith(("failure", "error")) for ch in c)]
-    print(len(cases), len(bad))
-except Exception:
-    print(-1, -1)
-PY
-)
+t = f = 0
+for p in sys.stdin.read().split():
+    try:
+        r = ET.parse(p).getroot()
+        cases = [e for e in r.iter() if e.tag.endswith("testcase")]
+        t += len(cases)
+        f += sum(1 for c in cases if any(ch.tag.endswith(("failure", "error")) for ch in c))
+    except Exception:
+        t = f = -1; break
+print(t, f)')
     pass_total=$((pass_total + t - f))
     fail_total=$((fail_total + f))
     if [ "$f" != "0" ]; then

@@ -99,6 +99,41 @@ module tb_soc;
   wire alert_minor, alert_major_internal, alert_major_bus;
   wire double_fault_seen, core_sleep;
 
+  // -------------------------------------------------------------------
+  // The GPIO pads and the board they are soldered to (docs/65).
+  //
+  // soc_top has no pad ring, so each pin leaves it as three wires --
+  // what to drive, whether to drive, what the pad sees -- and the pad
+  // is modelled HERE, as the one place outside the design where the
+  // three meet. A pad whose output buffer is enabled shows the SoC's
+  // own value; one whose buffer is disabled shows whatever the board
+  // drives.
+  //
+  // The board is a loopback: pads 8..15 are wired to pads 0..7, so a
+  // value the program drives on pin k arrives on pin k+8 as an INPUT.
+  // That is what makes check 28 of the bring-up program a test of the
+  // pin path rather than of a register: DATA reads back through the
+  // pad model and the wire, never through the OUTPUT register, which
+  // soc_gpio.v refuses to fold in for exactly this reason. Pins 0..7
+  // are driven low by the board when the SoC does not drive them.
+  //
+  // Contention -- the SoC driving a looped-back pad against the pin it
+  // is wired to, with a different value -- resolves to X, as it would
+  // on a scope. The program never does it; a program that did would
+  // read X out of DATA and fail its own check.
+  // -------------------------------------------------------------------
+  wire [15:0] gpio_o, gpio_oe, gpio_pad;
+  wire        gpio_irq;
+  genvar gp;
+  generate
+    for (gp = 0; gp < 8; gp = gp + 1) begin : g_pad
+      assign gpio_pad[gp] = gpio_oe[gp] ? gpio_o[gp] : 1'b0;
+      assign gpio_pad[gp + 8] = !gpio_oe[gp + 8]            ? gpio_pad[gp]
+                              : (gpio_o[gp + 8] === gpio_pad[gp]) ? gpio_o[gp + 8]
+                              : 1'bx;
+    end
+  endgenerate
+
   // The watchdog bootstrap pin is held LOW, which is the armed state.
   // A run with it high would have no watchdog at all and every watchdog
   // check in the program would pass vacuously, so it is a constant here
@@ -110,6 +145,10 @@ module tb_soc;
       .wdog_dis_i (1'b0),
       .uart_tx_o  (uart_tx),
       .uart_irq_o (uart_irq),
+      .gpio_i     (gpio_pad),
+      .gpio_o     (gpio_o),
+      .gpio_oe_o  (gpio_oe),
+      .gpio_irq_o (gpio_irq),
       .wdog_no       (wdog_n),
       .wdog_rst_o    (wdog_rst),
       .nmi_o         (nmi),
@@ -332,6 +371,8 @@ module tb_soc;
              rx_chars, rx_framing_errors);
     $display("[TB] watchdog: stage1 %0d, stage2 %0d, stage3 %0d",
              wdog_stage1, wdog_stage2, wdog_stage3);
+    $display("[TB] gpio: pads 0x%04x, driven 0x%04x, irq %b",
+             gpio_pad, gpio_oe, gpio_irq);
     if (rx_chars == 0) begin
       $display("[TB] FAIL: nothing came out of the UART");
       errors = errors + 1;

@@ -174,7 +174,12 @@ found that `docs/43`'s timing attribution was wrong — every worst path
 started at an input tied to a constant, and the binding constraint was
 an unbuffered 2,328-fanout reset net.
 
-*Does not exist.* No silicon. No spacecraft interfaces. No radiation
+*Does not exist.* No silicon. ~~No spacecraft interfaces.~~ One
+spacecraft interface since 2026-09-05: a 16-pin GPIO port, built,
+proved and driven through the pins by the bring-up program
+(`docs/65-gpio-and-the-interface-ip-assessment.md`); SpaceWire, CAN,
+SPI, I2C and QSPI are fetched, pinned and priced there and still not
+built. No radiation
 test data. No gate-level result for anything under `hw/soc/`. No DRC,
 LVS or XOR on the laid-out SoC, and that one is a PDK property rather
 than a schedule: `docs/12` measured 1,106,478 Magic errors inside a

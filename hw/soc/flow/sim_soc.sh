@@ -214,6 +214,7 @@ fi
   "$SOC_DIR/rtl/soc_pnp.v" \
   "$SOC_DIR/rtl/soc_apb_pnp.v" \
   "$SOC_DIR/rtl/soc_uart.v" \
+  "$SOC_DIR/rtl/soc_gpio.v" \
   "$SOC_DIR/rtl/soc_clint.v" \
   "$SOC_DIR/rtl/soc_gptimer.v" \
   "$SOC_DIR/rtl/soc_wdog.v" \

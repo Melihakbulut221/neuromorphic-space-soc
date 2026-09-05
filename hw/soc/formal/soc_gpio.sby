@@ -1,0 +1,47 @@
+# SymbiYosys job for the GPIO port.
+#
+#   sby -f soc_gpio.sby prove       k-induction proof of P1-P7 at NBITS 4
+#   sby -f soc_gpio.sby prove_w16   the same at NBITS 16, as instantiated
+#   sby -f soc_gpio.sby bmc         bounded check, depth 20
+#   sby -f soc_gpio.sby cover       reachability of every proven behaviour
+#
+# Properties live in soc_gpio_props.v, textually included at the end of
+# the soc_gpio module body under `ifdef FORMAL -- the arrangement every
+# other job in this directory uses. They reconstruct the architectural
+# state from the ports and grip.pdf chapter 62, not from the RTL.
+#
+# NBITS IS 4 IN THE DEFAULT TASKS AND 16 IN prove_w16, for the reason
+# soc_busstat.sby gives for its CNT_W: the narrow width keeps every
+# cover reachable in a bounded model and the wide one is what soc_top.v
+# instantiates, so the shipped configuration is proved and nothing is
+# claimed at a width that was not run. Nothing in the properties
+# mentions either number; every one is written against NBITS.
+
+[tasks]
+bmc
+prove
+prove_w16
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 20
+prove: mode prove
+prove: depth 8
+prove_w16: mode prove
+prove_w16: depth 8
+cover: mode cover
+cover: depth 20
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_gpio.v
+~prove_w16: chparam -set NBITS 4 soc_gpio
+prove_w16: chparam -set NBITS 16 soc_gpio
+prep -top soc_gpio
+
+[files]
+../rtl/soc_gpio.v
+soc_gpio_props.v

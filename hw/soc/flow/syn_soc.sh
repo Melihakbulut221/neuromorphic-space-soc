@@ -7,6 +7,7 @@
 # e.g.  flow/syn_soc.sh soc_bus
 #       flow/syn_soc.sh soc_apb_bridge
 #       flow/syn_soc.sh soc_uart
+#       flow/syn_soc.sh soc_gpio
 #       flow/syn_soc.sh soc_pnp
 #       flow/syn_soc.sh soc_apb_pnp
 #       flow/syn_soc.sh soc_clint
@@ -189,7 +190,8 @@ cat > "$OUT/soc_syn.ys" <<EOF
 read_liberty -lib $SG13G2_TYP
 
 read_verilog -I$RTL -I$PILOT_RTL -defer $RTL/soc_bus.v $RTL/soc_apb_bridge.v \
-                          $RTL/soc_uart.v $RTL/soc_pnp.v $RTL/soc_apb_pnp.v \
+                          $RTL/soc_uart.v $RTL/soc_gpio.v \
+                          $RTL/soc_pnp.v $RTL/soc_apb_pnp.v \
                           $RTL/soc_clint.v $RTL/soc_gptimer.v $RTL/soc_wdog.v \
                           $RTL/soc_busstat.v \
                           $RTL/soc_tmr_bank.v $RTL/soc_npu.v \

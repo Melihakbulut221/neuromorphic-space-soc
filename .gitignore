@@ -66,6 +66,11 @@ hw/soc/genrvfi/
 # rule: derived from a pinned input by a tracked script, never
 # vendored and never edited by hand.
 hw/soc/genp/
+# hw/soc/gen_spi_host/ is the sv2v conversion of OpenTitan's spi_host
+# closure at the commit hw/soc/tools.soc.mk pins, written by
+# hw/soc/flow/sv2v_spi_host.sh (docs/65). Same rule as gen/: derived
+# from a pinned input by a tracked script, never vendored.
+hw/soc/gen_spi_host/
 hw/soc/out/
 
 # SymbiYosys working directories for the SoC fabric jobs (docs/39). Same
@@ -85,6 +90,8 @@ hw/soc/formal/soc_busstat/
 hw/soc/formal/soc_busstat_*/
 hw/soc/formal/soc_npu_ser/
 hw/soc/formal/soc_npu_ser_*/
+hw/soc/formal/soc_gpio/
+hw/soc/formal/soc_gpio_*/
 
 # docs/47: the place-and-route flow. Generated and fetched, never
 # vendored -- the rule docs/38 section 11 states. The state file names

@@ -72,7 +72,7 @@ interrupt controller and the drivers cannot disagree
 |---|---|---|---|---|---|---|
 | `0xFF900000` | `0x000` | UART0 | 2 | 0 | implemented | Console UART, GRLIB APBUART register map, transmit only |
 | `0xFF901000` | `0x001` | UART1 | 3 | 1 | reserved | Second UART |
-| `0xFF902000` | `0x002` | GPIO | 4 | 2 | reserved | GRGPIO-style general purpose I/O, 16 pins |
+| `0xFF902000` | `0x002` | GPIO | 4 | 2 | implemented | GRGPIO-style general purpose I/O, 16 pins |
 | `0xFF908000` | `0x008` | TIMER0 | 8 | 3 | implemented | GPTIMER, last timer is the watchdog and is armed at reset |
 | `0xFF909000` | `0x009` | TIMER1 | 12 | 4 | reserved | Second GPTIMER |
 | `0xFF90D000` | `0x00D` | SPW | 16 | 5 | reserved | SpaceWire codec, GRSPW2-shaped registers, one DMA channel |

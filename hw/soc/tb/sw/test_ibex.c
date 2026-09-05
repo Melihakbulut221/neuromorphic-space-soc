@@ -55,6 +55,7 @@
 #include "soc_memmap.h"
 #include "soc_timers.h"
 #include "soc_npucfg.h"
+#include "soc_gpio.h"
 /* Both generated into the build directory by
    hw/soc/flow/gen_npu_vectors.py, which build_sw_soc.sh runs first:
    npu_regs.h is the node register map from regmap/regmap.yaml, and
@@ -1234,6 +1235,107 @@ int main(void) {
                puts_(" ev="); puthex(w);
                puts_(" spun="); puthex((uint32_t)spun); putc_('\n'); }
     check(27, ok);
+  }
+
+  {
+    /* 28: THE FIRST SPACECRAFT INTERFACE, through the pins.
+
+       docs/60 section 4.1 recorded that this SoC had no interface of
+       any kind and that its only functional output was the UART's
+       transmit line. This check is the first thing to change that,
+       and what it demonstrates is the whole path a peripheral has to
+       travel to be real: a slot the map has reserved since docs/39,
+       decoded in soc_top.v, a register file written against grip.pdf
+       chapter 62, sixteen pins leaving the top level, and a fast
+       interrupt line docs/40 assigned before the block existed.
+
+       EVERY READ-BACK HERE GOES THROUGH A PAD. tb_soc.v models the
+       pads and a board on which pins 8..15 are wired to pins 0..7.
+       soc_gpio.v's DATA register reads the pad and never the OUTPUT
+       register, so the value written on pin k is observed on pin k
+       through its own pad and on pin k+8 through the board wire. A
+       block that folded OUTPUT into DATA would pass a register test
+       and fail this one on the high byte. */
+    int ok = 1;
+    uint32_t cap = cfg_rd(GPIO_CAP);
+    ok &= (GPIO_CAP_NLINES(cap) == GPIO_NBITS - 1u);
+    ok &= ((cap & GPIO_CAP_IFL) != 0u);           /* it has IFLAG      */
+    ok &= (GPIO_CAP_IRQGEN(cap) == 1u);           /* one shared line   */
+    ok &= ((cap & (GPIO_CAP_IER | GPIO_CAP_PU)) == 0u);
+
+    /* Out of reset every pin is an input and the board drives them
+       low, so DATA is zero and nothing is driven. */
+    ok &= (cfg_rd(GPIO_DIR) == 0u);
+    ok &= (cfg_rd(GPIO_DATA) == 0u);
+
+    /* Drive 0xA5 on pins 7..0. Pins 15..8 stay inputs and the board
+       wires them to 7..0, so DATA must read 0xA5A5: the low byte back
+       through our own pads, the high byte through the board. */
+    cfg_wr(GPIO_OUTPUT, 0x00A5u);
+    cfg_wr(GPIO_DIR, 0x00FFu);
+    uint32_t d0 = cfg_rd(GPIO_DATA);
+    ok &= (d0 == 0xA5A5u);
+
+    /* OUTPUT bits whose DIR bit is clear must not reach the input
+       side: set them and DATA must not move. */
+    cfg_wr(GPIO_OUTPUT_OR, 0xFF00u);
+    uint32_t d1 = cfg_rd(GPIO_DATA);
+    ok &= (d1 == 0xA5A5u);
+
+    /* The XOR alias flips pin 0, and pad 8 follows it. */
+    cfg_wr(GPIO_OUTPUT_XOR, 0x0001u);
+    uint32_t d2 = cfg_rd(GPIO_DATA);
+    ok &= (d2 == 0xA4A4u);
+
+    /* The interrupt: a RISING EDGE on pin 15 -- an input, wired on
+       the board to pin 7 -- on fast local line SOC_IRQLINE_GPIO, at
+       its own vector. An edge rather than a level, because the
+       handler in crt0.S masks the source in mie and does not touch
+       the block; with a level the flag would re-arm as soon as it was
+       cleared while pin 15 stayed high, which is correct and is what
+       the cocotb suite checks, and is not the demonstration here. */
+    cfg_wr(GPIO_OUTPUT_AND, 0xFF7Fu);             /* pin 7 low         */
+    cfg_wr(GPIO_IFLAG, GPIO_PINS);                /* nothing pending   */
+    cfg_wr(GPIO_IEDGE, 1u << 15);
+    cfg_wr(GPIO_IPOL, 1u << 15);                  /* rising            */
+    cfg_wr(GPIO_IMASK, 1u << 15);
+    ok &= (cfg_rd(GPIO_IFLAG) == 0u);
+
+    irq_marker = 0; irq_mcause = 0; irq_count = 0;
+    csr_set_mie(1u << (16 + SOC_IRQLINE_GPIO));
+    csr_set_mstatus(0x8u);                        /* MIE */
+    cfg_wr(GPIO_OUTPUT_OR, 0x0080u);              /* pin 7 rises       */
+    int spun = 0;
+    while (irq_count == 0u && spun < 20000) spun++;
+    csr_clr_mstatus(0x8u);
+
+    ok &= (irq_count == 1u);
+    ok &= (irq_mcause == SOC_IRQ_GPIO);
+    ok &= (irq_marker == (SOC_FAST_IRQ_BASE + SOC_IRQLINE_GPIO));
+    uint32_t fl = cfg_rd(GPIO_IFLAG);
+    ok &= (fl == (1u << 15));
+    /* Write-one-to-clear, and an edge does not re-arm while the pin
+       stays high. The pins are back at 0xA4 -- pin 0 was flipped by
+       the XOR above and pin 7 has been dropped and raised again -- and
+       the board still mirrors them. */
+    cfg_wr(GPIO_IFLAG, 1u << 15);
+    ok &= (cfg_rd(GPIO_IFLAG) == 0u);
+    ok &= (cfg_rd(GPIO_DATA) == 0xA4A4u);
+
+    /* Leave the pins as they were found: inputs, nothing driven. */
+    cfg_wr(GPIO_IMASK, 0u);
+    cfg_wr(GPIO_DIR, 0u);
+    cfg_wr(GPIO_OUTPUT, 0u);
+    ok &= (cfg_rd(GPIO_DATA) == 0u);
+
+    if (!ok) { puts_("  gpio cap="); puthex(cap);
+               puts_(" d="); puthex(d0); putc_(' '); puthex(d1);
+               putc_(' '); puthex(d2);
+               puts_(" irq cause="); puthex(irq_mcause);
+               puts_(" vec="); puthex(irq_marker);
+               puts_(" n="); puthex(irq_count);
+               puts_(" fl="); puthex(fl); putc_('\n'); }
+    check(28, ok);
   }
 #endif
 

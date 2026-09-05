@@ -184,7 +184,7 @@ trap_vectors:
   j     vec_spurious      // 15
   j     vec_fast0         // 16  fast line 0, UART0
   j     vec_spurious      // 17
-  j     vec_spurious      // 18
+  j     vec_fast2         // 18  fast line 2, GPIO
   j     vec_fast3         // 19  fast line 3, GPTIMER0
   j     vec_spurious      // 20
   j     vec_spurious      // 21
@@ -212,6 +212,7 @@ vec_spurious: li t0, 0xFF ; j irq_common
 vec_msoft:    li t0, 3    ; j irq_common
 vec_mtimer:   li t0, 7    ; j irq_common
 vec_fast0:    li t0, 16   ; j irq_common
+vec_fast2:    li t0, 18   ; j irq_common
 vec_fast3:    li t0, 19   ; j irq_common
 vec_fast12:   li t0, 28   ; j irq_common
 

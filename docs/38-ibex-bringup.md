@@ -998,6 +998,11 @@ gaps are visible rather than assumed closed:
 7. **The `docs/03` OpenTitan `spi_host` claim is untested.** This
    document only establishes that sv2v carries *Ibex*. The SPI host
    shares the dependency and has not been through it.
+   *Tested 2026-09-05:* it does — 52 modules, zero patches to OpenTitan,
+   two lines rewritten in the generated file, elaborates and
+   synthesises; and the block measures 171 % of this core's area, which
+   is the finding that matters
+   (`docs/65-gpio-and-the-interface-ip-assessment.md` section 8).
 
 ---
 

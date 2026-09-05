@@ -6,6 +6,8 @@
 #   cd hw/soc/formal && make clint      soc_clint: bmc, prove, cover
 #   cd hw/soc/formal && make busstat    soc_busstat: bmc, prove,
 #                                       prove_w16, cover
+#   cd hw/soc/formal && make gpio       soc_gpio: bmc, prove, prove_w16,
+#                                       cover
 #   cd hw/soc/formal && make wdog       soc_wdog: bmc, prove, prove_w0,
 #                                       cover
 #   cd hw/soc/formal && make npuser     the NPU serial transport: bmc,
@@ -36,9 +38,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser
+all: bus apb clint wdog wdogtmr regfile busstat npuser gpio
 
 include $(REPO)/tools.mk
 
@@ -77,6 +79,17 @@ busstat:
 	@for t in $(BUSSTAT_TASKS); do \
 	  echo "== soc_busstat $$t"; \
 	  $(SBY) -f soc_busstat.sby $$t || exit 1; \
+	done
+
+# The GPIO port docs/65 adds, at the two widths it is proved at: NBITS
+# = 4 so that every cover is reachable in a bounded model, and NBITS =
+# 16 because that is what soc_top.v instantiates.
+GPIO_TASKS := bmc prove prove_w16 cover
+
+gpio:
+	@for t in $(GPIO_TASKS); do \
+	  echo "== soc_gpio $$t"; \
+	  $(SBY) -f soc_gpio.sby $$t || exit 1; \
 	done
 
 WDOG_TASKS := bmc prove prove_w0 cover
@@ -146,4 +159,5 @@ clean:
 	       soc_apb_bridge_cover \
 	       soc_clint soc_clint_bmc soc_clint_prove soc_clint_cover \
 	       $(addprefix soc_wdog_,$(WDOG_TASKS)) soc_wdog \
-	       $(addprefix regfile_secded_,$(REGFILE_TASKS)) regfile_secded
+	       $(addprefix regfile_secded_,$(REGFILE_TASKS)) regfile_secded \
+	       $(addprefix soc_gpio_,$(GPIO_TASKS)) soc_gpio

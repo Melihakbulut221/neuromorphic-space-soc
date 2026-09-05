@@ -52,7 +52,7 @@ APB_SLOT_SIZE = 0x1000
 APB_SLOTS = {
     "UART0": (0xFF900000, 0x000, 2, "implemented"),
     "UART1": (0xFF901000, 0x001, 3, "reserved"),
-    "GPIO": (0xFF902000, 0x002, 4, "reserved"),
+    "GPIO": (0xFF902000, 0x002, 4, "implemented"),
     "TIMER0": (0xFF908000, 0x008, 8, "implemented"),
     "TIMER1": (0xFF909000, 0x009, 12, "reserved"),
     "SPW": (0xFF90D000, 0x00D, 16, "reserved"),

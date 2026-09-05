@@ -256,6 +256,15 @@ module tb_soc_npu_fi;
       .wdog_dis_i (wdog_dis),
       .uart_tx_o  (uart_tx),
       .uart_irq_o (uart_irq),
+      // The GPIO pins (docs/65): a board with nothing on them. The
+      // campaign program does not touch the block and IMASK resets to
+      // zero, so the port's interrupt line is low throughout; the
+      // outputs are observed by nothing here. Tied rather than left
+      // open so that no X enters the synchroniser.
+      .gpio_i     (16'h0000),
+      .gpio_o     (),
+      .gpio_oe_o  (),
+      .gpio_irq_o (),
       .wdog_no       (wdog_n),
       .wdog_rst_o    (wdog_rst),
       .nmi_o         (nmi),
