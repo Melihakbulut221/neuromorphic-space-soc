@@ -476,6 +476,15 @@ different set of legal placements, or that `repair_design`'s and
 distinguishable by instrumenting the step and were not. Section 15 item
 1.
 
+*Established 2026-09-06 by `docs/72-post-grt-resizer.md`: it is the
+first reading, sharpened, and not the second. No repair budget bound;
+both loops ended on OpenROAD's own no-progress rule, the hardened one
+after 20 of 3,365 endpoints — the CLINT's read-data and time-base
+registers — each tried for 51 passes and restored. It started 2.477 ns
+worse on global-route parasitics because a single-drive `nor4_1` was
+left driving a 180 fF net across the upper ROM macro on the binding
+path, and it recovered 2.092 ns less. `docs/72` sections 6 to 8.*
+
 ### 6.3 The block is on none of it
 
 `hw/soc/pnr/violator_census.py`, on each run's own netlist:
@@ -756,7 +765,11 @@ items it must repeat because they are the largest.
   **Why** it did is not established, and separating "a larger netlist
   left a different set of legal placements" from "the repair loop
   terminated differently" needs the step instrumented, which was not
-  done.
+  done. *Closed 2026-09-06 by `docs/72-post-grt-resizer.md`: the step was
+  instrumented on its own saved state, reproduces to the byte, and the
+  mechanism is a different placement of the CLINT read path across the
+  ROM macro plus a loop that gives up when the worst endpoints cannot
+  be moved — not a budget.*
 - **THE CONTROL PAIR IS ONE PAIR.** Section 5.3's 0.5031 ns and
   0.0198 ns are single differences, exactly as `docs/44` section 5.2's
   0.4 ns is, and neither is a distribution. A floor derived from one
@@ -959,7 +972,11 @@ for the same reason.
    the regression to one stage and one observable — 102 setup repair
    buffers against 519 — and stops there. `repair_timing`'s own report
    and its iteration budget are in the step's log and were not read.
-   This is the difference between "reported" and "explained".
+   This is the difference between "reported" and "explained". *Closed 2026-09-06 by
+   `docs/72-post-grt-resizer.md`: read, instrumented and explained —
+   no cap bound; 20 of 3,365 endpoints visited before OpenROAD's
+   no-progress rule fired; 2.477 ns of the 4.0739 handed to the resizer
+   by one macro-crossing net, 2.092 ns not recovered.*
 3. **`docs/50`'s read register, which is owed a re-measurement.**
    `docs/67` section 5.3 found the load return carrying the memory's
    decoder and the register file's encoder in series, and section 6.3

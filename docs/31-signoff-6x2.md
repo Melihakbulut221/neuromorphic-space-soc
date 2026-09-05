@@ -359,6 +359,15 @@ this repository derated must read `_env.tcl` or the written SDC, never
 3.2 and `docs/28` section 4.4(a) name: a record that looks like evidence
 and is not.
 
+*Extended 2026-09-06 by `docs/72-post-grt-resizer.md` section 7.1: a
+step directory's own `config.json` is lossy in the same way — it records
+`5` for a flow that derated at `5.0` — so `python -m librelane.steps
+run` on a step's own `config.json` and `state_in.json` re-runs that
+step with no derate, silently. Measured at the post-GRT resizer's
+iteration 0: 1.744 ns and 1.623 ns better than the flow on the same
+ODB, same libraries and same global route. The copy handed to the
+runner must be corrected to `5.0` by hand.*
+
 ### 3.3 The setup checker is pointed at all three corners
 
 `SETUP_VIOLATION_CORNERS: ["*"]` against the PDK's

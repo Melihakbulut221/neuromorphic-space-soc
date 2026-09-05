@@ -610,7 +610,8 @@ except where this document names an item.
   bound that is not one.
 - **THE SETUP REGRESSION IS STILL LOCALISED, NOT EXPLAINED.** This
   document makes `docs/70` section 6.2's question sharper — the event
-  is reproducible — and does not answer it.
+  is reproducible — and does not answer it. *Answered 2026-09-06 by
+  `docs/72-post-grt-resizer.md`.*
 - **THE FAST CORNER'S MACRO LIBERTY IS CHARACTERISED AT −55 C** while
   the standard cells are at −40 C, `docs/12` section 6.4a; every hold
   figure here carries that mismatch, identically in both runs.
@@ -789,7 +790,12 @@ steps-1–37 figures, single-threaded throughout, agree within 3 %.
    102 setup buffers against 519, and reading them is the difference
    between "reported" and "explained". Because the flow is
    deterministic, any instrumentation of that step — a `-verbose`, a
-   `-max_iterations` sweep — measures the mechanism and not a draw.
+   `-max_iterations` sweep — measures the mechanism and not a draw. *Closed 2026-09-06 by
+   `docs/72-post-grt-resizer.md`: the step re-run on its saved state
+   with the `repair_setup` trace on reproduces the flow to the byte and
+   names the rule that stopped it; the `-max_iterations` sweep is
+   answered by the trace — the hardened loop had made no progress for
+   900 iterations when the rule fired — and was not run.*
 2. **Say what "noise floor" means everywhere it is quoted.** Section 7
    renames one concept; `docs/61` 9.1, `docs/62` 1, `docs/67` 5.3 and
    `docs/68` 9.2 quote the old name. None of their verdicts changes,
