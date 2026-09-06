@@ -121,3 +121,7 @@ hw/soc/pnr/state/
 # floorplan exactly at --channel 700.08 --density 40, so committing one
 # would be vendoring a thing the tree can regenerate.
 hw/soc/pnr/config-fp*.json
+
+# docs/73: config-ecc.json plus MANUAL_GLOBAL_PLACEMENTS, written by
+# hw/soc/pnr/clint_region.py config from the tracked clint_placement.json.
+hw/soc/pnr/config-ecc-clint*.json

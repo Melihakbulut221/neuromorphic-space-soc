@@ -631,6 +631,17 @@ swap and cloning do not shorten a wire. What would is a placement in
 which the CLINT's read mux and its response register are on the same
 side of the ROM macro, and that is not a `repair_timing` move.
 
+*Tried 2026-09-06 by `docs/73-clint-placement-probe.md`. The
+condition is necessary and not sufficient: with the response register
+and the exclusive part of its mux moved to the channel and the decode
+that selects it, and the mtime SECDED decoder, left in the pocket, the
+register-file read crosses the ROM four times instead of two, the
+worst path moves into the CLINT's time base with four crossings and
+three 300–740 fF stages, and the resizer's loop gives up at −10.67
+instead of −7.99 after the same rule. The constraint has to capture
+the registers together with their drivers; one that captures one
+without the other moves the crossing to the cut.*
+
 ### 8.3 No frequency
 
 `docs/53` section 9.2 refused a frequency on three grounds and `docs/05`
@@ -883,7 +894,19 @@ grep SIZE $PDK_ROOT/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x32_c2
    region constraint on `u_clint`'s cells, measured to step 37 on the
    hardened netlist with everything else held. `docs/48`'s lesson
    applies — one probe, not four — and the metric is section 6.4's
-   crossing count on the worst path, not the WNS alone.
+   crossing count on the worst path, not the WNS alone. *Done
+   2026-09-06 by `docs/73-clint-placement-probe.md`, in two forms. A
+   `dbRegion` fence on the derived CLINT set does not route on this
+   floorplan — the channel has no 38,000 um2 to give, 3,076 cells
+   spread into the macro gaps and the global router ends with 420
+   overflow — and the flow's own `MANUAL_GLOBAL_PLACEMENTS`, which
+   moves the set and nothing else, routes and reaches sign-off. The
+   crossing count on the read path went from 2 to 4, not to 0, because
+   the set's boundary cut the co-placed cluster; the worst path moved
+   into the time base at −15.1863 at step 37 against −8.1852. The set
+   derivation had a defect that shaped both layouts; the corrected set
+   and the block's register-to-register closure are derived there and
+   the layout that would move the whole cluster is named, not run.*
 2. **`docs/50`'s read register, now unblocked.** `docs/70` section 15
    item 3 deferred it until the resizer's behaviour was understood. It
    is: a whole-design setup delta must be read together with the
