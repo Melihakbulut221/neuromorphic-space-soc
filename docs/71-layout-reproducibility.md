@@ -586,7 +586,10 @@ except where this document names an item.
   in full. Two byte-identical unchecked layouts are two unchecked
   layouts. **A layout that reproduces is not thereby manufacturable,
   and identity is not equivalence to the RTL** — `Yosys.EQY` is off and
-  no gate-level simulation of `soc_top` exists.
+  no gate-level simulation of `soc_top` exists. *A gate-level simulation of
+  `s71boot`'s netlist exists since 2026-09-06,
+  `docs/74-core-gate-level-campaign.md`; equivalence is still not
+  proved.*
 - **ONE NETLIST.** The protected boot netlist, once. Determinism was
   measured on it and is claimed for this flow on this machine; a
   netlist that happened to sit at a tie in some heuristic could still

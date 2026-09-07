@@ -335,7 +335,15 @@ and doing the same for the core is real work: `hw/soc/` has no
 gate-level simulation flow at all, `docs/38` synthesised `ibex_top`
 standalone and never simulated the netlist, and the SoC has never been
 synthesised as one design. It is named in section 10 as an open item and
-not claimed.
+not claimed. *Closed 2026-09-06 by `docs/74-core-gate-level-campaign.md`: the
+whole SoC simulated at gate level on the sign-off layout's netlist,
+the clean run identical to this document's in every published field,
+and the 1,400 records of `docs/43`'s campaign of record replayed on
+it flip-flop for flip-flop, on the instant each RTL deposit actually
+landed. The three registers of section 4.2 are confirmed absent and
+so is one bit of `mcountinhibit`; sixty bits of the IF/ID instruction
+register are stored in one flip-flop for two RTL registers, and three
+state machines are re-encoded, so neither has a like-for-like twin.*
 
 ### 4.5 What the sample size supports, stated before the numbers
 
@@ -451,6 +459,16 @@ Five run before any data point, and `campaign.py` aborts on any of them
    campaign asserts that the value changed by exactly the requested bit
    and that the bit was inside the width. A deposit that missed is a
    hard failure, never a MASKED record.
+
+*Note added 2026-09-06 by `docs/74-core-gate-level-campaign.md` section
+5.2a: the deposit lands on the cycle a record names or on the one after
+it. `tb_soc_fi.v` waits `while (cycles < arg_cycle) @(posedge clk)` and
+`cycles` is incremented by another process on the same edge; the order
+is the scheduler's, and measured over the 1,400 records of `docs/43`'s
+campaign (which contain this one's 1,300) 686 landed one edge late and
+714 on time, deterministically per record. No distribution here moves,
+because a draw uniform over a window is uniform over the window shifted
+by one; the `cycle` a record names is off by one on about half of them.*
 
 **Control 4 earned its place immediately.** The first version of the
 testbench parsed its plusargs in one `initial` block and tested

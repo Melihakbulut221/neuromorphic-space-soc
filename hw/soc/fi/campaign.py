@@ -656,9 +656,24 @@ def main():
         for name, path, bit, cycle, was_truth, was_cls in want:
             if path not in by_path:
                 sys.exit("path %s is not in this build's site list" % path)
+
+        # docs/74: the pair is run through the same pool as the campaign
+        # proper.  Until then this loop was serial, which for docs/43's
+        # replays of a few dozen records was a minute and for a replay of
+        # a whole 1,400-record campaign would be a working day.  The
+        # records are classified below in their file order, as before.
+        def directed_job(item):
+            name, path, bit, cycle, was_truth, was_cls = item
             idx = by_path[path]
             a = runner.run(site=idx, bit=bit, cycle=cycle, armed=True)
             d = runner.run(site=idx, bit=bit, cycle=cycle, armed=False)
+            return a, d
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
+            pairs = list(ex.map(directed_job, want))
+
+        for (name, path, bit, cycle, was_truth, was_cls), (a, d) in zip(want, pairs):
+            idx = by_path[path]
             # The same verification the campaign does, for the same
             # reason: a deposit that missed has to be a hard failure and
             # never a quiet MASKED.

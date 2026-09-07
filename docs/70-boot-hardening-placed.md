@@ -751,7 +751,9 @@ items it must repeat because they are the largest.
   and that is all it is offered as.
 - **`Yosys.EQY` is off**, so nothing here proves the placed netlist is
   equivalent to the RTL, and **no gate-level simulation of `soc_top`
-  exists**. `docs/47` section 9's two obligations are unchanged.
+  exists**. `docs/47` section 9's two obligations are unchanged. *The second is closed 2026-09-06 by
+  `docs/74-core-gate-level-campaign.md`, on this very layout's netlist;
+  the first, equivalence, is not.*
 - **NO BEHAVIOURAL EVIDENCE WAS ADDED AND NONE WAS NEEDED.** No RTL
   file was modified, so `docs/69`'s campaign, its 572 injections, its
   formal jobs, its cocotb suites and its whole-SoC invariant of

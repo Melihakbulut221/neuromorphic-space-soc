@@ -709,7 +709,8 @@ lists stand unchanged except where this document names an item.
   reason `docs/12` sections 7.5 and 8 measured — a **NO-GO on
   RM_IHPSG13 for this PDK version** — and `docs/54` examined in full.
   No layout was produced by this document at all. **`Yosys.EQY` is off**
-  and no gate-level simulation of `soc_top` exists.
+  and no gate-level simulation of `soc_top` exists. *The latter since
+  2026-09-06 no longer: `docs/74-core-gate-level-campaign.md`.*
 - **NO NEW LAYOUT AND NO EXPERIMENT.** Two single steps were re-executed
   on saved states with nothing varied. Nothing here says what a
   different placement, a placement constraint on `u_clint`, a

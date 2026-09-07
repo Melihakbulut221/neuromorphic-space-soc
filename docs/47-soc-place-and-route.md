@@ -1066,7 +1066,10 @@ say.
   the memory boundary is no longer a stand-in, but the macros are
   **blackboxes** in this netlist and the ROM **has no contents**, so a
   gate-level run would need the PDK's behavioural macro models and a way
-  to load the ROM. Section 4.4.
+  to load the ROM. Section 4.4. *Closed 2026-09-06 by `docs/74-core-gate-level-campaign.md`: the
+  PDK's `FUNCTIONAL` macro models in the loop, the ROM loaded into its
+  two macros by the bench at time zero, the clean run of `docs/42`'s
+  workload identical to the RTL's in every published field.*
 - **No behavioural evidence was re-run and none of it moved.** The one
   RTL change is `soc_bus.v`'s request gate, whose behaviour is strictly
   more conservative than what it replaced (section 5.2), and
@@ -1182,7 +1185,7 @@ the second of the two.
 5. **A gate-level simulation of `soc_top`.** `docs/45` section 9 item 5,
    unchanged in rank and changed in obstacle: the memory boundary is now
    real, and what is missing is the PDK's behavioural macro models in
-   the loop and item 2's answer.
+   the loop and item 2's answer. *Closed 2026-09-06 by `docs/74-core-gate-level-campaign.md`.*
 
 6. **Give `campaign.py --directed` the `--jobs` it already accepts** —
    `docs/44` section 11 item 6 and `docs/45` section 9 item 6, untouched

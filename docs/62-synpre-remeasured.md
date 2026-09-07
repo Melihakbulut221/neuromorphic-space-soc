@@ -902,7 +902,9 @@ this document sets it in a flow invocation and not in the design.
   ever been checked for manufacturability.
 - **NOTHING HERE WAS SIMULATED AT THE GATE LEVEL.** `docs/49` section
   12's *"nothing has ever simulated `soc_top`'s netlist"* is unchanged.
-  Section 11's evidence is RTL.
+  Section 11's evidence is RTL. *Superseded for the design of `docs/70`
+  onward by `docs/74-core-gate-level-campaign.md`, 2026-09-06; the
+  `SYNPRE` netlist of this document was not simulated.*
 - **NO POWER NUMBER WAS MEASURED.** `docs/61` section 18 item 1's
   obligation is untouched, and this run's netlist and SPEF do not change
   that.

@@ -536,12 +536,19 @@ module tb_soc_fi;
           fi_hit = 1'b1; fi_w = 32;
         end
 `ifdef FI_MEM_HARDENED
+`ifndef FI_ROM_PLAIN
+        // docs/74: absent when fi_core.sh is run with SOC_ROM_HARDEN=0,
+        // the layout netlist's configuration, in which u_rom has no
+        // g_ecc arm and this reference would not elaborate. The ROM's
+        // check field is then not a memory target, and a request for
+        // it reports a miss exactly as it does in the unhardened build.
         else if (arg_mbit < 39) begin
           mem_before = {25'h0, dut.u_rom.g_ecc.chk[arg_midx]};
           dut.u_rom.g_ecc.chk[arg_midx] = mem_before[6:0] ^ (7'd1 << (arg_mbit - 32));
           mem_after  = {25'h0, dut.u_rom.g_ecc.chk[arg_midx]};
           fi_hit = 1'b1; fi_w = 39;
         end
+`endif
 `endif
       end
       fi_done = 1'b1;

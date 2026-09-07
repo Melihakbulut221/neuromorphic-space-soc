@@ -1243,7 +1243,12 @@ because its D input is a constant. Both are true at their own stage, the
 campaign injects into all 248, and 31 of those injections are into
 storage the netlist does not contain — the same class of bias
 `docs/42` section 4.4 item 1 records for the three IF-stage signals, in
-the same direction, and it can only inflate the masked fraction.
+the same direction, and it can only inflate the masked fraction. *Measured 2026-09-06 by `docs/74-core-gate-level-campaign.md`: the
+31 eighth-bit check flip-flops are absent from the sign-off netlist by
+name, by alias and by trace, the other 217 are present under their own
+names, and every `regfile_ecc` record of section 8 whose bit exists in
+silicon was replayed there. The cycle each record names is the edge or
+the one after it, `docs/74` section 5.2a.*
 
 ### 9.5 A latent defect in an existing guard, found by the width changing
 
