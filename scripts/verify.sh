@@ -18,6 +18,16 @@
 # per cocotb suite is build output and belongs in .gitignore, but "on this
 # commit, these suites reported these totals" is evidence and belongs in
 # the tree. The file is one line per run, appended, never rewritten.
+#
+# A ROW IS NEVER EDITED, INCLUDING A WRONG ONE. Two rows for 1ecf509 read
+# 558 and 624 cocotb tests against a repository that has 401, because two
+# runs overlapped and each counted the other's output; the runner now
+# refuses to run twice at once, and the fix is described where it lives.
+# Those two rows stay, because a log that quietly loses its own bad
+# measurements is not a log -- docs/64's rule. Set NOTE to say so in the
+# next row rather than by rewriting the last:
+#
+#   NOTE="supersedes ..." scripts/verify.sh
 
 set -u
 cd "$(dirname "$0")/.."
@@ -28,7 +38,16 @@ py=$(timeout 1800 .venv/bin/pytest -q 2>&1 | tail -1)
 py_n=$(printf '%s' "$py" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo 0)
 py_f=$(printf '%s' "$py" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo 0)
 
-cc=$(timeout 3600 ./scripts/run_cocotb.sh 2>&1 | tail -1)
+cc_out=$(timeout 3600 ./scripts/run_cocotb.sh 2>&1); cc_rc=$?
+cc=$(printf '%s' "$cc_out" | tail -1)
+# Exit 2 is the runner refusing a concurrent run. Recording 0 passed for
+# that would put a zero in the log that looks like a measurement, which
+# is the shape this whole file exists to stop.
+if [ "$cc_rc" = "2" ]; then
+    printf '%s\n' "$cc_out" | tail -3 >&2
+    echo "verify.sh: no record written -- the cocotb count would not be one." >&2
+    exit 2
+fi
 cc_n=$(printf '%s' "$cc" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo 0)
 cc_f=$(printf '%s' "$cc" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo 0)
 
@@ -50,7 +69,8 @@ dirty=$(git status --short | wc -l)
 frozen=$(git status --short hw/rtl/ hw/tb/ tt/ formal/ hw/openlane/ | grep -vc '^??' || true)
 line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$(date -u +%Y-%m-%dT%H:%MZ)" "$head" "$py_n" "$py_f" "$cc_n" "$cc_f" \
-    "$fm_pass" "$fm_other" "formal-logs-oldest=$fm_oldest,tree-dirty=$dirty,frozen-dirty=$frozen")
+    "$fm_pass" "$fm_other" \
+    "formal-logs-oldest=$fm_oldest,tree-dirty=$dirty,frozen-dirty=$frozen${NOTE:+,$NOTE}")
 
 if [ "$MODE" = "--check" ]; then
     printf 'now:  %s\n' "$line"

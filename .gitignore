@@ -128,3 +128,6 @@ hw/soc/pnr/config-fp*.json
 # docs/73: config-ecc.json plus MANUAL_GLOBAL_PLACEMENTS, written by
 # hw/soc/pnr/clint_region.py config from the tracked clint_placement.json.
 hw/soc/pnr/config-ecc-clint*.json
+
+# scripts/run_cocotb.sh single-run lock
+.run_cocotb.lock

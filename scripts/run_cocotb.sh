@@ -28,6 +28,33 @@ cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 FILTER="${1:-}"
 
+# ONE RUN AT A TIME, and the reason is measured rather than hypothetical.
+#
+# Every suite is counted by "the results XMLs written since this marker",
+# which orders by TIME and not by owner. Two concurrent runs therefore
+# each count the other's output: on 2026-09-08 two overlapping runs of
+# scripts/verify.sh recorded 558 and 624 cocotb tests for a 401-test
+# repository, and both landed in verification-log.tsv looking exactly
+# like measurements.
+#
+# That is the same defect docs/66 recorded one scale down -- a suite
+# counting the previous suite's XML because the marker was a second-
+# resolution timestamp -- and the marker file fixed the timestamp half
+# without touching the ownership half. This is the ownership half.
+#
+# It FAILS rather than waits. A verification runner that silently queues
+# behind another has a wall time that depends on what else is running,
+# and the caller who asked for a measurement gets one late instead of
+# being told it cannot have one now.
+LOCK="$ROOT/.run_cocotb.lock"
+exec 9>"$LOCK"
+if ! flock -n 9; then
+    echo "run_cocotb.sh: another run holds $LOCK." >&2
+    echo "Counting is by 'XMLs newer than a marker', which cannot tell two" >&2
+    echo "concurrent runs apart, so this one refuses rather than inflate." >&2
+    exit 2
+fi
+
 fail_total=0
 pass_total=0
 suite_fail=0

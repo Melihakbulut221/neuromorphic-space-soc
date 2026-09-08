@@ -2,3 +2,6 @@ utc	head	pytest_pass	pytest_fail	cocotb_pass	cocotb_fail	formal_pass	formal_othe
 2026-09-08T20:33Z	866d38f	490	0	401	0	117	0	formal-logs-oldest=2026-08-31,tree-dirty=14,frozen-dirty=0
 2026-09-08T21:02Z	6c37856	490	0	401	0	118	0	formal-logs-oldest=2026-08-31,tree-dirty=13,frozen-dirty=0
 2026-09-08T21:13Z	5384ee5	490	0	401	0	118	0	formal-logs-oldest=2026-08-31,tree-dirty=0,frozen-dirty=0
+2026-09-08T22:17Z	1ecf509	490	0	558	0	118	0	formal-logs-oldest=2026-08-31,tree-dirty=1,frozen-dirty=0
+2026-09-08T22:19Z	1ecf509	490	0	624	0	118	0	formal-logs-oldest=2026-08-31,tree-dirty=1,frozen-dirty=0
+2026-09-08T22:35Z	1ecf509	491	0	401	0	118	0	formal-logs-oldest=2026-08-31,tree-dirty=4,frozen-dirty=0,supersedes=two-invalid-rows-for-1ecf509-concurrent-run-overcount
