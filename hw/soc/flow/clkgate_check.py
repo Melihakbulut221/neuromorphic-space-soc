@@ -262,6 +262,16 @@ def cmd_duty(args):
     want = list(args.enable)
     low = {p: 0 for p in want}
     lowin = {p: 0 for p in want}
+    # docs/77 section 11: the number of SLEEP INTERVALS, not just the
+    # number of slept cycles. It is what prices the repair this document
+    # does not take -- a slave that refuses its grant while asleep costs
+    # one cycle per interval and nothing per slept cycle -- and docs/76
+    # section 7 quoted an interval count for the supervisor that nothing
+    # in this file could produce. A "wake" is a low-to-high edge of the
+    # enable sampled at a clock edge, and the first cycle counts as one
+    # if the run starts with the gate shut.
+    wakes = {p: 0 for p in want}
+    prev = {p: None for p in want}
     n = 0
     nin = 0
     for _c in w.edges():
@@ -270,15 +280,23 @@ def cmd_duty(args):
         if inwin:
             nin += 1
         for p in want:
-            if norm(w.value[p]) == "0":
+            v = norm(w.value[p])
+            if v == "0":
                 low[p] += 1
                 if inwin:
                     lowin[p] += 1
+            if prev[p] == "0" and v != "0":
+                wakes[p] += 1
+            prev[p] = v
     print(f"cycles: {n}")
     for p in want:
         print(f"  {p}: low on {low[p]} of {n} cycles "
               f"({100.0 * low[p] / n:.4f} %), so the gate removes that "
               f"fraction of its domain's clock edges")
+        mean = (low[p] / wakes[p]) if wakes[p] else float("nan")
+        print(f"      {wakes[p]} sleep intervals, mean {mean:.1f} cycles "
+              f"-- one cycle each is what a wakefulness-qualified grant "
+              f"would cost (docs/77 section 11)")
     if gate_path:
         print(f"window {gate_path}={gate_val}: {nin} cycles "
               f"({100.0 * nin / n:.4f} % of the run)")

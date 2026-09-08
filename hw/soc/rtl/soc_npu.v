@@ -414,6 +414,19 @@ module soc_npu #(
     input  wire        clk_i,
     input  wire        rst_ni,
 
+    // THE UNGATED CLOCK, and it clocks exactly one flip-flop in this
+    // module: `wake_q`, the registered half of the clock-gate enable.
+    // docs/77 section 5 is why it exists and section 6 is the theorem
+    // that makes it safe. It is NOT a second clock domain: `clk_i` is
+    // this same clock with edges REMOVED by the gate in `soc_top.v`, so
+    // every edge of `clk_i` is an edge of `clk_free_i` at the same
+    // instant and no crossing is created -- which is why no synchroniser
+    // appears here and why OpenSTA analyses the path from this
+    // module's registers to `wake_q` as an ordinary same-clock path.
+    // At CLKGATE = 0 nothing reads it, and the tie-off at the bottom of
+    // the file says so explicitly rather than leaving a dangling port.
+    input  wire        clk_free_i,
+
     // ---- system bus slave: the node register window ----
     input  wire        req_i,
     input  wire [31:0] addr_i,
@@ -1599,6 +1612,26 @@ module soc_npu #(
   // bit of its own.
   assign sticky_ev[C_AER_MM   - C_STICKY0] = aer_stb_mm;
 
+  // docs/77: THE ONE STICKY LINE THAT IS NOT A FUNCTION OF THIS BLOCK'S
+  // REGISTERS, named and masked rather than left for a cofactor.
+  //
+  // `C_INJ_OVF` is `inj_wr_en && inj_full`, and `inj_wr_en` is
+  // `psel_i && penable_i && pwrite_i` against a register offset. It can
+  // therefore only be true in a cycle in which `psel_i` is high -- and
+  // `psel_i` is a term of `npu_act_fast`, which stays combinational. The
+  // other eight are functions of this block's registers alone, measured
+  // rather than asserted: the census in
+  // sw/tests/test_soc_clkgate_guards.py walks the fan-in cone of
+  // `npu_act_slow` cut at every sequential cell and fails if ANY input
+  // port is reachable, and it was that census that found this bit.
+  //
+  // Masking it out of the SLOW half loses nothing: an overflow still
+  // wakes the block in its own cycle, through `psel_i`. What it buys is
+  // that the census can be an equality with zero rather than a list of
+  // exceptions.
+  localparam [NSTICKY-1:0] STICKY_FROZEN =
+      ~({{(NSTICKY-1){1'b0}}, 1'b1} << (C_INJ_OVF - C_STICKY0));
+
   // The clear strobe. Write-1-to-clear, and only the sticky half: a
   // write to a level bit is accepted and does nothing, because the way
   // to clear a level is to fix what is raising it.
@@ -1782,7 +1815,7 @@ module soc_npu #(
   //      the one thing gating a fault-tolerant block gets wrong by
   //      default: a voter's correction and a queue's parity discard are
   //      observed by soc_busstat.v, and a block with no clock cannot
-  //      report them. `|sticky_ev` carries all eleven -- the queue
+  //      report them. `|sticky_ev` carries all NINE -- the queue
   //      pointer votes, the entry parity, the cause bank's own voter,
   //      the strobe mismatch and the four bounded waits -- so an upset
   //      inside a sleeping accelerator wakes it up rather than being
@@ -1812,16 +1845,80 @@ module soc_npu #(
   // is only ALMOST equivalent cannot be checked that way.
 
 
+  // -------------------------------------------------------------------
+  // docs/77: THE SPLIT, AND WHY IT IS NOT THE ONE docs/76 RANKED FIRST
+  //
+  // docs/76 section 9.5 measured that this gate's clock-gating check
+  // misses by 5.0198 ns at the slow corner and attributed the cone to
+  // `|sticky_ev`. It is not that cone. Measured on that document's own
+  // signed-off netlist by cutting launch domains one at a time
+  // (docs/77 section 3): the worst path into this enable that starts
+  // inside this block -- which is where every one of the eleven fault
+  // lines starts -- is -1.3129 ns, the worst that starts in the ungated
+  // domain is -2.6166, and the -5.0198 launches from
+  // `u_ibex.gen_regfile_ff.register_file_i.raddr_a_i[2]`, the flip-flop
+  // that also gives the whole design its -6.3505 WNS. The enable's late
+  // input is `req_i`, and `req_i` is the CPU's register-file read
+  // address after the ALU, the load-store address, the fabric's address
+  // mux and the slave decode. THE FAULT LINES ARE NOWHERE ON IT.
+  //
+  // So the split below is by ARRIVAL and not by importance:
+  //
+  //   FAST -- `req_i` and `psel_i`. These are the only two things that
+  //   can rise and fall while this block's clock is stopped, because
+  //   they are driven from outside it, and a request that is not seen
+  //   at the edge that ends its own cycle is a request this block has
+  //   answered `gnt_o` to and then dropped. They stay combinational.
+  //
+  //   SLOW -- everything else, including eight of the nine fault
+  //   lines; the ninth is C_INJ_OVF, which carries `psel_i` and is
+  //   therefore already covered by the fast half. (docs/76 called them
+  //   eleven in three places and this file did too. NSTICKY is
+  //   NCAUSE - C_STICKY0 = 14 - 5 = 9, and nine is what the nine
+  //   `assign sticky_ev[...]` lines above come to; docs/77 section 13.)
+  //   Every term of `npu_act_slow` is a function of THIS BLOCK'S
+  //   REGISTERS -- the die's outputs included, because `pilot_top` is
+  //   clocked by the same gated clock and its outputs are therefore
+  //   functions of its own registers. A function of registers that
+  //   are not being clocked CANNOT PULSE AND VANISH: it rises when the
+  //   upset lands and it stays up until the block is clocked. So
+  //   registering it costs one cycle of latency on the wake and loses
+  //   nothing at all -- which is the whole of what `|sticky_ev` is in
+  //   the enable for, kept, and moved off the timing path.
+  //
+  // THE SIDE CONDITION IS MACHINE-CHECKED AND NOT ASSERTED.
+  // `sw/tests/test_soc_clkgate_guards.py` elaborates this module in
+  // yosys, flattens it, walks the fan-in cone of `npu_act_slow` cut at
+  // every sequential cell, and fails if ANY input port is reachable.
+  // That is what makes "a function of this block's registers" a
+  // measurement rather than a claim, and it is the condition the
+  // theorem in docs/77 section 6 needs. It is also what found
+  // C_INJ_OVF, which was not in anyone's list.
+  //
+  // WHAT IT DOES NOT DO. It does not close the check. The floor is
+  // `req_i`'s own arrival, and docs/77 section 9 measures it: at the
+  // slow corner the CPU-derived signal reaches this enable AFTER the
+  // check's required time, so the check fails with the enable's logic
+  // deleted entirely. Closing it needs `gnt_o` qualified by wakefulness
+  // -- a fabric-visible cycle on every wake -- and docs/77 section 11
+  // prices that and does not take it.
+  // -------------------------------------------------------------------
   generate
   if (CLKGATE != 0) begin : g_clkgate
-    wire npu_act =
+    // TRANSIENT AND EXTERNAL, therefore COMBINATIONAL.
+    wire npu_act_fast = req_i | psel_i;
+
+    // FROZEN WHILE THE CLOCK IS STOPPED, therefore REGISTERABLE.
+    wire npu_act_slow =
         // the fabric slave face
-          req_i | rvalid_o | win_out | (win_state != W_IDLE)
+          rvalid_o | win_out | (win_state != W_IDLE)
         | (win_guard != {WIN_GRD_W{1'b0}})
         // the peripheral face
-        | psel_i | flush_pulse | scrub_pulse
-        // anything that has to be recorded, including every fault
-        | (|sticky_ev)
+        | flush_pulse | scrub_pulse
+        // anything that has to be recorded, including every fault that
+        // is a function of this block's registers -- which is all of
+        // them but C_INJ_OVF, and STICKY_FROZEN is where that is said
+        | (|(sticky_ev & STICKY_FROZEN))
         // the serial transport
         | ser_busy | ser_start | ser_done | ser_timeout
         // the event engine, the show-ahead adapter and the two queues
@@ -1832,13 +1929,34 @@ module soc_npu #(
         // and the die: busy, holding an event, or not ready for one
         | node_busy | node_aer_out_vld | (~node_aer_in_rdy);
 
+    wire npu_act = npu_act_fast | npu_act_slow;
+
+    // THE WAKE BIT, ON THE UNGATED CLOCK. It is set by anything this
+    // block is doing or has to record and it is cleared only when all of
+    // that has gone away, so it holds the clock on for one cycle past
+    // the last activity as well as starting it one cycle after a frozen
+    // term rises. Reset to 1 so the block is clocked out of reset,
+    // which is what `wake_hold`'s own reset value does and for the same
+    // reason.
+    reg wake_q;
+    always @(posedge clk_free_i or negedge rst_ni) begin
+      if (!rst_ni) wake_q <= 1'b1;
+      else         wake_q <= npu_act;
+    end
+
     reg [HOLD_W-1:0] wake_hold;
     always @(posedge clk_i or negedge rst_ni) begin
       if (!rst_ni)                   wake_hold <= HOLD_LOAD;
       else if (npu_act)              wake_hold <= HOLD_LOAD;
       else if (wake_hold != HOLD_ZERO) wake_hold <= wake_hold - HOLD_ONE;
     end
-    assign clk_en_o = npu_act || (wake_hold != HOLD_ZERO);
+
+    // Written with the LATE term first and alone at the top level, so
+    // that what the mapper has to put next to the gate is one OR of a
+    // late signal against a signal that settled a cycle ago.
+    assign clk_en_o = npu_act_fast
+                   || wake_q
+                   || (wake_hold != HOLD_ZERO);
   end else begin : g_noclkgate
     // MEASUREMENT ONLY, and it is the baseline the gate's area and power
     // are priced against -- docs/41 section 6.5's rule. Nothing in this
@@ -1868,5 +1986,9 @@ module soc_npu #(
   assign obs_aer_out_vld_o = node_aer_out_vld;
 
   wire _unused_apb = &{1'b0, paddr_i[1:0], pwdata_i[31:16], 1'b0};
+  // At CLKGATE = 0 the ungated clock reaches nothing, which is what the
+  // baseline has to be -- docs/41 section 6.5's rule -- so it is tied
+  // off here rather than left to a lint warning.
+  wire _unused_free = &{1'b0, clk_free_i, 1'b0};
 
 endmodule

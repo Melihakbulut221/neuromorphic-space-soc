@@ -28,6 +28,10 @@
 #                                       the parameter guard, then eight
 #                                       tasks over three soc_tmr_bank
 #                                       replicas under one tmr_voter
+#   cd hw/soc/formal && make clkwake   docs/77's clock-gate enable
+#                                       transformation: bmc, prove,
+#                                       cover, and the same three with
+#                                       A2 dropped -- the fault case
 #   cd hw/soc/formal && make clean
 #
 # sby is resolved through the repository's tools.mk, not off PATH. That
@@ -47,9 +51,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub boot boot_tmr_params bytesecded memecc clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub boot bytesecded memecc
+all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub boot bytesecded memecc clkwake
 
 include $(REPO)/tools.mk
 
@@ -246,8 +250,22 @@ wdogtmr: wdog_tmr_params
 	  $(SBY) -f soc_wdog_tmr.sby $$t || exit 1; \
 	done
 
+# docs/77. Six tasks and not three: `sound` keeps A2 -- `slow` is a
+# function of the block's state -- and proves T1 and T2; `upset` DROPS it
+# and proves T2 alone, which is the fault case, a frozen fault line
+# rising inside a block whose clock is stopped. A job whose two halves
+# disagree about an assumption is the point of it, and the file says so.
+CLKWAKE_TASKS := bmc prove cover bmc_upset prove_upset cover_upset
+
+clkwake:
+	@for t in $(CLKWAKE_TASKS); do \
+	  echo "== clkgate_wake $$t"; \
+	  $(SBY) -f clkgate_wake.sby $$t || exit 1; \
+	done
+
 clean:
-	rm -rf $(addprefix soc_wdog_tmr_,$(WDOG_TMR_TASKS)) soc_wdog_tmr \
+	rm -rf $(addprefix clkgate_wake_,$(CLKWAKE_TASKS)) clkgate_wake \
+	       $(addprefix soc_wdog_tmr_,$(WDOG_TMR_TASKS)) soc_wdog_tmr \
 	       soc_bus soc_bus_bmc soc_bus_prove soc_bus_cover \
 	       soc_apb_bridge soc_apb_bridge_bmc soc_apb_bridge_prove \
 	       soc_apb_bridge_cover \

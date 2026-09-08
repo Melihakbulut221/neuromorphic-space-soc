@@ -102,6 +102,9 @@ hw/soc/formal/soc_qspi/
 hw/soc/formal/soc_qspi_*/
 hw/soc/formal/soc_boot/
 hw/soc/formal/soc_boot_*/
+# docs/77: the clock-gate enable transformation's six task directories.
+hw/soc/formal/clkgate_wake/
+hw/soc/formal/clkgate_wake_*/
 hw/soc/tb/cocotb/mutants_soc_qspi/
 # docs/68: the boot register block's mutation harness builds and its
 # per-mutant result files, and the loader's own build products.

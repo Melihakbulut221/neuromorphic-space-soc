@@ -1,0 +1,59 @@
+# SymbiYosys job for docs/77's clock-gate enable transformation.
+#
+#   sby -f clkgate_wake.sby prove    k-induction proof of T1 and T2
+#   sby -f clkgate_wake.sby bmc      bounded check, depth 24
+#   sby -f clkgate_wake.sby cover    reachability of W1-W3
+#   sby -f clkgate_wake.sby prove_upset   T2 with A2 DROPPED -- the
+#                                    fault case, where a frozen term
+#                                    rises with the clock stopped
+#   sby -f clkgate_wake.sby bmc_upset, cover_upset   the same, bounded,
+#                                    and W4: the one-cycle-late wake
+#
+# The design is hw/soc/formal/clkgate_wake.v, which is an ABSTRACTION and
+# not a block of the SoC. Its header says why at length: soc_npu.v
+# instantiates the frozen die, so "no register in soc_npu moves while the
+# enable is low" cannot be proved here, and docs/77 therefore proves the
+# TRANSFORMATION from two side conditions -- one measured (docs/76
+# section 6's equivalence, re-measured in docs/77 section 7) and one
+# machine-checked (the fan-in cone census in
+# sw/tests/test_soc_clkgate_guards.py).
+#
+# The cover task is not optional, for docs/09 section B.1's reason: T1 is
+# satisfied by an enable that is the constant 1.
+
+# The second column is a task GROUP, which is what the [script] section
+# selects on: `upset` is the three tasks that drop A2 and model the
+# fault, `sound` is the three that keep it.
+[tasks]
+bmc          sound
+prove        sound
+cover        sound
+bmc_upset    upset
+prove_upset  upset
+cover_upset  upset
+
+[options]
+bmc: mode bmc
+bmc: depth 24
+prove: mode prove
+prove: depth 12
+cover: mode cover
+cover: depth 24
+bmc_upset: mode bmc
+bmc_upset: depth 24
+prove_upset: mode prove
+prove_upset: depth 12
+cover_upset: mode cover
+cover_upset: depth 24
+
+[engines]
+smtbmc yices
+
+[script]
+upset: read_verilog -I. -formal -DNO_A2 clkgate_wake.v
+sound: read_verilog -I. -formal clkgate_wake.v
+prep -top clkgate_wake
+
+[files]
+clkgate_wake.v
+clkgate_wake_props.v

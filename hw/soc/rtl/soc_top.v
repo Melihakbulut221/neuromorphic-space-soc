@@ -960,6 +960,13 @@ module soc_top #(
       .CLKGATE   (CLKGATE)
   ) u_npu (
       .clk_i (clk_npu), .rst_ni (rst_sys_n),
+      // The gated clock for the block, and the UNGATED one for the
+      // single flip-flop that holds its wake bit. docs/77 section 5:
+      // the wake bit has to keep running while the block it wakes is
+      // stopped, so it cannot be on `clk_npu`, and it is one flip-flop
+      // rather than a second domain because `clk_npu` is `clk_i` with
+      // edges removed and nothing here crosses between them.
+      .clk_free_i (clk_i),
       .clk_en_o (npu_clk_en),
       .req_i (s_req[5]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),

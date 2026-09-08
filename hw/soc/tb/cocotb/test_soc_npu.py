@@ -122,6 +122,13 @@ class Env:
     async def reset(self):
         d = self.dut
         cocotb.start_soon(Clock(d.clk_i, CLK_NS, unit="ns").start())
+        # docs/77: soc_npu.v takes the UNGATED clock as a second port for
+        # the one flip-flop that holds its wake bit. In soc_top.v the two
+        # are the same net with edges removed by the gate; with the block
+        # instantiated bare there is no gate, so they are the same clock
+        # and are driven as one. Two Clock coroutines started at the same
+        # simulation time produce edges at the same instants.
+        cocotb.start_soon(Clock(d.clk_free_i, CLK_NS, unit="ns").start())
         d.rst_ni.value = 0
         d.req_i.value = 0
         d.addr_i.value = 0
@@ -1634,3 +1641,247 @@ async def test_a_phantom_aer_strobe_never_reaches_the_die(dut):
     assert set(strobes) == {int(dut.E_PIN_S.value)}, (
         f"the die was strobed in states {sorted(set(strobes))}; the pin "
         "is only legal in E_PIN_S")
+
+
+# ---------------------------------------------------------------------
+# docs/77: the clock-gate enable, executed
+# ---------------------------------------------------------------------
+#
+# hw/soc/formal/clkgate_wake.sby proves the TRANSFORMATION -- that a
+# complete enable stays complete when its frozen half is registered --
+# from two side conditions. One of those, A2, is discharged
+# structurally by the fan-in cone census in
+# sw/tests/test_soc_clkgate_guards.py. The other, A1, is the statement
+# that docs/76's enable was complete in the first place, and it is a
+# statement about THIS module rather than about an abstraction.
+#
+# These three tests are A1 and its consequences, executed against the
+# RTL a simulator elaborates, on the workload that drives the die
+# hardest -- the golden inference. They are weaker than the proof, which
+# quantifies over every reachable state, and stronger in one respect:
+# what they run is the elaborated design and not what yosys reads.
+
+def _sample(h):
+    """One signal's value as an int, or -1 if it is not resolvable.
+
+    Icarus hands back a LogicArray for a vector, a plain int for an
+    integer variable and an unresolvable LogicArray for anything holding
+    x or z. All three have to become one comparable scalar or the walk
+    below compares a value against an exception.
+    """
+    try:
+        v = h.value
+    except Exception:
+        return -1
+    if isinstance(v, int):
+        return v
+    try:
+        if not v.is_resolvable:
+            return -1
+    except AttributeError:
+        pass
+    try:
+        return int(v)
+    except Exception:
+        return -1
+
+
+def _npu_leaves(dut, limit=4000):
+    """Every scalar signal under soc_npu that holds STATE, collected once.
+
+    Two filters, and both are stated because a walk that samples the
+    wrong set proves the wrong thing.
+
+    Arrays are skipped: the die's weight and membrane memories are
+    thousands of bits, and sampling them every cycle would make this the
+    slowest test in the suite for no gain -- a memory that changed
+    without a clock edge would change a pointer or a valid flag with it,
+    and those are here.
+
+    COMBINATIONAL NETS ARE SKIPPED TOO, and that is the filter that
+    matters. This module's APB face computes `hit`, `prdata_o` and
+    `pslverr_o` continuously from `paddr_i`, so a testbench that moves
+    the address bus while the gate is shut moves them with it -- with no
+    clock edge anywhere near. That is not a state change and the gate
+    does not lose it. cocotb reports the object kind Icarus gave it, and
+    only registers are kept; if the simulator cannot say, the signal is
+    kept, so the filter can only make this test STRICTER than intended
+    and never weaker.
+    """
+    out = []
+    stack = [dut]
+    while stack and len(out) < limit:
+        h = stack.pop()
+        try:
+            kids = list(h)
+        except (TypeError, AttributeError):
+            kids = []
+        if kids:
+            stack.extend(kids)
+            continue
+        kind = getattr(h, "_type", None) or type(h).__name__
+        if "NET" in str(kind).upper():
+            continue
+        if _sample(h) == -1 and str(kind).upper().find("REG") < 0:
+            continue
+        out.append(h)
+    return out
+
+
+@cocotb.test()
+async def test_no_state_moves_in_a_cycle_the_gate_would_have_removed(dut):
+    """A1, executed: the enable is COMPLETE.
+
+    soc_top.v replaces this module's clock with ICG(clk_i, clk_en_o), and
+    that substitution is sound if and only if the enable is low only in
+    cycles where nothing under this module would have changed anyway --
+    the die included, because the die is inside the gated domain.
+
+    Sampled over the golden inference, which is the one workload in this
+    suite that drives the serial transport, both queues, the event
+    engine and the LIF datapath at once.
+    """
+    env = Env(dut)
+    await env.reset()
+    leaves = _npu_leaves(dut)
+    assert len(leaves) > 200, (
+        f"only {len(leaves)} signals found under soc_npu; the hierarchy "
+        "walk broke and this test would prove nothing")
+
+    shut = 0
+    seen = 0
+    moved = []
+
+    async def watch():
+        nonlocal shut, seen
+        prev = None
+        prev_en = None
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            now = tuple(_sample(h) for h in leaves)
+            if prev is not None and prev_en == 0 and now != prev:
+                for h, a, b in zip(leaves, prev, now):
+                    if a != b:
+                        moved.append(h._path)
+            if prev_en == 0:
+                shut += 1
+            seen += 1
+            prev = now
+            prev_en = int(dut.clk_en_o.value)
+
+    # THE WATCHER STARTS BEFORE BRING-UP, not after it. The bring-up is
+    # the only phase of this test that uses the FABRIC face -- `req_i`,
+    # the node register window -- and a watcher armed after it would
+    # measure the APB face alone and miss a mutation that drops `req_i`
+    # from the fast half. It did, before this line moved.
+    w = cocotb.start_soon(watch())
+    weights = make_weights(N_AXONS, N_NEURONS)
+    await bring_up(env, weights)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+    core = LIFCore(N_NEURONS, N_AXONS, weights, CFG)
+    expect = []
+    for k, spikes in enumerate(core.run_frames(FRAMES)):
+        expect += [TYPE_SPIKE | sp for sp in spikes]
+        expect.append(TYPE_SYNC | k)
+    got = await run_stream(env, FRAMES)
+    # AND THEN A QUIET WINDOW, because the stream itself never lets the
+    # gate close: `run_stream` polls EVQ_OUT over APB until the barrier
+    # comes back, so `psel_i` is up in almost every cycle of it and the
+    # enable's fast half holds the clock on. The cycles this test is
+    # about are the ones after the last barrier, and there are 400 of
+    # them here against the stream's own 3,359.
+    for _ in range(400):
+        await RisingEdge(dut.clk_i)
+    w.kill()
+
+    assert not moved, (
+        "clk_en_o was low for a cycle in which {} signal(s) under soc_npu "
+        "moved anyway, the first four being {}. The gate soc_top.v builds "
+        "on this enable would have lost those transitions."
+        .format(len(moved), sorted(set(moved))[:4]))
+    assert seen > 500, "the workload was too short to say anything"
+    assert shut > 0, (
+        f"clk_en_o was never low in {seen} cycles, so this test proved "
+        "nothing about a gate that never closes")
+    assert got == expect, "the inference is wrong; nothing above means anything"
+    dut._log.info("clock enable: shut on %d of %d cycles over %d signals, "
+                  "and nothing moved in any of them", shut, seen, len(leaves))
+
+
+@cocotb.test()
+async def test_a_request_is_never_accepted_at_an_edge_the_gate_removes(dut):
+    """The fast half's contract, which is why req_i and psel_i stay
+    combinational.
+
+    `gnt_o` is `req_i && win_state == W_IDLE` and `pready_o` is 1, so a
+    transaction this block has accepted and then not been clocked in is a
+    transaction it has dropped. docs/77 section 5.1.
+    """
+    env = Env(dut)
+    await env.reset()
+    weights = make_weights(N_AXONS, N_NEURONS)
+    await bring_up(env, weights)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+
+    bad = 0
+    accepted = 0
+
+    async def watch():
+        nonlocal bad, accepted
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            live = int(dut.req_i.value) or int(dut.psel_i.value)
+            if live:
+                accepted += 1
+                if int(dut.clk_en_o.value) == 0:
+                    bad += 1
+
+    w = cocotb.start_soon(watch())
+    await run_stream(env, FRAMES)
+    w.kill()
+    assert accepted > 50, "no transaction was seen; this measured nothing"
+    assert bad == 0, (
+        f"{bad} of {accepted} cycles carried req_i or psel_i with clk_en_o "
+        "low: the block would have been asked for something at an edge the "
+        "gate removed")
+
+
+@cocotb.test()
+async def test_a_frozen_term_has_the_clock_running_one_cycle_later(dut):
+    """T2, executed: the bound the fault lines now rest on.
+
+    hw/soc/formal/clkgate_wake.sby proves that a slow term true in any
+    cycle has the block clocked at the edge that ends the next one. That
+    is what replaces `|sticky_ev`'s combinational place in the enable,
+    and it is the property an upset in a sleeping accelerator depends on.
+    """
+    env = Env(dut)
+    await env.reset()
+    weights = make_weights(N_AXONS, N_NEURONS)
+    await bring_up(env, weights)
+    await env.cwr(C_CTRL, CTRL_IN_EN | CTRL_OUT_EN)
+
+    late = 0
+    checked = 0
+
+    async def watch():
+        nonlocal late, checked
+        prev_slow = None
+        while True:
+            await RisingEdge(dut.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            if prev_slow == 1:
+                checked += 1
+                if int(dut.clk_en_o.value) == 0:
+                    late += 1
+            prev_slow = int(dut.g_clkgate.npu_act_slow.value)
+
+    w = cocotb.start_soon(watch())
+    await run_stream(env, FRAMES)
+    w.kill()
+    assert checked > 100, "npu_act_slow was never high; this measured nothing"
+    assert late == 0, (
+        f"{late} of {checked} cycles followed a high npu_act_slow with "
+        "clk_en_o low, which T2 says cannot happen")

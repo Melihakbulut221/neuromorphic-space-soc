@@ -32,6 +32,20 @@ Four classes of check:
      file about another, and its completeness could not be proved in the
      module it belongs to -- which is the whole of why F10 is provable.
 
+  4b. **The slow half of the accelerator's enable is a function of its
+     own registers**, and it is a fan-in cone census rather than a
+     reading of the source. `docs/77` splits `soc_npu.v`'s enable into a
+     combinational half (`req_i | psel_i`, the only two things that can
+     rise and fall while the block's clock is stopped) and a registered
+     half, and the whole safety argument for the second is that a term
+     which is a function of registers that are not being clocked cannot
+     pulse and vanish. That is `hw/soc/formal/clkgate_wake.sby`'s
+     assumption A2, and this file is where it is discharged: elaborate
+     the module, flatten it, walk the fan-in cone of `npu_act_slow` cut
+     at every sequential cell, and fail if ANY input port is reachable.
+     It is what found `C_INJ_OVF` -- the one fault line that carries
+     `psel_i` -- which no reading of the file had noticed.
+
   4. **The census survives synthesis** -- three integrated clock gates in
      a netlist, and the fabric's and the accelerator's flip-flops on the
      gated nets rather than on `clk_i_regs`. `docs/33` is the record of
@@ -45,7 +59,11 @@ Run with the repository-root suite::
     .venv/bin/python -m pytest sw/tests/test_soc_clkgate_guards.py
 """
 
+import json
+import os
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -241,7 +259,9 @@ def test_the_completeness_property_still_names_every_register():
 def _netlists():
     out = ROOT / "hw" / "soc" / "out"
     found = []
-    for d in sorted(out.glob("s76*gate")):
+    # docs/76 built s76*gate and docs/77 builds s77*gate; the census is
+    # the same census and either answers it.
+    for d in sorted(list(out.glob("s76*gate")) + list(out.glob("s77*gate"))):
         nl = d / "soc_top.netlist.v"
         if nl.is_file():
             found.append(nl)
@@ -267,3 +287,219 @@ def test_three_integrated_clock_gates_survive_synthesis(nl):
     assert names == ["g_clkgate.u_bus_cg.u_icg",
                      "g_clkgate.u_npu_cg.u_icg",
                      "u_ibex.core_clock_gate_i.u_icg"], names
+
+
+# ---------------------------------------------------------------------
+# 4b. The slow half of the accelerator's enable, by fan-in cone
+# ---------------------------------------------------------------------
+#
+# docs/77 section 6. `hw/soc/formal/clkgate_wake.sby` proves that the
+# registered-wake enable is complete FROM TWO SIDE CONDITIONS, and A2 is
+# "`slow` is a function of the block's state". This is where A2 is
+# discharged on the design rather than assumed about it.
+#
+# The walk cuts at every sequential cell, so what it reaches are the
+# module's own input ports and nothing else. An input port in that cone
+# would be a term that can rise and fall with the clock stopped, and a
+# registered wake would then be able to miss it -- which is precisely
+# the failure the split exists to avoid.
+
+PILOT_RTL = ROOT / "hw" / "rtl"
+
+# The source list is hw/soc/tb/cocotb/Makefile.soc_npu's, which is the
+# list soc_npu is elaborated from everywhere else in this repository.
+_NPU_SOURCES = [
+    SOC_RTL / "soc_npu.v",
+    SOC_RTL / "soc_npu_ser.v",
+    SOC_RTL / "soc_tmr_bank.v",
+    PILOT_RTL / "pilot_top.v",
+    PILOT_RTL / "lif_core.v",
+    PILOT_RTL / "aer_fifo.v",
+    PILOT_RTL / "scrub.v",
+    PILOT_RTL / "secded_enc.v",
+    PILOT_RTL / "secded_dec.v",
+    PILOT_RTL / "tmr_voter.v",
+]
+
+# Every yosys cell type whose outputs are STATE rather than a function of
+# this cycle's inputs. The walk stops at each of them; a type missing
+# from this set would make the census too STRICT (it would walk through
+# a register and report inputs that are not really in the combinational
+# cone), never too permissive, so the failure mode is a false alarm.
+_SEQUENTIAL = {
+    "$dff", "$adff", "$sdff", "$dffe", "$adffe", "$sdffe", "$dffsr",
+    "$dffsre", "$aldff", "$aldffe", "$dlatch", "$adlatch", "$dlatchsr",
+    "$sr", "$mem", "$mem_v2", "$memrd", "$memrd_v2", "$memwr",
+    "$memwr_v2", "$meminit", "$meminit_v2", "$fsm", "$scopeinfo",
+}
+
+
+def _find_yosys():
+    on_path = shutil.which("yosys")
+    if on_path:
+        return on_path
+    candidates = [Path.home() / ".local" / "bin" / "yosys"]
+    candidates += sorted(
+        Path.home().glob("Downloads/oss-cad-suite*/oss-cad-suite/bin/yosys"))
+    candidates += sorted(Path.home().glob("oss-cad-suite/bin/yosys"))
+    for c in candidates:
+        if c.is_file() and os.access(c, os.X_OK):
+            return str(c)
+    return None
+
+
+YOSYS = _find_yosys()
+needs_yosys = pytest.mark.skipif(YOSYS is None, reason="yosys not available")
+
+
+def _elaborate_npu(tmp_path, src_override=None):
+    """soc_npu, flattened, as JSON. keep_hierarchy is dropped for the walk.
+
+    soc_tmr_bank and the pilot's own blocks carry `keep_hierarchy` so that
+    `opt_merge` cannot fold the TMR replicas together -- docs/33's whole
+    subject -- and with it in place `flatten` leaves them as instances a
+    cone walk would have to cross conservatively. Dropping it HERE
+    changes nothing about the shipped netlist: this elaboration is thrown
+    away, and hw/soc/flow/syn_soc_top.sh is untouched.
+    """
+    srcs = list(_NPU_SOURCES)
+    if src_override is not None:
+        srcs[0] = src_override
+    out = tmp_path / "soc_npu_flat.json"
+    script = (
+        "read_verilog -I {inc1} -I {inc2} {files}; "
+        "hierarchy -top soc_npu; proc; "
+        "setattr -mod -unset keep_hierarchy; flatten; opt_clean; "
+        "write_json {out};".format(
+            inc1=SOC_RTL, inc2=PILOT_RTL,
+            files=" ".join(str(p) for p in srcs), out=out))
+    r = subprocess.run([YOSYS, "-p", script], capture_output=True,
+                       text=True, timeout=900)
+    assert r.returncode == 0, (
+        "yosys failed:\n" + r.stdout[-3000:] + r.stderr[-3000:])
+    return json.loads(out.read_text())
+
+
+def _input_ports_in_cone(design, wire):
+    """Which input ports of soc_npu the combinational cone of `wire` reaches."""
+    m = design["modules"]["soc_npu"]
+    assert wire in m["netnames"], (
+        "{} is not a net of the elaborated soc_npu; the enable has been "
+        "renamed or restructured and this census no longer measures "
+        "what docs/77 section 6 says it does".format(wire))
+    driver = {}
+    for _name, c in m["cells"].items():
+        if c["type"] in _SEQUENTIAL:
+            continue
+        d = c.get("port_directions", {})
+        ins, outs = [], []
+        for port, bits in c["connections"].items():
+            (outs if d.get(port) == "output" else ins).extend(bits)
+        for b in outs:
+            driver.setdefault(b, []).append(ins)
+    inputs = {}
+    for name, p in m.get("ports", {}).items():
+        if p["direction"] in ("input", "inout"):
+            for b in p["bits"]:
+                inputs[b] = name
+    seen, hit = set(), set()
+    stack = [b for b in m["netnames"][wire]["bits"] if isinstance(b, int)]
+    while stack:
+        b = stack.pop()
+        if b in seen:
+            continue
+        seen.add(b)
+        if b in inputs:
+            hit.add(inputs[b])
+        for ins in driver.get(b, []):
+            stack.extend(x for x in ins if isinstance(x, int))
+    return hit
+
+
+@needs_yosys
+def test_the_slow_half_of_the_npu_enable_reaches_no_input_port(tmp_path):
+    """A2, discharged on the design.
+
+    `npu_act_slow` may depend on this block's registers and on nothing
+    else. `clk_i`, `clk_free_i` and `rst_ni` are not activity terms and
+    are excluded by name; anything else is a term that can move while the
+    clock is stopped, and a registered wake can miss such a term by one
+    cycle at the moment it matters.
+    """
+    design = _elaborate_npu(tmp_path)
+    reached = _input_ports_in_cone(design, "g_clkgate.npu_act_slow")
+    reached -= {"clk_i", "clk_free_i", "rst_ni"}
+    assert not reached, (
+        "soc_npu.v's npu_act_slow depends combinationally on {} -- it is "
+        "no longer a function of the block's registers alone, so "
+        "hw/soc/formal/clkgate_wake.sby's assumption A2 does not hold of "
+        "this design and the registered wake may miss it".format(
+            sorted(reached)))
+
+
+@needs_yosys
+def test_the_fast_half_of_the_npu_enable_is_exactly_the_two_transient_inputs(
+        tmp_path):
+    """And the fast half is `req_i | psel_i` and nothing more.
+
+    Adding a term here is not free: it is the half that lands on the
+    clock-gating check's timing path, and docs/77 section 9 measures that
+    the accelerator's check misses at the slow corner because `req_i`
+    alone already arrives after its required time. Removing one is worse
+    -- a bus or APB transaction accepted at an edge the gate removed.
+    """
+    design = _elaborate_npu(tmp_path)
+    reached = _input_ports_in_cone(design, "g_clkgate.npu_act_fast")
+    reached -= {"clk_i", "clk_free_i", "rst_ni"}
+    assert reached == {"req_i", "psel_i"}, (
+        "soc_npu.v's npu_act_fast is {} and docs/77 built it as exactly "
+        "req_i and psel_i".format(sorted(reached)))
+
+
+@needs_yosys
+def test_the_cone_census_fails_when_a_transient_term_is_moved_to_the_slow_half(
+        tmp_path):
+    """The census can fail, and this is the mutation that makes it.
+
+    docs/76 section 4.4's rule: a property that cannot fail is not a
+    property. `C_INJ_OVF` is `inj_wr_en && inj_full` and `inj_wr_en`
+    carries `psel_i`, so putting it back into the slow half is exactly
+    the mistake the mask in soc_npu.v exists to prevent -- and it is the
+    mistake the design shipped before docs/77, where the whole of
+    `|sticky_ev` was in one combinational term.
+    """
+    mutant = tmp_path / "soc_npu_mut.v"
+    body = NPU.replace("| (|(sticky_ev & STICKY_FROZEN))",
+                       "| (|sticky_ev)")
+    assert body != NPU, (
+        "the mask this mutation removes is not in soc_npu.v any more")
+    mutant.write_text(body)
+    design = _elaborate_npu(tmp_path, src_override=mutant)
+    reached = _input_ports_in_cone(design, "g_clkgate.npu_act_slow")
+    reached -= {"clk_i", "clk_free_i", "rst_ni"}
+    assert reached, (
+        "unmasking C_INJ_OVF no longer puts an input port in the slow "
+        "half's cone, so this census would not catch the mistake it was "
+        "written for")
+
+
+def test_the_wake_bit_is_on_the_ungated_clock():
+    """And soc_top.v hands it the ungated one.
+
+    A wake bit on the gated clock is a bit that cannot start the clock it
+    is gated by. It is one flip-flop and it is the whole of docs/77's
+    change, so both halves of the wiring are asserted here rather than
+    left to a reading.
+    """
+    body = _body(NPU, "soc_npu")
+    assert re.search(r"input\s+wire\s+clk_free_i", body), (
+        "soc_npu.v no longer takes the ungated clock as a port")
+    assert re.search(r"always\s*@\(posedge\s+clk_free_i", body), (
+        "soc_npu.v's wake bit is no longer clocked by the ungated clock, "
+        "so it cannot start the clock it gates")
+    top = _body(TOP, "soc_top")
+    assert re.search(r"\.clk_free_i\s*\(\s*clk_i\s*\)", top), (
+        "soc_top.v no longer hands soc_npu the UNGATED clk_i for its "
+        "wake bit")
+    assert re.search(r"\.clk_i\s*\(\s*clk_npu\s*\)", top), (
+        "soc_top.v no longer hands soc_npu the GATED clock for the rest")

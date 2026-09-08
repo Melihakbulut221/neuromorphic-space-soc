@@ -1507,6 +1507,32 @@ three is optional and all three were run to completion **[fact]**.
 
 ## 14. What the next block should be
 
+> **NOTE ADDED 2026-09-08 — ITEM 1 BELOW TARGETS THE WRONG CONE, AND
+> `docs/77-the-clock-gate-enables-and-what-actually-costs-them.md`
+> SECTION 3 MEASURES IT.** The two slack figures in section 9.5 are
+> right and were reproduced to six decimal places on this document's own
+> signed-off run before anything was changed. The ATTRIBUTION is not.
+> Cutting the launch domains one at a time on `s76gate`: the worst path
+> into the accelerator's enable that starts inside the accelerator --
+> which is where every one of the fault lines starts -- is **-1.3129 ns**
+> of the -5.0198; the worst that starts in the ungated domain is
+> **-2.6166**; and the -5.0198 launches from
+> `u_ibex.gen_regfile_ff.register_file_i.raddr_a_i[2]`, the flip-flop
+> that also gives this layout its -6.3505 ns WNS. For the fabric's gate
+> the same cut gives **+5.5158 ns MET** once Ibex's launches are
+> removed, so section 9.5's "a buffering distance rather than a
+> structural problem" is wrong in the other direction as well.
+> **Neither check can be closed by any change to either enable**, and
+> `docs/77` section 11 prices the one change that could.
+>
+> Two other numbers here are corrected there and neither carries a
+> measurement: `|sticky_ev` is **nine** cause lines and not eleven
+> (`NSTICKY = NCAUSE - C_STICKY0 = 14 - 5 = 9`), and section 7's "774
+> sleep intervals" could not have been produced by
+> `hw/soc/flow/clkgate_check.py`, which had no interval counter until
+> `docs/77` added one -- it reports **773 wakes** on the same dump.
+> `docs/77` section 14 is the full list.
+
 1. **Take `|sticky_ev` off the accelerator's enable path.** Section 9.5:
    the accelerator's clock-gating check misses by 3.96 ns at the slow
    corner, and the cone that costs it is the eleven fault lines that are
