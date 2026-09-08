@@ -374,6 +374,16 @@ there is no replication bound to hit, no POL/MIX transform to choose, no
 not become one.** Section 9.4 is a shorter guard than `docs/41` section
 6 for exactly that reason.
 
+*Confirmed 2026-09-07 by `docs/75` section 3.* That paragraph is why
+this document is the one wave since `docs/41` with **no replica count to
+re-measure**: H6 is a code and not a replication, so the census
+`docs/74` section 6.6 caught undercounting has nothing here to
+undercount. The 256 flip-flops and 25,792.0740 um2 of section 4.4 are a
+measurement of the TMR alternative this document declined, not of
+anything it shipped, and they are untouched. `docs/75` section 6 also
+looked at every asynchronous reset in the shipped netlist and this block
+drives none.
+
 ### 4.5 The upper bits are dead, and that is an argument FOR covering them
 
 The alternative nobody had raised: `mtime` is 64 bits and a mission that

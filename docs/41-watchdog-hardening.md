@@ -38,6 +38,7 @@ every file touched.
 | Is it *measured*? | **162 injections into the block's own flip-flops. 126 of 126 into the protected word came back CORRECTED — masked at the ports and counted. 0 SDC, 0 HANG, 0 disarmed** **[fact]**. Section 8. *Superseded in part 2026-09-05: the zero spurious escalations section 8.3 reports hold for upsets in the watchdog's own state, which is what this campaign injects into. `docs/43-core-hardening.md` sections 4 and 8.4 measured the windowed mode later built on this block against upsets in the core and found **7 spurious escalations in 1,232 survivable upsets**, so a zero-spurious-escalation headline no longer holds for the block as shipped* |
 | Does the same experiment on the unprotected block look different? | **Yes, and that is the point.** 32 injections into the same state with `HARDEN = 0`: 27 SDC, 1 HANG, **2 left the watchdog reading disarmed**, and only 6 of 32 preserved the escalation order **[fact]**. Section 8.3 |
 | Is `mtime` protected? | **No.** It is the highest-ranked thing this document does not do, and section 7.4 says why it is second and not first |
+| *Added 2026-09-07 by `docs/75`* | W4 put the protected word outside the reset domain so that the record survives the reset it causes. `docs/74` section 10.2 then measured what the *decode* of that word did on the netlist: `rst_req_o` was a combinational OR-reduce of five voted bits driving `soc_top.v`'s **asynchronous** `rst_raw_n`, and every one of 174 upsets the voter corrected also restarted the SoC. **The state was safe; the decode of it was not.** `docs/75`'s W9 puts one flip-flop between them, at no change of behaviour, and proves the gate on the mapped netlist |
 
 ---
 
@@ -285,6 +286,20 @@ corner, the same recipe `docs/39` and `docs/40` measured with:
 parameter declarations and the field list in the source rather than
 writing them down, so a width change moves the expectation with it.
 
+*Re-measured 2026-09-07 by `docs/75-the-reset-on-a-corrected-upset.md`
+section 3.3.* The 22 was right, and the instrument that produced it was
+right. `docs/74` section 6.6 found a census by **Q-net name** reporting
+29, 14 and 15 on the sign-off netlist, and the question `docs/75` had to
+answer was whether the count above — and `docs/55`'s 21, `docs/56`'s 25
+and `docs/69`'s 23 — had been taken with that instrument. They had not:
+every one was taken by **instance path**, and in this file's recipe
+`flatten` runs after `dfflibmap`, so the flip-flop built behind an
+inverter for a reset-to-one bit keeps the bank's prefix. Measured side
+by side on one netlist: instance path 29/29/29, fan-in cone 29/29/29,
+Q-net name 0/14/15. The word is 29 bits now — `docs/43` added W7 and W8
+— and 30 flip-flops with W9's registered reset request, which is why the
+budget in this table reads 132 today and not 102.
+
 ### 6.2 With every protective attribute deleted from the text
 
 `(* keep_hierarchy *)` on the bank is the weaker of the two defences and
@@ -441,6 +456,20 @@ because a build failure produced no `FAIL` lines to parse.
   is a second, textual check on the same thing. Neither alone is enough.
 - **It runs one liberty at one corner.** No timing was measured for any
   of this and no STA has been run on it.
+
+*Extended 2026-09-07 by `docs/75` sections 4 and 6.* Two more things it
+could not see, both now checked elsewhere. **First: it counts three
+banks and cannot say they are three DIFFERENT banks.** A voter wired to
+one replica twice passes every count in
+`sw/tests/test_soc_synthesis_guards.py` — per replica, total, and
+attribute-free — and its vote is a majority over two distinct values, so
+an upset in the doubled replica is not masked at all. The fan-in cone
+census added by `docs/75` is what catches that, and the mutation is
+measured. **Second: nothing in this repository had ever censused the
+netlist the foundry would receive**, which the fourth bullet above says
+in its own words. `sw/tests/test_soc_shipped_netlist_guards.py` is now
+that check, and it finds this word intact — 29/29/29, disjoint — in
+every one of the 65 whole-SoC netlists the working tree has kept.
 
 ---
 

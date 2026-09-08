@@ -60,6 +60,7 @@ Run with the repository-root suite::
     .venv/bin/python -m pytest sw/tests/test_soc_synthesis_guards.py
 """
 
+import importlib.util
 import json
 import math
 import os
@@ -154,10 +155,21 @@ def _geometry():
     unprot = width + width + pre_w + kick_w  # reload, counter, pre,
                                              # kick_left
 
-    return prot_w, report, unprot
+    # W9's `in_reset_q`, docs/75. It is counted apart from `unprot`
+    # because it is not unprotected by the same argument: `reload`,
+    # `counter`, `pre` and `kick_left` are left alone because the block
+    # rewrites them, and this one is left alone because it CANNOT be
+    # replicated -- one bit has two storage functions and three replicas
+    # need three (hw/rtl/pilot_top.v section 8.2) -- and because putting
+    # it in the protected word would put it back behind the very decode
+    # W9 exists to get the reset out from behind. It exists at HARDEN =
+    # 0 as well: it is outside the `g_prot_tmr` generate.
+    rstreq = 1
+
+    return prot_w, report, unprot, rstreq
 
 
-PROT_W, REPORT_FF, UNPROT_FF = _geometry()
+PROT_W, REPORT_FF, UNPROT_FF, RSTREQ_FF = _geometry()
 
 REPLICAS = ("g_prot_tmr.u_prot_a.",
             "g_prot_tmr.u_prot_b.",
@@ -274,6 +286,94 @@ def _census(script_body, workdir):
     out = Path(workdir) / "census.json"
     _run_yosys(script_body + " write_json {};".format(out), workdir)
     return Census(json.loads(out.read_text()))
+
+
+# =====================================================================
+# the SECOND instrument: the voter's fan-in cone
+# =====================================================================
+#
+# docs/75. `Census.in_instance` above counts a replica by the INSTANCE
+# PATH yosys bakes into a flattened cell name. That is exact in this
+# file's recipes -- `flatten` runs after `dfflibmap`, so the flip-flop
+# dfflibmap builds behind an inverter for a reset-to-one bit is created
+# inside the bank module and is prefixed like every other -- and it was
+# right every time it has been quoted (docs/41, docs/55, docs/56,
+# docs/69, and docs/75 section 3 re-measures all of them). It has one
+# blind spot and it is not small: **the instance path does not survive
+# the netlist LibreLane writes**. In `hw/soc/pnr/runs/*/final/nl/
+# soc_top.nl.v` every cell is `_00268_` and the only thing that says
+# which replica a flip-flop belongs to is what it drives.
+#
+# So this file gets a second instrument, and it is the SAME code the
+# gate-level campaign of docs/74 uses on the shipped netlist --
+# `hw/soc/fi/gl_netlist.py`, imported rather than reimplemented, for
+# the reason test_the_verdict_rule_is_one_file_and_not_two_copies_of_one
+# gives about the STA verdict. It walks back from the net the voter
+# reads and reports the flip-flops it finds, which depends on no name
+# and no instance path.
+#
+# It is not a replacement for the count. It answers a question the
+# count cannot: a count of three says three banks of the right SIZE
+# exist, and says nothing about whether they are three DIFFERENT banks.
+# A voter wired to one replica twice passes every count in this file
+# and is exactly the failure the protection exists to prevent. The
+# disjointness assertion below is the one that catches it, and
+# test_a_voter_wired_to_one_replica_twice_is_caught_only_by_the_cone
+# is the mutation that proves the pair is not decoration.
+_GL_NETLIST = ROOT / "hw" / "soc" / "fi" / "gl_netlist.py"
+
+
+def _gl():
+    spec = importlib.util.spec_from_file_location("gl_netlist", _GL_NETLIST)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _cones(script_body, workdir, structure, tag="cone"):
+    """The three replica banks of one structure, by fan-in cone.
+
+    Returns (sets, rows): the flip-flop instance sets in voter order,
+    and gl_netlist's own rows, which carry the net each cone started
+    from and the width it turned out to have. A caller MUST check the
+    width: a cone of zero over a net that is not in the netlist is a
+    census that failed, not a replica that merged, and reading one as
+    the other is the shape docs/40 section 11 records."""
+    out = Path(workdir) / ("cone_%s.json" % tag)
+    _run_yosys(script_body + " write_json {};".format(out), workdir)
+    rows = _gl().tmr_census_named(str(out), structure)
+    return [set(r["cone_insts"]) for r in rows], rows
+
+
+def _assert_three_disjoint_cones(sets, rows, width, what):
+    names = [r["bank"] for r in rows]
+    for r in rows:
+        assert r["width"] == width, (
+            "the cone census of {} could not find replica {}: it looked "
+            "for the net the voter reads and found {} bits, not {}. That "
+            "is a census that failed, and it must NOT be read as a "
+            "replica that merged -- the net it anchors on is {}."
+            .format(what, r["bank"], r["width"], width, r["net"]))
+        assert r["cone"] == width, (
+            "replica {} of {} has {} flip-flops in the fan-in cone of "
+            "the net the voter reads, not {}.".format(
+                r["bank"], what, r["cone"], width))
+    for i in range(3):
+        for j in range(i + 1, 3):
+            shared = sets[i] & sets[j]
+            assert not shared, (
+                "replicas {} and {} of {} SHARE {} flip-flops. Three "
+                "banks of the right size are not three banks if the "
+                "voter is reading the same storage twice: the vote is "
+                "then a majority over two distinct values and a single "
+                "upset in the shared bank is not masked. This is what "
+                "hw/rtl/pilot_top.v section 9 records happening to the "
+                "pilot, and a per-replica flip-flop COUNT cannot see "
+                "it.".format(names[i], names[j], what, len(shared)))
+    union = set().union(*sets)
+    assert len(union) == 3 * width, (
+        "{}: three cones of {} over {} distinct flip-flops, expected {}"
+        .format(what, width, len(union), 3 * width))
 
 
 # ---------------------------------------------------------------------
@@ -409,6 +509,114 @@ def test_the_protected_word_is_three_banks_in_the_ecp5_flow(ecp5):
     _assert_three_replicas(ecp5, "synth_ecp5")
 
 
+# =====================================================================
+# 1b. and three DIFFERENT banks, by the voter's fan-in cone
+# =====================================================================
+@needs_yosys
+def test_the_watchdogs_three_replicas_are_three_disjoint_cones(workdir):
+    """docs/75 section 4. The census above and this one on one netlist.
+
+    The pair is the point. The count says each replica is PROT_W
+    flip-flops; the cone says the three sets of PROT_W flip-flops the
+    voter actually reads are disjoint. Neither implies the other, and
+    the mutation below is a design that passes the first and fails the
+    second."""
+    sets, rows = _cones(_asic_script(SOURCES), workdir, "wdog_block", "wdog")
+    _assert_three_disjoint_cones(sets, rows, PROT_W, "the watchdog's "
+                                 "protected word")
+
+
+@needs_yosys
+def test_the_boot_words_three_replicas_are_three_disjoint_cones(workdir):
+    sets, rows = _cones(_boot_script(BOOT_SOURCES), workdir,
+                        "boot_block", "boot")
+    _assert_three_disjoint_cones(sets, rows, BOOT_PROT_W,
+                                 "the boot block's decision word")
+
+
+@needs_yosys
+def test_the_npu_cause_banks_three_replicas_are_three_disjoint_cones(workdir):
+    sets, rows = _cones(_npu_script(NPU_SOURCES), workdir, "npu_block", "npu")
+    _assert_three_disjoint_cones(sets, rows, NPU_PROT_W,
+                                 "the NPU cause bank")
+
+
+@needs_yosys
+def test_the_two_instruments_agree_on_every_replica_of_every_structure(
+        asic, boot_asic, npu_asic, workdir):
+    """The count and the cone, side by side, on all nine replicas.
+
+    This is the check docs/75 section 3 is: the published counts of
+    docs/41, docs/55, docs/56 and docs/69 were all taken with
+    `in_instance`, and the question that document had to answer was
+    whether an instrument that undercounts on the shipped netlist had
+    been undercounting here too. It had not, and this is the assertion
+    that keeps it that way rather than a sentence in a document.
+    """
+    for tag, script, sources, structure, replicas, width, census in (
+            ("wdog", _asic_script, SOURCES, "wdog_block", REPLICAS,
+             PROT_W, asic),
+            ("boot", _boot_script, BOOT_SOURCES, "boot_block",
+             BOOT_REPLICAS, BOOT_PROT_W, boot_asic),
+            ("npu", _npu_script, NPU_SOURCES, "npu_block", NPU_REPLICAS,
+             NPU_PROT_W, npu_asic)):
+        _, rows = _cones(script(sources), workdir, structure, tag + "2")
+        for r, replica in zip(rows, replicas):
+            assert r["cone"] == census.in_instance(replica) == width, (
+                "{} {}: the cone census says {} flip-flops and the "
+                "instance-path census says {}; both should say {}. A "
+                "disagreement here is a finding either way -- it means "
+                "one of the two instruments is reading storage the "
+                "other is not."
+                .format(tag, r["bank"], r["cone"],
+                        census.in_instance(replica), width))
+
+
+@needs_yosys
+def test_a_voter_wired_to_one_replica_twice_is_caught_only_by_the_cone(
+        workdir):
+    """The mutation that says the cone census is not decoration.
+
+    `.in_b(qa)` on the voter is a design with three intact banks whose
+    vote is a majority over TWO distinct values, so an upset in replica
+    A is not masked -- which is the whole failure W6 exists to prevent.
+    `(* keep *)` on `soc_tmr_bank`'s storage keeps replica B's
+    flip-flops in the netlist even though nothing reads them, so:
+
+      * the per-replica count is still PROT_W, PROT_W, PROT_W;
+      * the total flip-flop budget is unchanged;
+      * every functional test, every proof in hw/soc/formal and every
+        RTL fault-injection campaign in this repository still passes,
+        because they all read `soc_wdog.v` as it is committed and this
+        mutation is only ever made in a scratch copy;
+
+    and the cone census reports replicas A and B sharing all PROT_W of
+    their flip-flops. It is the docs/33 shape one more time: the
+    evidence has to be about the thing that was broken."""
+    sources = _mutated(workdir, "vote_ab",
+                       [(".in_b     (qb),", ".in_b     (qa),")])
+    census = _census(_asic_script(sources), workdir)
+
+    # First: the guards that were there before docs/75 all pass on it.
+    for r in REPLICAS:
+        assert census.in_instance(r) == PROT_W, (
+            "the mutation was supposed to leave three banks of {} "
+            "standing and did not; it no longer demonstrates what it "
+            "was written to demonstrate".format(PROT_W))
+    assert census.total == UNPROT_FF + RSTREQ_FF + 3 * PROT_W
+
+    # And the cone census does not.
+    sets, rows = _cones(_asic_script(sources), workdir, "wdog_block", "vote")
+    with pytest.raises(AssertionError) as caught:
+        _assert_three_disjoint_cones(sets, rows, PROT_W, "the mutant")
+    assert "SHARE" in str(caught.value), str(caught.value)
+    assert len(sets[0] & sets[1]) == PROT_W, (
+        "the mutant's voter should read replica A on two of its three "
+        "inputs, so those two cones should be the same {} flip-flops; "
+        "the cone census found {} shared"
+        .format(PROT_W, len(sets[0] & sets[1])))
+
+
 @needs_yosys
 def test_no_flip_flop_is_lost_when_every_attribute_is_deleted_asic(
         asic_noattr):
@@ -425,7 +633,7 @@ def test_no_flip_flop_is_lost_when_every_attribute_is_deleted_asic(
     `sw/tests/test_synthesis_guards.py` makes for the pilot under the
     name test_no_flip_flop_is_lost_when_every_attribute_is_deleted.
     """
-    expected = UNPROT_FF + 3 * PROT_W
+    expected = UNPROT_FF + RSTREQ_FF + 3 * PROT_W
     assert asic_noattr.total == expected, (
         "with every keep and keep_hierarchy deleted from the text, "
         "soc_wdog mapped to {} flip-flops instead of {}. Something in "
@@ -440,7 +648,7 @@ def test_no_flip_flop_is_lost_when_every_attribute_is_deleted_ecp5(
     """The same question of a completely different technology mapper,
     because a defence that is really a property of one recipe is not a
     defence. docs/18 makes the cross-flow argument at length."""
-    assert ecp5_noattr.total == UNPROT_FF + 3 * PROT_W
+    assert ecp5_noattr.total == UNPROT_FF + RSTREQ_FF + 3 * PROT_W
 
 
 # =====================================================================
@@ -453,13 +661,14 @@ def test_the_flip_flop_budget_is_the_unprotected_state_plus_three_replicas(
     somewhere else. This asserts the total against the two numbers W6
     is a decision about: what is protected, three times, plus what is
     deliberately not."""
-    expected = UNPROT_FF + 3 * PROT_W
+    expected = UNPROT_FF + RSTREQ_FF + 3 * PROT_W
     assert asic.total == expected, (
         "soc_wdog mapped to {} flip-flops, expected {} = {} unprotected "
-        "(reload + counter + pre) + 3 x {} protected. If the protected "
-        "word grew or shrank, _geometry() in this file has to grow or "
-        "shrink with it -- that is the point of it being derived.".format(
-            asic.total, expected, UNPROT_FF, PROT_W))
+        "(reload + counter + pre + kick_left) + {} for W9's registered "
+        "reset request + 3 x {} protected. If the protected word grew "
+        "or shrank, _geometry() in this file has to grow or shrink with "
+        "it -- that is the point of it being derived.".format(
+            asic.total, expected, UNPROT_FF, RSTREQ_FF, PROT_W))
 
 
 # =====================================================================
@@ -505,7 +714,7 @@ def test_removing_the_mix_transform_from_one_replica_collapses_half_of_it(
     or any proof in this repository: `.MIX(0)` on a replica is
     functionally identical RTL, bit for bit at every port.
     """
-    intact = UNPROT_FF + 3 * PROT_W
+    intact = UNPROT_FF + RSTREQ_FF + 3 * PROT_W
     # POL_C = 0xAAAA...: bit i is 1 for odd i, so the bits on which
     # replica C would store exactly what replica A stores are the even
     # ones.
@@ -556,13 +765,14 @@ def test_harden_zero_removes_the_replicas(workdir):
     census = _census(
         _asic_script(SOURCES, chparam="chparam -set HARDEN 0 {};".format(TOP)),
         workdir)
-    expected = UNPROT_FF + PROT_W - REPORT_FF
+    expected = UNPROT_FF + RSTREQ_FF + PROT_W - REPORT_FF
     assert census.total == expected, (
         "HARDEN = 0 should leave one plain bank: {} unprotected + {} "
-        "protected - {} report (the mismatch flag and counter have "
-        "nothing to report on and are correctly optimised away) = {} "
-        "flip-flops, found {}".format(
-            UNPROT_FF, PROT_W, REPORT_FF, expected, census.total))
+        "for W9's registered reset request + {} protected - {} report "
+        "(the mismatch flag and counter have nothing to report on and "
+        "are correctly optimised away) = {} flip-flops, found {}".format(
+            UNPROT_FF, RSTREQ_FF, PROT_W, REPORT_FF, expected,
+            census.total))
     for r in REPLICAS:
         assert census.in_instance(r) == 0
 
@@ -1237,6 +1447,142 @@ def test_the_watchdog_instantiates_that_voter_and_three_distinct_banks():
     assert len(signatures) == 3, (
         "two replicas carry the same storage transform, so they are one "
         "bank to structural hashing: {}".format(signatures))
+
+
+# =====================================================================
+# 4b. W9: the reset request cannot be asserted by the decode alone
+# =====================================================================
+#
+# docs/75 section 6. Everything above this line asks whether the
+# REDUNDANCY survived synthesis. This asks the opposite question about
+# the same word: whether the DECODE of it can reach the system reset
+# without going through a flip-flop.
+#
+# It could, until docs/75. `rst_req_o` was `(rst_hold != 0)`, five bits
+# of a combinational decode of the voted word, and `soc_top.v` builds
+# `rst_raw_n = rst_ni && !wdog_rst_req` and hangs every flip-flop in the
+# SoC off it asynchronously -- under a comment asserting that the
+# request is registered, which it was not. `docs/74` section 10.2
+# measured what that costs on the sign-off netlist: 174 of 174 upsets
+# into the replica banks were masked by the vote AND restarted the SoC,
+# because masking an upset changes the W6 report, changing the word
+# moves twenty-nine flip-flops per replica through two XOR trees, and a
+# transient of two of the three voter inputs is a majority.
+#
+# THIS IS A NETLIST PROPERTY AND NOTHING ELSE CAN SEE IT. `rst_req_o =
+# in_reset` and `rst_req_o = in_reset && in_reset_q` are the same
+# function of the same state on every cycle -- W9a in
+# hw/soc/formal/soc_wdog_props.v proves the two operands equal by
+# k-induction -- so no simulation, no proof and no RTL fault-injection
+# campaign in this repository can tell them apart. It is exactly the
+# `.MIX(0)` shape of section 3, and it gets the same treatment: a check
+# on the mapped netlist, with the mutations that make it fail.
+#
+# The check is a SAT proof and not a structural search, because a
+# structural search would be recording `abc`'s factoring. What is
+# asserted is the logical statement -- no assignment to the mapped
+# netlist's combinational inputs asserts `rst_req_o` while `in_reset_q`
+# is zero -- and `abc` may implement it however it likes.
+def _wdog_netlist(workdir, sources, name):
+    nl = Path(workdir) / (name + ".nl.v")
+    _run_yosys(_asic_script(sources) + " write_verilog -noattr {};".format(nl),
+               workdir)
+    return nl
+
+
+def _sat_reset_gated(workdir, nl):
+    """Prove, on the MAPPED netlist, that in_reset_q = 0 forces
+    rst_req_o = 0. Returns (ok, output).
+
+    `read_liberty` without `-lib` brings the cells' own functions in, so
+    the SAT solver sees through the standard cells rather than treating
+    them as black boxes; `async2sync` is needed because yosys's SAT pass
+    cannot import an asynchronous-reset flip-flop, and it changes only
+    how the reset is modelled, not the combinational cone this proves a
+    property of."""
+    lib = _sg13g2_liberty()
+    script = ("read_liberty -ignore_miss_func {}; read_verilog {}; "
+              "hierarchy -top {}; flatten; opt_clean; async2sync; "
+              "sat -seq 1 -verify -prove rst_req_o 1'b0 "
+              "-set in_reset_q 1'b0;".format(lib, nl, TOP))
+    result = subprocess.run([YOSYS, "-p", script], capture_output=True,
+                            text=True, cwd=workdir, timeout=900)
+    return result.returncode == 0, result.stdout + result.stderr
+
+
+@needs_yosys
+@pytest.mark.skipif(_sg13g2_liberty() is None,
+                    reason="no sg13g2 liberty; there is no mapped netlist "
+                           "to prove anything about")
+def test_no_transient_of_the_voted_word_can_reach_the_system_reset(workdir):
+    """W9, on the netlist the foundry would receive."""
+    ok, out = _sat_reset_gated(workdir, _wdog_netlist(workdir, SOURCES, "w9"))
+    assert ok, (
+        "on the mapped netlist there is an assignment that asserts "
+        "rst_req_o while W9's in_reset_q flip-flop is zero. That means "
+        "a combinational decode of the voted protected word can reach "
+        "soc_top.v's asynchronous rst_raw_n on its own, which is what "
+        "docs/74 section 10.2 measured resetting the SoC on 174 of 174 "
+        "CORRECTED upsets.\n" + out[-3000:])
+
+
+@needs_yosys
+@pytest.mark.skipif(_sg13g2_liberty() is None, reason="no sg13g2 liberty")
+def test_the_reset_gate_mutations_both_fail_the_proof(workdir):
+    """Two mutations, because the guard has two ways to be vacuous.
+
+    M1 removes the gate. `in_reset_q` then drives nothing, opt_clean
+    deletes it, and the proof cannot even be stated -- so the guard has
+    to fail on a MISSING signal and not pass on one. This is the
+    pre-docs/75 design, exactly.
+
+    M2 keeps the flip-flop and ORs it in instead of ANDing it. The
+    signal exists, the flip-flop count is unchanged, and the proof
+    fails. This is the mutation that says the proof is about the
+    LOGIC and not about whether a name is present.
+    """
+    m1 = _mutated(workdir, "w9_ungated",
+                  [("assign rst_req_o = in_reset && in_reset_q;",
+                    "assign rst_req_o = in_reset;")])
+    census1 = _census(_asic_script(m1), workdir)
+    assert census1.total == UNPROT_FF + 3 * PROT_W, (
+        "M1 should lose exactly W9's flip-flop; found {} against the "
+        "repaired design's {}".format(
+            census1.total, UNPROT_FF + RSTREQ_FF + 3 * PROT_W))
+    ok1, out1 = _sat_reset_gated(workdir, _wdog_netlist(workdir, m1, "m1"))
+    assert not ok1, "M1 passed the W9 proof, so the proof proves nothing"
+    assert "in_reset_q" in out1
+
+    m2 = _mutated(workdir, "w9_ored",
+                  [("assign rst_req_o = in_reset && in_reset_q;",
+                    "assign rst_req_o = in_reset || in_reset_q;")])
+    census2 = _census(_asic_script(m2), workdir)
+    assert census2.total == UNPROT_FF + RSTREQ_FF + 3 * PROT_W, (
+        "M2 was supposed to keep every flip-flop and only change the "
+        "gate; it did not, so it no longer demonstrates what it was "
+        "written to demonstrate")
+    ok2, out2 = _sat_reset_gated(workdir, _wdog_netlist(workdir, m2, "m2"))
+    assert not ok2, "M2 passed the W9 proof, so the proof proves nothing"
+    assert "proof did fail" in out2
+
+
+def test_the_top_level_reset_path_is_still_the_one_W9_was_written_for():
+    """W9 is a statement about a composition, so the composition is
+    asserted here rather than assumed.
+
+    If a later edit registered `wdog_rst_req` inside `soc_top.v`, or
+    stopped using it asynchronously, W9 would still be correct and would
+    no longer be load-bearing -- and this test failing is how a reader
+    would find that out."""
+    text = (SOC_RTL / "soc_top.v").read_text()
+    assert "wire rst_raw_n = rst_ni && !wdog_rst_req;" in text, (
+        "soc_top.v no longer builds the raw reset the way soc_wdog.v's "
+        "W9 argument is written against")
+    assert re.search(r"always @\(posedge clk_i or negedge rst_raw_n\)", text), (
+        "soc_top.v no longer uses rst_raw_n as an ASYNCHRONOUS reset, "
+        "which is the whole reason a glitch on it mattered")
+    wdog = (SOC_RTL / "soc_wdog.v").read_text()
+    assert "assign rst_req_o = in_reset && in_reset_q;" in wdog
 
 
 # =====================================================================

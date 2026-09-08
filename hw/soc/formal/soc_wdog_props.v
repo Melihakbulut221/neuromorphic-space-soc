@@ -428,3 +428,37 @@ always @(posedge clk_i) if (f_past_valid && rst_por_ni) begin
     cover (early_kick && nmi_o);                 // a violation escalates
     cover (f_rst_rise && $past(early_kick));     // ...to stage 2
 end
+
+// ---------------------------------------------------------------------
+// W9a: the registered reset request is the decode, on every cycle
+// ---------------------------------------------------------------------
+//
+// docs/75. W9 added one flip-flop between the combinational decode of
+// the voted word and rst_req_o, so that no transient of that decode can
+// reach an asynchronous system reset. The whole argument that this
+// changes NO behaviour rests on one claim: `in_reset_q` and `in_reset`
+// are equal on every cycle, because `prot` is `prot_n` one clock later
+// through the replicas and the voter. That claim is proved here by
+// k-induction rather than argued in a comment, and the two statements
+// below are deliberately separate:
+//
+//   W9a  the two operands of the AND agree, which is the claim;
+//   W9b  therefore rst_req_o is exactly what it was before W9 existed,
+//        which is the consequence a reader of docs/40 and docs/41 needs.
+//
+// W9b duplicates I3 above, and it is written out anyway: I3 is a
+// strengthening invariant guarded by f_armed_valid and could be
+// weakened or moved by a later proof engineering change, and this is
+// the requirement. Neither of them holds on the first cycle out of
+// power-on reset in the register-transfer sense -- both operands are
+// zero there, so they agree -- and neither is guarded for it.
+always @(posedge clk_i) if (rst_por_ni && f_past_valid) begin
+    assert (in_reset_q == in_reset);                          // W9a
+    assert (rst_req_o  == (rst_hold != {RST_W{1'b0}}));       // W9b
+end
+
+// W9c: a cover, because two signals that were both always zero would
+// satisfy W9a and W9b and say nothing. This is what makes the pair a
+// statement about a reset that happens.
+always @(posedge clk_i) if (rst_por_ni && f_past_valid)
+    cover (in_reset_q && in_reset && rst_req_o);

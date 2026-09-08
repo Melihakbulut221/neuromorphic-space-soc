@@ -316,6 +316,83 @@
 // restored to the maximum. Whatever the last software configured, the
 // next boot gets the whole budget and no cadence contract at all.
 //
+// W9. THE RESET REQUEST IS REGISTERED, BECAUSE ITS CONSUMER IS
+//     ASYNCHRONOUS AND SAYS SO.
+//
+//     `soc_top.v` builds the system reset as
+//
+//         wire rst_raw_n = rst_ni && !wdog_rst_req;
+//         always @(posedge clk_i or negedge rst_raw_n) ...
+//
+//     and its own comment states the assumption that makes that safe:
+//     "rst_req is a registered signal in this clock domain, so
+//     rst_sys_n would otherwise DEASSERT on a clock edge". Until
+//     docs/75 that assumption was FALSE. `rst_req_o` was
+//     `(rst_hold != 0)`, a five-bit OR-reduce of a combinational
+//     decode of the VOTED word -- and the voted word is the majority
+//     of three replicas, two of which present `mix_dec` of their
+//     storage, which is an XOR tree over all PROT_W flip-flops of the
+//     bank. So on any edge that changed the protected word, twenty-nine
+//     flip-flops per replica changed at twenty-nine slightly different
+//     times, the two XOR trees passed through words the banks never
+//     stored, and a value with a bit of `rst_hold` set could appear on
+//     two of the three voter inputs at once for as long as the trees
+//     took to settle. Two of three is a majority. There is no
+//     synchroniser, no filter and no registered stage between that and
+//     an asynchronous reset, and no static timing check anywhere in
+//     this repository asks how wide a glitch on an asynchronous reset
+//     is.
+//
+//     `docs/74` section 10.2 measured the consequence on the sign-off
+//     netlist: 174 of 174 upsets into the replica banks were voted out
+//     correctly -- the protection worked -- and every one of the 174
+//     ALSO restarted the SoC, because correcting the upset is itself a
+//     change of the protected word (the W6 report increments) and a
+//     change of the protected word is what puts the glitch on the
+//     reset. A correction that costs a reset is not a correction: W3's
+//     ladder exists to reset a part that has stopped working, and an
+//     upset the voter caught must not spend one of those.
+//
+//     The fix is one flip-flop and it changes no behaviour at all.
+//     `in_reset_q` is the same predicate computed on the other side of
+//     the register boundary -- from `prot_n`, before it is stored,
+//     rather than from `prot` after -- so in the RTL the two are equal
+//     on every cycle of every run and `rst_req_o` is the signal it
+//     always was. In the NETLIST they are equal only once the decode
+//     has settled, and the AND of a glitchy wire with a flip-flop that
+//     is holding zero is zero. The masking is LOGICAL and not
+//     structural, which is what makes it survive resynthesis: `abc` may
+//     factor `(|rst_hold) & in_reset_q` any way it likes and every
+//     product term it can produce still contains `in_reset_q`, because
+//     proving it redundant would need sequential reasoning a
+//     combinational mapper does not have.
+//
+//     WHAT THE ADDED FLIP-FLOP COSTS, stated rather than netted off.
+//     It is one unprotected bit on the reset path, and it cannot be
+//     tripled: `hw/rtl/pilot_top.v` section 8.2's bound says a one-bit
+//     value has exactly two storage functions and three replicas need
+//     three, and bundling it into the protected word would put it back
+//     behind the very decode this requirement exists to get it out
+//     from behind. So it is single, and the two directions of its
+//     corruption are not symmetric:
+//
+//       * upset to 1 while the word says no reset: `rst_req_o` stays 0,
+//         because the AND still has `in_reset` = 0. The upset is masked
+//         by the term it was added to guard, which is the useful
+//         direction and it is masked completely.
+//       * upset to 0 during a genuine stage-2 stretch: `rst_req_o`
+//         drops for one clock in the middle of a RST_CYCLES-clock
+//         assertion. `soc_top.v`'s two-stage synchroniser needs two
+//         clocks of `rst_raw_n` high before `rst_sys_n` rises, so a
+//         one-clock notch does not reach the SoC's flip-flops. The
+//         stretch is shortened by nothing and the reset still happens.
+//
+//     Neither direction is a way to reset the part, which is the
+//     property that mattered. What remains is a coincidence: an upset
+//     in `in_reset_q` in the same cycle as a change of the protected
+//     word, which needs two events and is priced in docs/75 rather
+//     than claimed to be impossible.
+//
 // =====================================================================
 // WHAT THIS BLOCK DOES NOT DO
 // =====================================================================
@@ -663,6 +740,31 @@ module soc_wdog #(
   reg [KICK_W-1:0] kick_left;
 
   wire in_reset = (rst_hold != 0);
+
+  // W9. The same predicate on the other side of the register boundary.
+  //
+  // `prot` is `prot_n` one clock later -- through the three replicas
+  // and the voter when HARDEN is on, through `plain` when it is off --
+  // so `in_reset_q` and `in_reset` are EQUAL on every cycle of every
+  // run, and `rst_req_o` below is the signal it was before this flop
+  // existed. hw/soc/formal/soc_wdog_props.v proves that equality by
+  // k-induction (W9a) rather than leaving it to this comment, and
+  // hw/soc/tb/cocotb/test_soc_wdog.py measures it on every cycle of
+  // every one of its runs.
+  //
+  // It is deliberately computed from `prot_n` and not registered off
+  // `in_reset`: registering `in_reset` would make the flop the decode's
+  // own output one clock late, so a glitch on the decode would be
+  // sampled by it whenever the glitch straddled an edge, and the
+  // assertion would be delayed by a cycle as well. This way the flop's
+  // D is the pre-storage function, which is settled at the edge for
+  // the same reason every other flop's D is.
+  reg in_reset_q;
+  always @(posedge clk_i or negedge rst_por_ni) begin
+    if (!rst_por_ni) in_reset_q <= 1'b0;
+    else             in_reset_q <= (prot_n[P_RSTHOLD +: RST_W] != 0);
+  end
+
   wire tick     = (PRESCALE <= 1) || (pre == 0);
   wire expire   = armed && !in_reset && tick && (counter == 0);
 
@@ -728,7 +830,14 @@ module soc_wdog #(
   wire stage2   = fault && nmi_pend;
 
   assign nmi_o     = nmi_pend;
-  assign rst_req_o = in_reset;
+
+  // W9. `in_reset` alone in the RTL; `in_reset` AND a flip-flop in the
+  // netlist. The two operands are equal on every cycle (W9a), so this
+  // is `in_reset` and the block's behaviour is unchanged -- and no
+  // transient of the combinational decode can reach an asynchronous
+  // reset through a flip-flop that is holding zero.
+  assign rst_req_o = in_reset && in_reset_q;
+
   assign wdog_no   = !(rst_count >= ESC_AT);
 
   // A write-one-to-clear of the pending stage 1, from either the status

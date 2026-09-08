@@ -586,14 +586,43 @@ def cmd_wdog(args):
         *[sum(1 for f in bank if not plain(f.q)[0].startswith("_")) for bank in (a, b, cc)])
     shift = m["gl_row_shift"]
     lo, hi = campaign.i(golden_rtl, "win_open"), campaign.i(golden_rtl, "win_close")
+    # THE DRAW'S KEY, and it is a choice with a reason (docs/75 section 7).
+    #
+    # docs/74 keyed the per-flop generator on the flip-flop's INDEX IN
+    # THE NETLIST, which is exact for one netlist and is not stable
+    # across two: W9 added one flip-flop to soc_wdog, every index after
+    # it moved by one, and the same seed would have drawn different
+    # cycles for the repaired design than for the baseline. A
+    # counterfactual whose two arms were injected at different cycles is
+    # not a counterfactual.
+    #
+    # --plan position keys on (bank, position within the bank) instead,
+    # which is the same physical bit in any netlist that holds the same
+    # word in three banks of the same width, and the check below is what
+    # says the two orderings really are the same bit: replica A's
+    # flip-flops carry `u_prot_a.bits [k]`, so position must equal bit,
+    # and in B and C the NAMED half must appear at the same positions
+    # with the same bit numbers.
+    #
+    # The default is unchanged so that docs/74's 174 records reproduce.
+    if args.plan == "position":
+        for bank, fs in (("A", a), ("B", b), ("C", cc)):
+            named = [(i, plain(f.q)) for i, f in enumerate(fs)
+                     if not plain(f.q)[0].startswith("_")]
+            say("plan check: bank %s, %d of %d flip-flops named, at "
+                "positions %s", bank, len(named), len(fs),
+                ",".join("%d:%s" % (i, n[1]) for i, n in named))
     plan = []
     for bank, fs in (("A", a), ("B", b), ("C", cc)):
-        for f in fs:
-            rng = random.Random("%d:wdog:%d" % (SEED, f.idx))
+        for pos, f in enumerate(fs):
+            key = ("%d:wdog:%s:%d" % (SEED, bank, pos) if args.plan == "position"
+                   else "%d:wdog:%d" % (SEED, f.idx))
+            rng = random.Random(key)
             for k in range(args.draws):
                 plan.append((bank, f, rng.randrange(lo, hi)))
-    say("sweep: %d replica flip-flops x %d draws = %d injections, watchdog ARMED",
-        len(a) + len(b) + len(cc), args.draws, len(plan))
+    say("sweep: %d replica flip-flops x %d draws = %d injections, watchdog "
+        "ARMED, plan keyed by %s",
+        len(a) + len(b) + len(cc), args.draws, len(plan), args.plan)
     g_cnt = int(golden["wd_tmr_count"])
 
     def job(item):
@@ -617,6 +646,16 @@ def cmd_wdog(args):
                          "ann_trap": df["ann_trap"], "persist": r["persist"],
                          "wd_mismatch": r["wd_mismatch"], "wd_tmr_count": r["wd_tmr_count"],
                          "wd_tmr_err": r["wd_tmr_err"], "cycles": df["cycles"],
+                         # docs/75. The classifier samples the watchdog
+                         # pins at clock edges and so cannot see a
+                         # reset that came and went inside one cycle;
+                         # this counts EVENTS on wdog_rst_o, which is
+                         # the channel an operator would have to watch
+                         # to be told. docs/74 section 10.2 established
+                         # the 174 restarts from the RUN LENGTHS
+                         # instead, because the counter did not exist
+                         # when those sweeps ran.
+                         "wdog_rst_events": r.get("wdog_rst_events", "-1"),
                          "wall": "%.1f" % r["_wall"]})
             if n % 25 == 0:
                 say("  ... %d of %d", n, len(plan))
@@ -636,6 +675,18 @@ def cmd_wdog(args):
         min(int(r["wd_mismatch"]) for r in rows), max(int(r["wd_mismatch"]) for r in rows),
         collections.Counter(r["wd_tmr_count"] for r in rows))
     say("persisted after release: %d of %d", sum(1 for r in rows if r["persist"] == "1"), len(rows))
+    # docs/75's headline number: resets per corrected upset.
+    ev = collections.Counter(r["wdog_rst_events"] for r in rows)
+    corrected = [r for r in rows if r["cls"] == "CORRECTED"]
+    reset = [r for r in corrected if r["wdog_rst_events"] not in ("0", "-1")]
+    say("wdog_rst_o events: %s", dict(ev))
+    if any(r["wdog_rst_events"] != "-1" for r in rows):
+        say("resets per corrected upset: %d of %d corrected upsets also "
+            "asserted wdog_rst_o (%s)", len(reset), len(corrected),
+            "%.4f" % (len(reset) / len(corrected)) if corrected else "n/a")
+    else:
+        say("resets per corrected upset: NOT MEASURED -- this build's "
+            "bench does not count wdog_rst_o events")
     log.close()
 
 
@@ -896,6 +947,12 @@ def main():
     ap.add_argument("--subset", type=int, default=100)
     ap.add_argument("--trace-check", type=int, default=0)
     ap.add_argument("--draws", type=int, default=3)
+    ap.add_argument("--plan", choices=["index", "position"], default="index",
+                    help="what the per-flop draw is keyed on: the "
+                         "flip-flop's index in the netlist (docs/74, "
+                         "exact for one netlist) or its position within "
+                         "its replica bank (docs/75, the same bit in two "
+                         "netlists that differ elsewhere)")
     ap.add_argument("--constants", action="store_true")
     ap.add_argument("--instants", default=None,
                     help="instants.csv from `instants`: replay at the measured row")

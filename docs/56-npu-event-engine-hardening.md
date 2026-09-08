@@ -863,6 +863,13 @@ capability.
 | three banks of `PROT_W` in the mapped netlist, derived from `NCAUSE` and `C_INJ_OVF` in the RTL | **25, 25, 25** **[fact]** |
 | the same with every `keep` and `keep_hierarchy` **deleted from the text** of the sources and `flatten` forced | **no flip-flop lost** **[fact]** |
 | `.MIX(0)` on replica C | **13 flip-flops lost**, one for each odd bit of the 25-bit word **[fact]** |
+
+*Re-measured 2026-09-07 by `docs/75` section 3.3.* The 25 per replica
+is confirmed by a second instrument that depends on no name — the fan-in
+cone of the voter's own input — **25 / 25 / 25, disjoint, in the block
+synthesis and in all 35 whole-SoC netlists in the tree that contain this
+block**. A census by Q-net name reports 25 / 12 / 13 on the shipped
+netlist, and this document did not use one.
 | `HARDEN = 0` | **50 lost = 2 x PROT_W** **[fact]** |
 | `u_ser.guard`, `win_guard` and **`oh_guard`** are nets in the mapped netlist at their derived widths | **8, 9 and 3** **[fact]** |
 | the mapped flip-flops whose `src` names `soc_npu_ser.v`, against the campaign's site list | **143 = 143** **[fact]** |

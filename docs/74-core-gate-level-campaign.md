@@ -1136,6 +1136,36 @@ could not carry it.
 
 ---
 
+*Two notes added 2026-09-07 by `docs/75-the-reset-on-a-corrected-upset.md`.*
+
+**Section 10.2 and section 17 item 1: done.** `soc_wdog.v` now carries
+W9, one flip-flop between the combinational decode of the voted word and
+`rst_req_o`, at no change of behaviour — the two operands of the added
+AND are proved equal on every cycle by k-induction — and the gate is
+proved on the mapped netlist by SAT, with the two mutations that make
+that proof fail. `docs/75` section 6 also answers a question this
+document did not ask: over the whole of `s71boot`'s netlist there are
+**five** distinct asynchronous-reset fan-in source sets, four of them a
+port or one or two registered signals, and the fifth is `rst_raw_n`,
+driven by **25 flip-flops of the three replica banks and nothing else**.
+This was the only place in the SoC where a decode reached an
+asynchronous reset.
+
+**Section 6.6's census is now three instruments and not two, and the
+distinction matters more than the numbers.** The "29, 14 and 15" here is
+a census by **Q-net name**. `docs/75` section 3 re-measured every replica
+count published since `docs/41` — the watchdog's, the boot block's and
+the NPU cause bank's — by the voter's fan-in cone, and confirmed all of
+them; but it also established that the guards in `sw/tests` had never
+used a Q-net census. They count by **instance path**, which is exact in
+their own recipe and blind on the netlist LibreLane writes, and neither
+this document nor any before it had ever censused that netlist
+mechanically. `sw/tests/test_soc_shipped_netlist_guards.py` now does,
+over every retained netlist, with the disjointness assertion this
+document's cone census implied and did not state.
+
+---
+
 ## 14. Cost, measured and contended
 
 **Every figure here was measured on a machine that ran the owner's

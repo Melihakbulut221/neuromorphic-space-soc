@@ -613,3 +613,73 @@ async def test_the_reset_count_saturates(dut):
             await RisingEdge(dut.clk_i)
             await Timer(T_SAMPLE, unit="ns")
     assert ((await w.read(SEL_STAT)) >> 8) & 0xFF == top, "RSTCNT wrapped"
+
+
+# =====================================================================
+# W9: the reset request is registered, and the register is the decode
+# =====================================================================
+#
+# docs/75. W9 put one flip-flop between the combinational decode of the
+# voted protected word and rst_req_o, so that no transient of that
+# decode can reach soc_top.v's asynchronous rst_raw_n. The RTL claim it
+# rests on is that `in_reset_q` and `in_reset` are equal on every cycle,
+# and it is proved by k-induction in hw/soc/formal/soc_wdog_props.v
+# (W9a). This is the same statement measured on every cycle of a run
+# that actually climbs the ladder, because a proof of an equality and a
+# measurement of it fail in different ways.
+#
+# WHAT THIS TEST CANNOT DO, and it is worth being blunt about it: it
+# cannot fail on the design W9 replaced. `rst_req_o = in_reset` and
+# `rst_req_o = in_reset && in_reset_q` are the same function of the same
+# state on every cycle of every run, so no simulation can tell them
+# apart. The evidence that W9 does anything is on the NETLIST --
+# test_no_transient_of_the_voted_word_can_reach_the_system_reset in
+# sw/tests/test_soc_synthesis_guards.py -- and in the gate-level
+# campaign of docs/75 section 8. What this test catches is W9
+# implemented WRONGLY: a flip-flop fed from `prot` instead of `prot_n`,
+# or one registered off `in_reset`, lags the decode by a clock, and the
+# AND then holds rst_req_o low for the first cycle of a genuine stage-2
+# stretch. docs/75 section 7.7 records that mutation failing here.
+@cocotb.test()
+async def test_the_registered_reset_request_tracks_the_decode_every_cycle(dut):
+    """W9a and W9b, on every clock edge of a full escalation."""
+    w = await setup(dut)
+    seen_asserted = 0
+    checks = 0
+
+    async def sample():
+        nonlocal seen_asserted, checks
+        await Timer(T_SAMPLE, unit="ns")
+        q = val(dut.in_reset_q)
+        c = val(dut.in_reset)
+        assert q == c, (
+            "W9a: in_reset_q is {} and the decode of the voted word says "
+            "{}. The two are the same predicate on opposite sides of one "
+            "register boundary and must agree on every cycle; if they do "
+            "not, rst_req_o is no longer the signal docs/40 and docs/41 "
+            "describe.".format(q, c))
+        assert val(dut.rst_req_o) == c, (
+            "W9b: rst_req_o is {} where (rst_hold != 0) is {}"
+            .format(val(dut.rst_req_o), c))
+        seen_asserted += c
+        checks += 1
+
+    for _ in range(ESCALATE):
+        await w.write(SEL_RLD, 4)
+        await w.kick()
+        for _ in range(40 * PRESCALE):
+            await RisingEdge(dut.clk_i)
+            await sample()
+            if val(dut.rst_req_o):
+                break
+        assert val(dut.rst_req_o), "the ladder never reached stage 2"
+        while val(dut.rst_req_o):
+            await RisingEdge(dut.clk_i)
+            await sample()
+
+    # A cover, not decoration: an in_reset_q that were stuck at zero
+    # would satisfy the equality above on a run that never resets.
+    assert seen_asserted >= 2 * (RST_CYCLES - 1), (
+        "the run asserted the reset on only {} of {} sampled cycles, so "
+        "the equality above was checked mostly against zero"
+        .format(seen_asserted, checks))

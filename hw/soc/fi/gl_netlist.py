@@ -244,6 +244,23 @@ def emit_vh(flops, path):
 # ---------------------------------------------------------------------
 _OUTPINS = ("Q", "Y", "X", "L_HI", "L_LO")
 
+# Every flip-flop this file may be asked to walk past. DFF_CELLS above
+# is the sg13g2 list the campaign's parse insists on; this predicate is
+# wider on purpose, because the cone census below also runs on a yosys
+# result that has not been through `dfflibmap` (no liberty on the
+# machine) and on `synth_ecp5`, and a cone that walked THROUGH a
+# flip-flop it did not recognise would report the flops behind it and
+# silently overcount.
+_YOSYS_FF = ("$_DFF", "$_SDFF", "$_ALDFF", "$_DFFE", "$_SDFFE", "$_DFFSR")
+
+
+def is_flop(cell):
+    if cell in DFF_CELLS or cell == "TRELLIS_FF":
+        return True
+    if cell.startswith(_YOSYS_FF):
+        return True
+    return bool(re.match(r"^sg13g2_s?df", cell))
+
 
 def graph(path):
     """net -> driving instance, and instance -> (cell, pins)."""
@@ -272,14 +289,18 @@ def cone_flops(driver, cells, net, _seen=None):
     if inst is None:
         return set()
     cell, pins = cells[inst]
-    if cell in DFF_CELLS:
+    if is_flop(cell):
         return {inst}
-    if cell.startswith("RM_"):
+    if cell.startswith("RM_") or cell.startswith("$mem"):
         return set()
     out = set()
     for k, v in pins.items():
-        if k not in _OUTPINS:
-            out |= cone_flops(driver, cells, v, _seen)
+        if k in _OUTPINS:
+            continue
+        # A structural netlist connects a pin to one net; a yosys JSON
+        # connects it to a list of bits. One walker, both shapes.
+        for one in (v if isinstance(v, list) else (v,)):
+            out |= cone_flops(driver, cells, one, _seen)
     return out
 
 
@@ -305,6 +326,265 @@ def wdog_replicas(flops, driver, cells, width=29):
     return (sorted(a, key=lambda f: f.idx),
             sorted((by_inst[i] for i in b), key=lambda f: f.idx),
             sorted((by_inst[i] for i in c), key=lambda f: f.idx))
+
+
+# ---------------------------------------------------------------------
+# the general replica census: three instruments over one structure
+# ---------------------------------------------------------------------
+#
+# docs/75. `wdog_replicas` above is this, specialised to one structure
+# and one width, and it is kept because docs/74 quotes it. Everything
+# that counts replicas now goes through `tmr_census`, including
+# sw/tests/test_soc_synthesis_guards.py, so that there is ONE cone
+# implementation in the tree and not one per caller --
+# `test_the_verdict_rule_is_one_file_and_not_two_copies_of_one` is the
+# same rule applied to the STA verdict.
+#
+# THREE INSTRUMENTS, because they do not agree and the disagreement is
+# the point:
+#
+#   by_q_net    the flip-flops whose Q net is called `<bank>.bits`.
+#               This is what gl_netlist.py --census does against the
+#               RTL site table and what docs/74 section 6.6 reports as
+#               29 / 14 / 15. It UNDERCOUNTS a mixed replica in a
+#               netlist that has been through dfflibmap: the flop that
+#               stores an inverted bit is a different cell from the one
+#               that carried the name, and it carries none.
+#
+#   by_instance the flip-flops whose INSTANCE PATH lies under the bank.
+#               This is what every guard in sw/tests has always used.
+#               It is exact wherever the instance path survives -- a
+#               yosys `flatten` prefixes `$flatten\<path>.` onto every
+#               cell it lifts, including cells dfflibmap created inside
+#               the module -- and it is BLIND wherever the path does
+#               not survive, which is the netlist LibreLane writes.
+#
+#   cone        the flip-flops in the fan-in cone of the net the voter
+#               reads. It depends on no name at all and is the only one
+#               of the three that works on the shipped netlist.
+#
+# The cone is the measurement; the other two are reported beside it so
+# that a disagreement is visible rather than inferred.
+
+# Each entry is (prefix, bank instances, the wires the bank drives, the
+# voter instance). The VOTER is named because the cone must start at the
+# voter's own input pin and not at the bank's output wire wherever both
+# survive: those two nets are the same net in a correct design and are
+# NOT the same net in a design whose voter reads one replica twice,
+# which is a failure no flip-flop count can see
+# (test_a_voter_wired_to_one_replica_twice_is_caught_only_by_the_cone).
+TMR_STRUCTURES = {
+    # name          prefix                          banks              bank outputs  voter
+    "wdog":  (WDOG,                     ("u_prot_a", "u_prot_b", "u_prot_c"),
+              ("qa", "qb", "qc"), "u_prot_vote"),
+    "boot":  ("u_boot.g_prot_tmr.",     ("u_prot_a", "u_prot_b", "u_prot_c"),
+              ("qa", "qb", "qc"), "u_prot_vote"),
+    "npu":   ("u_npu.g_cfg_tmr.",       ("u_cfg_a", "u_cfg_b", "u_cfg_c"),
+              ("qa", "qb", "qc"), "u_cfg_vote"),
+    # the same three structures synthesised on their own, which is what
+    # the guards in sw/tests do: no path above the generate block.
+    "wdog_block": ("g_prot_tmr.",       ("u_prot_a", "u_prot_b", "u_prot_c"),
+                   ("qa", "qb", "qc"), "u_prot_vote"),
+    "boot_block": ("g_prot_tmr.",       ("u_prot_a", "u_prot_b", "u_prot_c"),
+                   ("qa", "qb", "qc"), "u_prot_vote"),
+    "npu_block":  ("g_cfg_tmr.",        ("u_cfg_a", "u_cfg_b", "u_cfg_c"),
+                   ("qa", "qb", "qc"), "u_cfg_vote"),
+}
+
+
+class StructuralNetlist:
+    """A netlist as LibreLane and `write_verilog` write it: a flat
+    module of sg13g2 instances, nets addressed by their escaped names."""
+
+    kind = "structural"
+
+    def __init__(self, path):
+        self.text = open(path).read()
+        self.driver, self.cells = graph(path)
+        self._flops = list(parse(path)[0])
+        self._q = {f.inst: plain(f.q)[0] for f in self._flops}
+
+    def net(self, name):
+        """The per-bit keys of vector net `name`, taken from its USES
+        rather than its declaration, because a declaration is
+        `wire [28:0] \\x ;` and a use is `\\x [3]`."""
+        bits = sorted({int(k) for k in re.findall(
+            r"\\%s \[(\d+)\]" % re.escape(name), self.text)})
+        return ["\\%s [%d]" % (name, k) for k in bits]
+
+    def flop_instances(self):
+        return [f.inst for f in self._flops]
+
+    def q_name(self, inst):
+        return self._q.get(inst)
+
+    def q_names(self):
+        return list(self._q.values())
+
+
+class JsonNetlist:
+    """The same netlist as yosys `write_json` writes it, which is what
+    the guards in sw/tests already have in hand.
+
+    It exists so that there is ONE cone implementation in the tree:
+    `cone_flops` is generic over the key type, so a bit index serves
+    where a net name serves above. It is NOT a second census -- the two
+    front ends are checked against each other on the same design by
+    `test_the_cone_census_reads_the_same_answer_out_of_both_front_ends`.
+    """
+
+    kind = "json"
+
+    def __init__(self, path):
+        import json
+        design = json.load(open(path))
+        self.driver, self.cells, self._nets = {}, {}, {}
+        self._flops, self._bit_name = [], {}
+        for mod in design["modules"].values():
+            for name, net in mod.get("netnames", {}).items():
+                self._nets.setdefault(name, net["bits"])
+                if not net.get("hide_name", 0):
+                    for i, b in enumerate(net["bits"]):
+                        self._bit_name.setdefault(b, (name, i))
+            for inst, cell in mod["cells"].items():
+                pins = cell["connections"]
+                self.cells[inst] = (cell["type"], pins)
+                if is_flop(cell["type"]):
+                    self._flops.append(inst)
+                for k, v in pins.items():
+                    if k in _OUTPINS:
+                        for b in v:
+                            self.driver[b] = inst
+
+    def net(self, name):
+        return list(self._nets.get(name, []))
+
+    def flop_instances(self):
+        return list(self._flops)
+
+    def q_name(self, inst):
+        for k in _OUTPINS:
+            bits = self.cells[inst][1].get(k)
+            if bits:
+                got = self._bit_name.get(bits[0])
+                return got[0] if got else None
+        return None
+
+    def q_names(self):
+        return [self.q_name(i) for i in self._flops]
+
+
+def open_netlist(path):
+    return JsonNetlist(path) if str(path).endswith(".json") \
+        else StructuralNetlist(path)
+
+
+def replica_output(nl, prefix, bank, qname, voter=None, pin=None):
+    """The net the voter reads for one replica, and its per-bit keys.
+
+    THE ORDER MATTERS AND IT IS NOT ARBITRARY. The first candidate is
+    the VOTER'S OWN INPUT, because that is the question -- what the
+    voter reads -- and it is the only candidate that differs from the
+    others in a design whose voter has been wired to one replica twice.
+    Everything after it is a fall-back for a netlist in which that name
+    did not survive: LibreLane's `soc_top.nl.v` has no
+    `u_prot_vote.in_b`, and there `qb` IS the voter's input because the
+    two are one net.
+
+    `qa` normally does not exist as a net of its own either: POL_A is
+    zero and MIX is off, so `q_o = bits` and opt_clean keeps one name
+    for the three aliases. The candidate that hit is REPORTED, never
+    assumed -- a census that silently fell back to the bank's own
+    storage net would count replica A correctly and tell a reader
+    nothing about it.
+
+    A candidate whose bits exist but are UNDRIVEN is refused. abc leaves
+    the name of a wire it dissolved behind, pointing at bits no cell
+    drives any more, and a cone anchored there is empty for a reason
+    that has nothing to do with the design."""
+    cands = []
+    if voter and pin:
+        cands.append(prefix + voter + "." + pin)
+    cands += [prefix + qname, prefix + bank + ".q_o",
+              prefix + bank + ".bits"]
+    for cand in cands:
+        bits = nl.net(cand)
+        if bits and all(b in nl.driver for b in bits):
+            return cand, bits
+    return None, []
+
+
+def tmr_census(path, prefix, banks, qnames, nl=None, voter=None):
+    """Every replica of one TMR structure, counted three ways.
+
+    Returns one dict per bank with `cone`, `by_q_net`, `by_instance`,
+    the net the cone started from and the width that net turned out to
+    have -- so a caller can assert the width it expected rather than
+    trusting the census to have found the whole word. A bank whose
+    output net is not in the netlist at all comes back with width 0 and
+    cone 0, which is a failure a caller must not read as "merged"."""
+    nl = nl or open_netlist(path)
+    q_of = {}
+    for inst in nl.flop_instances():
+        q_of[inst] = nl.q_name(inst)
+    rows = []
+    for bank, qname, pin in zip(banks, qnames, ("in_a", "in_b", "in_c")):
+        net, bits = replica_output(nl, prefix, bank, qname, voter, pin)
+        cone = set()
+        for b in bits:
+            cone |= cone_flops(nl.driver, nl.cells, b)
+        rows.append({
+            "bank": bank,
+            "net": net,
+            "width": len(bits),
+            "cone": len(cone),
+            "cone_insts": sorted(cone, key=str),
+            "by_q_net": sum(1 for n in q_of.values()
+                            if n == prefix + bank + ".bits"),
+            "by_instance": sum(1 for i in q_of
+                               if (prefix + bank + ".") in str(i)),
+            "anonymous": sum(1 for i in cone
+                             if q_of.get(i) is None
+                             or re.match(r"^[_$]", str(q_of[i]))),
+        })
+    return rows
+
+
+# ---------------------------------------------------------------------
+# what feeds an asynchronous reset
+# ---------------------------------------------------------------------
+def reset_cones(path, nl=None):
+    """Group every flip-flop's RESET_B net by the SET of flip-flops that
+    feeds it combinationally.
+
+    docs/75 section 6. An asynchronous reset has no setup or hold check
+    and no static timing analysis in this repository asks how wide a
+    glitch on one is, so what matters about it is how many flip-flops'
+    outputs have to settle before it is stable. One flip-flop is safe:
+    a flop output does not glitch. Two flip-flops ANDed is safe for the
+    same reason a two-input AND of two registered values is. A decode of
+    thirteen flip-flops spread over three TMR replicas is what docs/74
+    section 10.2 measured resetting the SoC on every corrected upset.
+
+    Returns a list of (sources, reset nets, flip-flops reset), sorted by
+    the number of flip-flops reset, where `sources` is the sorted set of
+    Q-net names driving the reset."""
+    nl = nl or open_netlist(path)
+    flops, _ = parse(path) if getattr(nl, "kind", "") != "json" else ([], None)
+    q_of = {f.inst: plain(f.q)[0] for f in flops}
+    groups = {}
+    for f in flops:
+        cone = cone_flops(nl.driver, nl.cells, f.rst)
+        key = tuple(sorted(q_of.get(i, str(i)) for i in cone))
+        g = groups.setdefault(key, {"sources": key, "nets": set(), "flops": 0})
+        g["nets"].add(f.rst.strip())
+        g["flops"] += 1
+    return sorted(groups.values(), key=lambda g: -g["flops"])
+
+
+def tmr_census_named(path, which, nl=None):
+    prefix, banks, qnames, voter = TMR_STRUCTURES[which]
+    return tmr_census(path, prefix, banks, qnames, nl=nl, voter=voter)
 
 
 def emit_wdog_vh(path, width=29):
@@ -343,10 +623,44 @@ def main():
     ap.add_argument("--list", default=None)
     ap.add_argument("--emit-wdog", default=None)
     ap.add_argument("--wdog-census", action="store_true")
+    ap.add_argument("--reset-cones", action="store_true",
+                    help="every asynchronous reset, grouped by what "
+                         "feeds it (docs/75 section 6)")
+    ap.add_argument("--tmr-census", default=None,
+                    help="one of " + ", ".join(sorted(TMR_STRUCTURES))
+                         + ", or PREFIX:a,b,c")
     args = ap.parse_args()
+    if args.tmr_census:
+        if args.tmr_census in TMR_STRUCTURES:
+            prefix, banks, qnames, voter = TMR_STRUCTURES[args.tmr_census]
+        else:
+            prefix, spec = args.tmr_census.rsplit(":", 1)
+            banks = tuple(spec.split(","))
+            qnames, voter = ("qa", "qb", "qc"), None
+        for row in tmr_census(args.netlist, prefix, banks, qnames,
+                              voter=voter):
+            print("%-10s cone %3d  by_q_net %3d  by_instance %3d  "
+                  "(width %d from %s, %d anonymous)"
+                  % (row["bank"], row["cone"], row["by_q_net"],
+                     row["by_instance"], row["width"], row["net"],
+                     row["anonymous"]))
+        if not (args.census or args.emit or args.list or args.wdog_census):
+            return
     if args.emit_wdog:
         emit_wdog_vh(args.emit_wdog)
         if not (args.census or args.emit or args.list or args.wdog_census):
+            return
+    if args.reset_cones:
+        groups = reset_cones(args.netlist)
+        print("%d distinct asynchronous-reset fan-in source sets" % len(groups))
+        for g in groups:
+            print("  %d source flip-flop(s) -> %d reset net(s) -> %d "
+                  "flip-flops reset" % (len(g["sources"]), len(g["nets"]),
+                                        g["flops"]))
+            for n in g["sources"]:
+                print("      <- %s" % n)
+        if not (args.census or args.emit or args.list or args.wdog_census
+                or args.tmr_census):
             return
     if args.wdog_census:
         flops, _ = parse(args.netlist)

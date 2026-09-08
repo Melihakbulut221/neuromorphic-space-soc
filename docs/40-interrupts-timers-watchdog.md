@@ -604,6 +604,18 @@ This is the sharpest single argument in this document for W4 being right
 reset domain is what makes the record survive, and it is also what makes
 a stale configuration survive. Both halves had to be designed.
 
+*Extended 2026-09-07 by `docs/75-the-reset-on-a-corrected-upset.md`
+section 5.* A third way state outside the reset domain reaches the reset
+it causes, found on the netlist and invisible in the RTL: the stretch
+counter `rst_hold` was **decoded combinationally** into `rst_req_o`, and
+`soc_top.v` uses that signal as an asynchronous reset under a comment
+asserting it is registered. `docs/74` section 10.2 measured 174 of 174
+corrected upsets restarting the SoC through it. Neither this document's
+brick loop nor `docs/68`'s give-up path is affected — the policy is
+unchanged and the RTL is bit-identical — but the reset request now
+passes through a flip-flop (W9), which is what that comment always
+claimed.
+
 ### 7.3 A Verilog function in a continuous assignment lost its sensitivity
 
 `soc_clint.v` merges byte lanes with a function. Written the short way —
