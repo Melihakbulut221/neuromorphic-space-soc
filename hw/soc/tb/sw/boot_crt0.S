@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 // Startup for the BOOT LOADER, docs/68.
 //
 // The sibling crt0.S is the application's, and the two are deliberately

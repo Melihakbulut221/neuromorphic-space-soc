@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the SECDED (72, 64) codec (SymbiYosys harness,
 // formal/secded.sby). Acceptance criteria from
 // docs/09-formal-verification-plan.md target #2:

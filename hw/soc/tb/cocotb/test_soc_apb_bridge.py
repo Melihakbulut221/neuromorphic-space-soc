@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_apb_bridge suite: AMBA 3 APB compliance on the peripheral side.
 
 The expectations here come from two places and nowhere else:

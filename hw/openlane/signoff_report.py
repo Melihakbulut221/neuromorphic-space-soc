@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Extract one sign-off set from a LibreLane run directory.
 
 Every number quoted in docs/20 comes out of this script rather than out

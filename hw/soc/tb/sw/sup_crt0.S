@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 // Startup, vector table and privilege-switch primitives for the static
 // partitioned supervisor of hw/soc/tb/sw/fi_supervisor.c.
 //

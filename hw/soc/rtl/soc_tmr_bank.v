@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // soc_tmr_bank: one physical replica of a TMR domain in the SoC.
 //
 // =====================================================================

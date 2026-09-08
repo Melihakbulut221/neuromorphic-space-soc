@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Guard: hw/soc/rvformal/checks.cfg.in copies soc_top.v's ibex_top
 # parameter list, and a copy that drifts is a proof about a core the SoC
 # does not build.

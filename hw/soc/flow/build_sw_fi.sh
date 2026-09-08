@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Build the core fault-injection workload into a boot ROM image.
 #
 #   build_sw_fi.sh <out_dir> [extra CPPFLAGS...]

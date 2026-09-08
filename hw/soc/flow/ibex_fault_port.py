@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Give `ibex_top` one output port, so a corrected upset can be counted.
 
     ibex_fault_port.py <gen_dir> <out_dir> [secded|upstream]

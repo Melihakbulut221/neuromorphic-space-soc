@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Mutation evidence for the boot register suite (docs/68).
 
     python3 hw/soc/tb/cocotb/mutate_soc_boot.py

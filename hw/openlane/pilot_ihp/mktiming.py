@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Derive the docs/28 timing-recovery variants from the 6x2 submission config.
 
 The docs/27 re-harden left the slow-corner setup margin at +0.3229 ns,

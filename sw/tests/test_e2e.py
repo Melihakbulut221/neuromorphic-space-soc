@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """End-to-end functional test: a 3-layer toy SNN classifying two
 synthetic rate-coded patterns well above chance (docs/10 section 13).
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """TMR voter RTL vs an independent Python majority model.
 
 hw/rtl/tmr_voter.v computes the majority as a sum of AND terms; the

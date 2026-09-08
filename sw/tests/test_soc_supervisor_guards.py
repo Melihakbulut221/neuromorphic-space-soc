@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Guards on the second fault-injection workload, the static
 partitioned supervisor of `docs/46`.
 

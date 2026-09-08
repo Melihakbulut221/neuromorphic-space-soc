@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The QSPI controller on a board with two flash devices, for cocotb.
 //
 // hw/soc/tb/cocotb/test_soc_qspi.py drives the APB side of this module

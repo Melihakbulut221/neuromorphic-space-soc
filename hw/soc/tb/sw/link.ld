@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut */
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* Bare-metal link map for tb/ibex_min_system.v.
  *
  * 16 KiB of unified RAM at 0. Ibex's reset vector is

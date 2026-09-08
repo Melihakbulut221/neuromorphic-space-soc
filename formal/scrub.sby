@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for the weight-SRAM ECC scrub controller
 # (hw/rtl/scrub.v). Closes the scrub-controller clause of
 # docs/09-formal-verification-plan.md target #5 (control-FSM deadlock

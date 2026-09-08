@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """The core fault-injection campaign of docs/42 and docs/43, replayed on
 the mapped netlist -- docs/74.
 

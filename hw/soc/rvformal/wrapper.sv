@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // riscv-formal binding for this project's Ibex configuration.
 //
 // docs/63 is the record of what this proves and what it does not. Read

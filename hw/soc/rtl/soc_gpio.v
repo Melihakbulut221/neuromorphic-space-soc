@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // GPIO: a GRGPIO-shaped general purpose I/O port, 16 pins, on APB.
 //
 // =====================================================================

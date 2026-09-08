@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal targets for the NPU register bank (docs/09 section B.1 target #6).
 #
 # Standalone:      make -f formal/npu_regbank.mk regbank_all

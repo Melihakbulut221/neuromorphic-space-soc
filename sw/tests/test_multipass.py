@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Multi-pass execution tests (E9, docs/10 section 9).
 
 The equivalence obligation: running a layer as several output-neuron

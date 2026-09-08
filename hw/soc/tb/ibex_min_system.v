@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // A minimal system around the sv2v-converted Ibex, in Verilog-2005.
 //
 // WHY NOT ibex_simple_system. Upstream ships examples/simple_system,

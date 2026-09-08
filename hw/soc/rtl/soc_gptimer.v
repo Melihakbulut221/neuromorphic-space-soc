@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // General purpose timer unit, and the shell the watchdog lives in.
 //
 // Register map mirrored from GRLIB's GPTIMER (grip.pdf table 463, quoted

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* Register offsets, fields and the flash command set for the QSPI
  * controller docs/66 adds, hw/soc/rtl/soc_qspi.v.
  *

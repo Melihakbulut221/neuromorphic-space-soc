@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # cocotb + Icarus suite for hw/soc/rtl/soc_apb_bridge.v.
 #
 #   cd hw/soc/tb/cocotb && make -f Makefile.soc_apb_bridge        run the suite

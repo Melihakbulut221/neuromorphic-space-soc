@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Word-addressed memory behind one system-bus slave port.
 //
 // SCOPE, stated first because it bounds every claim made with this file

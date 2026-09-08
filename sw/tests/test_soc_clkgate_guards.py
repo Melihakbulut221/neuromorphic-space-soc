@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Textual and netlist guards for the fabric's and the accelerator's clock gates.
 
 `docs/76-the-second-and-third-clock-gates.md` adds two `sg13g2_lgcp_1`

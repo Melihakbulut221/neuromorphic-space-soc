@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Compute a floorplan for soc_top and emit it as LibreLane -c overrides.
 
 docs/47 section 8.4 measured that its floorplan is the most likely

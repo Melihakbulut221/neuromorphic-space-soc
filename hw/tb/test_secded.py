@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """SECDED (72, 64) RTL vs golden-model cross-check.
 
 Refinement evidence in the sense of docs/09 track 2: identical stimulus

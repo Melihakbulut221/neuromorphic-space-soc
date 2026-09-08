@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal targets for the lif_core memory hardening: the SECDED (26,20)
 # neuron-state codec, and both coded files in place inside the datapath
 # that reads and writes them.

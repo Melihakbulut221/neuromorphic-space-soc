@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal verification targets (SymbiYosys + smtbmc/yices).
 #
 # Tool resolution lives in one place for the whole repository. The glob

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal targets for the fault-tolerance primitives: the SECDED (72, 64)
 # weight-SRAM codec and the TMR voter.
 #

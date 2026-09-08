@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """LIF core RTL lockstep suite: hw/rtl/lif_core.v against the golden model.
 
 The golden model sw/golden/lif_core.py is the normative executable form of

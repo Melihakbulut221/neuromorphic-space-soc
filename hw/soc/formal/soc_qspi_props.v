@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The QSPI controller, stated as properties.
 //
 // Textually included at the end of the soc_qspi module body under

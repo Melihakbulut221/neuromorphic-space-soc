@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Toolchain resolution for the SoC (management subsystem) work.
 #
 # This extends the repository-wide `tools.mk`. The rule there -- one

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The scrubber's own invariants, textually included at the end of
 // hw/soc/rtl/soc_mem_ecc.v under `ifdef FORMAL, because they name
 // state the row port does not show. soc_mem_ecc.sby's harness,

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the watchdog's protected word: three
 // soc_tmr_bank replicas under one tmr_voter, the composition
 // hw/soc/rtl/soc_wdog.v builds in its `g_prot_tmr` generate block.

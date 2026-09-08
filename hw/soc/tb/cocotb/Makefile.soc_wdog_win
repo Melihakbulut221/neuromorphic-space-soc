@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # cocotb + Icarus suite for soc_wdog.v W7 and W8, docs/43.
 #
 #   cd hw/soc/tb/cocotb && make -f Makefile.soc_wdog        run the suite

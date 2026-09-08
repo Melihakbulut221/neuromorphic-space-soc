@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Blackbox declaration for RM_IHPSG13_1P_1024x32_c2_bm_bist.
 //
 // Port list transcribed verbatim from the PDK's own behavioural model,

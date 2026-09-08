@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Gate-level fault-injection testbench for the management core, docs/74.
 //
 // WHAT THIS IS

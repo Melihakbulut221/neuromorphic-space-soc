@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate a corner-experiment variant of config.json.
 
 Written for the docs/20 PNR_CORNERS experiments. A variant must be

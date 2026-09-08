@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Multi-corner OpenSTA on the WHOLE-DESIGN soc_top netlist.
 #
 #   sta_soc_top.sh <period_ns> [out_dir]

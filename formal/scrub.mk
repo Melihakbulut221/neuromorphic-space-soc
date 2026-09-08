@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal targets for the weight-SRAM ECC scrub controller: window
 # containment, writeback discipline, walk integrity, port handshake,
 # deadlock freedom and any-state SEU recovery.

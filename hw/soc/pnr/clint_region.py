@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """The CLINT placement region of docs/73: derive the cell set, write the
 constraint into a saved OpenDB database, and read the result back.
 

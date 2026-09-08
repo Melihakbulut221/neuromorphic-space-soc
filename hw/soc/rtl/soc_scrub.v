@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // SCRUB: the memory codec's counters, the scrubber's control, and the
 // address of the last word that could not be repaired.
 //

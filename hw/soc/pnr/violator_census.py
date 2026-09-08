@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Census a sign-off run's setup violators by launch point and by capture.
 
 docs/49 section 3.1 and docs/50 section 6.3 each answer the same question

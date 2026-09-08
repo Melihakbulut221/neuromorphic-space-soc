@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Repository-root pytest configuration.
 
 Several directories in this repository hold files named ``test_*.py``, and

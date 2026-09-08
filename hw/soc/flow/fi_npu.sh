@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Build everything the NPU-connection fault-injection campaign of docs/52
 # needs, and elaborate it ONCE.
 #

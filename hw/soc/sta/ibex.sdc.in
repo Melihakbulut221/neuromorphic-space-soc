@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # Timing constraints for the synthesised Ibex netlist on ihp-sg13g2.
 #
 # This is LibreLane's scripts/base.sdc, specialised by hand to this

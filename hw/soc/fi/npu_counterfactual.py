@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate the counterfactual copy of soc_npu.v: the connection with its
 one recovery mechanism removed.
 

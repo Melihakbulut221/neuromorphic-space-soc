@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """The memory fault-injection campaign of docs/67: draw by REGION of the
 program's own link map, run, classify -- on the hardened SoC and on the
 same SoC with the memory codec off.

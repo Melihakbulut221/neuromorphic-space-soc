@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for npu_regbank (SymbiYosys harness,
 // formal/npu_regbank.sby). Target #6 of docs/09-formal-verification-plan.md
 // section B.1: "register file / CSR write-enable logic -- write-enable

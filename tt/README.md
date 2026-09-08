@@ -60,8 +60,17 @@ it.
 
 ## Licence
 
-**Not yet decided.** See `LICENSE.PENDING.md`. This tree must not be
-published until that file is replaced with a real licence.
+Two licences, because this tree has two origins.
+
+* **The design sources in `src/`** are `CERN-OHL-W-2.0`, the full text
+  of which is in `LICENSE`. They are copied byte for byte out of
+  `hw/rtl/` in the source repository and carry their SPDX tag from
+  there.
+* **The scaffolding listed above** stays `Apache-2.0` as received from
+  the upstream template; its text is in `LICENSES/Apache-2.0.txt`.
+
+The decision behind the split is `docs/14-licensing-decision.md` in the
+source repository, signed 2026-09-09.
 
 ## Running the tests
 

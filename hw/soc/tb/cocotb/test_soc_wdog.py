@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_wdog suite: the five requirements W1-W5, one test group each.
 
 WHERE THE EXPECTATIONS COME FROM. From the specification in the header of

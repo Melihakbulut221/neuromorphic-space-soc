@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_qspi suite: a register-mode QSPI flash controller, driven against
 the specification, with a modelled flash on the wire.
 

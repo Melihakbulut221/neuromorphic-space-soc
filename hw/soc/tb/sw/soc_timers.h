@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* Register offsets for the blocks docs/40-interrupts-timers-watchdog.md
  * adds, and the machine-mode CSR bit positions the tests use.
  *

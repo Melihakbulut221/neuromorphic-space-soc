@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Toolchain resolution, shared by every makefile in this repository.
 #
 # Why this file exists. The formal gate used to resolve `sby` through a

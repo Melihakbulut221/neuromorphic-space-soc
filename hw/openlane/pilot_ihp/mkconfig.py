@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Derive the ihp-sg13g2 corner-experiment configs from the submission config.
 
 The IHP re-harden of docs/20 section 2 runs the *submission's own*

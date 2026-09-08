@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Multi-corner OpenSTA on a synthesised Ibex netlist.
 #
 #   sta_ibex.sh <config> <period_ns> [out_root]

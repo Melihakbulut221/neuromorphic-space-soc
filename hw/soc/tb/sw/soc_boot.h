@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* The boot flow's register block and its image format, docs/68.
  *
  * The same split soc_timers.h, soc_gpio.h, soc_qspi.h and soc_scrub.h

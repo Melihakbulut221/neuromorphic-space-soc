@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The byte shortening, proved.
 //
 // hw/soc/rtl/soc_mem_ecc.v stores each byte of a RAM word as its own

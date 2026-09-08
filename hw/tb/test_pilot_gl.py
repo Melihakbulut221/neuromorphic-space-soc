@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Gate-level rerun of the pilot bring-up suite, on the hardened netlist.
 
 This module contains no tests of its own. It re-exports the tests in

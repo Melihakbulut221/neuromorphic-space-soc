@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Weight-SRAM ECC scrub controller suite (hw/rtl/scrub.v).
 
 Two different things are checked here.

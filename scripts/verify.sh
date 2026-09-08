@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Run every suite and RECORD the result, rather than reporting it.
 #
 #   scripts/verify.sh            run all three and write the record

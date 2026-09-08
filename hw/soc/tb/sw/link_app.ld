@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut */
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* Bare-metal link map for the APPLICATION (hw/soc/tb/sw/test_ibex.c)
  * once it is a flash image loaded into RAM rather than a ROM resident,
  * docs/68.

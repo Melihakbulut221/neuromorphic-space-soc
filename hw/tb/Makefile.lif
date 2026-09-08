@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # cocotb + Icarus suite for hw/rtl/lif_core.v (docs/10 sections 1-4):
 # the LIF datapath run in lockstep against sw/golden/lif_core.py.
 #

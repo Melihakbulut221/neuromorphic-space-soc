@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Convert OpenTitan's spi_host -- the docs/03 QSPI candidate -- from
 # SystemVerilog to Verilog-2005 with the pinned sv2v, then prove the
 # output elaborates in Icarus and synthesises in Yosys. docs/65.

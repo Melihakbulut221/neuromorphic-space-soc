@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Multi-pass network runner over the bit-exact LIF core golden model.
 
 Models the multi-pass execution concept of docs/10-npu-mvp-spec.md

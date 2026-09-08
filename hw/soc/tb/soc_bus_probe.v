@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // FABRIC OCCUPANCY PROBE. NOT PART OF THE DESIGN.
 //
 // A second elaboration root that only observes. It is compiled into the

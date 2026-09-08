@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """TTIHP26b pilot bring-up suite: the Tiny Tapeout wrapper end to end.
 
 The device under test is hw/rtl/tt_um_melihakbulut_nssoc.v, the Tiny

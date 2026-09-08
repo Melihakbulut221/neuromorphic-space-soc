@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # The Ibex source list, in one place, with the register file selected.
 #
 # SOURCE THIS, do not run it:

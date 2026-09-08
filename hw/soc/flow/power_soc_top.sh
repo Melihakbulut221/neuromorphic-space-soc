@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Activity-annotated power for soc_top, from a whole-SoC simulation.
 #
 #   power_soc_top.sh extract <vcd> <tb> <out_dir> [window ...]

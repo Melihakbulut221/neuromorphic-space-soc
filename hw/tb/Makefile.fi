@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Fault-injection campaign harness (docs/16-fault-injection-campaign.md).
 #
 #   cd hw/tb && make -f Makefile.fi

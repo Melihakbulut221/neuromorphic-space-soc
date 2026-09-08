@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """SoC memory map consistency tests (single-source discipline).
 
 The YAML source (regmap/memmap.yaml) must stay in sync with the six files

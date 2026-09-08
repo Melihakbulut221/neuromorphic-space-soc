@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Convert the pinned Ibex checkout from SystemVerilog to Verilog-2005.
 #
 # This is a re-implementation of hw/soc/ext/ibex/syn/syn_yosys.sh's sv2v

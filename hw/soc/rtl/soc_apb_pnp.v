@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Peripheral bus device table.
 //
 // The APB-side counterpart of soc_pnp.v: two words per peripheral slot

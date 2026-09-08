@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """cocotb suite for hw/soc/rtl/soc_npu.v -- the CPU-side NPU interface
 with the frozen pilot behind it.
 

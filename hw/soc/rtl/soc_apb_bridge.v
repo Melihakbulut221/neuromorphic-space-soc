@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // System bus to AMBA APB bridge.
 //
 // This is the one place in the SoC where a standard bus protocol is

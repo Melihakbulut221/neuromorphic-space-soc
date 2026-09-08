@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """The substituted register file: does it behave, and does it correct?
 
 WHERE THESE EXPECTATIONS COME FROM

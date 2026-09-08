@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Build a browsable static site from the repository's markdown corpus.
 
 Inputs are read from disk at build time: every `docs/*.md`, plus `README.md`

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // lif_core: time-multiplexed LIF neuron datapath (docs/10-npu-mvp-spec.md
 // sections 1-4), pilot configuration with flip-flop synapse storage.
 //

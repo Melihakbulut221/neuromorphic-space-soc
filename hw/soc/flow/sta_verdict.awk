@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # The verdict rule, in one file, for every STA flow under hw/soc/.
 #
 #   awk -v cfg=<name> -v per=<period> -v corners="<list>" \

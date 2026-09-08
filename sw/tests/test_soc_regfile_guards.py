@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Does the register-file protection survive synthesis, and is the
 substitution still a drop-in?
 
@@ -410,7 +413,19 @@ def test_the_substitute_accepts_every_parameter_ibex_top_overrides():
 
 # docs/34-pilot-freeze.md section 2, the rows for the two codec files.
 # The document prints the first twelve hex digits.
+#
+# AMENDED 2026-09-09 for the licence headers. The blobs moved because
+# every file in hw/rtl/ gained two SPDX comment lines; docs/34 section
+# 9.3 is the rule that makes a comment-only edit legal against a freeze,
+# and section 2.2's strip-and-compare is the proof it was one. The
+# superseded values are kept here for the same reason docs/34 keeps its
+# own: what these guards defend is that the SoC has not forked the
+# primitive, and that claim spans both pins.
 SECDED_PINNED_BLOBS = {
+    "secded_enc.v": "36c294ea08d1",
+    "secded_dec.v": "df9de408d4dd",
+}
+SECDED_SUPERSEDED_BLOBS = {          # before 2026-09-09, headers only
     "secded_enc.v": "b5710b8a679c",
     "secded_dec.v": "f7c7ec187a0d",
 }

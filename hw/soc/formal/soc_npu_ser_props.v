@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for hw/soc/rtl/soc_npu_ser.v.
 //
 // WHAT THESE ARE WRITTEN AGAINST. They are the serial host protocol of

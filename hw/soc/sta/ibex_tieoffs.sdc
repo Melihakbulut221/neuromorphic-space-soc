@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # The constants soc_top.v drives into ibex_top, as a case analysis.
 #
 # WHY THIS FILE EXISTS

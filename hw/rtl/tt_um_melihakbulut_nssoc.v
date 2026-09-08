@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Tiny Tapeout wrapper for the TTIHP26b pilot (hw/rtl/pilot_top.v).
 //
 // The wrapper does three things and nothing else: it maps the pilot's

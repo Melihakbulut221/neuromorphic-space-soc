@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Drive riscv-formal against this project's Ibex. docs/63.
 #
 #   flow/rvformal.sh setup                 build the work tree and

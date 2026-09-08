@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Package marker for the golden-model pytest suite.
 
 This file is not here for imports - every module in this directory is

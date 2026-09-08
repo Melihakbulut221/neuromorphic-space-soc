@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # cocotb targets for the TMR voter.
 #
 #   make -f Makefile.tmr                    all three widths (1, 8, 32)

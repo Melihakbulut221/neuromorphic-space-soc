@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for the (72, 64) SECDED golden model (sw/golden/secded.py).
 
 Coverage, matching the acceptance criteria of docs/09 target #2:

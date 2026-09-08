@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* Register offsets and fields for the GPIO port docs/65 adds,
  * hw/soc/rtl/soc_gpio.v.
  *

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Synthesise one module from hw/soc/rtl/probe/ onto ihp-sg13g2 and report
 # its cell count, flip-flop count and cell area.
 #

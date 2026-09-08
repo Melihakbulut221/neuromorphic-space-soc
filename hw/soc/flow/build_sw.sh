@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Build the Ibex bring-up self-test into a $readmemh image.
 #
 #   build_sw.sh <out_dir> [extra CPPFLAGS...]

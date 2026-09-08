@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # SymbiYosys jobs for the SoC fabric blocks.
 #
 #   cd hw/soc/formal && make            every task of every job

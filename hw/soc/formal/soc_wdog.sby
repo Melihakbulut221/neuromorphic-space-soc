@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for the watchdog.
 #
 #   sby -f soc_wdog.sby prove    k-induction proof of W1-W5

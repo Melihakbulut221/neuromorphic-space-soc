@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for the system bus to APB bridge.
 #
 #   sby -f soc_apb_bridge.sby prove    k-induction proof of A1-A11

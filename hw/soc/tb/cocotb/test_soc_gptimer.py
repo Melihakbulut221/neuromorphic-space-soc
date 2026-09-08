@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_gptimer suite: GRLIB's GPTIMER register map, on AMBA 3 APB.
 
 WHERE THE EXPECTATIONS COME FROM. Three places, none of which is the RTL:

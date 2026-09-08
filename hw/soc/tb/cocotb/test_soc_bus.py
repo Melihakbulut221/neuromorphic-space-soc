@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_bus system fabric suite.
 
 Every expected value in this file comes from one of exactly two sources:

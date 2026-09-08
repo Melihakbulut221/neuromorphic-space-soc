@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* NPUCFG register map, for the bare-metal program.
  *
  * This is the FABRIC-LEVEL block's own map -- the event port and the

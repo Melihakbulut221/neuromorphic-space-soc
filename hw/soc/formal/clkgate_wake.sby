@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for docs/77's clock-gate enable transformation.
 #
 #   sby -f clkgate_wake.sby prove    k-induction proof of T1 and T2

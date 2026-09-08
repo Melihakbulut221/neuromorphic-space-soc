@@ -1,0 +1,76 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
+name: licence
+
+# Fails the build on a source file that carries no SPDX tag, or one
+# tagged against the policy of docs/14-licensing-decision.md section
+# 6.4.
+#
+# This is the step docs/14 section 9 stage 1 lists as "CI: SPDX tag
+# check fails the build on an untagged source file", and its purpose is
+# stated there: it is what makes the section 4 scope claim mechanically
+# true rather than editorially asserted. A licence map that nothing
+# checks drifts the first time a file is added, and a drifted map is
+# worse than none because it is believed.
+#
+# The second job is the other half of that stage-1 line: a clean
+# checkout must be able to run the check with no access to anything the
+# repository does not carry. It installs nothing.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spdx:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Every source file carries the right SPDX tag
+        run: python3 scripts/spdx_check.py
+
+      - name: The licence texts are present and are the canonical ones
+        run: |
+          set -eu
+          for f in CERN-OHL-W-2.0 Apache-2.0 CC-BY-4.0 ISC; do
+            test -s "LICENSES/$f.txt" || { echo "missing LICENSES/$f.txt"; exit 1; }
+          done
+          # The Apache-2.0 text is the one with a known digest; a
+          # paraphrase would pass a "file exists" check and fail this.
+          echo "3b83ef96387f14655fc854ddc3c6bd57  LICENSES/Apache-2.0.txt" \
+            | md5sum -c -
+          grep -q 'CERN Open Hardware Licence Version 2 - Weakly Reciprocal' \
+            LICENSES/CERN-OHL-W-2.0.txt
+
+      - name: The map, the memo and the tree agree
+        run: |
+          set -eu
+          grep -q 'SIGNED 2026-09-09' docs/14-licensing-decision.md
+          test -f LICENSES.md
+          test -f .reuse/dep5
+          test ! -e tt/LICENSE.PENDING.md
+          test -f tt/LICENSE
+          cmp LICENSES/CERN-OHL-W-2.0.txt tt/LICENSE
+          cmp LICENSES/Apache-2.0.txt tt/LICENSES/Apache-2.0.txt
+
+      - name: The generators still emit the tag they are supposed to
+        run: |
+          set -eu
+          python3 regmap/generate.py
+          python3 regmap/generate_memmap.py
+          python3 scripts/gen_tt_submission.py
+          python3 scripts/spdx_check.py
+          git diff --exit-code -- hw/rtl hw/soc/rtl hw/soc/tb/sw sw/golden tt \
+            || { echo "a generator's output drifted from what is committed"; exit 1; }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // GENERATED FILE - edit regmap/memmap.yaml and run regmap/generate_memmap.py
 //
 // Address constants for the system fabric. BASE/MASK are a

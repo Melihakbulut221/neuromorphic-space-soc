@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut */
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* Bare-metal link map for the real SoC (hw/soc/rtl/soc_top.v).
  *
  * The sibling link.ld targets the minimal testbench memory of docs/38:

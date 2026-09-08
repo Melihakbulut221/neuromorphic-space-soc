@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Place and route soc_top -- the WHOLE SoC -- through LibreLane on IHP
 # SG13G2, with the RM_IHPSG13 SRAM macros of soc_mem_sram.v.
 #

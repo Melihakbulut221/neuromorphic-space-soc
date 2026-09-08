@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* Static configuration shared by hw/soc/tb/sw/fi_supervisor.c and
  * hw/soc/tb/sw/sup_crt0.S.
  *

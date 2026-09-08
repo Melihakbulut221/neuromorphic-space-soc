@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Spec-model-test sync enforcement (docs/10 section 13).
 
 Every numbered equation tag (En) appearing in docs/10-npu-mvp-spec.md

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // SoC top level: Ibex, the system fabric, the memories, the peripheral
 // bridge and the two device tables.
 //

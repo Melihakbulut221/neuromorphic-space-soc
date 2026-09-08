@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // sg13g2 binding for the clock gate Ibex leaves to the integrator.
 //
 // ibex_top.sv instantiates `prim_clock_gating` (one instance when the

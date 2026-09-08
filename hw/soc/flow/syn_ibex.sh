@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Synthesise one named Ibex configuration onto ihp-sg13g2 with Yosys.
 #
 #   syn_ibex.sh <config> <clock_period_ns> [out_root]

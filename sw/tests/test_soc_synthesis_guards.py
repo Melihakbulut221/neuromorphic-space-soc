@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Does the watchdog's W6 protection survive synthesis?
 
 WHY THIS FILE EXISTS AND WHY IT IS SEPARATE
@@ -91,7 +94,9 @@ SOURCES = [
 
 # docs/34-pilot-freeze.md section 2, the row for hw/rtl/tmr_voter.v. The
 # document prints the first twelve hex digits.
-TMR_VOTER_PINNED_BLOB = "62b5f4d2a1ea"
+TMR_VOTER_PINNED_BLOB = "e52580002bf6"
+# Superseded 2026-09-09 by the licence headers, docs/34 section 9.3:
+TMR_VOTER_SUPERSEDED_BLOB = "62b5f4d2a1ea"
 
 
 # =====================================================================

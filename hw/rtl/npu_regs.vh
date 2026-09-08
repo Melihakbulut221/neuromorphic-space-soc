@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // GENERATED FILE - edit regmap/regmap.yaml and run regmap/generate.py
 `ifndef NPU_REGS_VH
 `define NPU_REGS_VH

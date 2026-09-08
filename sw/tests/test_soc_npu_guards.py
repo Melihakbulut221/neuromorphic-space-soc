@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Textual guards for the NPU connection.
 
 These are the half of the checking that a simulation cannot do, and they

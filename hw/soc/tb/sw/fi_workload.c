@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 // The workload the core fault-injection campaign of docs/42 runs.
 //
 // WHY THIS IS NOT test_ibex.c

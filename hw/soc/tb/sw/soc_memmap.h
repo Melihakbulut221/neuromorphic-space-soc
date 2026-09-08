@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut */
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* GENERATED FILE - edit regmap/memmap.yaml and run regmap/generate_memmap.py */
 #ifndef SOC_MEMMAP_H
 #define SOC_MEMMAP_H

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Gate-level fault injection on the hardened submission netlist.
 
 Every fault-injection number this project has ever quoted -- the SDC

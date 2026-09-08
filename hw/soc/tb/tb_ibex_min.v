@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Icarus testbench for the sv2v-converted Ibex.
 //
 // Clock, reset, program load, timeout, and a pass/fail decision that

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // SECDED (72, 64) decoder for the synaptic weight SRAM
 // (docs/10-npu-mvp-spec.md sections 5 and 11.2). One 72-bit physical word
 // in; corrected 64-bit weight word plus the two fault flags out.

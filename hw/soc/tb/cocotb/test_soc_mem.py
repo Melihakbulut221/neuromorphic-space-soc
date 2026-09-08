@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_mem suite: the memory as a FABRIC SLAVE, at both response latencies.
 
 Every expectation here comes from one of two specifications and not from

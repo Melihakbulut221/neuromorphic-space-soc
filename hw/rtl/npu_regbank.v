@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // NPU register bank: the configuration, status and observability register
 // file of one NPU node. It implements regmap/regmap.yaml exactly, through
 // the generated header hw/rtl/npu_regs.vh -- every address, reset value and

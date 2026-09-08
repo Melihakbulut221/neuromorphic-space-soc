@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Flow-evidence drift guard: docs/12 section 4 against the retained run tree.
 
 ROADMAP gate G0 ("sg13g2 trial harden DRC/LVS clean") is claimed by

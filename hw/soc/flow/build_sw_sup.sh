@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Build the static partitioned supervisor workload into a boot ROM image.
 #
 #   build_sw_sup.sh <out_dir> [extra CPPFLAGS...]

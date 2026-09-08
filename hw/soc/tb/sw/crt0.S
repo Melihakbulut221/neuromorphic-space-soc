@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 // Startup and trap handler for the Ibex bring-up test.
 //
 // Deliberately tiny: this exists to get from Ibex's reset vector into C

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Time the register file's READ PATH, on its own, at every corner.
 #
 #   sta_regfile.sh [dir_written_by_syn_regfile.sh]

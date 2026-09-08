@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # ECP5 / ULX3S fit-and-timing check for tt_um_melihakbulut_nssoc.
 #
 # This is a portability and timing probe, not a product flow. It answers

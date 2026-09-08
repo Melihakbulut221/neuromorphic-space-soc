@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for the watchdog's protected word: three soc_tmr_bank
 # replicas under one tmr_voter, as hw/soc/rtl/soc_wdog.v composes them
 # in its g_prot_tmr generate block.

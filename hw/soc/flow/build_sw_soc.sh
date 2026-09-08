@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Build the self-test for the real SoC into a boot ROM image.
 #
 #   build_sw_soc.sh <out_dir> [extra CPPFLAGS...]

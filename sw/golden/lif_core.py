@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Bit-exact golden model of the time-multiplexed LIF neuron core.
 
 This file is the executable form of the numbered equations in

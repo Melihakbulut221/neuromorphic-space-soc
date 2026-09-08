@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The memory codec and scrubber over a four-row array, stated as
 // properties. soc_mem_ecc.sby's header says what is and is not proved.
 //

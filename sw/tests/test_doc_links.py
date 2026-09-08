@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Link integrity across the markdown corpus.
 
 Two properties, both of which the documentation site depends on and

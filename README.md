@@ -249,6 +249,33 @@ hardening it before measuring it is the mistake `docs/38` section 10
 item 4 names. `docs/52` is that campaign and `docs/55` and `docs/56` are
 what it produced.
 
+## Licence
+
+Three licences, one per kind of thing, decided in
+`docs/14-licensing-decision.md` and signed 2026-09-09.
+
+| Class | Licence |
+|---|---|
+| RTL, testbenches, constraints, formal jobs, flow configuration | `CERN-OHL-W-2.0` |
+| Generators, golden models, harnesses, flow drivers, analysis, CI | `Apache-2.0` |
+| Documents in `docs/` and measurement data | `CC-BY-4.0` |
+
+`LICENSES.md` is the map: every tracked path, in or out, with what is
+held back and why. Every source file carries an SPDX tag; the 161 files
+that cannot hold a comment are covered by path in `.reuse/dep5`.
+
+The map is checked rather than asserted:
+
+```bash
+python3 scripts/spdx_check.py
+```
+
+It fails on an untagged or mis-tagged source file and runs in CI. Two
+files are under a licence this project did not choose —
+`hw/soc/rvformal/insns/insn_div.v` and `insn_rem.v` are corrected copies
+of riscv-formal's models and carry upstream's ISC notice inline.
+
+
 ## Documents
 
 - `docs/00-reference-brief.md` — GR801 public-brief summary and initial scaling observations

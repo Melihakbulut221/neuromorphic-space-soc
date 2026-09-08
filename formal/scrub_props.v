@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the weight-SRAM ECC scrub controller
 // (hw/rtl/scrub.v). SymbiYosys harness: formal/scrub.sby, driver
 // formal/scrub.mk. Reference model and lockstep suite:

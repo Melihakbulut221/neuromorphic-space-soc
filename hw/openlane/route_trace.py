@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Extract the routing behaviour of a LibreLane run, the same way for every run.
 
 `signoff_report.py` reads final/metrics.json and therefore only sees

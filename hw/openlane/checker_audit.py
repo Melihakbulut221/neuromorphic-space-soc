@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Audit every LibreLane checker in a run: does it gate, and on what?
 
 WHY THIS EXISTS

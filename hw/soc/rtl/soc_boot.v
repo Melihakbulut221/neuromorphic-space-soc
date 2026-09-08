@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // BOOTREG: the bootstrap pins as they were sampled, the boot counter no
 // software can write, and two words that survive the reset they
 // describe.

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """SRAM macro energy from the Liberty tables and the measured access pattern.
 
     macro_energy.py act.json --window idle --corner typ_1p20V_25C

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Console UART, transmit only, on the peripheral bus.
 //
 // Register map mirrored from GRLIB's APBUART (grip.pdf table 126, quoted

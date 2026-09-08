@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // BUSSTAT: the counters that make a corrected upset an observable event.
 //
 // =====================================================================

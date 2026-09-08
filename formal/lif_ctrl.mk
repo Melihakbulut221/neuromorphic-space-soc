@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal targets for the lif_core control path: command arbitration, the
 # input and output handshakes, scan integrity and the spec section 11.4
 # SAFE state.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Gate-level cocotb run against the hardened submission netlist.
 #
 #   cd hw/tb && make -f Makefile.gl              # run the suite

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The registered-wake clock-gate enable, as a THEOREM about the
 // transformation rather than about one block.  docs/77 section 6.
 //

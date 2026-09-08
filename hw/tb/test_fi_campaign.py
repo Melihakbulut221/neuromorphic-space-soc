@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Single-bit fault-injection campaign over hw/rtl/pilot_top.v.
 
 This is the instrument the pilot's fault-tolerance claims rest on. The

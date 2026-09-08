@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for aer_fifo (SymbiYosys harness, formal/aer_fifo.sby).
 //
 // This file is textually included inside the aer_fifo module body under

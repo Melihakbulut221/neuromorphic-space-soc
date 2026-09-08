@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Pin a harden to an exact set of RTL blobs instead of to the live tree.
 
 Why this exists. On 2026-08-26 at 07:15:28 a concurrent session wrote a

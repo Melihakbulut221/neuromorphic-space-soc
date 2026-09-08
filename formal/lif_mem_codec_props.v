@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the SECDED (26, 20) neuron-state codec
 // (hw/rtl/lif_core.v, modules lif_state_enc and lif_state_dec).
 // SymbiYosys harness: formal/lif_mem.sby, driver formal/lif_mem.mk.

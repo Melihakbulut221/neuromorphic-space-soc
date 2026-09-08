@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """AER event FIFO suite: fill/drain ordering, registered-output timing,
 simultaneous read/write streaming, overflow-drop counting (EVQ_IN
 software-port semantics, docs/10 section 7.2), drop-counter clear and

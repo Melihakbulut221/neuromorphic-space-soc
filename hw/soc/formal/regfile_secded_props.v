@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // The shortened code, proved.
 //
 // WHAT THIS JOB IS FOR, AND WHAT IT DELIBERATELY IS NOT

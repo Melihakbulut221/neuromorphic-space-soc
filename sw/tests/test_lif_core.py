@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for the bit-exact LIF core golden model (lif_core.py).
 
 Each test_e<n>_* function exercises the correspondingly numbered equation

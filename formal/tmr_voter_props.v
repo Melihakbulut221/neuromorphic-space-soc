@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the TMR voter (SymbiYosys harness,
 // formal/tmr_voter.sby). Acceptance criteria from
 // docs/09-formal-verification-plan.md target #4, "TMR voters + resync

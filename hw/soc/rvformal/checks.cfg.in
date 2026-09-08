@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # riscv-formal check configuration for this project's Ibex.
 #
 # hw/soc/flow/rvformal.sh expands @MODE@ and @IBEX_FILES@ and writes

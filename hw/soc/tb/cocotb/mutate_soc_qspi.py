@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Mutation evidence for the soc_qspi suite.
 
 Each mutation below is one deliberate defect written into a SCRATCH COPY

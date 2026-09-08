@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 /* SCRUB, hw/soc/rtl/soc_scrub.v (docs/67): the memory codec's counters,
  * the scrubbers' control and the address of the last uncorrectable
  * word. Register offsets are the block's own and are defined here; the

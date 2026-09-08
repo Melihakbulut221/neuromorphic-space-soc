@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut */
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* Bare-metal link map for the BOOT LOADER (hw/soc/tb/sw/boot.c), the
  * program that lives in the boot ROM from docs/68 onward.
  *

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 name: docs
 
 # Builds the document site from docs/*.md, README.md and ROADMAP.md on
@@ -10,19 +13,23 @@ name: docs
 #    actions/deploy-pages step; this one stops at upload-artifact. Two
 #    reasons, both current as of 2026-08-26:
 #
-#      * This repository is private. Deploying to Pages publishes it.
-#      * docs/14-licensing-decision.md is a decision memo whose decision
-#        section is UNSIGNED. Until the owner signs it, the repository
-#        has no licence, and publishing unlicensed work -- especially
-#        work whose funding application (docs/13-nlnet-application.md)
-#        turns on the licence answer -- is a decision the owner has not
-#        made. Publication is therefore not a CI default; it is an
-#        explicit act, and it belongs to the owner, not to this file.
+#      * This repository is private, and stays private.
+#      * ~~docs/14-licensing-decision.md is UNSIGNED.~~ **Signed
+#        2026-09-09.** That half of the reason is gone: the corpus now
+#        has a licence (CC-BY-4.0) and could be published.
 #
-#    Turning it on later is a small edit: restore borg's `deploy` job,
-#    add `pages: write` and `id-token: write` to `permissions`, and add
-#    the `concurrency: group: pages` block. Do that only after docs/14
-#    section 11 is signed.
+#    UPDATED 2026-09-09. The second reason is replaced rather than
+#    removed, and the deploy stays off. docs/14 section 11 chose a
+#    CURATED PUBLIC MIRROR over making this repository public, so the
+#    published site belongs to the mirror's workflow, not to this one.
+#    Deploying from here would publish this repository's tree, which is
+#    the thing that decision declined -- and it would publish docs/05
+#    section 3, docs/06 and docs/13, which LICENSES.md section 2.1
+#    holds back.
+#
+#    So this file still stops at upload-artifact, and the reason is now
+#    scope rather than licence. The mirror is where a Pages deploy
+#    belongs, over the published subset only.
 #
 # 2. No build_book.py snippet resolution and no Mermaid loader. Our
 #    corpus has no snippet directives, no diagrams and, before

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # The memory read-return and write-in paths, timed on their own, at the
 # slow corner, on a whole-design netlist flow/sta_soc_top.sh has already
 # timed.

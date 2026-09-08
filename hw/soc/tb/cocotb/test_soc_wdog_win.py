@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """W7 and W8: the cadence contract and the kick budget.
 
 WHERE THESE EXPECTATIONS COME FROM

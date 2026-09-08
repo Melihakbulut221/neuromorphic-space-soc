@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """SoC memory map generator.
 
 Reads regmap/memmap.yaml (the single source) and emits:
@@ -41,6 +44,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "regmap" / "memmap.yaml"
 
 HEADER = "GENERATED FILE - edit regmap/memmap.yaml and run regmap/generate_memmap.py"
+# See regmap/generate.py for why these three live in the generator.
+CR = "SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut"
+LIC_HW = "CERN-OHL-W-2.0"
+LIC_SW = "Apache-2.0"
 
 # GRLIB plug-and-play record field widths (grlib.pdf section 5.3). The
 # identification word is vendor[31:24] device[23:12] version[9:5]
@@ -588,7 +595,8 @@ def human_size(n):
 def gen_python(spec):
     meta = spec["meta"]
     apb = by_name(spec["regions"], "APB")
-    lines = [f'"""{HEADER}"""', ""]
+    lines = [f"# {CR}", f"# SPDX-License-Identifier: {LIC_SW}", "",
+             f'"""{HEADER}"""', ""]
     lines.append(f'VERSION = "{meta["version"]}"')
     lines.append(f"VENDOR_ID = 0x{meta['vendor_id']:02X}")
     lines.append(f"BOOT_ADDR = 0x{by_name(spec['regions'], meta['boot_region'])['base']:08X}")
@@ -653,6 +661,9 @@ def gen_verilog(spec):
     meta = spec["meta"]
     apb = by_name(spec["regions"], "APB")
     lines = [
+        f"// {CR}",
+        f"// SPDX-License-Identifier: {LIC_HW}",
+        "",
         f"// {HEADER}",
         "//",
         "// Address constants for the system fabric. BASE/MASK are a",
@@ -718,6 +729,9 @@ def gen_pnp_rom(spec):
     with no storage.
     """
     lines = [
+        f"// {CR}",
+        f"// SPDX-License-Identifier: {LIC_HW}",
+        "",
         f"// {HEADER}",
         "//",
         "// Body of the device table read multiplexer, textually included",
@@ -744,11 +758,14 @@ def gen_pnp_rom(spec):
     lines += ["  default: pnp_data = 32'h0000_0000;", "endcase", ""]
     # The peripheral-bus table is a separate include, consumed by the
     # bridge's own table slot.
-    lines.insert(0, "")
     body = "\n".join(lines)
 
     apb_lines = [
+        f"// {CR}",
+        f"// SPDX-License-Identifier: {LIC_HW}",
         "",
+        f"// {HEADER}",
+        "//",
         "// Peripheral bus device table, two words per slot. `word_addr` is",
         "// PADDR[11:2] inside the table's own 4 KiB slot. Not guarded,",
         "// for the same reason soc_pnp_rom.vh is not.",
@@ -765,6 +782,9 @@ def gen_c_header(spec):
     meta = spec["meta"]
     apb = by_name(spec["regions"], "APB")
     lines = [
+        f"/* {CR} */",
+        f"/* SPDX-License-Identifier: {LIC_SW} */",
+        "",
         f"/* {HEADER} */",
         "#ifndef SOC_MEMMAP_H",
         "#define SOC_MEMMAP_H",
@@ -826,6 +846,9 @@ def gen_linker(spec):
     ram = by_name(spec["regions"], "RAM")
     off = meta["reset_vector_offset"]
     return "\n".join([
+        f"/* {CR} */",
+        f"/* SPDX-License-Identifier: {LIC_SW} */",
+        "",
         f"/* {HEADER} */",
         "",
         "/* The ROM region starts AT the reset vector, not at the region",

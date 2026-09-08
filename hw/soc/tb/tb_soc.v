@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Icarus testbench for the whole SoC: Ibex, the fabric, the memory map.
 //
 // The difference from tb_ibex_min.v is the point of the exercise. That

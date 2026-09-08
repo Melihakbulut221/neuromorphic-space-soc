@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the system fabric (SymbiYosys harness,
 // hw/soc/formal/soc_bus.sby).
 //

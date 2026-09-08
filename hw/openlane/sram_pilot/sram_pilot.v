@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Decision vehicle for the 2026-09-07 RM_IHPSG13 go/no-go (docs/06 B.6.1).
 //
 // One RM_IHPSG13_1P_512x32_c2_bm_bist macro in a registered wrapper and

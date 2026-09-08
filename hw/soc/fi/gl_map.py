@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Which netlist flip-flop is which RTL bit, derived from a trace of
 both designs on the clean run -- docs/74.
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Toggle-rate extraction from a whole-SoC VCD, for activity-annotated power.
 
     vcd_activity.py <vcd> --clock tb_soc.dut.clk_i --scope tb_soc.dut \

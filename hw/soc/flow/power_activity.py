@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Turn `vcd_activity.py`'s toggle counts into an OpenSTA annotation.
 
     power_activity.py act.json --window busy --scope tb_soc.dut \

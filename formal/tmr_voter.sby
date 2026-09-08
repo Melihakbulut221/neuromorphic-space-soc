@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for the TMR voter.
 #
 #   sby -f tmr_voter.sby bmc        full proof at WIDTH = 8 (boolector)

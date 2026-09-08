@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_scrub suite: the memory codec's counters and the scrubbers' control.
 
 WHERE THE EXPECTATIONS COME FROM. Not from the RTL:

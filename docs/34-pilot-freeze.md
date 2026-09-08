@@ -94,16 +94,16 @@ Every file in `hw/rtl/` at the freeze commit **[fact,
 `git rev-parse HEAD:<path>`]**:
 
 ```
-25c86327f3c5  hw/rtl/aer_fifo.v
-ab6dc8b4569b  hw/rtl/lif_core.v
-e6c1e6466438  hw/rtl/npu_regbank.v
-9aaaa394e7a6  hw/rtl/npu_regs.vh
-1874313e1c1b  hw/rtl/pilot_top.v
-89e62789ad01  hw/rtl/scrub.v
-f7c7ec187a0d  hw/rtl/secded_dec.v
-b5710b8a679c  hw/rtl/secded_enc.v
-62b5f4d2a1ea  hw/rtl/tmr_voter.v
-e294afcf03e1  hw/rtl/tt_um_melihakbulut_nssoc.v
+5a350525cc48  hw/rtl/aer_fifo.v
+fad5e7572ffb  hw/rtl/lif_core.v
+af8f65b69645  hw/rtl/npu_regbank.v
+f7ff6df7af43  hw/rtl/npu_regs.vh
+e2512de1f69a  hw/rtl/pilot_top.v
+60ad5696d0a2  hw/rtl/scrub.v
+df9de408d4dd  hw/rtl/secded_dec.v
+36c294ea08d1  hw/rtl/secded_enc.v
+e52580002bf6  hw/rtl/tmr_voter.v
+c554cb817fbb  hw/rtl/tt_um_melihakbulut_nssoc.v
 ```
 
 To check a working tree against this list:
@@ -111,6 +111,45 @@ To check a working tree against this list:
 ```bash
 for f in hw/rtl/*; do echo "$(git hash-object "$f" | cut -c1-12)  $f"; done
 ```
+
+**AMENDED 2026-09-09. Every one of the ten blobs above moved, and the
+netlist did not.** `docs/14` section 11 was signed and stage 1 of its
+section 9 added two SPDX comment lines to every file in `hw/rtl/`. That
+is the case section 9.3 covers, and section 9.2's amendment rule is why
+this record is amended rather than superseded: **the built artifacts of
+section 3 are unchanged, so their inventory is not split across two
+documents.** The superseded list, which is the list `docs/31` hardened
+from and every run record from `docs/15` to `docs/41` cites:
+
+```
+25c86327f3c5  hw/rtl/aer_fifo.v          89e62789ad01  hw/rtl/scrub.v
+ab6dc8b4569b  hw/rtl/lif_core.v          f7c7ec187a0d  hw/rtl/secded_dec.v
+e6c1e6466438  hw/rtl/npu_regbank.v       b5710b8a679c  hw/rtl/secded_enc.v
+9aaaa394e7a6  hw/rtl/npu_regs.vh         62b5f4d2a1ea  hw/rtl/tmr_voter.v
+1874313e1c1b  hw/rtl/pilot_top.v         e294afcf03e1  hw/rtl/tt_um_melihakbulut_nssoc.v
+```
+
+**The comment-only claim is not taken on this document's word.** Section
+2.2's strip-and-compare was run across all ten files, old revision
+against new, and every one matched **[fact, 2026-09-09]**. Three of the
+ten are a stronger check than the other seven: `aer_fifo.v`,
+`lif_core.v` and `pilot_top.v` reproduce
+`da858e4be4e71784`, `d83b62b7ca295bdb` and `f15b6f56e3da32cd` — the
+exact code digests section 2.2 recorded at the freeze, from the same
+command. **The normalisation is therefore the same normalisation**, which
+is what makes the other seven digests worth reading.
+
+Two consequences follow and both were discharged in the same change.
+`tt/src/` was regenerated so that section 2.3 still holds — checked, no
+`DIFFERS` line — and `tt/MANIFEST.sha256` with it. And the three places
+outside this document that pin one of these blobs were re-pinned:
+`sw/tests/test_soc_regfile_guards.py` for the two codecs and
+`sw/tests/test_soc_synthesis_guards.py` for the voter, each keeping its
+superseded value beside the new one. **The historical run records were
+not edited**: `docs/15`, `docs/18`, `docs/20`, `docs/22` to `docs/28`,
+`docs/31` and `docs/41` cite the superseded hashes because those are the
+bytes those runs read, and `docs/64`'s rule is that a superseded
+measurement is left standing rather than rewritten.
 
 **Seven of the ten are synthesized.** `VERILOG_FILES` lists
 `tt_um_melihakbulut_nssoc.v`, `pilot_top.v`, `lif_core.v`, `aer_fifo.v`,

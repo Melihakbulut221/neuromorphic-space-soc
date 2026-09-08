@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the pilot's configuration TMR domain: three
 // pilot_cfg_bank replicas under one tmr_voter, the composition
 // hw/rtl/pilot_top.v builds at lines 1484-1512. SymbiYosys harness:

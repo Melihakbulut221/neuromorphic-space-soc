@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Properties for clkgate_wake.v -- docs/77 section 6.
 //
 // Textually included at the end of the module body under `ifdef FORMAL,

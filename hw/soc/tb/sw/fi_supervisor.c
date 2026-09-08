@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 // The SECOND workload of the core fault-injection campaign: a static
 // partitioned supervisor, written to be what this project's software is
 // actually going to be.

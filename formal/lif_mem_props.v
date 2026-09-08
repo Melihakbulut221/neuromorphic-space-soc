@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Formal properties for the lif_core memory hardening: the two coded
 // files, in place, inside the datapath that reads them. SymbiYosys
 // harness: formal/lif_mem.sby, driver formal/lif_mem.mk.

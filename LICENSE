@@ -1,0 +1,24 @@
+This repository is published under three licences, because it holds
+three kinds of thing. There is no single licence text here, and a file
+called LICENSE that named only one of them would be wrong about the
+other two.
+
+    Hardware sources           CERN-OHL-W-2.0   LICENSES/CERN-OHL-W-2.0.txt
+    Software and tooling       Apache-2.0       LICENSES/Apache-2.0.txt
+    Documents and data         CC-BY-4.0        LICENSES/CC-BY-4.0.txt
+
+Every source file carries an SPDX-License-Identifier tag saying which of
+these applies to it. Files that cannot carry a comment -- JSON, CSV,
+Markdown -- are covered by path in .reuse/dep5. LICENSES.md is the map
+in prose, and scripts/spdx_check.py is the same map as a program: it
+fails if any source file is untagged or tagged against policy.
+
+Two files are under a licence this project did not choose:
+hw/soc/rvformal/insns/insn_div.v and insn_rem.v are corrected copies of
+riscv-formal's instruction models and carry upstream's ISC notice inline
+(LICENSES/ISC.txt).
+
+The decision behind all of this, including what was considered and
+rejected, is docs/14-licensing-decision.md, signed 2026-09-09.
+
+Copyright 2026 Hasan Melih Akbulut.

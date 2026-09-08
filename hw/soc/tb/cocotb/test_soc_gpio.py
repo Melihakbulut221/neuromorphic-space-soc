@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_gpio suite: a GRGPIO-shaped port, driven against the specification.
 
 WHERE THE EXPECTATIONS COME FROM. Not from the RTL:

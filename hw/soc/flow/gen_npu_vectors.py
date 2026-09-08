@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Emit the NPU end-to-end demonstration's stimulus AND its expected
 answer, computed by the golden model, as a C header for the boot ROM.
 

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # PDN configuration for a design containing RM_IHPSG13 SRAM macros.
 #
 # THIS FILE IS NOT OPTIONAL AND IT IS NOT A TUNING. Without it the six

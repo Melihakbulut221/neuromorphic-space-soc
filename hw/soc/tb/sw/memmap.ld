@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut */
+/* SPDX-License-Identifier: Apache-2.0 */
+
 /* GENERATED FILE - edit regmap/memmap.yaml and run regmap/generate_memmap.py */
 
 /* The ROM region starts AT the reset vector, not at the region

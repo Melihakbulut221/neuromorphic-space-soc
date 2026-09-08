@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_busstat suite: the counters that make a corrected upset visible.
 
 WHERE THE EXPECTATIONS COME FROM. Not from the RTL:

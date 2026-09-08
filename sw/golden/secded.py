@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Bit-exact golden model of the weight-SRAM SECDED code (72, 64).
 
 Normative source: docs/10-npu-mvp-spec.md section 5 ("64 data bits = 16

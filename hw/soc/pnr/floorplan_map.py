@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Extract a floorplan region map of soc_top from the signed-off DEF.
 
 docs/59 is the document this script exists for: an annotated map of the

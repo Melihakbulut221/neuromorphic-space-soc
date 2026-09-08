@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """soc_boot suite: the bootstrap pins, the boot counter and the record.
 
 WHERE THE EXPECTATIONS COME FROM. Not from the RTL:

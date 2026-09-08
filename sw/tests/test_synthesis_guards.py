@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Synthesis guards: structures whose FUNCTION is to exist physically must
 survive synthesis, and only the netlist can say whether they did.
 

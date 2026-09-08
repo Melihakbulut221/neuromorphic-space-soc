@@ -683,20 +683,69 @@ Defaults are marked. Signing the defaults is a complete decision;
 striking one is also a complete decision. Nothing here needs to be
 researched further before it can be signed.
 
-| # | Item | Default | Decision | Date | Signature |
-|---|---|---|---|---|---|
-| 1 | **Option C**: publish a defined scope now, in the two stages of section 9 | accept | accept / reject / amend | | |
-| 2 | RTL and hardware sources: **CERN-OHL-W-2.0** | accept | accept / reject / amend | | |
-| 3 | Software, generators, harnesses, CI: **Apache-2.0** | accept | accept / reject / amend | | |
-| 4 | Documents in `docs/`: **CC-BY-4.0** | accept | accept / reject / amend | | |
-| 5 | Measurement datasets: **CC-BY-4.0** (CC0-1.0 alternative) | accept | accept / reject / amend | | |
-| 6 | `docs/` scope: **answer (b)** — publish the technical documents, hold `docs/05` section 3, `docs/06`, `docs/13` and `docs/14` until they are decisions rather than drafts (section 4) | accept | (a) / **(b)** / (c) | | |
-| 7 | Upstream-contribution boundary: anything written for a named upstream project is **Apache-2.0 from the start** (section 6.5) | accept | accept / reject / amend | | |
-| 8 | **Decline the two LGPL cores** (SpaceWire, CAN) from the funded scope pending advice (section 5.2) | accept | accept / reject / amend | | |
-| 9 | Stage-1 mechanics, including re-pinning `docs/34` for the header change (section 3A item 5) | approved | approved / amend | | |
-| 10 | Export advice on section 7 item 2, before any radiation dataset and **not** before the shuttle | scheduled 2026-09-30 | done / scheduled / waived with reasons | | |
-| 11 | `docs/02` open question 2 — Solderpad reuse versus independent implementation (section 5.1) — **overdue** | 2026-09-30 | answer: reuse / reference only / independent | | |
+**SIGNED 2026-09-09, Hasan Melih Akbulut.** Rows 1 to 9 accepted as
+defaulted; rows 10 and 11 remain scheduled and are recorded below as
+what they are. One amendment is attached to row 6.
 
-Until rows 1 to 5 are completed, `docs/13` D-6 and D-7 remain open, the
-application must not be submitted with a claim about the repository's
-public state, **and the TTIHP26b submission cannot be pushed.**
+| # | Item | Default | Decision | Date |
+|---|---|---|---|---|
+| 1 | **Option C**: publish a defined scope now, in the two stages of section 9 | accept | **accept** | 2026-09-09 |
+| 2 | RTL and hardware sources: **CERN-OHL-W-2.0** | accept | **accept** | 2026-09-09 |
+| 3 | Software, generators, harnesses, CI: **Apache-2.0** | accept | **accept** | 2026-09-09 |
+| 4 | Documents in `docs/`: **CC-BY-4.0** | accept | **accept** | 2026-09-09 |
+| 5 | Measurement datasets: **CC-BY-4.0** (CC0-1.0 alternative) | accept | **accept**, CC-BY-4.0 | 2026-09-09 |
+| 6 | `docs/` scope: **answer (b)** — publish the technical documents, hold `docs/05` section 3, `docs/06`, `docs/13` and `docs/14` until they are decisions rather than drafts (section 4) | accept | **(b), amended** — see 11.1 | 2026-09-09 |
+| 7 | Upstream-contribution boundary: anything written for a named upstream project is **Apache-2.0 from the start** (section 6.5) | accept | **accept** | 2026-09-09 |
+| 8 | **Decline the two LGPL cores** (SpaceWire, CAN) from the funded scope pending advice (section 5.2) | accept | **accept** | 2026-09-09 |
+| 9 | Stage-1 mechanics, including re-pinning `docs/34` for the header change (section 3A item 5) | approved | **approved**, executed same day | 2026-09-09 |
+| 10 | Export advice on section 7 item 2, before any radiation dataset and **not** before the shuttle | scheduled 2026-09-30 | **scheduled**, unchanged | 2026-09-09 |
+| 11 | `docs/02` open question 2 — Solderpad reuse versus independent implementation (section 5.1) — **overdue** | 2026-09-30 | **still open**, see 11.2 | 2026-09-09 |
+
+### 11.1 The amendment to row 6, and why it is an amendment
+
+Answer (b) held `docs/14` back until it was a decision rather than a
+draft. **It now is one, so this document publishes with the rest**, and
+the held set is `docs/05` section 3, `docs/06` and `docs/13` — the
+commercial and funding material, which was never a licence question.
+This is an amendment rather than a fresh answer because (b)'s stated
+condition is the thing that changed, not the rule.
+
+### 11.2 Row 11 is still open, and the paper is where that now bites
+
+`docs/02` open question 2 decides whether the phrase **"clean-room" may
+ever be written** about this accelerator. It was overdue in August and
+it is overdue now. Nothing in stage 1 depends on it. What does depend on
+it is any public description of the design's relationship to its
+reference: **until row 11 is answered, no publication may claim
+independent implementation**, and any paper must describe the
+accelerator as what the record supports rather than as what would be
+convenient. Section 5.1 is the argument; the answer is the developer's.
+
+### 11.3 What the signature released, and what it did not
+
+Released, and executed on the same day:
+
+- `LICENSES/` with the four texts, and inline SPDX tags on **309** source
+  files, `hw/rtl/` included. `scripts/spdx_check.py` is the policy in
+  machine-readable form and fails on an untagged source file, which is
+  what makes the section 4 scope claim checkable rather than asserted.
+- The freeze re-pin of section 3A item 5. All ten `hw/rtl/` blobs moved;
+  the netlist did not. `docs/34` section 2.1 carries the amendment, the
+  comment-only proof, and the superseded list.
+- `tt/` regenerated: `LICENSE` (CERN-OHL-W-2.0) and
+  `LICENSES/Apache-2.0.txt` in place of `LICENSE.PENDING.md`,
+  `MANIFEST.sha256` refreshed, `--check` clean. **The TTIHP26b
+  submission is no longer blocked by this memo.**
+
+NOT released by this signature:
+
+- **The shuttle purchase itself.** EUR 955 for the 6x2 slot and the
+  account are the developer's, and 2026-09-21 20:00 UTC is unchanged.
+- **Rows 10 and 11**, above.
+- **Anything under `docs/05` section 3, `docs/06` or `docs/13`.**
+- **The radiation datasets that do not exist**, which is where row 10
+  would have bitten if they did.
+
+Rows 1 to 5 are complete, so `docs/13` D-6 and D-7 can be closed with
+real URLs once the public tree exists, and the application may describe
+the published state as a fact.

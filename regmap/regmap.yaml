@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Register map single source for the NPU node block.
 # Everything else -- docs/regmap-npu.md, sw/golden/regmap_gen.py,
 # hw/rtl/npu_regs.vh -- is generated from this file by regmap/generate.py.

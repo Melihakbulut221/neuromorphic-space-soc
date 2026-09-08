@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // pilot_top: TTIHP26b pilot integration (ROADMAP phase P1 default content).
 //
 // One self-contained NPU node slice, sized for a Tiny Tapeout block and

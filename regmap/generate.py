@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Register map generator for the NPU configuration/status block.
 
 Reads regmap/regmap.yaml (the single source) and emits:
@@ -22,6 +25,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "regmap" / "regmap.yaml"
 
 HEADER = "GENERATED FILE - edit regmap/regmap.yaml and run regmap/generate.py"
+# The licence header the generated files carry. scripts/spdx_check.py is
+# the policy; docs/14 section 6.4 is the decision behind it. A generated
+# file gets its tag from here, so regenerating never drops it.
+CR = "SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut"
+LIC_HW = "CERN-OHL-W-2.0"
+LIC_SW = "Apache-2.0"
 
 
 def load():
@@ -111,7 +120,8 @@ def gen_markdown(spec, regs):
 
 
 def gen_python(spec, regs):
-    lines = [f'"""{HEADER}"""', "", "ADDR = {"]
+    lines = [f"# {CR}", f"# SPDX-License-Identifier: {LIC_SW}", "",
+             f'"""{HEADER}"""', "", "ADDR = {"]
     for reg in regs:
         lines.append(f'    "{reg["name"]}": 0x{reg["offset"]:03X},')
     lines += ["}", "", "ACCESS = {"]
@@ -153,7 +163,8 @@ def gen_verilog(spec, regs, guard="NPU_REGS_VH"):
     """
     ab = spec["meta"]["addr_bits"]
     db = spec["meta"]["data_bits"]
-    lines = [f"// {HEADER}"]
+    lines = [f"// {CR}", f"// SPDX-License-Identifier: {LIC_HW}",
+             "", f"// {HEADER}"]
     if guard:
         lines += [f"`ifndef {guard}", f"`define {guard}", ""]
     else:

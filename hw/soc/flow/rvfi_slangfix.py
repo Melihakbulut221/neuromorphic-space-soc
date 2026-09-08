@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """One mechanical rewrite of the sv2v output, so yosys-slang can read it.
 
 docs/63 section 3. Same rule as hw/soc/flow/ibex_fault_port.py: a

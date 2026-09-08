@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // SECDED (72, 64) encoder for the synaptic weight SRAM
 // (docs/10-npu-mvp-spec.md section 5: "64 data bits = 16 weights, plus 8
 // SECDED check bits (72-bit macro word, 12.5 percent overhead)"). One

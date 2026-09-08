@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Measure the architectural register file on its own, five ways.
 #
 #   syn_regfile.sh [out_dir]

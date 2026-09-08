@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Formal targets for the pilot's configuration TMR domain: three
 # pilot_cfg_bank replicas under one tmr_voter, the composition
 # hw/rtl/pilot_top.v builds around its u_cfg_vote instance.

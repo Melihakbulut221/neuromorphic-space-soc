@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Synthesise soc_top -- the WHOLE SoC, core included -- onto ihp-sg13g2.
 #
 #   syn_soc_top.sh [clock_period_ns] [out_dir]

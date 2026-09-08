@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 #
 # IHP SG13G2 corner-experiment hardening of the 4x2 pilot, rootless.
 #

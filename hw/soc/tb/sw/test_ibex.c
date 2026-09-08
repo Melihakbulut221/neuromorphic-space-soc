@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: Apache-2.0
+
 // Ibex bring-up self-test.
 //
 // This is the "prove it fetches and executes" program from the CPU

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Elaborate and run the whole SoC in Icarus Verilog.
 #
 #   sim_soc.sh [out_dir]

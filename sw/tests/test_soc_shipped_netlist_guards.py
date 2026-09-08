@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Do the three TMR structures survive into the netlist the foundry gets?
 
 WHY THIS FILE EXISTS AND WHY IT IS NOT PART OF test_soc_synthesis_guards

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # SymbiYosys job for the pilot's configuration TMR domain: three
 # pilot_cfg_bank replicas under one tmr_voter, as hw/rtl/pilot_top.v
 # composes them. Closes the "TMR'd CSRs vote correctly" clause of

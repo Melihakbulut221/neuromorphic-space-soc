@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Elaborate and run the sv2v-converted Ibex in Icarus Verilog.
 #
 #   sim_ibex.sh <config> [out_dir]

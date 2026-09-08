@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Clock gate model for the riscv-formal run. docs/63.
 //
 // THIS IS A SUBSTITUTION AND NOT THE DESIGN. hw/soc/rtl/prim_clock_gating.v

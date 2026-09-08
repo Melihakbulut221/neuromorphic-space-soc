@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Run every cocotb suite in the repository and report one line per suite.
 #
 #   scripts/run_cocotb.sh              every suite

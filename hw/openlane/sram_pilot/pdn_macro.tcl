@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # PDN grid definition for the RM_IHPSG13 macro run.
 #
 # Measured reason this file has to exist (run macro-01, 2026-08-25):

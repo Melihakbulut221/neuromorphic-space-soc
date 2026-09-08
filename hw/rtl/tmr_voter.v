@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Triple modular redundancy voter: bitwise majority over three replicas,
 // with a per-word disagreement flag for the fault counters.
 //

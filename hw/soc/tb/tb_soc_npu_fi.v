@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Fault-injection testbench for the NPU CONNECTION.
 //
 // WHAT THIS IS FOR

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Event ordering and determinism tests (E8, docs/10 section 4.3)."""
 
 import sys

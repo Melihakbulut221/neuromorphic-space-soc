@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Guards on the boot flow: what the RTL, the flows and the loader must
 keep true, checked textually because no simulation reaches them.
 

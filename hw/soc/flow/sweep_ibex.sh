@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 # Find the fastest clock a configuration closes SETUP at, at every
 # sg13g2 corner, with the pilot's 5% derate.
 #

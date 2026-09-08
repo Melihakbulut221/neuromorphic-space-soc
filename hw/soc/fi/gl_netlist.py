@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """The mapped netlist's flip-flops, parsed once, for the gate-level core
 campaign of docs/74.
 

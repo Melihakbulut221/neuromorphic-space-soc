@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+// SPDX-License-Identifier: CERN-OHL-W-2.0
+
 // Weight-SRAM ECC scrub controller (docs/10 section 11.2, register
 // CTRL.SCRUB_EN of docs/regmap-npu.md). Background walker: it steps
 // through the protected word window one word per visit to S_IDLE, reads

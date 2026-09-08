@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
 # report_power on the signed-off netlist, with or without measured
 # switching activity. Driven by hw/soc/flow/power_soc_top.sh.
 #
