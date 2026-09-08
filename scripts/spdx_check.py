@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
 """Check -- and, with --apply, insert -- the SPDX header on every source file.
 
 This script is the licence policy of `docs/14-licensing-decision.md`
@@ -132,12 +135,39 @@ def path_licence(rel):
     return SW
 
 
-TAG_RE = re.compile(r"SPDX-License-Identifier:\s*([A-Za-z0-9.\-+ ]+)")
+TAG_RE = re.compile(r"SPDX-License-Identifier:\s*([A-Za-z0-9.\-+]+)")
+COMMENT_START = ("#", "//", "/*", "*", "--", ";")
+
+# How far into a file a tag may sit and still count. A header is a
+# header: after a shebang, before the code.
+HEADER_LINES = 12
 
 
 def read_tag(text):
-    m = TAG_RE.search(text[:4000])
-    return m.group(1).strip() if m else None
+    """The tag, if this file carries one in its header COMMENT.
+
+    NARROWED 2026-09-09, and the reason is that the first version of this
+    function reported this very file as tagged when it was not. It
+    searched the first 4000 characters for the identifier string with no
+    regard for where or what it was, and this file's own docstring and
+    regular expression both contain that string -- so the checker read
+    its own prose as its own licence. It went unnoticed until an edit
+    pushed the docstring past 4000 characters and the file suddenly
+    turned up MISSING.
+
+    That is the failure shape this corpus names most often: a check that
+    passed, read wider than what it actually looked at. A tag now counts
+    only on a COMMENT LINE inside the first {n} lines, which is where a
+    header is and where prose about headers is not.
+    """.format(n=HEADER_LINES)
+    for line in text.split("\n")[:HEADER_LINES]:
+        s = line.strip()
+        if not s.startswith(COMMENT_START):
+            continue
+        m = TAG_RE.search(s)
+        if m:
+            return m.group(1).strip()
+    return None
 
 
 def header_lines(lic, syn):
@@ -160,9 +190,28 @@ def insert(text, lic, syn):
 
 
 def tracked():
-    out = subprocess.run(["git", "ls-files"], cwd=ROOT, check=True,
-                         capture_output=True, text=True).stdout
-    return [l for l in out.split("\n") if l]
+    """Every file to classify.
+
+    `git ls-files` when this is a checkout, and a filesystem walk when it
+    is not -- a generated mirror is a plain directory until it is
+    committed, and a check that cannot run there is a check that does not
+    run where it is most needed.
+    """
+    out = subprocess.run(["git", "ls-files"], cwd=ROOT,
+                         capture_output=True, text=True)
+    if out.returncode == 0 and out.stdout.strip():
+        return [l for l in out.stdout.split("\n") if l]
+    skip = {".git", "__pycache__", ".venv", "ext", "tools", "gen", "genrvfi",
+            "runs", "out", "_site", "node_modules"}
+    found = []
+    for p in ROOT.rglob("*"):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(ROOT)
+        if any(part in skip for part in rel.parts):
+            continue
+        found.append(str(rel))
+    return sorted(found)
 
 
 def main():
