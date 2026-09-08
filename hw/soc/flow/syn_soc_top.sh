@@ -197,6 +197,16 @@ if [ "$SOC_BOOT_HARDEN" != 1 ]; then
   TOP_CHPARAM="$TOP_CHPARAM
 chparam -set HARDEN $SOC_BOOT_HARDEN soc_boot"
 fi
+# docs/76's knob, on soc_top's own parameter, which forwards it to
+# soc_npu. 0 removes the fabric's and the accelerator's clock gates AND
+# the enable logic that drives them, which is the like-for-like baseline
+# the gates' area and power are measured against -- docs/41 section 6.5's
+# rule. Defaults to the design.
+SOC_CLKGATE=${SOC_CLKGATE:-1}
+if [ "$SOC_CLKGATE" != 1 ]; then
+  TOP_CHPARAM="$TOP_CHPARAM
+chparam -set CLKGATE $SOC_CLKGATE soc_top"
+fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -602,6 +612,6 @@ awk -v top=soc_top -v ge=7.2576 '
 ' "$OUT/$AREA_SUMMARY"
 
 echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE"
-echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  abc -D $PERIOD_NS"
+echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  clkgate=$SOC_CLKGATE  abc -D $PERIOD_NS"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"

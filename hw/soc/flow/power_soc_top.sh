@@ -75,7 +75,53 @@ extract)
   # and that third number is paid six times over on every clock edge of
   # an idle part. Marginal duty cycles cannot express that; the joint
   # states can, and hw/soc/flow/macro_energy.py is what reads them.
+  # PWR_MEM selects which memory topology the derivations describe, and
+  # it is not cosmetic: docs/67 put soc_mem_ecc.v under both memories, so
+  # the RAM's four macros are now driven by the CODEC's row port
+  # (row_en / row_we / row_addr) and not by the fabric's req_i and
+  # do_write, and its bank select moved from addr_i[15:14] to
+  # row_addr[12:11] because the RAM is 8,192 protected rows and not
+  # 16,384 plain words.
+  #
+  #   ecc     (default) the design as of docs/67: u_ram is
+  #           g_ram_2048x64_ecc behind soc_mem_ecc, u_rom is
+  #           g_rom_1024x32 at ROM_HARDEN = 0 -- which is the
+  #           configuration hw/soc/pnr/config-ecc.json places, docs/68
+  #           section 8's reason.
+  #   legacy  docs/57's, for hw/soc/pnr/runs/full3: u_ram is
+  #           g_ram_2048x64 driven straight off the fabric. Kept so that
+  #           document's figures stay reproducible from this script.
+  #
+  # The expressions are copied out of hw/soc/rtl/soc_mem_sram.v's own
+  # port maps in both cases, so the derivation is the design's and not
+  # this script's.
+  PWR_MEM=${PWR_MEM:-ecc}
   DER=()
+  if [ "$PWR_MEM" = ecc ]; then
+   RE="V['$D.u_ram.g_ecc.row_en']"
+   RW="V['$D.u_ram.g_ecc.row_we']"
+   RB="((V['$D.u_ram.g_ecc.row_addr']>>11)&3)"
+   for k in 0 1 2 3; do
+    SELK="($RE and $RB==$k)"
+    DER+=(--derive "ram_men$k=1 if $SELK else 0")
+    DER+=(--derive "ram_rd$k=1 if ($SELK and not $RW) else 0")
+    DER+=(--derive "ram_wr$k=1 if ($SELK and $RW) else 0")
+    DER+=(--derive "ram_dr$k=1 if (not $SELK and not $RW) else 0")
+    DER+=(--derive "ram_dw$k=1 if (not $SELK and $RW) else 0")
+   done
+   DER+=(--derive "ram_wen=1 if $RW else 0")
+   DER+=(--derive "ram_ren=0 if $RW else 1")
+   for k in 0 1; do
+    SELK="(V['$D.u_rom.req_i'] and ((V['$D.u_rom.addr_i']>>12)&1)==$k)"
+    DER+=(--derive "rom_men$k=1 if $SELK else 0")
+    DER+=(--derive "rom_rd$k=1 if ($SELK and not V['$D.u_rom.g_plain.do_write']) else 0")
+    DER+=(--derive "rom_wr$k=1 if ($SELK and V['$D.u_rom.g_plain.do_write']) else 0")
+    DER+=(--derive "rom_dr$k=1 if (not $SELK and not V['$D.u_rom.g_plain.do_write']) else 0")
+    DER+=(--derive "rom_dw$k=1 if (not $SELK and V['$D.u_rom.g_plain.do_write']) else 0")
+   done
+   DER+=(--derive "rom_wen=1 if V['$D.u_rom.g_plain.do_write'] else 0")
+   DER+=(--derive "rom_ren=0 if V['$D.u_rom.g_plain.do_write'] else 1")
+  else
   for k in 0 1 2 3; do
     SELK="(V['$D.u_ram.req_i'] and ((V['$D.u_ram.addr_i']>>14)&3)==$k)"
     DER+=(--derive "ram_men$k=1 if $SELK else 0")
@@ -96,6 +142,7 @@ extract)
   done
   DER+=(--derive "rom_wen=1 if V['$D.u_rom.do_write'] else 0")
   DER+=(--derive "rom_ren=0 if V['$D.u_rom.do_write'] else 1")
+  fi
 
   WIN=()
   if [ $# -eq 0 ]; then
@@ -116,10 +163,51 @@ extract)
 annotate)
   OUT=${1:?out dir}; WINDOW=${2:?window}; TB=${3:-tb_soc}
   D=$TB.dut
+  # PWR_MEM again, for the macro INSTANCE names this time: docs/67's RAM
+  # is `u_ram.g_ram_2048x64_ecc.u_bN` and docs/57's was
+  # `u_ram.g_ram_2048x64.u_bN`. A name that does not resolve is a silent
+  # loss of the annotation, so the two are spelled out rather than
+  # guessed at.
+  PWR_MEM=${PWR_MEM:-ecc}
+  RAMBLK=g_ram_2048x64_ecc
+  [ "$PWR_MEM" = ecc ] || RAMBLK=g_ram_2048x64
+  # PWR_GATES: which integrated clock gates the target netlist HAS.
+  #
+  #   ibex   one, `u_ibex.core_clock_gate_i.u_icg`. docs/57's netlist and
+  #          every netlist before docs/76.
+  #   all    (default) three: that one, plus the fabric's and the
+  #          accelerator's, docs/76.
+  #
+  # The GATE pin is the whole mechanism by which a stopped clock reaches
+  # report_power. OpenSTA propagates the annotated activity of the gate's
+  # enable through the cell to GCLK, so the sinks on that net are charged
+  # the clock-pin energy of a clock that is not running. Annotating a
+  # gate the netlist does not contain fails loudly (`get_pins` finds
+  # nothing); NOT annotating one it does contain fails silently, with the
+  # gated net taking the tool's default, so the default here is the
+  # design and the reduced set has to be asked for.
+  PWR_GATES=${PWR_GATES:-all}
+  # docs/57 excluded u_npu from the register population because the
+  # netlist it measured did not contain the accelerator. docs/61's does
+  # and so does every netlist since, so the exclusion is now the
+  # exception rather than the rule -- and it is a SEPARATE knob from
+  # PWR_GATES, because docs/76 annotates one netlist that has three
+  # gates and one that has one and both contain the accelerator. Tying
+  # the two together would have made the gated and ungated power figures
+  # figures of two different register populations, which is not a
+  # comparison of gates.
+  #   PWR_EXCL_NPU=1   docs/57's population, for the full3 netlist.
+  EXCL=()
+  [ "${PWR_EXCL_NPU:-0}" = 0 ] || EXCL=(--exclude "$D.u_npu")
+  PIN=(--pin "u_ibex.core_clock_gate_i.u_icg/GATE=$D.u_ibex.clock_en")
+  if [ "$PWR_GATES" = all ]; then
+    PIN+=(--pin "g_clkgate.u_bus_cg.u_icg/GATE=$D.bus_clk_en")
+    PIN+=(--pin "g_clkgate.u_npu_cg.u_icg/GATE=$D.npu_clk_en")
+  fi
   MP=()
   i=0
-  for inst in u_ram.g_ram_2048x64.u_b0 u_ram.g_ram_2048x64.u_b1 \
-              u_ram.g_ram_2048x64.u_b2 u_ram.g_ram_2048x64.u_b3; do
+  for inst in u_ram.$RAMBLK.u_b0 u_ram.$RAMBLK.u_b1 \
+              u_ram.$RAMBLK.u_b2 u_ram.$RAMBLK.u_b3; do
     MP+=(--macro-pin "$inst/A_MEN=ram_men$i")
     MP+=(--macro-pin "$inst/A_WEN=ram_wen")
     MP+=(--macro-pin "$inst/A_REN=ram_ren")
@@ -134,9 +222,9 @@ annotate)
   done
   exec python3 "$SOC_DIR/flow/power_activity.py" "$OUT/activity.json" \
        --window "$WINDOW" --ref-window "${PWR_REF:-all}" \
-       --scope "$D" --exclude "$D.u_npu" \
+       --scope "$D" "${EXCL[@]}" \
        --port "rst_ni=$D.rst_ni" --port "wdog_dis_i=$D.wdog_dis_i" \
-       --pin "u_ibex.core_clock_gate_i.u_icg/GATE=$D.u_ibex.clock_en" \
+       "${PIN[@]}" \
        "${MP[@]}" --report --blocks --tcl "$OUT/act.$WINDOW.tcl"
   ;;
 

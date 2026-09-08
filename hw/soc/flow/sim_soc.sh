@@ -194,6 +194,15 @@ if [ -n "$SOC_SCRUB_IVL" ]; then
   DEFPARAMS="$DEFPARAMS
   defparam tb_soc.dut.SCRUB_IVL_RST = $SOC_SCRUB_IVL;"
 fi
+# SOC_CLKGATE, docs/76: soc_top.v's CLKGATE, the fabric's and the
+# accelerator's clock gates. 0 is the ungated build the bit-exact
+# equivalence of docs/76 section 6 is measured against; the design ships
+# 1 and sw/tests enforces it.
+SOC_CLKGATE=${SOC_CLKGATE:-1}
+if [ "$SOC_CLKGATE" != 1 ]; then
+  DEFPARAMS="$DEFPARAMS
+  defparam tb_soc.dut.CLKGATE = $SOC_CLKGATE;"
+fi
 if [ -n "$DEFPARAMS" ]; then
   RF_ROOT=(-s soc_param_override)
   RF_SRC=("$OUT/soc_param_override.v")

@@ -461,6 +461,69 @@ always @(posedge clk_i) if (f_past_valid && $past(rst_ni) && rst_ni) begin
 end
 
 // ---------------------------------------------------------------------
+// F10: the clock-gate enable is COMPLETE
+// ---------------------------------------------------------------------
+//
+// THIS IS THE PROPERTY THAT LETS soc_top.v GATE THIS MODULE'S CLOCK
+// WITHOUT RE-ARGUING F1 TO F9.
+//
+// The obligation a gated slave creates is real and docs/50 section 8.1
+// is the precedent for how it is discharged. F9 is a fairness bound with
+// "every slave ready" in its antecedent, and a slave that cannot answer
+// because its clock is stopped is, to a property, indistinguishable from
+// one that is refusing to. The tempting repair is to weaken F9 -- to add
+// "and the slave is awake" to its antecedent -- and that would be
+// exactly the relaxation docs/50 section 8.1 refused. What is done
+// instead is to prove that the gate CHANGES NOTHING:
+//
+//   In every cycle where `clk_en_o` is low, no register in this module
+//   changes value.
+//
+// A design whose state does not change is a design whose state does not
+// change whether or not it is clocked, so the gated instance and the
+// ungated one have the same state in every cycle, present the same
+// outputs in every cycle, and satisfy the same properties. F1 to F9 are
+// transported, not restated. THIS IS AN EXTENSION AND NOT A RELAXATION
+// in the strict sense: the property set gains a theorem and loses
+// nothing, and the version of F9 proved here is the same version that
+// was proved before the gate existed.
+//
+// TWO THINGS F10 DOES NOT SAY, and both matter.
+//
+//   * It says nothing about ASYNCHRONOUS RESET, and does not have to.
+//     Every register here is reset on `negedge rst_ni` with no clock,
+//     so the gate cannot hold a stale value through a reset. The guard
+//     `$past(rst_ni) && rst_ni` below excludes the reset edge for that
+//     reason and not to avoid a failure.
+//   * It says nothing about the OTHER slaves. It is a statement about
+//     this module's own registers, and the corresponding statement for
+//     any other gated block has to be made about that block.
+//
+// The registers are enumerated rather than sampled in bulk, because
+// there is no bulk to sample: `q_owner` and `q_fill` are arrays and
+// `$past` of an array element is what has to be written.
+integer f_g;
+always @(posedge clk_i) if (f_past_valid && $past(rst_ni) && rst_ni
+                            && !$past(clk_en_o)) begin
+    assert (issue_en   == $past(issue_en));
+    assert (last_was_d == $past(last_was_d));
+    assert (err_rvalid == $past(err_rvalid));
+    assert (cnt_i      == $past(cnt_i));
+    assert (cnt_d      == $past(cnt_d));
+    assert (lock_i     == $past(lock_i));
+    assert (lock_d     == $past(lock_d));
+    for (f_g = 0; f_g < F_NS; f_g = f_g + 1) begin
+        assert (q_owner[f_g] == $past(q_owner[f_g]));
+        assert (q_fill[f_g]  == $past(q_fill[f_g]));
+    end
+end
+
+// F10b. And the enable is not the constant 1, which is the vacuity
+//       check docs/09 section B.1 requires of a new property: a gate
+//       that never closes would satisfy F10 and save nothing. The
+//       covers are at the end of this file with the others.
+
+// ---------------------------------------------------------------------
 // L1-L4: the slave latency regime docs/50 puts the memories into
 // ---------------------------------------------------------------------
 //
@@ -532,4 +595,19 @@ always @(posedge clk_i) if (f_past_valid && rst_ni) begin
     //     the ownership queue, at a latency where it is not the same
     //     request being pushed and popped.
     cover (f_gnt && s_req_o[0] && f_pop[0] && f_occ[0] >= 4'd2);
+
+    // G1. THE GATE CLOSES. Without this F10 is satisfied by an enable
+    //     that is the constant 1, which is a proof that a clock gate
+    //     nobody built is safe. docs/09 section B.1.
+    cover (!clk_en_o);
+
+    // G2. And it closes WHILE A REQUEST IS OUTSTANDING, which is the
+    //     case the fabric's own header calls out: a master waiting on
+    //     the 172-cycle NPU window is a master the fabric has nothing
+    //     to do for, and 171 of those cycles are cycles this module
+    //     does not need a clock in. A gate that only ever closed with
+    //     the fabric completely empty would be worth far less and F10
+    //     would not distinguish the two.
+    cover (!clk_en_o && f_out_i != 3'd0);
+    cover (!clk_en_o && f_out_d != 3'd0);
 end

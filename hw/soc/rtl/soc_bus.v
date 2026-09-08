@@ -90,6 +90,62 @@
 // no-starvation property provable in two cycles rather than argued from
 // "the pipeline cannot issue loads without instructions", which is a
 // statement about the core and not about this file.
+//
+// =====================================================================
+// THE CLOCK-GATE ENABLE, AND WHY IT IS AN OUTPUT AND NOT A GATE
+// =====================================================================
+//
+// `clk_en_o` is a combinational statement about this cycle: it is high
+// whenever any register in this module CAN change value at the edge
+// that ends the cycle. It is not a power-management policy and it does
+// not read `core_sleep_o` or any other block's state; it is a property
+// of this file's own next-state functions, and its whole content is:
+//
+//   G1. `issue_en` moves only while it is 0.
+//   G2. `last_was_d` moves only on `accepted`, and `accepted` implies
+//       `any_win`, which implies one of the two masters is requesting.
+//   G3. `err_rvalid` is set only by `accepted` and is cleared only when
+//       it is already 1.
+//   G4. `q_owner` and `q_fill` move only on a push or a pop. A push
+//       implies `accepted`; a pop is `slv_rvalid`, which is
+//       `{err_rvalid, s_rvalid_i}`.
+//   G5. `cnt_i`, `cnt_d`, `lock_i` and `lock_d` move only on a grant or
+//       an rvalid. A grant implies a request; an rvalid to a master
+//       implies a `slv_rvalid`.
+//
+// THE GATE ITSELF IS IN soc_top.v, not here, and that placement is the
+// whole reason the fabric's proofs did not have to be re-argued. Every
+// property in hw/soc/formal/soc_bus_props.v samples `posedge clk_i`. If
+// this module gated its own clock, F1 to F9 would be properties of a
+// design whose clock the property set could not see, and the fairness
+// bound F9 in particular -- which counts CYCLES -- would be counting
+// something else. Instead this module is proved AS WRITTEN, on an
+// ungated clock, and one added property F10 states G1 to G5 as a
+// theorem: in every cycle where `clk_en_o` is low, no register in this
+// module changes value. F10 is what licenses soc_top.v to replace
+// `clk_i` with `ICG(clk_i, clk_en_o)`, because a design whose state does
+// not change is a design whose state does not change whether or not it
+// is clocked. F1 to F9 are therefore not weakened, not re-stated and
+// not re-proved against a gated slave: they are transported unchanged.
+//
+// AND NOTHING ABOUT THIS ENABLE IS VISIBLE TO A SLAVE. `s_req_o`,
+// `s_addr_o` and the grant outputs are combinational, so the fabric
+// answers a master in the cycle it asks whether or not the previous
+// cycle was clocked.
+//
+// THE ONE OBLIGATION THIS CREATES IS A STATIC-TIMING ONE, AND IT IS A
+// FULL CYCLE AND NOT A HALF ONE. `sg13g2_lgcp_1` is
+// `clock_gating_integrated_cell : "latch_posedge"`: the latch is
+// transparent while CLK is low and CLOSES on the rising edge, so the
+// value that decides an edge is the enable's settled value during the
+// cycle that edge ends, and OpenSTA's clock gating check requires it
+// stable at that rising edge. It is an ordinary setup path that happens
+// to end at a clock gate, derived from the cell's Liberty with no
+// constraint written by hand, and docs/76 section 9.5 measures what it
+// costs on the placed design: this enable's check MET by +0.7197 ns at
+// the slow corner before detailed routing and misses by -0.7495 ns
+// after it, on a design that fails setup at that corner on 3,055
+// endpoints without it.
 
 `timescale 1ns / 1ps
 
@@ -133,7 +189,10 @@ module soc_bus (
     input  wire [31:0] s_rdata_3_i,
     input  wire [31:0] s_rdata_4_i,
     input  wire [31:0] s_rdata_5_i,
-    input  wire [5:0]  s_err_i
+    input  wire [5:0]  s_err_i,
+
+    // ---- clock-gate enable. See the header, and F10. ----
+    output wire        clk_en_o
 );
 
 `include "soc_memmap.vh"
@@ -440,6 +499,34 @@ module soc_bus (
       if (md_gnt_o) lock_d <= tgt_d;
     end
   end
+
+  // -------------------------------------------------------------------
+  // The clock-gate enable, which is the header's G1 to G5 written out
+  //
+  // Read it as one disjunction of five reasons this module might have
+  // work to do at the end of this cycle:
+  //
+  //   !issue_en          G1: the boot cycle, once, ever.
+  //   mi_req_i           G2, and the grant half of G5: a request is the
+  //   md_req_i           precondition of every grant, and a grant is the
+  //                      precondition of `accepted` and of every push.
+  //   |s_rvalid_i        G4 and the response half of G5: a pop.
+  //   err_rvalid         G3, and the error slave's own pop.
+  //
+  // `err_rvalid` is this module's own register and `issue_en` is too, so
+  // the enable is a function of the ports plus two bits of state that
+  // are themselves frozen while it is low -- which is the reason it
+  // cannot get stuck: nothing inside can raise it, and nothing inside
+  // needs to.
+  //
+  // NOT INCLUDED, deliberately: `cnt_i`, `cnt_d` and `q_fill`. A master
+  // with an outstanding request is waiting for a slave, and waiting
+  // costs this module nothing until the response arrives. Adding an
+  // "outstanding" term would hold the clock on for the 172 cycles of an
+  // NPU register access and buy nothing -- F10 is what says so, because
+  // the enable it proves complete does not contain one.
+  assign clk_en_o = !issue_en || mi_req_i || md_req_i
+                 || (|s_rvalid_i) || err_rvalid;
 
 `ifdef FORMAL
 `include "soc_bus_props.v"

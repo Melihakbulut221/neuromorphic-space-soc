@@ -174,7 +174,26 @@ module soc_top #(
     // The boot attempt limit, reported through BOOTREG.BSTAT and
     // reachable by no register. Three, and soc_boot.v says why that
     // number and WDOG_ESCALATE = 2 go together.
-    parameter integer BOOT_LIMIT = 3
+    parameter integer BOOT_LIMIT = 3,
+
+    // ---- the second and third clock gates, docs/76 ----
+    //
+    // CLKGATE puts an `sg13g2_lgcp_1` on the fabric's clock and another
+    // on the accelerator's, driven by each block's own `clk_en_o`. IT
+    // DEFAULTS TO 1 AND NOTHING IN THE DESIGN MAY SET IT TO 0; sw/tests
+    // enforces that, as it does for MEM_HARDEN and for the watchdog's
+    // and the CLINT's HARDEN. The ungated configuration exists so that
+    // the gates' cost can be measured from the same files -- docs/41
+    // section 6.5's rule -- and so that the bit-exact equivalence of the
+    // two configurations is a measurement rather than an argument, and
+    // for nothing else.
+    //
+    // ONE PARAMETER, TWO DOMAINS, deliberately. They wake for different
+    // reasons and are proved by different means -- soc_bus.v's enable by
+    // k-induction, soc_npu.v's by measurement over a frozen die -- but
+    // there is no configuration in which one is wanted and the other is
+    // not, and a second parameter would be a second thing to get wrong.
+    parameter integer CLKGATE = 1
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -508,9 +527,80 @@ module soc_top #(
   wire [31:0] s_rdata_ram, s_rdata_rom, s_rdata_apb, s_rdata_pnp,
               s_rdata_clint, s_rdata_npu;
 
+  // -------------------------------------------------------------------
+  // The second and third clock gates
+  //
+  // docs/57 found the FIRST one -- `u_ibex.core_clock_gate_i.u_icg`,
+  // bound by hw/soc/rtl/prim_clock_gating.v, covering 2,323 of the
+  // design's flip-flops -- and measured that the part idles at 16.3 %
+  // of its busy power because of it. docs/61 section 7.3 then measured
+  // that every one of the 2,178 flip-flops the accelerator brought is
+  // on the UNGATED net, so that gate now covers 44.1 % of the design
+  // rather than 79.9 %. These two are the answer to that.
+  //
+  // WHAT IS GATED AND WHAT IS NOT, with the reason in one line each:
+  //
+  //   u_bus     GATED. Its enable is proved complete by k-induction
+  //             (soc_bus_props.v F10), so the gated fabric and the
+  //             ungated one have the same state in every cycle and F1
+  //             to F9 -- the fairness bound F9 included -- transport
+  //             unchanged. That proof is the whole price of the gate.
+  //   u_npu     GATED, as one domain including the frozen die. Its
+  //             enable is conservative and measured rather than proved,
+  //             for the reason soc_npu.v's own section gives.
+  //   u_clint   NOT GATED, AND IT CANNOT BE. TICK_DIV = 1, so `mtime`
+  //             increments and its SECDED codeword is re-encoded on
+  //             every single clock edge (docs/58 H6). A complete enable
+  //             for this block is the constant 1, and an incomplete one
+  //             stops the architectural time base -- which is not a
+  //             power saving, it is a different device. docs/57 section
+  //             7.3 measured it as 52.4 % of all idle switching, so it
+  //             is the largest single target in the SoC and it is the
+  //             one that must not be taken.
+  //   u_timer0  NOT GATED, same reason at a smaller size: the GPTIMER
+  //             prescaler and the watchdog counter advance every cycle
+  //             by construction. 24.6 % of idle switching.
+  //   u_uart0   NOT GATED: the baud divider free-runs. 23.0 %.
+  //   the rest  NOT GATED HERE. u_apb, u_pnp, u_gpio, u_qspi, u_scrub,
+  //             u_busstat, u_boot and the two memories carry 237 of the
+  //             468 non-core flip-flop bits docs/57 section 7.3 counted
+  //             and 0.02 % of the idle switching between them. Each
+  //             needs its own completeness argument and buys a share of
+  //             a number that is already almost zero; docs/76 section
+  //             14 ranks them and this document does not take them.
+  //
+  // The gates are instantiated HERE and not inside the two blocks, so
+  // that every property in hw/soc/formal/ is still a property of a
+  // module on an ungated clock. soc_bus.v's header says why that
+  // matters and F10 is what makes it sound.
+  wire bus_clk_en, npu_clk_en;
+  wire clk_bus, clk_npu;
+
+  generate
+  if (CLKGATE != 0) begin : g_clkgate
+    prim_clock_gating u_bus_cg (
+        .clk_i     (clk_i),
+        .en_i      (bus_clk_en),
+        .test_en_i (1'b0),
+        .clk_o     (clk_bus)
+    );
+    prim_clock_gating u_npu_cg (
+        .clk_i     (clk_i),
+        .en_i      (npu_clk_en),
+        .test_en_i (1'b0),
+        .clk_o     (clk_npu)
+    );
+  end else begin : g_noclkgate
+    assign clk_bus = clk_i;
+    assign clk_npu = clk_i;
+    wire _unused_cg = &{1'b0, bus_clk_en, npu_clk_en, 1'b0};
+  end
+  endgenerate
+
   soc_bus u_bus (
-      .clk_i  (clk_i),
+      .clk_i  (clk_bus),
       .rst_ni (rst_sys_n),
+      .clk_en_o (bus_clk_en),
 
       .mi_req_i    (instr_req),
       .mi_addr_i   (instr_addr),
@@ -866,9 +956,11 @@ module soc_top #(
       .N_AXONS   (8),
       .SER_HALF  (2),
       .INJ_DEPTH (8),
-      .CAP_DEPTH (8)
+      .CAP_DEPTH (8),
+      .CLKGATE   (CLKGATE)
   ) u_npu (
-      .clk_i (clk_i), .rst_ni (rst_sys_n),
+      .clk_i (clk_npu), .rst_ni (rst_sys_n),
+      .clk_en_o (npu_clk_en),
       .req_i (s_req[5]), .addr_i (s_addr), .we_i (s_we),
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[5]), .rvalid_o (s_rvalid[5]),

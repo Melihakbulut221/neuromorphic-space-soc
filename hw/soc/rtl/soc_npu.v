@@ -392,7 +392,24 @@ module soc_npu #(
     // against an OLDER file list costs: it credits the hardening with a
     // refactor's saving. Nothing in this repository instantiates 0, and
     // sw/tests/test_soc_npu_guards.py asserts that.
-    parameter integer HARDEN = 1
+    parameter integer HARDEN = 1,
+
+    // ---- the clock-gate enable, docs/76 ----
+    //
+    // 1 builds `clk_en_o` out of the block's own quiescence; 0 ties it
+    // high and deletes the wake-hold counter with it, which is the
+    // like-for-like baseline the gate's area and power are measured
+    // against. Same discipline and same reason as HARDEN above.
+    // soc_top.v passes ONE parameter to this and to the gate cell, so
+    // an enable without a gate or a gate without an enable is not a
+    // reachable configuration.
+    parameter integer CLKGATE = 1,
+    // Cycles the clock keeps running after the last activity. Not a
+    // correctness term -- see the enable's own comment -- but the margin
+    // that covers a settling chain inside the frozen die that no term
+    // of `npu_act` names. 4 covers a two-flop synchroniser and one
+    // cycle of slack; sw/tests enforces the value the design ships.
+    parameter integer HOLD_CYCLES = 4
 ) (
     input  wire        clk_i,
     input  wire        rst_ni,
@@ -449,8 +466,23 @@ module soc_npu #(
     output wire        obs_ser_mosi_o,
     output wire        obs_ser_miso_o,
     output wire        obs_aer_in_stb_o,
-    output wire        obs_aer_out_vld_o
+    output wire        obs_aer_out_vld_o,
+
+    // ---- clock-gate enable. See its own section near the bottom. ----
+    output wire        clk_en_o
 );
+
+  // Width of the wake-hold counter, derived rather than parameterised so
+  // that HOLD_CYCLES is the only number a reader has to check.
+  localparam integer HOLD_W = (HOLD_CYCLES < 2)   ? 1 :
+                              (HOLD_CYCLES < 4)   ? 2 :
+                              (HOLD_CYCLES < 8)   ? 3 :
+                              (HOLD_CYCLES < 16)  ? 4 :
+                              (HOLD_CYCLES < 32)  ? 5 : 6;
+  localparam [31:0]         HOLD_32   = HOLD_CYCLES;
+  localparam [HOLD_W-1:0]   HOLD_LOAD = HOLD_32[HOLD_W-1:0];
+  localparam [HOLD_W-1:0]   HOLD_ZERO = {HOLD_W{1'b0}};
+  localparam [HOLD_W-1:0]   HOLD_ONE  = {{(HOLD_W-1){1'b0}}, 1'b1};
 
   // The die's own register offsets, from the single source. No literal
   // offset of regmap/regmap.yaml appears anywhere in this file.
@@ -1715,6 +1747,111 @@ module soc_npu #(
       default:    hit = 1'b0;
     endcase
   end
+
+  // -------------------------------------------------------------------
+  // THE CLOCK-GATE ENABLE
+  //
+  // docs/57 section 9 measured that this block multiplies the SoC's idle
+  // power by 5.588 and docs/61 section 7.3 measured why: every one of
+  // the 2,178 flip-flops `soc_top` gained when this module arrived is on
+  // the UNGATED clock net, because the design's one `sg13g2_lgcp_1` is
+  // bound inside `ibex_top` and gates Ibex and nothing else. This is the
+  // enable for the second one.
+  //
+  // IT IS ONE DOMAIN AND NOT SEVERAL, and the reason is the transport
+  // rather than a preference. `soc_npu_ser` generates `ser_sck` from
+  // `clk_i` by division, and `pilot_top` samples that pin on `clk`. Two
+  // domains -- the CPU face clocked, the die not -- would make the
+  // die's serial port a clock-domain crossing between a divided clock
+  // and a stopped one, which is a real CDC in a block that has none and
+  // cannot be given one, because `hw/rtl/pilot_top.v` is frozen by
+  // docs/34 and only its clock can be reached from outside. The die
+  // stops with the transport or not at all.
+  //
+  // WHAT MAKES IT DIFFERENT FROM soc_bus.v's. That module's enable is
+  // PROVED complete -- hw/soc/formal/soc_bus_props.v F10, k-induction,
+  // and every one of its five terms is load-bearing under mutation. No
+  // such proof is available here: the state this enable has to cover
+  // includes 2,152 flip-flops inside a frozen submission whose property
+  // set is `formal/` and is not this project's to extend. So the enable
+  // is made CONSERVATIVE in two independent ways and then MEASURED:
+  //
+  //   1. `npu_act` names every reason this block or the die behind it
+  //      could have work to do, including every reason it could have a
+  //      FAULT to record. That second class is not decoration and it is
+  //      the one thing gating a fault-tolerant block gets wrong by
+  //      default: a voter's correction and a queue's parity discard are
+  //      observed by soc_busstat.v, and a block with no clock cannot
+  //      report them. `|sticky_ev` carries all eleven -- the queue
+  //      pointer votes, the entry parity, the cause bank's own voter,
+  //      the strobe mismatch and the four bounded waits -- so an upset
+  //      inside a sleeping accelerator wakes it up rather than being
+  //      lost.
+  //
+  //   2. `wake_hold` keeps the clock running for HOLD_CYCLES more
+  //      cycles after the last of those goes away, so a settling chain
+  //      inside the die -- pilot_top.v's two-flop input synchronisers,
+  //      for instance -- is not cut off by a term nobody wrote down.
+  //      This is insurance and it is priced: HOLD_CYCLES cycles of
+  //      clock per wake, against 2,178 flip-flops of clock per idle
+  //      cycle.
+  //
+  // AND THE MEASUREMENT IS hw/soc/flow/clkgate_check.py, which reads a
+  // whole-SoC dump and reports every bit under this module that changes
+  // value at an edge the gate would have removed. Zero is the result
+  // that licenses the gate, and it is a statement about the workloads
+  // measured and not a theorem.
+  //
+  // `win_guard` and `oh_guard` are in the list for a reason worth
+  // stating: both are cleared to zero the cycle AFTER the thing they
+  // were counting goes away, so leaving them out would freeze a stale
+  // non-zero count. Neither can cause a spurious expiry -- both
+  // expiries are qualified by `win_out` and `oh_req` -- so this is not
+  // a correctness term. It is there because the verification instrument
+  // is bit-exact equivalence with the ungated design, and a design that
+  // is only ALMOST equivalent cannot be checked that way.
+
+
+  generate
+  if (CLKGATE != 0) begin : g_clkgate
+    wire npu_act =
+        // the fabric slave face
+          req_i | rvalid_o | win_out | (win_state != W_IDLE)
+        | (win_guard != {WIN_GRD_W{1'b0}})
+        // the peripheral face
+        | psel_i | flush_pulse | scrub_pulse
+        // anything that has to be recorded, including every fault
+        | (|sticky_ev)
+        // the serial transport
+        | ser_busy | ser_start | ser_done | ser_timeout
+        // the event engine, the show-ahead adapter and the two queues
+        | (ev_state != E_IDLE) | ev_start | aer_in_stb
+        | inj_rd_en | inj_rd_valid | cap_wr_en | cap_rd_en | cap_rd_valid
+        | oh_req | (oh_guard != {OH_GUARD_W{1'b0}})
+        | (~inj_empty) | (~cap_empty)
+        // and the die: busy, holding an event, or not ready for one
+        | node_busy | node_aer_out_vld | (~node_aer_in_rdy);
+
+    reg [HOLD_W-1:0] wake_hold;
+    always @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni)                   wake_hold <= HOLD_LOAD;
+      else if (npu_act)              wake_hold <= HOLD_LOAD;
+      else if (wake_hold != HOLD_ZERO) wake_hold <= wake_hold - HOLD_ONE;
+    end
+    assign clk_en_o = npu_act || (wake_hold != HOLD_ZERO);
+  end else begin : g_noclkgate
+    // MEASUREMENT ONLY, and it is the baseline the gate's area and power
+    // are priced against -- docs/41 section 6.5's rule. Nothing in this
+    // repository instantiates it; sw/tests enforces the default.
+    // NOTHING of the enable is elaborated in this arm, deliberately.
+    // A baseline that kept the enable's gates and merely ignored them
+    // would be a baseline that already paid for the gate, and docs/41
+    // section 6.5's rule is exactly that the counterfactual must be the
+    // design WITHOUT the mechanism rather than the design with it
+    // disconnected.
+    assign clk_en_o = 1'b1;
+  end
+  endgenerate
 
   assign pready_o  = 1'b1;
   assign pslverr_o = psel_i && !hit;

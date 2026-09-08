@@ -288,6 +288,26 @@ def _census(script_body, workdir):
     return Census(json.loads(out.read_text()))
 
 
+def _strobe_cone(script_body, workdir, tag):
+    """The flip-flops the die's AER strobe pin depends on, by name.
+
+    docs/56 H5 gates `aer_in_stb` with `ev_state == E_PIN_S`, so a
+    netlist that carries the gate has the event engine's state register
+    in this cone and one that does not carries only the strobe flag.
+    That is the whole of H5 stated as a structure rather than as a size,
+    and docs/76 section 9.2 is why the size no longer works.
+    """
+    out = Path(workdir) / ("cone_%s.json" % tag)
+    _run_yosys(script_body + " write_json {};".format(out), workdir)
+    gl = _gl()
+    nl = gl.JsonNetlist(str(out))
+    bits = nl.net("obs_aer_in_stb_o")
+    assert len(bits) == 1, (
+        "obs_aer_in_stb_o is {} bits in the netlist, not 1".format(len(bits)))
+    insts = gl.cone_flops(nl.driver, nl.cells, bits[0])
+    return {nl.q_name(i) or i for i in insts}
+
+
 # =====================================================================
 # the SECOND instrument: the voter's fan-in cone
 # =====================================================================
@@ -1149,9 +1169,27 @@ def test_the_aer_strobe_gate_is_in_the_netlist_and_costs_no_flip_flop(
     passing on a part whose die can be strobed by one upset again.
 
     The check is the mutation: build the design with the gate removed
-    and require the netlist to be strictly smaller in CELLS at exactly
-    the same flip-flop count. That says two things at once -- the gate
-    is physically present, and it costs no state."""
+    and require the STROBE'S FAN-IN CONE to lose the event engine's
+    state, at exactly the same flip-flop count. That says two things at
+    once -- the gate is physically present, and it costs no state.
+
+    IT USED TO BE A CELL COUNT AND docs/76 HAD TO CHANGE IT, which is
+    worth stating because the replacement is stronger and the reason it
+    was needed is a real property of this flow. The assertion was
+    `base.cells > mut.cells`: removing a combinational gate must make
+    the netlist smaller. Measured on the design docs/76 builds, it
+    INVERTED -- the mutant came out 39 cells LARGER. The mechanism is
+    named in docs/76 section 9.2: `aer_stb_state` is a bare
+    `ev_state == E_PIN_S` comparison, and yosys's mapper decides
+    whether to DUPLICATE `ev_state` and materialise that comparison as
+    a register of its own on cost grounds that the mutation changes.
+    The intact and mutated designs therefore differ by a register
+    duplication as well as by the gate, and the sign of the cell delta
+    is the mapper's decision rather than the gate's cost.
+    A cone census cannot be inverted that way: it asks what the die's
+    strobe pin actually depends on, which is the whole content of H5.
+    `hw/soc/fi/gl_netlist.py` is the same walker docs/75 uses on the
+    shipped netlist, imported rather than reimplemented."""
     dst = Path(workdir) / "npu_mut_stb"
     dst.mkdir(exist_ok=True)
     old = ("assign aer_in_stb_q = aer_in_stb && aer_stb_state;\n"
@@ -1179,12 +1217,32 @@ def test_the_aer_strobe_gate_is_in_the_netlist_and_costs_no_flip_flop(
         "({} -> {}). H5 is combinational and must cost no state; if it "
         "does, this test is measuring something else".format(
             base.total, mut.total))
-    assert base.cells > mut.cells, (
-        "the netlist is the same size with the AER strobe gate as "
-        "without it ({} cells either way). The gate has been optimised "
-        "away or is no longer there, and NOTHING ELSE in this "
-        "repository can fail on that -- the campaign and the cocotb "
-        "suite both drive the RTL.".format(base.cells))
+
+    base_cone = _strobe_cone(_npu_script(NPU_SOURCES), workdir, "stb_base")
+    mut_cone = _strobe_cone(_npu_script(mutated), workdir, "stb_mut")
+    # THE NAME IS NOT ASSERTED, ONLY THAT THERE IS SOMETHING BESIDES THE
+    # STROBE FLAG. `aer_stb_state` is a bare `ev_state == E_PIN_S`
+    # comparison and the mapper may keep it as combinational logic over
+    # `ev_state` or materialise it as a register of its own; both were
+    # observed while docs/76 was written, on the SAME RTL at two
+    # settings of an unrelated parameter. What cannot vary is that a
+    # strobe which is gated depends on more than the flag, and a strobe
+    # which is not depends on the flag alone.
+    extra = {n for n in base_cone if "aer_in_stb" not in str(n)}
+    assert extra, (
+        "the die's strobe pin depends on nothing but the strobe flag: "
+        "its fan-in cone is {}. The gate has been optimised away or is "
+        "no longer there, and NOTHING ELSE in this repository can fail "
+        "on that -- the campaign and the cocotb suite both drive the "
+        "RTL.".format(sorted(str(n) for n in base_cone)))
+    assert all(("ev_state" in str(n)) or ("aer_stb_state" in str(n))
+               for n in extra), (
+        "the strobe's cone carries state this test does not recognise "
+        "as the event engine's: {}".format(sorted(str(n) for n in extra)))
+    assert not {n for n in mut_cone if "aer_in_stb" not in str(n)}, (
+        "the mutation was supposed to leave the strobe depending on the "
+        "flag alone and did not: {}. This test is then measuring "
+        "nothing.".format(sorted(str(n) for n in mut_cone)))
 
 
 @needs_yosys

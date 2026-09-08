@@ -60,7 +60,15 @@ WHAT THIS SUITE DOES NOT COVER
     connects index 2 to the APB bridge is not verified here.
   * More than the two Ibex masters, and any notion of arbitration fairness
     finer than the cycle bound stated in test_no_starvation.
-  * Power intent, clock gating and reset-domain crossing.
+  * Reset-domain crossing, and the placement of the clock gate itself.
+    The two tests at the end of this file exercise `clk_en_o` -- the
+    COMBINATIONAL statement soc_bus.v makes about whether its own state
+    can move -- but the gate that consumes it lives in soc_top.v and is
+    not instantiated here, so nothing below runs on a stopped clock.
+    hw/soc/formal/soc_bus_props.v F10 is the proof that gating on this
+    signal changes nothing; these two are the same statement checked by
+    execution rather than by induction, and the reason for having both is
+    that one of them can be run against a mutant in a minute.
 """
 
 import random
@@ -1169,3 +1177,123 @@ async def test_slave_error_propagates(dut):
     assert env.mi.rvalids == 60 and env.md.rvalids == 60
     assert n_err > 0, "no erroring access was generated"
     dut._log.info("error propagation: %d of 120 responses carried err", n_err)
+
+
+# ---------------------------------------------------------------------------
+# The clock-gate enable (docs/76)
+# ---------------------------------------------------------------------------
+
+# soc_bus.v's own register list, in the order its header's G1 to G5 name
+# them. The two arrays are indexed because cocotb reaches a Verilog memory
+# one element at a time. NS = 7 is six slave ports plus the internal error
+# slave, which is soc_bus.v's own localparam and is derived here from the
+# port width rather than written down.
+_SCALAR_REGS = ("issue_en", "last_was_d", "err_rvalid",
+                "cnt_i", "cnt_d", "lock_i", "lock_d")
+
+
+def _state(dut):
+    """Every flip-flop in soc_bus, as one comparable tuple."""
+    vals = []
+    for name in _SCALAR_REGS:
+        vals.append(int(getattr(dut, name).value))
+    for s in range(N_SLAVES + 1):
+        vals.append(int(dut.q_owner[s].value))
+        vals.append(int(dut.q_fill[s].value))
+    return tuple(vals)
+
+
+@cocotb.test()
+async def test_the_clock_enable_is_low_only_when_no_register_moves(dut):
+    """F10, executed rather than proved: the enable is COMPLETE.
+
+    soc_top.v replaces this module's clock with ICG(clk_i, clk_en_o). That
+    is sound if and only if the enable is low only in cycles where no
+    register would have changed anyway, because then the gated instance and
+    the ungated one have the same state in every cycle and F1 to F9 --
+    the fairness bound F9 included -- transport unchanged rather than
+    having to be restated for a slave whose clock is off.
+
+    This samples the whole of soc_bus's state at every edge of a busy mixed
+    workload and asserts that statement directly. It is weaker than the
+    k-induction proof, which quantifies over every reachable state; it is
+    stronger in one respect, which is that it runs against the RTL a
+    simulator elaborates rather than against the one yosys reads.
+    """
+    rng = random.Random(2026)
+    env = await setup(dut, latencies=(1, 2, 4, 3, 7, 11))
+
+    regions = list(port_regions().items())
+    for _ in range(120):
+        for m in (env.mi, env.md):
+            region, (base, size) = regions[rng.randrange(len(regions))]
+            idx = SLAVE_INDEX[region]
+            addr = base + WORD * rng.randrange(size // WORD)
+            m.push(Xact(addr, we=(0 if m is env.mi else rng.randrange(2)),
+                        be=0xF, wdata=rng.randrange(1 << 32),
+                        exp_rdata=tag_of(idx, addr)))
+
+    shut = 0
+    seen = 0
+    prev = None
+    prev_en = None
+    for _ in range(6000):
+        await RisingEdge(dut.clk_i)
+        await Timer(T_CHECK, unit="ns")
+        now = _state(dut)
+        if prev is not None and prev_en == 0:
+            assert now == prev, (
+                "clk_en_o was low for the cycle ending at this edge and the "
+                "fabric's state moved anyway: {} -> {}. The gate soc_top.v "
+                "builds on this signal would have lost that transition."
+                .format(prev, now))
+        if prev_en == 0:
+            shut += 1
+        seen += 1
+        prev = now
+        prev_en = int(dut.clk_en_o.value)
+        if env.mi.idle() and env.md.idle():
+            break
+
+    assert seen > 200, "the workload was too short to say anything"
+    assert shut > 0, (
+        "clk_en_o was never low in {} cycles, so this test proved nothing "
+        "about a gate that never closes".format(seen))
+    dut._log.info("clock enable: shut on %d of %d cycles, no state moved "
+                  "in any of them", shut, seen)
+
+
+@cocotb.test()
+async def test_the_clock_enable_closes_while_a_slow_slave_is_working(dut):
+    """And it closes in the case that is worth having, not only when idle.
+
+    soc_bus.v's own header says the enable deliberately contains no
+    "something is outstanding" term: a master waiting on the NPU register
+    window waits about 172 cycles, and the fabric has nothing to do for any
+    of them but the last. A gate that only closed with the fabric
+    completely empty would leave that on the table, so the property is that
+    the enable goes low WHILE a transaction is in flight.
+
+    The bound below is deliberately loose -- more than half the wait -- so
+    that the test states the effect and not the arithmetic of one latency.
+    """
+    slow = 40
+    env = await setup(dut, latencies=(slow, 1, 1, 1, 1, 1))
+    base, size = port_regions()["RAM"]
+    env.mi.push(Xact(base, exp_rdata=tag_of(SLAVE_INDEX["RAM"], base)))
+
+    shut = 0
+    for _ in range(slow + 20):
+        await RisingEdge(dut.clk_i)
+        await Timer(T_CHECK, unit="ns")
+        if int(dut.clk_en_o.value) == 0:
+            shut += 1
+        if env.mi.idle():
+            break
+    assert env.mi.rvalids == 1, "the slow slave never answered"
+    assert shut > slow // 2, (
+        "the fabric held its clock enable high for all but {} of a {}-cycle "
+        "wait; the gate is then worth only the fully idle case".format(
+            shut, slow))
+    dut._log.info("one %d-cycle access: the enable was low on %d of its "
+                  "cycles", slow, shut)

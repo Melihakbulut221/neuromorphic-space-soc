@@ -68,10 +68,20 @@ puts [format "TOTAL %s %s internal %.6e switching %.6e leakage %.6e total %.6e" 
 # that still carry the name the RTL gave them -- everything else was
 # renamed by `abc` -- so this is the one block-level attribution the
 # hardened netlist can support without a second synthesis.
+# BOTH SPELLINGS OF THE RAM'S GENERATE BLOCK, docs/76: docs/67 put
+# soc_mem_ecc.v under the memory and the arm's label went from
+# g_ram_2048x64 to g_ram_2048x64_ecc, so a list with only the old name
+# reports nothing on any netlist built since -- and `get_cells` on an
+# absent instance is a warning and not an error, which is exactly how
+# that went unnoticed. Absent names are skipped below, so carrying both
+# costs nothing and reports whichever the netlist has.
 foreach m {u_ram.g_ram_2048x64.u_b0 u_ram.g_ram_2048x64.u_b1
            u_ram.g_ram_2048x64.u_b2 u_ram.g_ram_2048x64.u_b3
-           u_rom.g_rom_1024x32.u_b0 u_rom.g_rom_1024x32.u_b1} {
-    set c [get_cells $m]
+           u_ram.g_ram_2048x64_ecc.u_b0 u_ram.g_ram_2048x64_ecc.u_b1
+           u_ram.g_ram_2048x64_ecc.u_b2 u_ram.g_ram_2048x64_ecc.u_b3
+           u_rom.g_rom_1024x32.u_b0 u_rom.g_rom_1024x32.u_b1
+           u_rom.g_rom_1024x32_ecc.u_b0 u_rom.g_rom_1024x32_ecc.u_b1} {
+    set c [get_cells -quiet $m]
     if { $c eq "" } { continue }
     lassign [lrange [sta::instance_power $c $CORNER] 0 3] i s l t
     puts [format "MACRO %s %s internal %.6e switching %.6e leakage %.6e total %.6e" \
