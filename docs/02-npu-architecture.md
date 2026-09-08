@@ -156,10 +156,35 @@ than ASIC hardening.
   (https://arxiv.org/pdf/2606.23532) have been taped out on SkyWater
   130 nm via open flows. Facts.
 - In-house: **tt-um-lif-crossbar**, this developer's Tiny Tapeout chip —
-  an 8x8 LIF-neuron crossbar on a 2x2 tile, with ~70.7% classification
-  accuracy verified pre-tapeout through the open flow. Fact (project's own
-  verified result). This is the direct ancestor of Candidate A and the
-  source of the verified Verilog LIF neuron and crossbar update logic.
+  an 8x8 LIF-neuron crossbar on a 2x2 tile, taken through the open flow
+  to a shipped submission. This is the direct ancestor of Candidate A and
+  the source of the verified Verilog LIF neuron and crossbar update
+  logic. **No accuracy figure is claimed for it here.**
+
+  **CORRECTED 2026-09-09.** This bullet said "~70.7% classification
+  accuracy verified pre-tapeout" and tagged it *Fact (project's own
+  verified result)*. It was neither verified nor, on the evidence, an
+  accuracy. `docs/13` section 10.6 item 6 had already found that the
+  number collides with itself — `docs/15` and `docs/17` both use
+  **70.66 %** for the *placement utilisation* of the same chip — and
+  removed it there pending [D-7]. **The removal did not reach this
+  document, and this is the document that travels**: the public mirror
+  publishes `docs/02` and holds `docs/13` back as commercial material, so
+  the claim would have shipped and its withdrawal would not.
+
+  Re-checked at source 2026-09-09, which `docs/13` could not do: **the
+  string `70.66` does not occur anywhere in the `tt-um-lif-crossbar`
+  repository** — not in a document, not in a run tree, not in a metrics
+  file. Its recorded placement utilisations are 82.33 %, 81.3 % and
+  74.6 %. So **both readings are unsupported**, not just the accuracy
+  one, and the two documents that use it as a utilisation reference point
+  are using a number with no artefact behind it either.
+
+  What is left standing, because it is true and checkable: this project
+  has **no application-accuracy result for any design**, and never had
+  one. The lesson is `docs/64`'s, arriving from a new direction — a
+  correction filed in one document does not correct the corpus, and the
+  document a correction fails to reach may be the one a reader sees.
 - Context: the developer's GOLDFINCH-1 accelerator project formally
   evaluated and rejected an SNN engine *for that product* because its
   small-MLP workloads favored a weight-stationary INT8 systolic array.

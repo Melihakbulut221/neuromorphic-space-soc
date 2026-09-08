@@ -567,6 +567,25 @@ re-raised without new evidence.
   the GR801 brief but is listed as a brief fact": rejected — the figure
   was found in the cited vendor material on re-verification; the docs/01
   section 2.2 sourcing stands.
+
+  **AMENDED 2026-09-09, and the amendment is the more interesting half.**
+  The rejection is correct and now names its artefact: the sentence is on
+  <https://www.gaisler.com/products/gr801> verbatim, and
+  `docs/ref-gr801-product-page.md` records the fetch date, the HTTP
+  status and a SHA-256 of the bytes. It was cleared here on a
+  re-verification that named nothing, which is a clearance a reader
+  cannot check — and this corpus does not otherwise accept those.
+
+  **But R-2 was a real defect wearing the wrong label, and rejecting the
+  label dismissed the defect.** The finding said the figure was not in
+  the brief; that is true. The rejection said the figure was in the
+  cited material; that is also true. Both are true because `docs/01`
+  section 2.2 put items from **two different documents** under one
+  heading naming one of them and citing the other. The review answered
+  the question the finding asked instead of asking why both answers could
+  be right, and a defect that had been correctly spotted survived its own
+  review for a year of documents. It is fixed at `docs/01` section 2.2,
+  where the list is now split by source.
 - **R-3** — "The EUR 27.5k NLnet ask and docs/04's EUR 20-65k MVP
   envelope are unreconciled": rejected — the two numbers cover different
   phases by design; docs/06 B.6 and docs/04 section 5 place the MVP die

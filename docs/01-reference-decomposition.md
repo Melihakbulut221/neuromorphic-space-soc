@@ -46,16 +46,44 @@ guarantee (https://www.gaisler.com/products/gr801).
 
 ### 2.2 Akida 1.0 neuromorphic engine
 
-Facts from the GR801 brief (https://www.gaisler.com/products/gr801):
+Facts from Gaisler's published GR801 material. **The heading used to
+say "the GR801 brief" and cite the product page, which are two different
+documents; corrected 2026-09-09** — see the note below the list, and
+`docs/ref-gr801-product-page.md` for the archived evidence.
+
+From the product brief PDF (2 pages, released April 2026):
 
 - Eight neural processing nodes connected in a mesh network.
 - Each node contains four convolutional or fully connected engines.
-- Each node supports 128 4x4 MACs, for a total of 1024 MACs per clock.
 - Hardware support for 1-, 2-, or 4-bit hybrid quantized weights.
 - Multi-pass processing enables execution of networks larger than the
   physical fabric.
 - 3.2 MB RAM private to the Akida unit.
 - Event-based computing to minimize power consumption.
+
+From the product page <https://www.gaisler.com/products/gr801> and
+**not** from the brief:
+
+- "Each node supports 128 4x4 MACs, for total of 1024 MACs/clock."
+
+**Why this list is now split.** `docs/07` raised finding R-2 — that the
+MAC figure is not in the brief but is listed as a brief fact — and
+rejected it, correctly, because the figure *is* in the cited material.
+It is on the product page, verbatim, and `docs/ref-gr801-product-page.md`
+records the fetch date, the HTTP status and a SHA-256 of the bytes so
+that the claim does not rest on a live URL. **The rejection was right and
+the heading was wrong**: one list under one heading, citing one URL, held
+items from two documents. R-2 was a real defect wearing the wrong label,
+and it survived its own review because the review answered the question
+the finding asked rather than the one it should have asked.
+
+`pdftotext` over the archived brief returns zero occurrences of `MAC`,
+`1024`, `128` or `4x4`, including after decompressing every content
+stream **[fact, 2026-09-09]**. Note also that the vendor's own arithmetic
+is ambiguous — 128 units x 8 nodes = 1,024 units per clock on the
+sentence's own reading, or 16,384 multiply-accumulates if a "4x4 MAC" is
+sixteen of them. This document does not resolve it and nothing here
+depends on which reading is right.
 
 Additional context from the commercial Akida 1.0 silicon (AKD1000), useful
 for understanding the node internals even though GR801 instantiates a
