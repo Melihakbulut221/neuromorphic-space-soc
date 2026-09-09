@@ -1215,17 +1215,97 @@ rather than in totals.
 
 | | Phase 1 | Phase 2 |
 |---|---|---|
-| **bmc** | 70 PASS, 3 FAIL, 6 stopped | **69 PASS, 3 FAIL, 6 stopped, 1 TIMEOUT** (`reg_ch0`, section 17) |
+| **bmc** | 70 PASS, 3 FAIL, 6 stopped | **69 PASS, 3 FAIL, 6 stopped, 1 ERROR** (`reg_ch0`, killed from outside; section 17, and the correction below) |
 | **cover** | 79 PASS | **79 PASS** |
+
+> **Correction, 2026-09-09 — the phase-2 `reg_ch0` cell said
+> "1 TIMEOUT" and its own log does not.** The superseded wording of
+> the bmc row read: **69 PASS, 3 FAIL, 6 stopped, 1 TIMEOUT**
+> (`reg_ch0`, section 17). It is kept here and not overwritten. What
+> the artefact says, read out of
+> `hw/soc/out/rvformal-secded/cores/ibex/checks/reg_ch0/logfile.txt`:
+> the job started at 17:59:21, the last engine line is
+> `SBY 19:40:47 [reg_ch0] engine_0: <SIGTERM>`, followed by
+> `engine_0: finished (returncode=1)`,
+> `ERROR: engine_0: Engine terminated without status.`,
+> `summary: Elapsed clock time [H:MM:SS (secs)]: 1:41:26 (6086)` and
+> `DONE (ERROR, rc=16)` [fact]. The `status` file beside it holds
+> `ERROR 16 6087`, and `reg_ch0.xml` carries
+> `<property name="status" value="ERROR"/>` with `errors="1"`
+> `failures="0"` [fact]. Re-running the very tool this section cites,
+> `IBEX_REGFILE=secded hw/soc/flow/rvformal.sh report`, prints
+> `== checks: 79 checks  ERROR=1  FAIL=3  NO STATUS=6  PASS=69` and
+> the line `ERROR    reg_ch0 (6087s)` [fact] — `cmd_report` reads
+> field 0 of `status` and has no branch that can emit the string
+> TIMEOUT at all.
+>
+> **The right word is ERROR, and the cause was a kill from outside.**
+> `reg_ch0`'s generated `config.sby` has no `timeout` option in its
+> `[options]` block — `mode bmc`, `expect pass,fail`, `append 0`,
+> `depth 26`, `skip 25`, and nothing else [fact] — and `cmd_run` in
+> `hw/soc/flow/rvformal.sh` invokes `make -k -jN -f makefile` with no
+> `timeout(1)` wrapper anywhere on that path [fact]. So no bound
+> existed for this job to reach. Nothing in the flow could have sent
+> that `SIGTERM`; it arrived from outside the run at 1 h 41 m 26 s,
+> and sby's own handler turned it into `ERROR, rc=16` rather than a
+> verdict. Section 21's ledger already had this right — its row
+> "`reg_ch0` on SECDED, three attempts **killed from outside**
+> (3,013 + 3,598 + **6,087** s)" carries this exact job as its third
+> entry, matched by the 6,087 s elapsed process time — so the table
+> above was the only place in this document saying otherwise.
+>
+> **Why the distinction is worth thirty lines.** TIMEOUT, KILLED and
+> ERROR are three different words here and each one licenses a
+> different reading. TIMEOUT means a bound was set, the job reached
+> it, and the measurement is therefore complete: *this engine did not
+> close in that much time*. That is what sections 17.2, 20.1 and 20.2
+> report, and they are entitled to it — every one of those ten jobs
+> wrote `14400 rc=124` into its `.WALL` file, and `rc=124` is
+> `timeout(1)` saying it sent the signal itself [fact,
+> `hw/soc/out/rvf-eng-*/cores/ibex/checks/reg_ch0.WALL`]. ERROR from
+> an outside kill means no bound was set and no measurement was
+> completed: 1 h 41 m is a lower bound on what the check costs and
+> nothing more, and calling it a TIMEOUT would silently promote an
+> interrupted run into a finished experiment. This corpus has made
+> the opposite mistake before, reporting a session kill where every
+> runner had in fact written `WALL=14400 rc=124`, and the fix in both
+> directions is the same: read the runner's return code before
+> choosing the noun.
+>
+> **What does not change.** The 69/3/6 counts are unaffected — the
+> job produced no verdict under either name — and section 17.2's
+> conclusion does not rest on this run at all: it rests on the six
+> engines of section 20.2, which were bounded, did reach the bound,
+> and are TIMEOUTs in the strict sense.
 
 ### 16.1 Sixty-nine checks pass in both, and the list is identical except for `reg_ch0`
 
-Of the 79 bmc checks, **68 have the same status in both runs and one
-changed**, and the one that changed is `reg_ch0`, which section 17 is
-about. Every other check — 62 instruction checks, the seven consistency
+Of the 79 bmc checks, **78 have the same status in both runs and one
+changed** — 69 PASS in both, 3 FAIL in both, and 6 that produced no
+status in either — and the one that changed is `reg_ch0`, which
+section 17 is about.
+
+> **Correction, 2026-09-09 — the count in the sentence above was
+> 68, which is not reachable from either reading of it.** The
+> superseded wording was "Of the 79 bmc checks, **68 have the same
+> status in both runs and one changed**". Neither arithmetic works:
+> counted over all 79, the same-status set is 69 PASS + 3 FAIL + 6
+> no-status = **78**; counted as the pass-in-both set that this
+> subsection's own heading names, it is **69**. The report output
+> quoted in the correction above is the artefact for both figures.
+> The heading, "Sixty-nine checks pass in both", was and remains
+> correct.
+
+Every other check — 62 instruction checks, the six consistency
 checks other than `reg` and `liveness`, and `cover` — has the same
 verdict in both runs, and no check that passed in phase 1 fails in
-phase 2 **[fact]**.
+phase 2 **[fact]**. That enumeration is 62 + 6 + 1 = 69, the
+pass-in-both set; it said "seven consistency checks ... and `cover`"
+before 2026-09-09, which counts `cover` twice, because the nine
+non-`insn_` jobs in `checks/` are `causal`, `cover`, `hang`, `ill`,
+`liveness`, `pc_bwd`, `pc_fwd`, `reg` and `unique` [fact,
+`ls hw/soc/out/rvformal-secded/cores/ibex/checks/*.sby`], of which
+six remain once `reg`, `liveness` and `cover` are named separately.
 
 **All 79 cover jobs pass in both runs.** Nothing became unreachable, no
 depth became vacuous, and the substituted register file does not stop

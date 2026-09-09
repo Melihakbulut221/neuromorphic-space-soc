@@ -265,6 +265,49 @@ question 2), which becomes the authority once extracted. ECC overhead
 (+22% bits for SECDED on 32-bit words) is carried inside the capacity
 figures of the candidate tables below (e.g. "128 KB + SECDED ≈ 156 KB").
 
+**NOTE ADDED 2026-09-09, and it governs every capacity and area figure
+in section 3.** The codeword above is not the one that was built. **The
+implemented weight memory is 64 data bits plus 8 check bits, 12.5 %
+overhead, not 32 plus 7 at 21.875 %** — `10-npu-mvp-spec.md` section 5
+fixes the physical word at "64 data bits = 16 weights, plus 8 SECDED
+check bits (72-bit macro word, 12.5 percent overhead)" and derives
+**128 KB data + 16 KB check = 144 KB**, and `hw/rtl/secded_enc.v` is a
+(72,64) encoder whose elaboration guard refuses any other width, with
+`hw/rtl/lif_core.v` line 244 spending one codeword on sixteen
+consecutive weights. Fact, both files. The +22 % arithmetic is correct
+for the 32-bit word it names — the minimal SECDED there is (39,32),
+seven check bits, which is exactly what `43-core-hardening.md`
+section 6.3 measured on the register file — but a 32-bit codeword is
+not what a weight SRAM uses and never was here.
+
+**What that costs the numbers below, and what it does not.** Every
+figure derived from 156 KB is high by 156/144 = **8.33 % of the 144 KB
+basis, which is 7.7 % of the number as quoted** (estimate, arithmetic).
+Read across section 3: the Candidate B weight-SRAM row is 144 KB, its
+SG13G2 band ~3.6–5.7 mm² rather than ~4–6.2, its sky130 OpenRAM figure
+~20 mm² rather than ~22, the half-size fallback point 36 KB rather than
+≈40 KB, and Candidate C's per-node "48 KB + ECC ≈ 58 KB" is ≈54 KB.
+**The direction is conservative in every case — the memory and the die
+area are overstated, not understated — and no decision in this document
+turns over.** sky130 at OpenRAM density is still essentially the whole
+die against the 25 mm² budget, so the 512-neuron working point is still
+out of reach of it; SG13G2 is still inside the budget and still the
+dominant NPU cost; F1 and the 256-neuron fallback are unchanged in
+trigger and in purpose.
+
+**Nothing below is renumbered or rewritten, by `64-document-reconciliation.md`
+section 2's rule** — a superseded figure stays visible with a dated note
+saying what replaced it, because silently editing "156" to "144" in five
+places would leave `07-design-review.md` line 128 and
+`10-npu-mvp-spec.md` line 15, both of which cite this document's 156 KB
+row by name, pointing at a number that no longer exists. **Not fixed
+here**: `10-npu-mvp-spec.md` calls its 144 KB "in line with the `docs/02`
+estimate" and "consistent with the Candidate B budget", which is a claim
+of agreement across the 8.33 % this note has just measured; that
+sentence lives in a document this note does not own.
+`64-document-reconciliation.md` reconciled seven numbers stated two ways
+and did not reach this pair.
+
 ---
 
 ## 3. Candidate architectures

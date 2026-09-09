@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
-# SPDX-License-Identifier: CERN-OHL-W-2.0
+# SPDX-License-Identifier: Apache-2.0
 """How far apart the TMR replicas actually are on the die.
 
     python3 hw/openlane/replica_placement.py <run-dir> [--json]

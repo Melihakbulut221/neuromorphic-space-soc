@@ -36,9 +36,9 @@ moment it is written.
 | `hw/rtl/` | 10 | CERN-OHL-W-2.0 | yes — the frozen pilot, `docs/34` |
 | `hw/soc/` | 213 | CERN-OHL-W-2.0 for `.v .vh .sv .sdc .sby .tcl`, Apache-2.0 for the rest | yes, except the two ISC files below |
 | `hw/tb/` | 26 | CERN-OHL-W-2.0 / Apache-2.0 by type | yes |
-| `hw/openlane/` | 37 | CERN-OHL-W-2.0 | yes |
+| `hw/openlane/` | 38 | CERN-OHL-W-2.0 for the flow configuration, Apache-2.0 for the Python drivers | yes |
 | `hw/fpga/` | 4 | CERN-OHL-W-2.0 / Apache-2.0 by type | yes |
-| `formal/` | 24 | CERN-OHL-W-2.0 | yes |
+| `formal/` | 27 | CERN-OHL-W-2.0 for the SymbiYosys jobs, Apache-2.0 for the equivalence driver and its mutation generator | yes |
 | `tt/` | 29 | CERN-OHL-W-2.0, scaffolding Apache-2.0 as received | yes — this is the shuttle submission |
 | `regmap/` | 4 | Apache-2.0 | yes |
 | `sw/golden/`, `sw/tests/` | 27 | Apache-2.0 | yes |

@@ -1,0 +1,1552 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+%
+% Every number printed in this paper is registered in paper/claims.yaml
+% and re-derived by paper/check_claims.py, which runs in CI. A claim that
+% cannot be re-derived is recorded there as read-by-hand from a named
+% artefact, and the count of those is printed in Section 10 rather than
+% left implicit.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{tabularx}
+
+\sisetup{group-separator={,}, group-minimum-digits=4, detect-weight=true}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\file}[1]{\texttt{\small #1}}
+\newcommand{\um}{\si{\micro\meter}}
+
+\title{Triplicated in the Netlist, Adjacent in the Die:\\
+Instrumenting a Redundancy Claim Across an Open 130\,nm Flow}
+
+\author{Hasan Melih Akbulut\thanks{Independent researcher.
+Correspondence: \texttt{57303760+Melihakbulut221@users.noreply.github.com}.
+All sources, harnesses and records are open: see Appendix~\ref{app:artefacts}.}}
+
+\date{9 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We report two levels at which a triple-modular-redundancy claim about a
+130\,nm open-PDK neuromorphic system-on-chip was false while every check
+pointed at it returned green, and we name the instrument that was blind
+to each.
+\textbf{No silicon exists, no radiation testing has been performed, and
+neither open PDK involved publishes total-ionising-dose or single-event
+data}; every reliability figure here is a seeded fault-injection
+measurement on RTL and on placed netlists, the system-on-chip layout
+fails 3{,}088 setup endpoints at the slow corner, and no Magic DRC,
+KLayout DRC or Netgen LVS result exists for it---the decks were switched
+off on the strength of a single-macro experiment in which the vendor SRAM
+macro produced \num{1106478} Magic errors, \emph{every one of them inside
+the macro footprint and none outside}, and we report below what happens
+when they are switched back on.
+What we do have is a design whose redundancy claim was checked at three
+levels and was wrong at two of them.
+At the register-transfer level the claim was true. In the mapped netlist
+it was false---the synthesiser's structural hashing had collapsed three
+declared replicas into one physical bank, and the register-transfer-level
+fault-injection campaign that was supposed to detect this produced
+\emph{bit-identical} output on the defective and the repaired design,
+because it deposits into signals the netlist no longer contains.
+Repaired, and confirmed by a per-instance-path census of mapped
+flip-flops that is mutation-checked and runs in two independent
+technology mappers.
+In the die it is false again, and this is measured here for the first
+time: the three replica banks share one region of the layout, the minimum
+cross-replica cell separation is \SI{3.78}{\micro\meter} centre-to-centre
+and \SI{0.00}{\micro\meter} edge-to-edge---the cells touch---49 pairs
+abut, and for 103 of 165 configuration flip-flops the nearest other
+configuration flip-flop belongs to a \emph{different} replica.
+Nothing in the flow asked for separation, and the census that establishes
+the redundancy runs on the synthesis netlist and cannot see placement by
+construction.
+A third result is orthogonal and sharper: in a gate-level campaign on the
+watchdog's protection banks, 174 of 174 injected upsets classified
+\textsc{corrected}---and every one of them reset the part one clock
+later, through a combinational decode of the voted state onto an
+asynchronous reset that the register-transfer level cannot express.
+The generalisable claim is not a taxonomy of defects. It is that a
+fault-tolerance property is not one claim but a claim at each level
+between the source and the die, that the instrument which establishes it
+at one level is structurally incapable of refuting it at the next, and
+that each replacement instrument must carry a mutation that has been seen
+to make it fail. We publish the instruments, the mutations, the negative
+results and the claims we withdrew.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+This paper is about a claim we made about our own design and could not
+support, twice, at two different levels, while the checks we had pointed
+at it all passed.
+
+The design is a radiation-tolerance-oriented neuromorphic
+system-on-chip built entirely with open tools on an open 130\,nm PDK,
+through a community-governed successor of the tapeout-proven open
+register-transfer-to-mask-data flow~\cite{openlane2020}.
+Its configuration state is triplicated and majority-voted; its memories
+and register file carry SEC-DED codes; its watchdog is windowed and its
+protection state is triplicated with a storage transform. All of that is
+ordinary, and none of it is this paper's contribution.
+The contribution is what happened when we tried to establish that the
+redundancy was actually there.
+
+\paragraph{The first level.}
+The register-transfer source declares three replicas. That is checkable
+by reading it, and it was true.
+
+\paragraph{The second level.}
+The mapped netlist did not contain three replicas. Yosys's
+\texttt{opt\_dff} normalises hold-multiplexers into enable flip-flops and
+\texttt{opt\_merge} then hashes cells on their (D, EN, reset-value)
+signature; three replicas written from the same expression hash
+identically and become one. The netlist that fed a hardening run contains
+362 references to \texttt{cfg\_a}, none to \texttt{cfg\_b} and none to
+\texttt{cfg\_c}. The RTL declares \num{1161} flip-flops; the netlist has
+\num{1045}.
+
+This is not a new phenomenon. It is documented in the FPGA
+radiation-hardening literature~\cite{kastensmidt2005}, in vendor
+guidance~\cite{esa_ftmr}, and it is the reason post-synthesis TMR
+insertion tools exist~\cite{tmrg2017,johnson2010}. What is worth
+reporting is not that it happened but \emph{what failed to notice}: a
+committed register-transfer-level fault-injection campaign, aimed
+specifically at the configuration TMR, reporting five injections per
+replica, all \textsc{corrected}, zero silent data corruptions---and
+producing the same numbers before and after the repair, because at the
+register-transfer level the three replicas are three distinct signals
+regardless of what the netlist holds. A second check, an A/B of the total
+flip-flop count with and without a preservation attribute, returned the
+same total both ways and that identity was read as ``nothing was
+merged''. It is equally consistent with ``the merge happened and the
+attribute does not prevent it'', which is what was true: the attribute
+lands on the net, not the cell, so 110 names survived as aliases while
+the storage was deleted.
+
+\paragraph{The third level.}
+The repair was made, and the instrument built for it---a census of mapped
+flip-flops by \emph{instance path}, in two independent technology
+mappers, with the preservation attributes deleted from the source text,
+carrying a mutation that makes it fail---has passed ever since. We then
+asked a question nothing in the project had asked: \emph{where are the
+three banks on the die?}
+
+They are in the same place. Section~\ref{sec:placement} is the
+measurement. The census establishes redundancy in the netlist and is
+structurally incapable of seeing placement, because it runs before
+placement exists. A guard must sit at the stage that can satisfy it, and
+this one cannot.
+
+\paragraph{What this paper claims, and what it does not.}
+It does not claim the design is radiation-hardened. It cannot: there is
+no silicon, no beam, no total-ionising-dose curve, no single-event
+cross-section, and the design maps to stock standard cells rather than to
+a radiation-hardened-by-design library, one of which exists for a
+neighbouring PDK and is not used here~\cite{sky130rhbd}. It does not
+claim a failure rate; every fault-injection figure is conditional on an
+upset having landed in the injection window. It does not offer a
+cost-versus-residual-SDC curve and therefore makes no cost-optimality
+claim, which is the axis CLEAR~\cite{clear2018} settled.
+It claims exactly this: the redundancy is real in the netlist, is not
+real in the die, and each of those statements needed a different
+instrument to establish.
+
+\paragraph{Structure.}
+Section~\ref{sec:inventory} is an inventory of what exists and what does
+not, before any argument, because the single largest risk to a paper like
+this is a reader discovering the absence of silicon halfway through.
+Section~\ref{sec:design} describes the design;
+Section~\ref{sec:mechanisms} the protection mechanisms and their measured
+cost; Section~\ref{sec:formal} what is proved and what is assumed;
+Sections~\ref{sec:fi-method} and~\ref{sec:fi-results} the fault-injection
+method and results; Section~\ref{sec:placement} the placement
+measurement; Section~\ref{sec:evidence} the paper's central argument;
+Section~\ref{sec:determinism} the flow determinism that licenses every
+delta in the paper to be attributed at all; Section~\ref{sec:limits} the
+limitations; Section~\ref{sec:related} related work, which credits away
+most of what this design does.
+
+\section{What exists and what does not}
+\label{sec:inventory}
+
+Table~\ref{tab:inventory} is the inventory, and the rows saying
+\emph{does not exist} are the reason it is on the second page rather than
+in a limitations section at the end.
+
+\begin{table}[htbp]
+\centering
+\caption{What has been built and measured, and what has not.
+Every figure is re-derived by \file{paper/check\_claims.py} or is recorded
+there as read once from the named artefact.}
+\label{tab:inventory}
+\small
+\begin{tabularx}{\textwidth}{L{4.6cm}X}
+\toprule
+\multicolumn{2}{l}{\textbf{The pilot: a 12-tile shuttle submission, frozen by git blob hash}}\\
+\midrule
+Geometry & 6\,$\times$\,2 tiles; die \SI{404499}{\micro\meter\squared},
+core \SI{392988}{\micro\meter\squared} \\
+Content & 8 neurons, 8 axons, flip-flop storage, 4-deep event queues \\
+Mapped cells & \num{12546} excluding fill; \num{1296} flip-flops \\
+Geometric sign-off & Magic DRC 0, KLayout DRC 0, KLayout XOR 0, Netgen LVS
+0 on all four unmatched counters, antenna 0, route DRC 0 \\
+Timing & slow-corner setup \textbf{+\SI{1.2262}{\nano\second}} at a
+\SI{20}{\nano\second} period with a real 5\,\% on-chip-variation derate;
+0 setup and 0 hold violations at all three corners \\
+\midrule
+\multicolumn{2}{l}{\textbf{The system-on-chip around it}}\\
+\midrule
+Geometry & \SI{2306.40}{\micro\meter} $\times$ \SI{2075.22}{\micro\meter}
+= \SI{4.7863}{\milli\meter\squared} \\
+Mapped cells & \num{42518} cells, \num{5263} flip-flops \\
+Timing & \textbf{$-$\SI{4.6799}{\nano\second} slow-corner setup on
+\num{3088} violating endpoints}; hold met at all three corners;
+detailed-route DRC 0 \\
+Geometric sign-off & \textbf{none as of the run this paper measures}. The
+decks are switched off in the configuration and were never run on this
+design \\
+Why & a single-macro experiment: one \texttt{RM\_IHPSG13} returns
+\num{1106478} Magic DRC error boxes \emph{of which none falls outside the
+macro footprint}, \num{2316} KLayout errors all naming cells inside the
+macro hierarchy, and 359 Netgen LVS errors that are a \emph{name and bus
+delimiter} mismatch rather than a geometric one. An upstream integration
+failure, not a defect of this design---and see \S\ref{sec:decks} for what
+happens when the decks are pointed at this design with the vendor macro
+abstracted \\
+\midrule
+\multicolumn{2}{l}{\textbf{What does not exist}}\\
+\midrule
+Silicon & none, no engineering sample, no schedule for one \\
+Radiation data & none of any kind. Neither SkyWater 130\,nm nor IHP
+SG13G2 publishes TID, SEE or SER characterisation \\
+Application accuracy & no classification result for this design on any
+task, and none has ever existed \\
+A clock frequency for the SoC & withheld. \SI{50}{\mega\hertz} is not
+achieved and the measured non-closure is not a specification. The
+\emph{pilot's} figure is published above because it signs off on every
+deck an open flow can run \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Two of those rows deserve a sentence each rather than a footnote.
+
+\paragraph{The SRAM macro, and a decision that was narrower than it
+looked.}
+Six macros were needed and one was integrated as a bring-up vehicle. Its
+vendor views fail three independent decks by margins that are not
+marginal: \num{1106478} Magic errors, \num{2316} KLayout errors
+attributed to 57 cells all inside the macro hierarchy, and 359 Netgen LVS
+errors. On that evidence the three decks were switched off in the
+system-on-chip's configuration, and they have never been run on the
+system-on-chip at all.
+
+Two things about that are worth separating, because the project's own
+record ran them together.
+
+The \emph{diagnosis} is well supported and we stand behind it. All
+\num{1106478} Magic errors fall inside the macro footprint and
+\textbf{none falls outside}; the KLayout errors all name cells inside the
+macro hierarchy; and the LVS failure is not geometric at all but a
+\emph{naming} mismatch---the mask-data cell names and the circuit
+netlist's subcircuit names disagree and the bus delimiters differ, so
+none of the 188 bus pins match. That is an upstream integration failure
+with an upstream owner.
+
+The \emph{decision} was described in the project's record as a choice
+between running the decks and substituting the PDK's own unverified
+residual rule set, with the substitution examined and declined on the
+grounds that a sign-off obtained by relaxing a deck is not a sign-off.
+That reasoning is sound and the option space was not. \textbf{A third
+route existed and was not examined}: abstracting the vendor macro so that
+the deck reads its boundary rather than descending into its geometry,
+which is what an integrator ordinarily does with a hard macro whose
+internals the vendor certifies. It is not deck relaxation---it changes
+what is looked at, not what counts as an error---and the diagnosis above
+is precisely the evidence that it would work, because a deck that never
+enters the macro cannot report the errors that are all inside it.
+
+We record this as an instance of the paper's own subject arriving one
+level up from a check: \emph{the option space was described as explored
+when a standard option in it had not been looked at}. The measurement
+that follows from taking that route is reported in
+Section~\ref{sec:decks}.
+
+\paragraph{The frequency.}
+The project operates a standing rule that a measured non-closure is not a
+specification. The SoC misses its target; publishing the number it misses
+by, as though it were an achieved frequency, is the class of overclaim
+this paper is about. The pilot's number is published because the pilot
+closes.
+
+\section{The design under study}
+\label{sec:design}
+
+\subsection{Two designs, and the gap between them}
+
+The specification defines a 512-neuron, 512-axon leaky-integrate-and-fire
+core with 4-bit signed weights in an axon-major crossbar, \num{256}k
+synapses in SEC-DED-protected SRAM, and ten bit-exact integer equations
+that a Python golden model implements as the executable specification.
+
+\textbf{That core has never been elaborated.} The top-level module
+refuses geometries outside $[4,16]$, and the fallback trigger that
+governs this---storage moves from SRAM macros to flip-flops when the
+macros are unavailable---has fired, because the macros are the ones
+Section~\ref{sec:inventory} describes. What was built, frozen and
+submitted is 8 neurons and 8 axons with flip-flop storage: the
+specified \emph{datapath} at a fallback \emph{scale}.
+
+Every result in this paper is a result about the built design. Where a
+figure is measured at a particular geometry, the geometry is printed with
+it. Nothing here is a claim about the specified core.
+
+\subsection{The reference, and what is and is not claimed about it}
+
+The accelerator's architecture takes its shape from a published product
+brief for a 28\,nm commercial part, of which two pages are public and no
+datasheet, user manual or conference paper exists. We use it as an
+\emph{architecture-class reference} and never as a performance baseline.
+No performance comparison is offered, and the one figure this project
+once derived from that comparison has been withdrawn: the source list
+mixed items from the two-page brief with an item from the vendor's
+product page under a single heading naming the brief, and the resulting
+compute ratio inherited a provenance it did not have.
+
+There is a second open question we do not resolve. Whether this
+accelerator is an independent implementation or a reference-guided one
+has not been settled in the project's own record, and until it is,
+\textbf{no claim of independent implementation is made here}. The word
+that would usually be used does not appear in this paper.
+
+\section{Protection mechanisms and their measured cost}
+\label{sec:mechanisms}
+
+\subsection{A replication bound that comes from the tool, not from
+information theory}
+
+Three replicas of a $W$-bit word, written from the same expression, are
+merged by structural hashing. The project's response is to give each
+replica a different \emph{storage transform}: replica A stores the value,
+B stores it under a polarity mask, C under a mixing transform composed
+with a mask.
+
+The available affine transforms over $W$ bits give exactly
+\[
+2\,(2^{W}-1)
+\]
+distinct coordinate functions---2 at $W=1$, 6 at $W=2$, 14 at $W=3$.
+Three replicas need six distinct functions, and one of the three is the
+identity, so \textbf{three bits is the first width at which a third
+replica has a function left to take}. Below it, structural hashing
+collapses one replica whatever the source says.
+
+This is a statement about defeating a specific optimisation over a
+specific family of transforms, not an information-theoretic bound, and it
+should be read that way. It is nonetheless a design rule with immediate
+consequences that are visible in the source: a one-bit flag gets two
+rails and detection only, never a triple; a two-bit state gets a check
+field rather than a third copy; and scattered one-bit flags are
+\emph{bundled} into 22-, 23-, 25- and 29-bit words before triplication,
+because the bundle has functions to spare and the flags do not.
+We found no statement of this bound in the surveyed literature, though
+the underlying problem is thoroughly documented~\cite{kastensmidt2005,
+esa_ftmr,tmrg2017}.
+
+\subsection{Codes}
+
+The weight path uses a (72,64) Hsiao SEC-DED code~\cite{hsiao1970}. Its
+parity matrix was re-derived from the source constants rather than taken
+on trust: all 72 columns are distinct, non-zero and of odd weight---56 of
+weight 3, 8 of weight 5, 8 identity---and every row has weight 26 over
+the data field, so all eight parity trees are five levels of XOR2. Odd
+column weight is the double-error-detection argument: a two-bit error
+always produces a syndrome of even parity, which can never equal a
+column.
+
+Shortened to 32 data bits one row vanishes, giving (39,32) and seven
+check flip-flops per register---the minimal SEC-DED width for 32 bits.
+Shortened to 8 it becomes (13,8) inside a 16-bit lane, and four
+independent lanes fill a 64-bit memory row exactly. That last choice has
+a consequence worth stating because it is the reason the memory was
+halved rather than widened: two upsets in two lanes are two corrected
+singles, where a single word-wide code would report one uncorrectable
+double.
+
+Formally proving an ECC decoder is routine industrial
+practice~\cite{kumar2023} and is not claimed here as a contribution.
+
+\subsection{Cost, and the rule that makes a cost figure mean anything}
+
+Costs are measured against \emph{the same design with hardening disabled},
+never against the earlier design. The difference is not pedantic. When a
+hardening change is accompanied by a refactor---and it usually is---
+measuring against the earlier design credits the refactor to the
+hardening. The project records four instances where this was caught after
+the fact, of \SI{683.1216}{\micro\meter\squared},
+\SI{58.17}{\micro\meter\squared}, \SI{27.216}{\micro\meter\squared} and
+\SI{25.4394}{\micro\meter\squared}, and \textbf{every one of them was in
+the direction that understates the cost}.
+
+The register-file SEC-DED substitution costs
+\SI{38050.5762}{\micro\meter\squared} (+13.80\,\%) and 222 flip-flops on
+the core, measured module-alone in one session. Two qualifications travel
+with that figure and are printed here because they are printed in the
+record: an earlier section of the same document states
+\SI{37983}{\micro\meter\squared} for the same measurement, a
+\SI{67.58}{\micro\meter\squared} discrepancy that stood uncorrected until
+this paper was prepared; and the module-alone configuration is not the
+shipped one, which measures \SI{316051.6590}{\micro\meter\squared}
+(+14.64\,\%).
+
+\section{Formal verification: what is proved, what is assumed}
+\label{sec:formal}
+
+\subsection{The scope, counted from the files}
+
+There are 23 SymbiYosys job files defining \textbf{118 tasks}: 54 over
+the frozen pilot and 64 over the system-on-chip fabric and peripherals.
+By mode, \textbf{51 are \texttt{prove}} by $k$-induction---the only
+unbounded results anywhere in the project---36 are bounded model
+checking and 31 are cover, with depths from 1 to 220. All 118 have a
+result directory and all 118 report \texttt{DONE (PASS)}. The task set
+and the result-directory set are exactly equal: 118 expected, 118
+present, none missing, none orphaned.
+
+\subsection{Three things about that result that a reader must have}
+
+\paragraph{No verdict is committed.}
+\texttt{git ls-files '*logfile.txt'} returns \textbf{zero}. Every result
+directory is build output and is ignored. The only tracked artefact is a
+verification log that records \emph{counts}. A reader who clones this
+repository obtains 23 job files and no verdicts, and must re-run to see a
+single \texttt{PASS}. We state this rather than write ``118/118 pass''
+unqualified.
+
+\paragraph{The date of the evidence is not in the evidence.}
+SymbiYosys log lines carry a wall-clock time of day and no date. The
+figure this project reports as the age of its oldest verdict is derived
+from file modification time, which a clone, a checkout or a \texttt{touch}
+resets and nothing recovers.
+
+\paragraph{Whether the verdicts match the current source is checkable,
+and nothing in the project was checking it.}
+A SymbiYosys run copies its sources into the task directory. Comparing
+all 336 such copies against their tracked originals: raw comparison says
+336 differ, and the entire difference is a three-line licence header
+added later. Stripping only those headers gives \textbf{336 identical, no
+real difference}, so the verdicts do correspond to the design as it
+stands. This was established once, by hand, for this paper, and it is now a
+check.
+
+The project's own verification recorder had two blind spots and they are
+worth reporting because the file exists to stop exactly this. It read the
+\texttt{DONE} line and the file's timestamp and nothing else, so a log
+left over from superseded RTL would have been counted as a pass. And it
+enumerated results with a two-level wildcard over two directories, which
+\textbf{structurally could not reach} the processor checks of
+\S\ref{sec:rvformal} at all: it reported \num{118} passing and
+\emph{zero} not-passing on a tree that also held 6 failures, 3 errors and
+26 stopped runs. Every row it had ever written said
+\texttt{formal\_other=0}, and the statement was true of what it looked at
+and false of the repository.
+
+Widened to every directory holding both a job file and a log, and taught
+to compare each task's own source copies against the tracked originals
+modulo comment-only differences, it now reads \num{425} passing and
+\num{35} not, over 460 result directories, with no stale verdict and no
+unchecked one. \textbf{The numbers in this section did not change. The
+recorder's ability to contradict them did.}
+
+\subsection{The assumption ledger}
+
+Across 25 property files there are 106 \texttt{assume} statements, 6
+symbolic constants, and \textbf{zero} \texttt{restrict}. Six property
+files carry \emph{no} assumptions at all---the SEC-DED codec, the
+byte-lane codec, the register-file codec, the memory ECC integration, the
+LIF memory codec and the TMR voter---and these are the strongest results
+in the project. The SEC-DED property file states each property as an
+implication on Hamming weight rather than assuming one.
+
+The load-bearing assumption is stated plainly because it bounds
+everything: \textbf{the single-fault assumption appears in 14 of the 25
+property files.} Every fault-tolerance proof in this work is scoped to at
+most one bad replica and at most one flipped bit, by construction. It
+follows that no proof here can express a multiple-bit upset, and
+Section~\ref{sec:placement} is precisely about a geometry in which
+multiple-bit upsets are the relevant question.
+
+\subsection{The processor: 79 checks, none of them unbounded}
+\label{sec:rvformal}
+
+The core is a small RV32IMC implementation with physical memory
+protection, with its architectural register file substituted for a
+SEC-DED-protected one. It was run against the standard RISC-V formal
+verification harness in two configurations, upstream and substituted.
+
+\begin{table}[htbp]
+\centering
+\caption{RISC-V formal checks, both configurations, parsed from every
+generated task's own log.}
+\label{tab:rvformal}
+\small
+\begin{tabular}{lrr}
+\toprule
+& upstream register file & SEC-DED register file \\
+\midrule
+\texttt{PASS} & 70 & 69 \\
+\texttt{FAIL} & 3 & 3 \\
+no \texttt{DONE} line (stopped) & 6 & 6 \\
+\texttt{DONE (ERROR)} & --- & 1 (\texttt{reg\_ch0}) \\
+\midrule
+generated check directories & 79 & 79 \\
+of which \texttt{mode prove} & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three points, in the order that matters.
+
+\paragraph{Zero of the 79 are unbounded.}
+78 are bounded model checking and one is cover. Nothing about this core
+is proved for all time by this harness; it is checked to a depth.
+
+\paragraph{The failing and stopped sets are identical across the two
+configurations}---\texttt{insn\_div}, \texttt{insn\_rem} and
+\texttt{liveness} fail in both, and the six multiply and unsigned-divide
+checks stop in both. That identity is the substance of the claim that the
+substitution changed nothing, and it holds.
+
+\paragraph{The one check that behaved differently did not time out, and
+the project said it did.}
+\texttt{reg\_ch0} is the check over the substituted register file. Its
+own log ends \texttt{engine\_0: <SIGTERM>}, ``Engine terminated without
+status'', \texttt{DONE (ERROR, rc=16)} at 1\,h\,41\,m. That is an
+external kill, not a bound reached. The project's summary table printed
+\textsc{timeout}; its own cost ledger, four sections later, said ``killed
+from outside''. The two disagree and the log settles it. Elsewhere---an
+engine sweep run under \texttt{timeout(1)}, where the exit status is
+\texttt{rc=124}---\textsc{timeout} \emph{is} the right word and is
+verified.
+
+We report this at length for a reason that is not pedantry.
+\textsc{timeout}, \textsc{killed} and \textsc{error} are three different
+words describing three different states of knowledge: a bound was
+reached, something outside intervened, or the tool failed. Conflating
+them converts ``we do not know'' into ``we ran out of time'', which reads
+as a resource problem rather than an open question. \textbf{Nothing here
+is evidence that the substitution preserves the property, and nothing
+here is evidence that it breaks it.}
+
+\paragraph{What the harness does not reach at all.}
+Zero control-and-status-register checks are generated, because the core's
+formal interface exposes no CSR ports. Memory-protection enforcement is
+unproved, and two assumptions exist to keep it from biting. Eight of the
+70 base instructions have no verdict in either run. Bus errors are
+assumed away while the fabric raises one on every unmapped address. Trap
+destination and the three trap CSRs are unchecked.
+
+\subsection{A wrong specification manufactures a bug}
+
+Two of the three failing checks are not failures of this design. The
+harness's own reference models for signed division and remainder compute
+the \emph{unsigned} result, confirmed on four counterexamples from two
+independent runs and checkable by hand from the language standard's
+sign-extension rules. Corrected copies are carried in this repository
+with the upstream licence notice inline.
+
+The general point is the sharpest available demonstration of a thing this
+paper keeps returning to: \textbf{a trusted specification is a trusted
+component}, and a wrong one does not merely fail to catch a bug, it
+manufactures one. Had these two checks been believed, the design would
+have been ``repaired'' to compute an unsigned division.
+
+\section{Fault injection: method}
+\label{sec:fi-method}
+
+\subsection{Fault model, stated before any result}
+
+Single-bit, single-event, flip-flop only. One bit of one sequential
+element is inverted once, at one clock edge, and the simulation continues
+to completion against a golden run. There are no single-event transients,
+no multiple-bit upsets, no permanent faults and no spatial correlation
+between injection sites.
+
+Two consequences follow and are stated here rather than in the
+limitations, because they are large.
+
+First, \textbf{a combinational decoder is not a site}. The register
+file's SEC-DED decoder is 528 combinational cells and none of them can be
+injected by this method, so the campaign says nothing about a transient
+in the decoder that produces a wrong correction.
+
+Second, \textbf{the hazard that Section~\ref{sec:fi-results} repairs is
+precisely a transient}, and the campaign that measures the repair injects
+only into flip-flops. That is not a contradiction---the repair is
+observed through a flip-flop upset that reaches a combinational
+decode---but it is a limit, and the geometry of
+Section~\ref{sec:placement} is exactly where multiple-bit upsets would
+matter and this model cannot express them.
+
+\subsection{Outcome classes, and how they map onto the standard ones}
+
+Each injection is classified into one of five: \textsc{masked} (the
+upset never reaches an observable), \textsc{corrected} (a protection
+mechanism fired and the answer is right), \textsc{detected} (an error was
+reported and the answer is not silently wrong), \textsc{sdc} (the answer
+is wrong and nothing said so), \textsc{hang} (the run did not terminate).
+
+\textsc{sdc} and \textsc{detected} are Mukherjee's silent data corruption
+and detected unrecoverable error~\cite{mukherjee2003,mukherjee2008}, and
+\textsc{masked} is their benign complement, which
+Shivakumar~\emph{et~al.}~\cite{shivakumar2002} decompose into logical,
+electrical and latching-window masking---of which this method observes
+only the first, because it injects into state rather than into a node.
+The campaign structure follows Cho~\emph{et~al.}~\cite{cho2013}, which is
+also the citation for what a higher abstraction level costs, and is the
+reason the campaigns here are run at gate level as well as at
+register-transfer level.
+
+\textsc{corrected} is the class that is not in those taxonomies. It is
+the case where a mechanism fired and the answer is right, which the
+architectural-vulnerability vocabulary folds into benign. Keeping it
+separate is what makes Section~\ref{sec:fi-results}'s central result
+expressible at all: a class where everything went right by every measure
+the classifier had, and the machine restarted.
+
+\subsection{A weakness we did not repair}
+
+We report proportions and, in most places, do not report confidence
+intervals derived from statistical fault-injection
+theory~\cite{leveugle2009}. Where the population is small the project
+uses the rule of three---``0 of 100 is a rate below about 3.7\,\%, not a
+rate of zero''---and that phrasing appears in the record. It is not
+enough, and for a paper about evidence discipline it is the most
+uncomfortable gap in this section. It is a day of work and it was not
+done before this submission.
+
+\subsection{The bench was wrong, and the check that caught it}
+
+The system-on-chip's injection bench decides its deposit instant by a
+wait loop racing its own cycle counter. Over a 1{,}400-injection
+campaign, \textbf{686 deposits landed one clock edge after the cycle
+their record names}, and 714 landed on it.
+
+This bench passed its own per-deposit verification on all 2{,}800 runs
+of that campaign---each injection is checked to have flipped the bit it
+names---and it passed a uniquely-determined cross-design trace alignment.
+Both are real checks and neither can see the defect, because both ask
+\emph{was the right bit flipped} and the defect is \emph{when}.
+
+What caught it was a different question: a cycle-for-cycle comparison of
+every mapped flip-flop between the register-transfer and gate-level
+models of the same record. On the first record whose outcome depended on
+the edge, the two levels disagreed completely---an upset that derailed
+the register-transfer model with 64 traps and a nonzero exit status was,
+one edge earlier, \emph{a golden run}. Before the repair, that control
+reported 2, 1 and 1 differing flip-flops out of 964 on the three records
+it passed; after, it reports \textbf{0 of 964 over 18{,}681 cycles on all
+four}.
+
+The consequence was not a patch. A 450-record gate-level pass, seven
+hours and twenty-two minutes of compute, was \textbf{discarded} rather
+than corrected, because a campaign whose deposit instant is not known is
+not a campaign with a small error. The published outcome distributions
+did not change; what changed is that they are now attributable to an
+instant that was measured.
+
+\section{Fault injection: results}
+\label{sec:fi-results}
+
+\subsection{Register-transfer and gate level do not diverge much, and
+where they do the mechanism is nameable}
+
+On the frozen pilot, 370 of 370 like-for-like injections classify
+identically between the register-transfer model and the sign-off netlist.
+On the system-on-chip, of 1{,}175 records replayed at gate level,
+\textbf{1{,}158 classify identically and 17 disagree}. Every disagreement
+class was characterised rather than reported as noise: the synthesiser
+storing two register-transfer registers in one flip-flop each, so the
+netlist is strictly worse on a subset; state-machine re-encoding
+producing netlist flip-flops with no register-transfer twin, which are
+the most lethal storage in the design per bit; and one class where the
+netlist is better.
+
+We draw the conclusion the numbers support and no more: at this scale,
+on this design, register-transfer-level injection is a good
+approximation of gate-level injection for \emph{outcome distribution},
+and it is not a substitute for it, because the cases where it differs are
+structural and are invisible at the level that approximates well.
+
+\subsection{A correction that cost a reset}
+\label{sec:w9}
+
+This is the sharpest single measurement in the project.
+
+The watchdog's protected state is 29 bits, triplicated into three banks
+of 29 flip-flops. A gate-level campaign injected \textbf{174 single-bit
+upsets}---87 replica flip-flops, two draws each, 58 per bank---into the
+sign-off netlist. Every one classified \textsc{corrected}. No error was
+announced. Masking fields were identical on every record: nothing
+\textsc{masked}, nothing \textsc{sdc}, nothing \textsc{detected}, nothing
+hung, the voter's mismatch flag set once, the output correct.
+
+An \emph{event} counter on the reset pin---a channel distinct from the
+clocked sampler the classifier reads---recorded that \textbf{every one of
+those 174 corrections also asserted the system reset}, one clock later.
+
+\begin{table}[htbp]
+\centering
+\caption{One byte-identical 174-injection plan, four netlists.
+Every masking field is identical across all four arms; only the reset
+event count moves.}
+\label{tab:w9}
+\small
+\begin{tabular}{llrrr}
+\toprule
+Design & Netlist & \textsc{corrected} & reset events & resets/correction \\
+\midrule
+unrepaired & placed      & 174/174 & 174 & 1.0000 \\
+repaired   & placed      & 174/174 & 0   & 0.0000 \\
+unrepaired & synthesised & 174/174 & 174 & 1.0000 \\
+repaired   & synthesised & 174/174 & 0   & 0.0000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{The mechanism.}
+The voted 5-bit reset-hold field was decoded \emph{combinationally} onto
+the asynchronous reset of every flip-flop in the system-on-chip. A
+correction is a state change; the decode of that change reached the
+reset before it was registered. In the source this is a single
+continuous assignment followed by an \texttt{always} block sensitive to
+the resulting net, under a comment asserting that the request is
+registered.
+
+\paragraph{Why nothing saw it.}
+The gate-level classifier samples announcement pins on the rising clock
+edge and cannot see a sub-clock pulse on an asynchronous reset. Every
+register-transfer-level campaign missed it---126 and 168 injections, all
+corrected, no reset---and so did the formal property, because
+\texttt{rst\_req\_o = in\_reset} and
+\texttt{rst\_req\_o = in\_reset \&\& in\_reset\_q} are \emph{the same
+function of the same state at the register-transfer level}. The property
+passed by $k$-induction on the defective design and on the repaired one,
+and it was true of both.
+
+There was one further tell that was visible and not looked at: on all 174
+records of both unrepaired arms, the run length minus the injection edge
+is \emph{exactly} 18{,}683, with no spread. A machine that restarts
+finishes at a fixed offset from the restart. A spread of zero over 174
+records is not a plausible property of an unperturbed run, and nobody
+asked.
+
+\paragraph{The repair, and the instrument.}
+One flip-flop: 131 to 132 in the block, 5{,}873 to 5{,}874 in the
+system-on-chip, \SI{643.0536}{\micro\meter\squared} of synthesised area,
+\num{0.0993}\,\%. Die area unchanged.
+
+The instrument built for it is a whole-netlist census of asynchronous
+reset fan-in. On the unrepaired netlist there are five distinct
+asynchronous-reset source sets; four are a port or registered signals,
+and the fifth---one net, two flip-flops---has a combinational fan-in of
+\textbf{25 flip-flops, every one of them a watchdog replica bit}. On the
+repaired netlist the same cone has 26 sources: the same 25 plus the
+register that now stands between them and the reset. The census is a
+general shape rather than a special case: \emph{flag any asynchronous
+reset whose fan-in is a decode rather than a register}.
+
+\paragraph{The mutations.}
+Two, both committed and both executing in the regression: the pre-repair
+design, and an inverted combining term. Both fail the proof.
+
+\section{The two checks that were switched off, and the scope they were
+switched off at}
+\label{sec:decks}
+
+Sections~\ref{sec:evidence} and~\ref{sec:placement} are about instruments
+that ran and could not see. This section is about two that did not run,
+and it belongs in the same paper because the reason in both cases is a
+\emph{scope} that was set once and then read as though it were wider.
+
+\subsection{The geometric decks}
+
+The frozen pilot passes every deck an open flow can run: Magic DRC 0,
+KLayout DRC 0, KLayout XOR 0, Netgen LVS 0 on all four unmatched
+counters, antenna 0, route DRC 0. That is the design being manufactured.
+
+The system-on-chip has no such result, and the immediate reason is
+mechanical: \texttt{RUN\_MAGIC\_DRC}, \texttt{RUN\_KLAYOUT\_DRC},
+\texttt{RUN\_KLAYOUT\_XOR} and \texttt{RUN\_LVS} are all \texttt{0} in its
+configuration. The flow log records four consecutive lines of the form
+\emph{``Gating variable for step \ldots{} set to `False'---the step will
+be skipped''}, and the manufacturability report at the end notes that
+three counters were ``not reported''.
+
+The evidence behind that setting is real and we do not dispute it. What
+we dispute is the shape of the conclusion drawn from it, which
+Section~\ref{sec:inventory} sets out: the diagnosis was that every Magic
+error falls inside the vendor macro's footprint and none outside, and the
+conclusion drawn was that the decks would tell a reader nothing---when
+the diagnosis is in fact an argument that a deck which does not enter the
+macro would return a result about this project's own geometry.
+
+\paragraph{Why abstracting the macro is not relaxing the deck.}
+The distinction matters and it is the whole legitimacy of the experiment.
+Substituting a permissive rule set changes \emph{what counts as an
+error}, and a clean result obtained that way means less than no result.
+Abstracting a hard macro changes \emph{what is looked at}: the deck runs
+unmodified over every polygon the integrator drew and treats the macro as
+a boundary, on the standing assumption that the vendor certifies its own
+cell. That assumption is exactly what the 1{,}106{,}478-to-0 inside-to-
+outside split calls into question for this PDK version---and that is a
+statement about the vendor's macro, which is the finding, not a
+concealment of it.
+
+\paragraph{What is being measured.}
+\textsc{[Results pending: the three decks are running over this design's
+final mask data---Magic DRC classified by whether each error falls inside
+one of the six macro bounding boxes, KLayout DRC classified by the cell
+each violation names, and Netgen LVS with the macro declared a black box
+so that the connectivity of everything else is compared. The claim this
+section will make is bounded in advance: at most ``no design-rule error
+in the geometry this project drew, with the vendor macro abstracted and
+that exclusion named''---never ``the design is DRC-clean''.]}
+
+\subsection{The timing scope, which is the same defect inverted}
+
+The system-on-chip fails 3{,}088 setup endpoints at the slow corner with
+a worst slack of $-$\SI{4.6799}{\nano\second} and total negative slack of
+$-$\SI{8267.18}{\nano\second}. It \emph{meets} setup at typical by
++\SI{4.3153}{\nano\second} and at fast by +\SI{9.5579}{\nano\second}, and
+meets hold at all three. Alongside the setup failures the slow corner
+carries 33 maximum-capacitance and 67 maximum-slew violations.
+
+A nine-nanosecond spread between the corner that is met and the corner
+that is not is the shape of a design optimised at one corner and checked
+at another, and the configuration says that is what happened:
+
+\begin{center}
+\small
+\begin{tabular}{lll}
+\toprule
+Key & Value & Binds \\
+\midrule
+\texttt{SETUP\_VIOLATION\_CORNERS} & \texttt{['*']} & the \emph{checker}
+to all three corners \\
+\texttt{MAX\_SLEW\_VIOLATION\_CORNERS} & \texttt{['*']} & the checker \\
+\texttt{MAX\_CAP\_VIOLATION\_CORNERS} & \texttt{['*']} & the checker \\
+\texttt{TIMING\_VIOLATION\_CORNERS} & \texttt{['*typ*']} &
+\textbf{the repair} \\
+\texttt{RSZ\_CORNERS} & \texttt{None} & \textbf{the repair} \\
+\texttt{PL\_TIMING\_DRIVEN} & \texttt{False} &
+\textbf{placement, entirely} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The project had already found, at cost, that this flow's checkers examine
+less than a reader assumes: its configuration file carries four separate
+comment blocks documenting checkers whose shipped corner bindings made
+them incapable of failing, including one where two checkers resolve an
+empty corner list, warn, and let the flow exit zero. Those were found and
+bound to \texttt{['*']}.
+
+\textbf{The repair side was left at the default, and a default is not a
+decision.} The checkers were widened to every corner; the optimiser that
+is supposed to satisfy them was not. So the design is repaired against
+typical, measured against slow, and the gap between them is reported as a
+failure of the design rather than of the scope it was optimised at.
+
+This is the same shape as Section~\ref{sec:placement} with the roles
+exchanged. There, a check ran at a level above where the property could
+fail. Here, a \emph{repair} runs at a corner below where the property is
+checked. In both cases the artefact that would have shown it---a
+placement, a slow-corner slack---exists on disk and was not consulted.
+
+\paragraph{What the path itself says.}
+The worst path launches at the processor's register-file read address and
+ends at an SRAM macro input, passing through address decode and a long
+exclusive-or chain that is the memory's error-correcting encoder. Its
+delay is not evenly distributed. One \texttt{nand3} of minimum drive
+strength on that path has an output transition of
+\SI{1.611}{\nano\second} and contributes \SI{1.396}{\nano\second} of
+delay while driving \SI{0.119}{\pico\farad}; a \texttt{nand2}, also
+minimum strength, transitions in \SI{1.042}{\nano\second}. Two cells,
+roughly \SI{2.2}{\nano\second}. \textbf{A minimum-strength cell driving
+ten times its comfortable load is a resizer that did not run at that
+corner}, and the 33 capacitance and 67 transition violations at the same
+corner are the same fact counted a different way.
+
+\paragraph{What is being measured.}
+\textsc{[Results pending: which corner the resizer optimises is being
+verified from the flow's own step classes rather than inferred from the
+key names; the 3{,}088 endpoints are being histogrammed by slack to
+establish whether this is a cliff or a plateau, which decides whether a
+configuration change can close it at all; and a re-hardening with the
+repair bound to the corner it is checked at, with timing-driven
+placement, is running into a new directory. Whatever it returns will be
+reported against the attribution rule of Section~\ref{sec:determinism}:
+an improvement is not credited to a change unless it can be separated
+from the netlist landing differently.]}
+
+\section{Where the replicas actually are}
+\label{sec:placement}
+
+\subsection{The question nothing had asked}
+
+The census of Section~\ref{sec:evidence} establishes that the mapped
+netlist contains three banks of 55 flip-flops. It runs on the synthesis
+netlist. Placement does not exist yet when it runs, so it cannot see
+placement, and no other check in the project looked.
+
+A majority vote over three registers placed in adjacent rows is defeated
+by whatever corrupts two adjacent registers. Nothing in this flow asks
+the placer to keep replicas apart, and nothing was asked.
+
+\subsection{The instrument}
+
+\file{hw/openlane/replica\_placement.py} reads the run's own final
+design-exchange file and hierarchical netlist, attributes every mapped
+flip-flop to a replica by instance path, attributes each to the storage
+bit it holds where that net survives, and computes distances between cell
+bounding boxes.
+
+Its first assertion is that it counts the same flip-flops the synthesis
+census counts. If the placed database and the netlist have come apart,
+nothing else means anything. It reads 55, 55, 55---the census's own
+figure on the same run.
+
+Geometry, from the run's own files and the process design kit: die
+\SI{1289.28}{\micro\meter} $\times$ \SI{313.74}{\micro\meter}; site
+\SI{0.48}{\micro\meter}; row \SI{3.78}{\micro\meter}; the flip-flop is
+\SI{12.96}{\micro\meter} $\times$ \SI{3.78}{\micro\meter}, which is 27
+sites wide and exactly one row high.
+
+\subsection{The measurement}
+
+\begin{table}[htbp]
+\centering
+\caption{Replica placement in the frozen sign-off layout, 33{,}564
+components. Every row is re-derived by \file{paper/check\_claims.py}.}
+\label{tab:placement}
+\small
+\begin{tabular}{lr}
+\toprule
+Flip-flops per replica & 55 / 55 / 55 \\
+Cross-replica pairs & \num{9075} \\
+Centre-to-centre, minimum & \SI{3.78}{\micro\meter} (one row) \\
+Centre-to-centre, median & \SI{113.47}{\micro\meter} \\
+\textbf{Edge-to-edge, minimum} & \textbf{\SI{0.00}{\micro\meter}} \\
+Pairs whose cell outlines touch & \textbf{49} \\
+Pairs within one \SI{0.48}{\micro\meter} site & 51 \\
+Corresponding-bit pairs, minimum & \SI{3.78}{\micro\meter} \\
+Corresponding-bit pairs touching & 18 (a lower bound; see below) \\
+\textbf{Nearest fellow configuration flip-flop is in another replica} &
+\textbf{103 of 165} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The closest pairs are the same bit of the same word. Two replicas of
+configuration bit 35 sit in adjacent rows at the identical horizontal
+span, sharing all 27 sites of width; bit 32 is the same case.
+
+The row that needs no threshold and no interpretation is the last one.
+For \textbf{103 of the 165 configuration flip-flops, the nearest other
+configuration flip-flop belongs to a different replica.} Three separated
+banks give the opposite.
+
+\subsection{The mechanism, which matters more than the numbers}
+
+This is not a bug and not an unlucky seed. \textbf{The placer is
+minimising wirelength to a shared voter, and that objective pulls the
+three copies of each bit together.} It is what was asked of it.
+
+One consequence was not designed and is worth recording. Replica C is
+the best-separated bank, and the reason is the mixing transform of
+Section~\ref{sec:mechanisms}, which was chosen for a purely logical
+reason---to stop structural hashing merging it. \textbf{A defence chosen
+against the synthesiser bought physical margin by accident}, for one of
+the three pairings, when a vote needs only two replicas corrupted.
+
+\subsection{What the tool undercounts, and says}
+
+Fifteen of replica C's flip-flops cannot be attributed to a bit index,
+because C stores a transform of the value and the corresponding nets may
+be optimised away. The corresponding-bit figures are therefore a
+\textbf{lower bound}, and the tool prints the word \textsc{undercount}
+when it reports them. A deeper one-off analysis that resolved the
+remaining fifteen through the decode network found 165 corresponding-bit
+pairs, 28 of them touching, and two of three voter inputs in contact on
+30 of the 55 bits; the committed tool reports the conservative figure,
+because a lower bound quoted as a measurement is the failure this paper
+is about.
+
+\subsection{It is not one layout}
+
+The same picture appears on the system-on-chip across three independent
+triplicated structures---a 29-bit watchdog bank, a 23-bit boot bank, a
+25-bit accelerator bank---on two independent hardening runs, by a
+completely different attribution method, because that flow flattens
+instance names and the cells must be reached through fan-in cones.
+Per-bit critical separations are \SI{4.48}{\micro\meter},
+\SI{7.58}{\micro\meter} and \SI{3.90}{\micro\meter} minimum, with
+different-replica cells holding the same output bit abutting in the same
+row. Two designs, four layouts, three attribution methods, one answer.
+
+\subsection{What this does not say, in the paper's own voice}
+
+\textbf{A distance is not a safety argument, in either direction.} No
+single-event or multiple-bit-upset cross-section, charge-collection
+radius or linear-energy-transfer threshold for this process was measured
+and none is available: the PDK publishes no radiation data at all. These
+are cell bounding boxes, not sensitive nodes---the storage node inside a
+\SI{12.96}{\micro\meter} $\times$ \SI{3.78}{\micro\meter} rectangle is
+somewhere in that rectangle and this work does not say where.
+
+So the measurement establishes that this layout \emph{permits} a
+common-mode upset of two replicas across a large fraction of the
+protected word. It does \textbf{not} say one occurs at any fluence, and
+it does \textbf{not} say that some other separation would prevent one.
+The sentence ``the replicas are a few micrometres apart, so a single ion
+track defeats the vote'' does not appear in this paper, because it
+silently supplies a conversion from micrometres to a coincidence
+probability that we do not have.
+
+What it does establish, and what we did change, is the wording of every
+claim this project makes about the state in question. \textbf{``Protected
+by triple modular redundancy'' is false as stated and now reads
+``triplicated in the netlist'' throughout.} That is a correctness change,
+not a style preference.
+
+\subsection{A constraint exists, and it is not free}
+
+Three mechanisms could impose separation, and this project has exercised
+two of them before: a per-instance manual placement hint, which the
+pilot flow already runs as a step and which does nothing when unset; a
+region-and-group construct in the placer's database, which fences a group
+into a rectangle; and soft placement obstructions, which can evacuate a
+rectangle but cannot fence a group into one and are useless alone.
+
+The price is known from the one time this project constrained placement,
+on an unrelated block: the region form \emph{did not route}, and the
+manual-placement form routed but cost roughly \SI{7}{\nano\second} of
+worst negative slack and moved the problem rather than solving it,
+because a constraint that captures one half of a co-placed cluster moves
+the crossing to the cut. For triplication that means each replica must
+move together with its own fan-in and fan-out cone, not merely its 55
+flip-flops.
+
+On the pilot the conditions are friendlier---no macros, 48.75\,\% core
+utilisation, \SI{201400}{\micro\meter\squared} of the core unoccupied
+against \SI{2694}{\micro\meter\squared} for one bank, and a design that
+already routes a \SI{901.08}{\micro\meter} net and closes with
+\SI{1.2262}{\nano\second} to spare. The binding constraint is timing, not
+area. We did not attempt it: the design is frozen for a shuttle, and an
+unmeasured constraint applied to a frozen design is not an improvement.
+
+\section{When the evidence was wrong}
+\label{sec:evidence}
+
+\subsection{The claim}
+
+A fault-tolerance property is not one claim. It is a claim at the source,
+a claim in the mapped netlist, and a claim in the die, and the three can
+disagree. The instrument that establishes it at one level is
+\emph{structurally incapable} of refuting it at the next---not merely
+unlucky, not merely incomplete, but built at a level where the failure
+cannot be expressed.
+
+Table~\ref{tab:evidence} is the paper's contribution. Two rows, both from
+this project's own published claims, both reproducible from committed
+artefacts, both carrying a mutation that has been observed to make the
+replacement instrument fail.
+
+\begin{table}[htbp]
+\centering
+\caption{Two levels at which a redundancy claim was false while a check
+aimed at it passed.}
+\label{tab:evidence}
+\small
+\begin{tabularx}{\textwidth}{L{2.4cm}XX}
+\toprule
+& \textbf{R1 --- collapsed in the netlist} & \textbf{R2 --- reset by its
+own correction} \\
+\midrule
+\textbf{Defect} &
+Three declared replicas became one physical bank; the voter read it three
+times &
+The voted word decoded combinationally onto the asynchronous reset of
+every flip-flop \\
+\addlinespace
+\textbf{Evidence the property was absent} &
+Netlist: 362 references to \texttt{cfg\_a}, \textbf{0} to
+\texttt{cfg\_b}, \textbf{0} to \texttt{cfg\_c}; \num{1045} mapped
+flip-flops against \num{1161} declared. Reproduced on a second PDK &
+Reset-cone census: of five asynchronous-reset fan-in source sets, one has
+a combinational fan-in of \textbf{25 flip-flops, all replica bits}.
+Repaired netlist: 26 sources, the extra one being the register now in
+between \\
+\addlinespace
+\textbf{Blind instrument 1} &
+The register-transfer fault-injection campaign aimed at this TMR:
+5 injections per replica, all \textsc{corrected}, 0 \textsc{sdc} ---
+\textbf{bit-identical before and after the repair} &
+The gate-level classifier: 174/174 \textsc{corrected}, no announcement,
+\textbf{no reset column at all}. It samples on the clock edge and cannot
+see a sub-clock pulse \\
+\addlinespace
+\textbf{Blind instrument 2} &
+A flip-flop-total A/B with and without a preservation attribute:
+\textbf{the same total both ways}, read as ``nothing merged''. It is
+equally consistent with ``the attribute does not work'', which was true &
+$k$-induction on
+\texttt{rst\_req\_o = in\_reset}: \textbf{true of the defective and the
+repaired design alike}, because they are the same function of the same
+state at that level \\
+\addlinespace
+\textbf{Catching instrument} &
+Per-replica census of mapped flip-flop cells \emph{by instance path}, in
+two independent technology mappers, with every preservation attribute
+deleted from the source text, re-run on the sign-off netlist: 55/55/55 &
+An \emph{event} counter on the reset pin; a satisfiability query over the
+mapped cells; a whole-netlist census of asynchronous-reset fan-in \\
+\addlinespace
+\textbf{Detector proved able to fail} &
+Pre-repair source through today's guard: \textbf{4 failed}, census
+$\{0,0,0\}$ at \num{1045} flip-flops in both mappers. A
+\emph{functionally identical} mutation (removing one replica's transform)
+fails 3 of 40 &
+One byte-identical 174-injection plan on four netlists:
+$1.0000 \to 0.0000$ resets per correction, every masking field identical.
+Two committed mutations both fail the proof \\
+\addlinespace
+\textbf{Cost of the repair} &
+\num{1045} $\to$ \num{1155} flip-flops;
+\SI{106174}{\micro\meter\squared} $\to$
+\SI{109058}{\micro\meter\squared} (+2.7\,\%) &
+\textbf{One flip-flop.}
+\SI{643.0536}{\micro\meter\squared}, +0.0993\,\%; die area unchanged \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Two rows, not six, and why the difference is the method}
+
+We began with nine candidates and tested each against four conditions:
+the defect was real; \emph{something was checking and passed}; a distinct
+detector exists in the tree; and that detector has been observed to fail
+on a defective input. Seven did not survive, and the reasons are more
+useful than the survivors.
+
+\paragraph{Absent is not blind.}
+Four candidates failed because nothing had been checking. A windowed
+watchdog was recommended, built, measured at zero catches in thirty and
+removed at source---a good decision, correctly taken, and \emph{not} an
+evidence failure, because the mechanism did not exist when it was
+recommended. A shipped-netlist census caught a real gap the first time it
+ran, which is coverage arriving, not evidence failing. Conflating the two
+would be this paper's own thesis committed in its own text: ``no one
+looked'' and ``someone looked and could not see'' are different claims
+and only the second is interesting.
+
+\paragraph{A red result read too wide is still a red result.}
+One candidate was a timing violation attributed to the wrong logic cone.
+The analysis had reported both the violation \emph{and} the correct
+launching register; the error was in reading it. That is a real mistake,
+recorded and corrected in the project, and it is not an instrument being
+blind.
+
+\paragraph{Tightening a check is not a new instrument.}
+Several candidates were the same check with a narrower window. They
+belong in a changelog.
+
+\paragraph{And one candidate was no defect at all.}
+A census panic that appeared to show undercounted replicas turned out to
+be the panic's own instrument counting by net name instead of instance
+path. \textbf{No published replica count was ever wrong.} We report this
+because a paper cataloguing false alarms that itself raised one, and
+suppressed the fact, would be worthless.
+
+\subsection{The third level, found by turning the method on itself}
+
+Section~\ref{sec:placement} is not in Table~\ref{tab:evidence}, and it
+is the strongest thing in this paper.
+
+The catching instrument for R1 is a census of mapped flip-flops. It
+passes. It is mutation-checked, runs in two technology mappers and
+survives the deletion of every preservation attribute. And it establishes
+\emph{logical} redundancy only, because it runs before placement exists.
+The claim it supports was being read as a claim about the manufactured
+part, and at that level it is false.
+
+We did not find this by being careful. We found it because a hostile
+reading of the project's own record asked which measurement, if a
+reviewer made it first, would sink the argument---and then we made it.
+The answer came back badly, and it is published because a paper arguing
+that green checks do not establish what they appear to establish is
+\emph{confirmed}, not damaged, by discovering that its own green check
+did not.
+
+\subsection{The middle link, which did not exist}
+
+A census counts cells and walks cones. It never establishes that the
+netlist \emph{computes} what the source says. A synthesis fault that
+preserved three banks of 55 flip-flops and miscomputed the voter would
+pass every check in this project---and the voter is the one module a
+flip-flop census structurally cannot check, because it has no flip-flops.
+
+Until this paper there were \textbf{zero} equivalence checks in the
+repository, while the tool sat in the pinned toolchain the whole time.
+There are now three, on the modules chosen for that reason: the voter at
+its instantiated width, and both SEC-DED codecs. The gate side is
+\emph{extracted from the sign-off run}, not synthesised fresh, so the
+result is about the artefact that is frozen rather than about today's
+recipe. Two negative controls---one term dropped from the majority
+function, one bit flipped in a parity row---are part of the default
+target, and a control that \emph{passes} is treated as an error.
+
+The equivalence checker itself produced a finding. It partitions at
+module outputs and feeds each partition's cut points as independent free
+inputs, which for the decoder manufactures an unreachable
+state---a syndrome no codeword produces---and reports a counterexample
+\textbf{on a correct netlist}. Binding the cut points to the reference
+design's own nets removes the freedom without weakening the proof. The
+general statement is worth carrying: \textbf{partitioned equivalence
+checking is sound for proofs and incomplete for refutations}, and a gate
+written as \texttt{eqy \ldots{} \&\& echo ok} would have failed on a
+correct netlist on the first day it ran.
+
+\subsection{The generalisable form}
+
+\begin{quote}
+For each level of representation between the source and the die, a
+fault-tolerance property is a separate claim. Establish it at each level
+with an instrument that lives at that level. An instrument that lives
+above the level at which the property can fail cannot refute it, and will
+return green. Every replacement instrument must carry a mutation that has
+been observed to make it fail; a guard that has never returned red is not
+a guard.
+\end{quote}
+
+Concretely, for triplication in a standard-cell flow: check the source by
+reading it; check the netlist by censusing mapped cells \emph{by instance
+path}, in more than one mapper, with preservation attributes deleted;
+check the \emph{function} by equivalence checking, because a census
+cannot; and check the die by measuring where the cells are. We did the
+first three. We did the fourth for the first time while writing this
+paper, and it failed.
+
+\section{Flow determinism, and why every delta in this paper is
+attributable}
+\label{sec:determinism}
+
+Every cost figure here is a difference between two runs of the same flow.
+That difference means nothing unless the flow is deterministic, so we
+measured it.
+
+The same netlist through the same 62-step flow twice: the sign-off
+metrics file is byte-identical on all 199 keys; the routed design
+exchange file, the database, both netlists, the constraints, three
+timing libraries, the abstract layout and the extracted netlist are
+byte-identical; the mask data, the layout database, the parasitics and
+three delay files are identical \emph{modulo the date stamps their
+writers embed}; and 58 of 62 steps are identical in every metric and
+every view.
+
+Under the vocabulary of Lamb and Zacchiroli~\cite{lamb2022} this is
+\textbf{repeatability}, not reproducibility: one host, one operating
+system, one tool build, and not bit-identical because of embedded
+timestamps. We say so in those words.
+
+Its value is instrumental rather than headline. It converts every
+``noise floor'' this project had previously reported into
+\emph{netlist sensitivity}, and it is what licenses the cell-count deltas
+of Section~\ref{sec:mechanisms} and the four-arm comparison of
+Section~\ref{sec:w9} to be read as measurements at all. Without it, a
+$1.0000 \to 0.0000$ difference across two designs would be a difference
+between two runs.
+
+It also has teeth in the other direction, and the project has been cut by
+them. Two clock-gating checks improved after a repair, and the
+improvement was \emph{not} claimed for the repair, because the module
+that carried one of them was byte-identical between the two builds: its
+check closed because the netlist landed differently. A delta between two
+layouts of this flow is a delta of netlists, and that rule cost the
+project a headline it would otherwise have printed.
+
+\section{Limitations and threats to validity}
+\label{sec:limits}
+
+Most of these are in the sections they belong to. They are collected here
+because a reader is entitled to find them in one place.
+
+\paragraph{The evidence tier.}
+No silicon, no beam, no total-ionising-dose curve, no single-event
+cross-section, no latch-up data, and no radiation characterisation of the
+process at all. Under the space product-assurance standard this is not an
+evidence tier that qualifies anything~\cite{ecss60_15c}. Work that does
+reach it exists for spiking accelerators~\cite{nijsink2026}, and this
+paper is explicitly below it. What gate-level fault injection can bound
+is logical and architectural masking and the structural divergence
+between representation levels; what it cannot touch is multiple-bit
+upset, transient width, latch-up, dose and spatial correlation.
+
+\paragraph{No rate, anywhere.}
+Every proportion is conditional on an upset having landed in the
+injection window, uniform over targets and cycles. Simulated time is not
+exposure.
+
+\paragraph{Sample size.}
+Proportions are largely reported without confidence intervals derived
+from statistical fault-injection theory~\cite{leveugle2009}. This is a
+correctable weakness and it is not corrected here.
+
+\paragraph{Fault model.}
+Single-bit, flip-flop only, one workload per campaign. No transients, no
+multiple-bit upsets, no permanent faults. Combinational cells are not
+injection sites, so a 528-cell decoder is outside every campaign in this
+paper.
+
+\paragraph{The proofs are scoped to one fault.}
+The single-fault assumption appears in 14 of 25 property files. No proof
+here can express the failure mode that Section~\ref{sec:placement}'s
+geometry makes relevant.
+
+\paragraph{Physical independence is measured and absent.}
+Section~\ref{sec:placement}. And the measurement itself is of cell
+bounding boxes on one layout per design, with no cross-section to
+interpret it against.
+
+\paragraph{Equivalence is three modules, not the design.}
+Whole-design equivalence against the placed netlist was attempted and
+reached roughly half the partitions; no figure for it is printed here,
+because ``no failing partition was traced to a synthesis defect'' is
+strictly weaker than ``the netlist is correct'' and we decline to print
+the weaker statement as though it were the stronger one.
+
+\paragraph{The design under test is not the specified design.}
+Section~\ref{sec:design}. Every figure carries its geometry.
+
+\paragraph{No application result.}
+No accuracy on any task, no benchmark, no compiler, and one small
+workload. One accuracy figure that this project once carried has been
+withdrawn: it was unsupported in both of the readings available for it,
+and re-checking the sibling design's own repository found the number
+occurs nowhere in it.
+
+\paragraph{The verdicts are not in the repository.}
+Section~\ref{sec:formal}. A reader who clones obtains the jobs and the
+harnesses, and must re-run to obtain a single verdict. The run trees that
+back the fault-injection campaigns are likewise build output; digests are
+published in their place, and a digest establishes identity, not
+correctness.
+
+\paragraph{Who checked the checker.}
+Every audit reported here was performed by the author of the thing
+audited. Our answer is that an audit is worth something only if it is
+mechanically re-runnable and mutation-checked, and Appendix
+\ref{app:artefacts} is one command per claim. The project's own sharpest
+statement against itself is worth more than any protestation of rigour:
+\emph{a mutation that passes is a mutation that was testing the wrong
+thing}---which is how a preservation attribute was found to preserve
+storage that was already dead.
+
+\paragraph{Four references we could not verify.}
+A 2021 study of triplicated-layout single-event tolerance, an automated
+triplication-flow paper, and two open fault-injection frameworks surfaced
+in the literature search and could not be corroborated to author, venue
+and year. They are not cited. We name them here because ``the literature
+contains X'' is itself a claim, and an unverified one belongs with the
+other unverified things.
+
+\section{Related work}
+\label{sec:related}
+
+Most of what this design does is not new, and the honest way to open a
+related-work section is by saying which parts.
+
+\paragraph{Spiking accelerators on open PDKs with open flows are done.}
+OpenSpike~\cite{openspike2023} taped one out in SkyWater 130\,nm at
+roughly thirty times this design's scale in 2023, and further open
+130\,nm neuromorphic silicon followed~\cite{kumaresan2026}. An SNN on an
+open PDK is not a contribution and is not claimed as one. The
+neuromorphic-for-space framing is a survey topic~\cite{naoukin2023}.
+
+\paragraph{Neuromorphic hardware under radiation has beam data.}
+Nijsink~\emph{et~al.}~\cite{nijsink2026} put an open SNN
+processor~\cite{frenkel2019} in a neutron beam and extracted
+cross-sections. That is the tier above this work, and the difference is
+not one of degree.
+
+\paragraph{Triplication and its synthesis survival are old.}
+Voter placement, not triplication itself, dominates residual
+cross-section in the FPGA literature~\cite{kastensmidt2005}; the
+synchronisation-voter algorithms are standard~\cite{johnson2010};
+post-synthesis insertion tools exist because logic optimisation removes
+source-level redundancy~\cite{tmrg2017}; and vendor guidance documents
+the preservation attributes~\cite{esa_ftmr}. Our contribution on this
+axis is not that the merge happens. It is the measurement of what did not
+notice, and the bound that says how wide a word must be before a third
+transform exists.
+
+\paragraph{Identical replication is known to be weak.}
+Mitra~\emph{et~al.}~\cite{mitra2002} is the citation, and the diversity
+line in silicon~\cite{safede2021,tcls2016,tcls2019} operationalises it.
+Section~\ref{sec:placement} is a physical instance of the same idea:
+identical replicas that the placer is free to co-locate are correlated by
+geometry, whatever their logic says.
+
+\paragraph{Hardened RISC-V systems with fault injection exist, with
+silicon.}
+Trikarenos~\cite{rogenmoser2023} combines ECC-protected memory with
+triple-core lockstep and characterises it in a beam \emph{and} in
+gate-level injection; on-demand redundancy grouping~\cite{odrg2022}
+explores the reconfigurable version. This is the work our fault-injection
+methodology is compared against, and the comparison is unfavourable on
+evidence tier.
+
+\paragraph{The closest published work to this paper's angle.}
+Santos~\emph{et~al.}~\cite{santos2023} state their contribution as
+extending fault \emph{observability} in a hardened RISC-V
+system-on-chip---closing the gap between ``the system corrected
+something'' and ``we can say what it corrected''.
+Section~\ref{sec:w9} is exactly that gap and is one level deeper: the
+system could say what it corrected and could not say what the correction
+cost.
+
+\paragraph{Cost optimality.}
+CLEAR~\cite{clear2018} searched 586 cross-layer resilience combinations
+against cost and residual silent-data-corruption rate. We produce no such
+curve and therefore make no cost-optimality claim.
+
+\paragraph{Codes, scrubbing, ECC proofs.}
+Hsiao~\cite{hsiao1970} for the code; Saleh~\emph{et~al.}~\cite{saleh1990}
+for scrub-interval reliability; Kumar~\cite{kumar2023} for the formal
+proof of an ECC decoder, which is routine industrial practice and not a
+contribution.
+
+\paragraph{Hash-pinned artefacts.}
+Lamb and Zacchiroli~\cite{lamb2022} is the framework. We found no
+published application of it to a PDK, an open flow and a mask-data
+freeze, and no prior work publishing a re-runnable post-place-and-route
+triplication-survival check on an open flow. That, and the placement
+measurement, are the parts of this paper we believe are not already in
+the literature.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We set out to show that a design's configuration state was protected by
+triple modular redundancy. At the source it was. In the mapped netlist it
+was not, and the campaign built to detect exactly that produced identical
+output on the broken design and the fixed one. We repaired it and built
+an instrument that lives at the netlist. In the die it is still not
+protected, and the instrument we built cannot see that, because it runs
+before the die exists.
+
+Separately, a protection mechanism that worked perfectly---174 of 174
+upsets corrected, no error, no wrong answer---restarted the machine every
+single time it worked, through a path the register-transfer level cannot
+express and a classifier that samples on the clock edge cannot see. One
+flip-flop, and a census of what feeds an asynchronous reset.
+
+There is no silicon here and no beam, and this paper does not pretend to
+the evidence tier that would need. What it offers instead is the missing
+rung below: for each level between a source file and a die, an instrument
+that lives at that level, and a mutation proving the instrument can fail.
+The two places where ours could not are published above, and the third is
+the one we found by asking which measurement would embarrass us most.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\appendix
+
+\section{Artefacts and how to re-derive every number}
+\label{app:artefacts}
+
+Everything below is in the public repository. Run trees and simulation
+records are build output and are not tracked; digests are published in
+their place, and a digest establishes identity, not correctness.
+
+\begin{verbatim}
+# every number this paper prints
+python3 paper/check_claims.py
+
+# the placement measurement of Section 8
+python3 hw/openlane/replica_placement.py \
+        hw/openlane/pilot_ihp/runs/signoff-6x2
+
+# its guard, which pins the measured values rather than demanding
+# separation, because the design is frozen
+.venv/bin/python -m pytest sw/tests/test_replica_placement.py -q
+
+# equivalence, with both negative controls; a control that PASSES
+# is an error
+make -C formal/eqy
+
+# the netlist censuses of Section 9
+.venv/bin/python -m pytest sw/tests/test_synthesis_guards.py -q
+
+# the suites, recorded rather than asserted
+scripts/verify.sh
+\end{verbatim}
+
+\section{Claims withdrawn while this paper was written}
+\label{app:withdrawn}
+
+A ledger with no open rows is not a ledger. Each of these was a
+statement this project had published and could not support.
+
+\begin{itemize}\itemsep2pt
+\item \textbf{A classification-accuracy figure} attributed to a sibling
+design, tagged as a verified result. It collides with a placement
+utilisation of the same value for the same design, and re-checking that
+design's own repository shows the number occurs nowhere in it. Both
+readings are unsupported. No accuracy figure is claimed anywhere in this
+work.
+\item \textbf{A compute-ratio comparison} against the reference product,
+derived from a figure listed under a heading naming a two-page brief
+while citing the vendor's product page. The figure is on the page and not
+in the brief; the sourcing was wrong, not the figure. An independent
+review had raised this and it was rejected on a re-verification that
+named no artefact. The list is now split by source and the artefact is a
+digest of the page as fetched.
+\item \textbf{A block-area cost} for the one-flip-flop repair of
+Section~\ref{sec:w9}. It does not reproduce across recipes and under the
+project's own driver the sign inverts. Only the flip-flop count and the
+whole-design area are printed.
+\item \textbf{A busy-power figure} attributed to added clock gates,
+withdrawn along with its own replacement, because across three netlists
+the combinational group ranges too widely for the gates to order it.
+\item \textbf{Two suite totals} recorded by overlapping runs of the
+verification script, which counted each other's output: 558 and 624
+cocotb tests for a suite of 401. The rows stand in the log with a
+correction beside them, because a log that loses its own bad measurements
+is not a log.
+\item \textbf{A licence checker's own compliance.} It searched a
+character window for its identifier string, and its own prose contains
+that string, so it reported itself compliant while carrying no header.
+Narrowed to a comment line in the first twelve.
+\end{itemize}
+
+\end{document}

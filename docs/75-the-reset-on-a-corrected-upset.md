@@ -48,7 +48,7 @@ own new run directory. Section 12 lists every file.
 | **Is the fix proved on the netlist?** | **Yes, by SAT on the mapped cells, not by looking at the wiring.** No assignment to the mapped netlist's inputs asserts `rst_req_o` while `in_reset_q` is zero **[fact]**, and the two mutations that could make that vacuous — removing the gate, and ORing instead of ANDing — both fail it. Section 7.4 |
 | **Resets per corrected upset** | **1.0000 before, 0.0000 after, and the voter's masking rate does not move.** 174 injections into the same 87 replica flip-flops at the same 174 cycles, on two layouts from one flow: on `s71boot` every one of the 174 is CORRECTED **and** raises a `wdog_rst_o` event, with a run length of exactly injection-edge plus 18,683; on `s75w9` every one of the 174 is CORRECTED and **none** raises one **[fact]**. The two arms agree in every other field the classifier and the voter shadow produce, down to which 4 / 8 / 8 of the upset replicas held rather than being rewritten. Section 8 |
 | **Is the zero a property of W9 or of the netlist?** | **W9, and the calibration is a two-by-two rather than an argument.** The same 174 injections were also run on both designs' *synthesis* netlists — mapped by `abc` on separate occasions, no clock tree, no placement: the repaired one gives **0 of 174** and the unrepaired one **174 of 174**, with the same injection-edge-plus-18,683 run length. **The row is the design and the column is nothing.** This is what `docs/55` section 8 refused a 19 % delta for the lack of. Section 8.5 |
-| **What does it cost?** | **+1 flip-flop and +401.2092 um2 on the block** — 15,503.3298 to 15,904.5390, **+2.588 %**, **+0.1455 % of the Ibex core** **[fact, two synthesised designs on one source list]**. On the whole SoC, 647,548.0200 to 648,191.0736 um2, **+643.0536, +0.0993 %**, at 5,873 → 5,874 flip-flops. **And on the layout: no die area, no hold margin at any corner, no DRC, and the same deferred-error list corner for corner** — hold closes at +0.062088 / +0.231403 / +0.451156 ns against `s71boot`'s +0.062133 / +0.273524 / +0.589658, and setup *improves* by 2.1105 ns, which `docs/71`'s rule says is a delta of netlists and which this document does not claim for W9. Section 9 |
+| **What does it cost?** | **[The block figure in this row is WITHDRAWN, 2026-09-09, section 9.1: it does not reproduce under any of nine recipes re-run on this machine — the repository's own `syn_soc.sh` puts the delta at +267.8508 um2 and two attribute-free recipes make the repaired block SMALLER — and it names no artefact. It is left standing here, unedited, and should not be quoted. **+1 flip-flop** and the whole-SoC **+643.0536 um2** stand.]** **+1 flip-flop and +401.2092 um2 on the block** — 15,503.3298 to 15,904.5390, **+2.588 %**, **+0.1455 % of the Ibex core** **[fact, two synthesised designs on one source list]**. On the whole SoC, 647,548.0200 to 648,191.0736 um2, **+643.0536, +0.0993 %**, at 5,873 → 5,874 flip-flops. **And on the layout: no die area, no hold margin at any corner, no DRC, and the same deferred-error list corner for corner** — hold closes at +0.062088 / +0.231403 / +0.451156 ns against `s71boot`'s +0.062133 / +0.273524 / +0.589658, and setup *improves* by 2.1105 ns, which `docs/71`'s rule says is a delta of netlists and which this document does not claim for W9. Section 9 |
 | **And what does the added flip-flop expose?** | **One unprotected bit on the reset path, and it cannot be tripled** — `hw/rtl/pilot_top.v` section 8.2's bound, one bit has two storage functions and three replicas need three. Its two corruption directions are not symmetric and neither is a way to reset the part: upset to 1 is masked by `in_reset` = 0, and upset to 0 during a genuine stretch is a one-clock notch that `soc_top.v`'s two-stage synchroniser does not pass. Section 7.3 |
 | **What is not covered** | Zero-delay simulation, so the *width* of the physical glitch this repairs is still unmeasured and unmeasurable here; one workload, one seed; no timing, DRC, LVS or equivalence on either layout; the cone census cannot run in the attribute-free flow, where `abc` dissolves every net it could anchor on. Section 10 |
 
@@ -796,6 +796,22 @@ from one flow whose RTL differs by one flip-flop and one AND gate.
 
 ### 9.1 The block, on its own recipe
 
+> **WITHDRAWN 2026-09-09. The table below does not reproduce, and it
+> names no artefact.** Nine synthesis recipes were run on this machine
+> against the two designs — the paragraph after the table is the
+> measurement — and not one of them produces 959 or 985 cells, or
+> 15,503.3298 or 15,904.5390 um2, or a delta of +401.2092. Under the
+> repository's own driver, `hw/soc/flow/syn_soc.sh soc_wdog`, the two
+> designs measure 15,579.7614 and 15,847.6122 um2, a delta of
+> **+267.8508**; under two of the nine the repaired block comes out
+> **smaller** than the unrepaired one. The figures are left standing
+> below, unedited, because `docs/64` section 2's rule is that a
+> superseded measurement stays visible; **nothing in this corpus should
+> now quote them**, and that includes `docs/00-index.md`'s row for this
+> document. What survives the withdrawal is **+1 flip-flop**, which every
+> recipe agrees on, and the whole-SoC **+643.0536 um2** of section 9.3,
+> which two committed reports carry.
+
 `docs/41` section 6.5's method: yosys `stat -liberty` on `ihp-sg13g2`
 typical, `abc -D 20`, the same three files, one source list, two
 designs differing by W9 and by nothing else **[fact]**.
@@ -813,6 +829,129 @@ reference) **[estimate, arithmetic on measurements]**.
 Against what `docs/41` priced W6 at — +5,091.0552 um2 for the
 protection — W9 is **7.88 %** of that, and it is the part that makes the
 protection stop charging the mission a restart.
+
+**The two derived figures above — the 2.588 % and the 0.1455 %, and the
+7.88 % of W6 — are arithmetic on the withdrawn number and fall with
+it.** They are not recomputed here, because the thing they would be
+recomputed from is a quantity this section can no longer claim to have.
+
+#### 9.1a The re-run, 2026-09-09
+
+The block was re-synthesised both ways rather than argued about. It is a
+sub-second job: nine recipes, eighteen runs, under twenty seconds in
+total, so nothing here rests on a committed log. All of it is yosys
+0.67+146 as `hw/soc/tools.soc.mk` pins it, `sg13g2_stdcell_typ_1p20V_25C`
+from the pinned PDK, one machine, one session, outside the repository in
+a scratch tree — **no file under `hw/` was written and no run directory
+was touched**. The unrepaired arm is HEAD's `hw/soc/rtl/soc_wdog.v` with
+W9's five lines removed and `assign rst_req_o = in_reset;` restored;
+that file is line-for-line identical, comments excluded, to
+`git show ad3d068:hw/soc/rtl/soc_wdog.v`, and both baselines were
+synthesised and gave the same area to four decimal places **[fact]**.
+
+| # | recipe | unrepaired, cells / um2 | with W9, cells / um2 | delta, um2 |
+|---:|---|---:|---:|---:|
+| 1 | `hw/soc/flow/syn_soc.sh soc_wdog`, unmodified | 1,035 / 15,579.7614 | 1,058 / 15,847.6122 | **+267.8508** |
+| 2 | the three files alone (`soc_wdog.v`, `soc_tmr_bank.v`, `hw/rtl/tmr_voter.v`), same `abc` arguments | 1,035 / 15,579.7614 | 1,058 / 15,847.6122 | +267.8508 |
+| 3 | three files, `abc -liberty` with no constraint file and no delay target — `sw/tests/test_soc_synthesis_guards.py`'s `_asic_script` | 999 / 15,249.6162 | 1,018 / 15,437.2932 | +187.6770 |
+| 4 | three files, `abc -D 20000` | 1,007 / 15,294.9006 | 1,028 / 15,566.3802 | +271.4796 |
+| 5 | three files, `-constr` and `-D 20000` | 1,035 / 15,498.1134 | 1,058 / 15,784.1082 | +285.9948 |
+| 6 | whole source list, attribute-free (`keep_hierarchy` stripped before `synth`), `-constr` and `-D 20` | 1,041 / 15,415.9362 | 1,061 / 15,566.1156 | +150.1794 |
+| 7 | whole source list, attribute-free, plain `abc` | 1,013 / 15,122.0034 | 1,028 / 15,297.5844 | +175.5810 |
+| 8 | three files, attribute-free, `-constr` and `-D 20` | 1,052 / 15,497.4708 | 1,044 / 15,379.9128 | **−117.5580** |
+| 9 | three files, attribute-free, plain `abc` | 1,045 / 15,662.4300 | 1,038 / 15,417.8262 | **−244.6038** |
+
+**[fact, all eighteen runs]**. **Flip-flops are 131 and 132 in every one
+of the nine.**
+
+Four things follow and they are not the same thing said four ways.
+
+**The published figure is not among them, and neither are its cell
+counts.** The unrepaired design measures between 999 and 1,052 cells
+across the nine recipes against a published 959, and the repaired one
+between 1,018 and 1,061 against a published 985. The absolute areas
+bracket the published pair but never meet it. A recipe that produces 959
+cells for this block was not found, and it cannot be recovered from the
+tree: `grep` over the whole of `hw/soc/out` finds neither 15,503.3298
+nor 15,904.5390 in any report or log this machine kept **[fact]**, and
+section 11's reproduction list carries no command that would produce
+them. **That is the other half of the defect and the more serious half.**
+This corpus's rule is that every claim names its artefact; this one named
+a method and no file, and a method with no file behind it is what made
+the figure survive to publication.
+
+**The repository's own driver disagrees with it, and a report older than
+W9 corroborates the driver.** `hw/soc/out/soc-syn/soc_wdog/area.rpt`,
+written 2026-09-01 — six days before W9 existed — reports 1,035 cells
+and `Chip area for module '\soc_wdog': 15579.761400` **[fact]**, which is
+recipe 1's unrepaired arm to the last digit. So the unrepaired block's
+area under `syn_soc.sh` was already on this machine, in a file, and it is
+not 15,503.3298.
+
+**The sign is not stable, which is the finding.** Recipes 8 and 9 are
+`docs/41` section 6.2's attribute-free flow — the one this document's own
+section 3.5 leans on — and in both of them the design with one MORE
+flip-flop maps to FEWER cells and less area: −244.6038 um2 and 7 cells
+in recipe 9. Nothing is wrong with those runs. `abc` is re-mapping about
+a thousand combinational cells around a one-cell change, and its result
+is a function of the whole cone, the delay target, the constraint file
+and whether the bank boundary is still there to map inside. **A quantity
+whose sign depends on which of nine defensible recipes was run is not a
+measurement of the change; it is a measurement of the mapper.**
+
+**And the drift with time is of the same order as the delta being
+claimed.** `docs/43` section 7.3 published 1,042 cells and 15,695.7318
+um2 for the unrepaired watchdog at `HARDEN = 1, WINDOW = 1` under this
+same driver. Today the same driver on the same configuration gives 1,035
+and 15,579.7614 — **115.9704 um2 apart, with no W9 in it at all**, from
+the sources and the source list having moved in between. That is 43 % of
+the number this section was claiming as the cost of a flip-flop.
+`hw/soc/flow/syn_soc.sh`'s own header states this in advance — a
+per-block area from it "reproduces against THE FILE LIST AS IT STOOD ON
+THE DAY, and not against the block" — and `docs/45` section 4.3 measured
+it, on `soc_clint` moving 29.3328 um2 because three files it does not
+instantiate were read. Section 9.1 quoted that driver's ancestor and did
+not carry its caveat.
+
+**What stands, and it is less than was published.** The flip-flop count:
+**131 to 132 on the block in all nine recipes**, and **5,873 to 5,874 on
+the whole SoC**, from `hw/soc/out/s70-rom0-syn.log` and
+`hw/soc/out/s75-rom0-syn.log` **[fact]**. It is recipe-invariant for a
+mechanical reason: `dfflibmap` chooses the sequential cell before `abc`
+runs, and `abc` may not re-factor a flip-flop away, so the sequential
+count is the one part of this measurement the mapper is not free to move.
+And the whole-SoC area, **+643.0536 um2**, from two reports this machine
+holds: `hw/soc/out/s70-rom0-syn/area_hier.rpt` says
+`Chip area for module '\soc_top': 647548.020000` and
+`hw/soc/out/s75-rom0-syn/area_hier.rpt` says `648191.073600`; including
+the macros, the two `area.rpt` files say 685,153.2744 and 685,796.3280,
+the same difference **[fact]**. Section 9.3 already says what that number
+is and is not — 740 cells moved for one flip-flop and one gate, which is
+re-mapping and not W9 — and that reading is unchanged by this
+withdrawal. **The honest statement of W9's area cost is therefore: one
+flip-flop, exactly; and no block-level area delta that this repository
+can currently measure, because the smallest scope that contains the
+change does not isolate it.**
+
+Reproducing the nine, for anyone who wants to check the withdrawal
+rather than take it:
+
+```bash
+# recipe 1, the repository's own driver, on each of the two designs
+hw/soc/flow/syn_soc.sh soc_wdog        # writes hw/soc/out/soc-syn/soc_wdog/
+# recipes 2 to 9 differ only in the source list, in whether
+# `attrmap -modattr -remove keep_hierarchy` runs BEFORE `synth`, and in
+# the arguments to `abc`; every one of them is
+#   read_liberty -lib $SG13G2_TYP; read_verilog ...; hierarchy -top soc_wdog;
+#   [attrmap]; synth -flatten -top soc_wdog; dfflibmap -liberty $SG13G2_TYP;
+#   abc -liberty $SG13G2_TYP [-constr abc.constr] [-D <target>];
+#   attrmap -modattr -remove keep_hierarchy; flatten; opt_clean -purge;
+#   stat -liberty $SG13G2_TYP
+```
+
+The two designs are HEAD and HEAD with the five lines of section 7.1
+removed; do it in a scratch copy of the tree, because
+`hw/soc/rtl/soc_wdog.v` is the shipped file.
 
 ### 9.2 The layout, beside the one it replaces
 
@@ -882,6 +1021,26 @@ side rather than one of them being chosen. The number a reader should
 carry is **+1 flip-flop**, which is exact, and **about 400 um2 on the
 block**, which is measured on the smallest scope that isolates the
 change.
+
+> **Marked 2026-09-09.** The two sentences above that lean on the block
+> figure — that the top-level delta is *larger than the block's
+> 401.2092*, and that a reader should carry *about 400 um2 on the
+> block* — fall with section 9.1's withdrawal, and are left standing
+> here rather than edited. The comparison has nothing on its right-hand
+> side any more: the block delta is between −244.6038 and +285.9948 um2
+> depending on the recipe, so it is not known to be smaller than 643.0536
+> and under two recipes it is not even positive. **The block is not the
+> smallest scope that isolates the change; it is the smallest scope that
+> CONTAINS it**, and section 9.1a is the measurement of the difference —
+> `abc` re-maps about a thousand cells around the one that was added, and
+> does it differently under every recipe. The rest of this section is
+> unaffected: the whole-SoC rows are read from
+> `hw/soc/out/s70-rom0-syn/area_hier.rpt` and
+> `hw/soc/out/s75-rom0-syn/area_hier.rpt`, the +643.0536 reproduces in
+> both of the two forms the table reports, and this section's own reading
+> of it — that 740 cells for one flip-flop and one gate is mapping noise
+> and not a cost of W9 — is the reading section 9.1a now applies to the
+> block figure as well, one scope down.
 
 ### 9.4 Wall, and it is contended
 

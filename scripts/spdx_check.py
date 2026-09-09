@@ -78,6 +78,7 @@ UNTAGGED_NAMES = {"LICENSE", "pytest.ini", ".gitignore"}
 HASH = ("# ", "")
 SLASH = ("// ", "")
 BLOCK = ("/* ", " */")
+PCT = ("% ", "")
 
 SYNTAX = {
     ".v": SLASH, ".vh": SLASH, ".sv": SLASH, ".c": SLASH, ".h": SLASH,
@@ -85,7 +86,18 @@ SYNTAX = {
     ".sdc": HASH, ".sby": HASH, ".tcl": HASH, ".py": HASH, ".sh": HASH,
     ".mk": HASH, ".yml": HASH, ".yaml": HASH, ".awk": HASH, ".cfg": HASH,
     ".ys": HASH,
+    ".tex": PCT, ".bib": PCT,
 }
+
+# Directories where the class of a file is decided by what the directory
+# is FOR, not by the file's extension. `paper/` holds a document, its
+# bibliography and the registry of the numbers the document prints; all
+# three are the document, and `docs/14` section 6.4 puts documents and
+# their data under CC-BY-4.0. The Python that re-derives those numbers is
+# a program and stays Apache-2.0, because it is the kind of thing section
+# 6.5 wants to be able to offer upstream.
+DIR_IS_DOCUMENT = ("paper/",)
+DOCUMENT_SUFFIXES = {".tex", ".bib", ".yaml", ".yml", ".csv", ".tsv"}
 
 # Hardware sources take CERN-OHL-W-2.0; everything else executable takes
 # Apache-2.0. The boundary is `docs/14` section 6.5: tooling is permissive
@@ -120,6 +132,8 @@ def classify(rel):
     syn = SYNTAX.get(suf)
     if syn is None:
         return None, None
+    if rel.startswith(DIR_IS_DOCUMENT) and suf in DOCUMENT_SUFFIXES:
+        return DOC, syn
     lic = HW if suf in HW_SUFFIXES else SW
     return lic, syn
 
@@ -128,6 +142,8 @@ def path_licence(rel):
     """The licence a path-covered (untagged) file is under, for LICENSES.md."""
     if rel.startswith("tt/"):
         return "see tt/README.md"
+    if rel.startswith(DIR_IS_DOCUMENT):
+        return DOC
     if rel.endswith((".md", ".csv", ".tsv")):
         return DOC
     if rel.endswith(".json"):
@@ -136,7 +152,7 @@ def path_licence(rel):
 
 
 TAG_RE = re.compile(r"SPDX-License-Identifier:\s*([A-Za-z0-9.\-+]+)")
-COMMENT_START = ("#", "//", "/*", "*", "--", ";")
+COMMENT_START = ("#", "//", "/*", "*", "--", ";", "%")
 
 # How far into a file a tag may sit and still count. A header is a
 # header: after a shebang, before the code.
@@ -197,10 +213,20 @@ def tracked():
     committed, and a check that cannot run there is a check that does not
     run where it is most needed.
     """
-    out = subprocess.run(["git", "ls-files"], cwd=ROOT,
-                         capture_output=True, text=True)
+    # --others --exclude-standard as well as --cached, so a file is
+    # checked the moment it exists rather than the moment it is staged.
+    # WIDENED 2026-09-09 after this check reported a clean tree while
+    # three files it should have rejected sat untracked beside it: the
+    # policy was run, then the files were added, then they were
+    # committed, and nothing between those steps looked. A check whose
+    # scope is narrower than the thing it certifies is the shape this
+    # project keeps finding, and it found it here in its own licence
+    # gate.
+    out = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT, capture_output=True, text=True)
     if out.returncode == 0 and out.stdout.strip():
-        return [l for l in out.stdout.split("\n") if l]
+        return sorted({l for l in out.stdout.split("\n") if l})
     skip = {".git", "__pycache__", ".venv", "ext", "tools", "gen", "genrvfi",
             "runs", "out", "_site", "node_modules"}
     found = []

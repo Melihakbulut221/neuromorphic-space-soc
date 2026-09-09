@@ -414,10 +414,213 @@ def test_register_offsets_in_the_datasheet_match_the_register_map():
             continue
         offset_text, name = cells[0], cells[1]
         if name not in ADDR:
-            continue  # a pilot-only register, checked by its own table
+            # Not in the architecture register map. That is only allowed
+            # for a register the frozen die decodes outside the map --
+            # the pilot-only block (deviation D5). Until 2026-09-09 this
+            # branch was a bare `continue` commented "a pilot-only
+            # register, checked by its own table"; no such table check
+            # existed anywhere in the tree, so every pilot-only row in
+            # docs/info.md was unchecked while this test reported green.
+            # The check now exists, in
+            # test_pilot_only_registers_and_fault_clr_bits_are_documented
+            # below, and this branch no longer takes an unknown name on
+            # trust: it is verified against the die's own decode.
+            if name not in pilot_only_registers_in_the_die():
+                wrong.append(
+                    f"{name} at {offset_text}: not in regmap/regmap.yaml and "
+                    f"not decoded by tt/src/pilot_top.v either"
+                )
+            continue
         if int(offset_text, 16) != ADDR[name]:
             wrong.append(f"{name}: datasheet {offset_text}, regmap 0x{ADDR[name]:03X}")
     assert not wrong, "docs/info.md disagrees with regmap/regmap.yaml:\n  " + "\n  ".join(wrong)
+
+
+# ---------------------------------------------------------------------
+# The pilot-only register block (deviation D5) and its FAULT_CLR bits.
+#
+# These registers are deliberately absent from regmap/regmap.yaml, so
+# every generated-from-regmap check steps over them. That left them
+# checked by nothing at all: on 2026-09-09 review found CNT_EVQ_OUT_OVF
+# (0x0AC) and CNT_EVQ_PAR (0x0B0) decoded by the frozen die, absent from
+# docs/21 and from tt/docs/info.md, and asserted about nowhere, while
+# test_register_offsets_in_the_datasheet_match_the_register_map passed
+# with a comment saying they were covered. The single source used here
+# is therefore the die itself -- the decode in tt/src/pilot_top.v, which
+# is byte-identical to hw/rtl/pilot_top.v and hashed by tt/MANIFEST.sha256
+# -- and prose is checked against it, never the other way round.
+# ---------------------------------------------------------------------
+
+# Architecture registers get their decode address from the generated
+# header (`SA_X = ADDR_X >> 2`); a pilot-only register is exactly one
+# whose decode address is a literal, because the map does not carry it.
+_PILOT_DECODE_RE = re.compile(
+    r"^\s*localparam\s*\[6:0\]\s*SA_(\w+)\s*=\s*12'h([0-9A-Fa-f]{3})\s*>>\s*2\s*;",
+    re.MULTILINE,
+)
+_PILOT_FAULT_CLR_BIT_RE = re.compile(
+    r"^\s*localparam\s+integer\s+PILOT_BIT_FAULT_CLR_(\w+)\s*=\s*(\d+)\s*;",
+    re.MULTILINE,
+)
+
+# tt/ is frozen for the TTIHP26b shuttle, so tt/docs/info.md cannot be
+# corrected on this branch even though it is wrong. What CAN be done is
+# to pin the wrongness exactly: these two registers, and no others, are
+# missing from the submitted datasheet, and the clear mask it publishes
+# is the stale one. docs/21 section 10 item 7 is the written record.
+# If a third register goes undocumented, or the mask drifts again, the
+# assertions below fail. If tt/ is regenerated after the shuttle and the
+# gap closes, they also fail -- deliberately, so the exception is
+# retired by hand rather than outliving the thing it excuses.
+FROZEN_INFO_MD_MISSING = {"CNT_EVQ_OUT_OVF", "CNT_EVQ_PAR"}
+FROZEN_INFO_MD_STALE_CLEAR = "Writing `0x3F` clears everything."
+
+
+def pilot_only_registers_in_the_die():
+    """{name: offset} for the pilot-only block, read out of tt/src."""
+    body = (TT / "src" / "pilot_top.v").read_text(encoding="utf-8")
+    found = {name: int(off, 16) for name, off in _PILOT_DECODE_RE.findall(body)}
+    assert found, (
+        "no literal SA_* decode constants found in tt/src/pilot_top.v; the "
+        "pilot-only block moved or was rewritten and this test needs "
+        "rewriting deliberately rather than silently passing on an empty set"
+    )
+    return found
+
+
+def _markdown_offset_rows(text, heading):
+    """Rows of the first table under `heading`, as {name: offset}."""
+    start = text.index(heading) + len(heading)
+    rest = text[start:]
+    end = re.search(r"^#{1,6} ", rest, re.MULTILINE)
+    rows = {}
+    for line in rest[: end.start() if end else len(rest)].splitlines():
+        if not line.startswith("| 0x"):
+            continue
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        rows[cells[1]] = int(cells[0], 16)
+    return rows
+
+
+def test_pilot_only_registers_and_fault_clr_bits_are_documented():
+    """Every register the die decodes outside the map is written down.
+
+    This is the check that
+    test_register_offsets_in_the_datasheet_match_the_register_map
+    claimed existed and did not, from 2026-08-29 (when CNT_EVQ_OUT_OVF
+    was added) until 2026-09-09.
+    """
+    sys.path.insert(0, str(ROOT / "sw"))
+    from golden.regmap_gen import ADDR, FIELDS  # noqa: E402
+
+    die = pilot_only_registers_in_the_die()
+
+    # 1. "Pilot-only" has to mean it: none of them may be in the map.
+    overlap = sorted(set(die) & set(ADDR))
+    assert not overlap, (
+        "these registers are decoded from a literal address in "
+        f"tt/src/pilot_top.v but ARE in regmap/regmap.yaml: {overlap}. One "
+        "of the two is wrong; the map is the architecture contract"
+    )
+
+    # 2. FAULT_CLR: architecture bits from the map, pilot bits from the
+    #    die, and the portable clear-everything mask is their union.
+    body = (TT / "src" / "pilot_top.v").read_text(encoding="utf-8")
+    pilot_bits = {n: int(b) for n, b in _PILOT_FAULT_CLR_BIT_RE.findall(body)}
+    arch_bits = dict(FIELDS["FAULT_CLR"])
+    assert pilot_bits, "no PILOT_BIT_FAULT_CLR_* constants found in tt/src/pilot_top.v"
+    assert not set(pilot_bits) & set(arch_bits), (
+        "a pilot FAULT_CLR clear reuses an architecture field name: "
+        f"{sorted(set(pilot_bits) & set(arch_bits))}"
+    )
+    assert min(pilot_bits.values()) > max(arch_bits.values()), (
+        "a pilot FAULT_CLR bit sits at or below the architecture block's "
+        f"highest assigned bit {max(arch_bits.values())}; the whole reason "
+        "the pilot allocates upward is that one mask must be portable"
+    )
+    for name in pilot_bits:
+        assert name in die, (
+            f"FAULT_CLR bit {pilot_bits[name]} clears {name}, which is "
+            "neither in regmap/regmap.yaml nor decoded as a pilot-only "
+            "register. A clear bit with no register behind it is a defect"
+        )
+    for name in die:
+        if name.startswith("CNT_"):
+            assert name in pilot_bits, (
+                f"pilot-only counter {name} at 0x{die[name]:03X} has no "
+                "FAULT_CLR bit; one clear bit per fault-block register is "
+                "the convention this map is built on and a counter that "
+                "cannot be cleared reads a lifetime total forever"
+            )
+    mask = 0
+    for bit in list(arch_bits.values()) + list(pilot_bits.values()):
+        mask |= 1 << bit
+
+    # 3. docs/21 section 5.3 must list exactly what the die decodes.
+    docs21 = (ROOT / "docs" / "21-pilot-datasheet.md").read_text(encoding="utf-8")
+    documented = _markdown_offset_rows(
+        docs21, "#### Pilot-only observability registers (deviation D5)"
+    )
+    assert documented == die, (
+        "docs/21 section 5.3 disagrees with the decode in "
+        "tt/src/pilot_top.v.\n  datasheet: "
+        + ", ".join(f"{n}=0x{o:03X}" for n, o in sorted(documented.items()))
+        + "\n  die:       "
+        + ", ".join(f"{n}=0x{o:03X}" for n, o in sorted(die.items()))
+    )
+
+    # 4. docs/21 must publish the portable clear mask the die implements,
+    #    in both places it states one.
+    for sentence in (
+        f"**`0x{mask:02X}`** clears everything in either implementation",
+        f"`FAULT_CLR` = `0x{mask:02X}` clears everything including",
+    ):
+        assert sentence in docs21, (
+            f"docs/21 does not say {sentence!r}. The die's FAULT_CLR bits "
+            f"are {sorted(arch_bits.values()) + sorted(pilot_bits.values())}, "
+            f"so the portable clear-everything write is 0x{mask:02X}; a "
+            "datasheet that publishes a smaller mask tells an operator to "
+            "leave counters uncleared and then read them as live"
+        )
+
+    # 5. tt/docs/info.md is frozen and wrong. Pin the gap exactly.
+    info_md = (TT / "docs" / "info.md").read_text(encoding="utf-8")
+    anchor = "do not change the architecture's register\nmap:"
+    assert anchor in info_md, (
+        "the pilot-only register table in tt/docs/info.md is no longer "
+        "where this test looks for it; find it and re-anchor deliberately"
+    )
+    shipped = _markdown_offset_rows(info_md, anchor)
+    for name, offset in shipped.items():
+        assert die.get(name) == offset, (
+            f"tt/docs/info.md lists {name} at 0x{offset:03X}; "
+            f"tt/src/pilot_top.v decodes it at "
+            f"{'0x%03X' % die[name] if name in die else 'no address at all'}"
+        )
+    missing = set(die) - set(shipped)
+    assert missing == FROZEN_INFO_MD_MISSING, (
+        "the set of pilot-only registers missing from tt/docs/info.md "
+        f"changed. Pinned: {sorted(FROZEN_INFO_MD_MISSING)}. Now: "
+        f"{sorted(missing)}. If the gap GREW, the submitted datasheet "
+        "describes even less of the die than docs/21 section 10 item 7 "
+        "records. If it CLOSED, tt/ was regenerated: delete this pin and "
+        "item 7 rather than widening it"
+    )
+    assert FROZEN_INFO_MD_STALE_CLEAR in info_md, (
+        "tt/docs/info.md no longer carries the stale clear-everything "
+        f"sentence {FROZEN_INFO_MD_STALE_CLEAR!r}. Either it was corrected "
+        f"to 0x{mask:02X}, in which case retire this pin and docs/21 "
+        "section 10 item 7, or it drifted somewhere new and needs reading"
+    )
+    assert f"Writing `0x{mask:02X}`" not in info_md, (
+        "tt/docs/info.md now publishes the correct clear mask "
+        f"0x{mask:02X}. That is the outcome this pin is waiting for: "
+        "remove FROZEN_INFO_MD_MISSING, FROZEN_INFO_MD_STALE_CLEAR and "
+        "docs/21 section 10 item 7, and let the assertions above check "
+        "info.md the same way they check docs/21"
+    )
 
 
 def test_licence_state_is_declared():

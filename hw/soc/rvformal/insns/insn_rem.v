@@ -49,9 +49,59 @@
 //     correct; upstream's model returns 0x0E1FB3AB, which is
 //     4294947755 mod 1352663040.
 //
-// and confirmed in a second, independent tool: Icarus Verilog evaluates
-// upstream's expression to 1070592674 on its own counterexample and the same operation written on its
-// own to -347.
+// THE ARITHMETIC, hand-checked, so that a reader can confirm both
+// answers with nothing but a calculator:
+//
+//     Operands. 0xFFFFB3AB is -19,541 read as signed and 4,294,947,755
+//     read as unsigned (4,294,967,296 - 19,541). 0x50A00000 is
+//     +1,352,663,040 either way -- its top bit is clear, so signedness
+//     does not change it. Only the dividend is ambiguous here.
+//
+//     The signed result. Verilog's % truncates toward zero and gives
+//     the remainder the sign of the dividend, which is what RISC-V
+//     requires of REM. -19,541 / 1,352,663,040 = 0, so the remainder is
+//     the whole dividend: -19,541 = 0xFFFFB3AB. That is Ibex's answer.
+//
+//     The unsigned result. 1,352,663,040 * 3 = 4,057,989,120, and
+//     4,294,947,755 - 4,057,989,120 = 236,958,635 = 0x0E1FB3AB. That is
+//     upstream's model's answer.
+//
+//     Why they differ. The same 32 bits are a small negative number and
+//     a very large positive one. Signed, the dividend is smaller in
+//     magnitude than the divisor, the quotient is 0, and the remainder
+//     is the entire dividend. Unsigned, the dividend is the larger of
+//     the two, the quotient is 3, and what is left over is a positive
+//     value. The two answers share their low bits, which is the easiest
+//     thing to check by eye: 1,352,663,040 * 3 = 0xF1E00000, whose
+//     low 21 bits are zero, so subtracting it leaves the dividend's low
+//     21 bits (0x1FB3AB) exactly as they were -- hence the common
+//     0xB3AB tail on 0xFFFFB3AB and 0x0E1FB3AB. Sharing a tail is not
+//     agreement: the two answers differ in exactly the bits of
+//     0xFFFFB3AB ^ 0x0E1FB3AB = 0xF1E00000, the sign bit among them,
+//     and a sign bit is the whole defect.
+//
+// and confirmed in a second, independent tool: Icarus Verilog, given
+// THESE operands, evaluates upstream's conditional to 236,958,635
+// (0x0E1FB3AB) and the same remainder written on its own
+// self-determined wire to -19,541 (0xFFFFB3AB) -- upstream's model's
+// wrong answer and Ibex's right one, from a front end that shares no
+// code with Yosys [fact, iverilog 14.0 (devel) s20260301-337-ge3934871
+// from the pinned oss-cad-suite-linux-x64-20260804]. Note that docs/63
+// section 7.5 records its Icarus confirmation on the DIV operands only;
+// the evaluation quoted here was run for this comment, on the rem
+// counterexample, and is not in that document.
+//
+// 2026-09-09: the two numbers this paragraph used to quote, 1070592674
+// and -347, were NOT this counterexample's, and the sentence claimed
+// them as "its own counterexample". They belong to the DIV
+// counterexample's operands, rs1 = 0xFFFFFEA5 and rs2 = 0x40100401, put
+// through a remainder rather than a division: that pair gives
+// 1,070,592,674 unsigned and -347 signed. The old sentence was right
+// about the shape of the failure and wrong about which run it came
+// from, so neither figure could be checked against the counterexample
+// printed above it. It is replaced by the measurement above. The
+// superseded numbers are left standing here rather than deleted, per
+// the standing rule that a corrected figure stays visible.
 //
 // The fix is to give the signed operation its own self-determined wire,
 // where nothing can demote it, and to use that wire in the conditional.

@@ -1,0 +1,312 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+%
+% Every entry carries a `note` recording HOW WELL IT WAS VERIFIED, on the
+% scale the survey behind it used:
+%
+%   [V] existence, authorship and venue corroborated by an authoritative
+%       source;
+%   [P] existence and venue corroborated, one metadata field (a DOI, a
+%       page range, part of an author list) reconstructed from convention
+%       or reported by a secondary source and not independently confirmed.
+%
+% References that reached only [U] -- surfaced in a search and not
+% independently verified -- are NOT in this file, and the paper does not
+% cite them. Four are named in the paper's own limitations section
+% instead, because a claim that something exists in the literature is a
+% claim, and an unverified one belongs where the other unverified things
+% are. A bibliography that hides its own confidence is the same defect
+% this paper is about, wearing a different hat.
+
+@article{hsiao1970,
+  author  = {M. Y. Hsiao},
+  title   = {A Class of Optimal Minimum Odd-Weight-Column {SEC-DED} Codes},
+  journal = {IBM Journal of Research and Development},
+  volume  = {14}, number = {4}, pages = {395--401}, year = {1970},
+  doi     = {10.1147/rd.144.0395},
+  note    = {[V]}
+}
+
+@article{saleh1990,
+  author  = {A. M. Saleh and J. J. Serrano and J. H. Patel},
+  title   = {Reliability of Scrubbing Recovery Techniques for Memory Systems},
+  journal = {IEEE Transactions on Reliability},
+  volume  = {39}, number = {1}, pages = {114--122}, year = {1990},
+  doi     = {10.1109/24.52622},
+  note    = {[P], DOI reconstructed from the Xplore document number}
+}
+
+@inproceedings{kastensmidt2005,
+  author    = {F. L. Kastensmidt and L. Sterpone and L. Carro and
+               M. {Sonza Reorda}},
+  title     = {On the Optimal Design of Triple Modular Redundancy Logic for
+               {SRAM}-based {FPGAs}},
+  booktitle = {Design, Automation and Test in Europe (DATE)},
+  pages     = {1290--1295}, year = {2005},
+  doi       = {10.1109/DATE.2005.229},
+  note      = {[P]}
+}
+
+@inproceedings{johnson2010,
+  author    = {J. Johnson and M. Wirthlin},
+  title     = {Voter Insertion Algorithms for {FPGA} Designs Using Triple
+               Modular Redundancy},
+  booktitle = {ACM/SIGDA International Symposium on Field Programmable Gate
+               Arrays (FPGA)},
+  year      = {2010},
+  doi       = {10.1145/1723112.1723154},
+  note      = {[V]}
+}
+
+@article{tmrg2017,
+  author  = {S. Kulis},
+  title   = {Digital Design Flow with {TMRG} Toolset},
+  journal = {Journal of Instrumentation},
+  volume  = {12}, pages = {C01082}, year = {2017},
+  doi     = {10.1088/1748-0221/12/01/C01082},
+  note    = {[P], the single-author attribution is unverified}
+}
+
+@techreport{esa_ftmr,
+  author      = {{ESA Microelectronics Section}},
+  title       = {Functional Triple Modular Redundancy ({FTMR})},
+  institution = {European Space Agency},
+  number      = {FPGA-003-01}, year = {2000},
+  note        = {[V] as a technical note, not peer reviewed. Documents the
+                 use of synthesis-preservation attributes to stop the tool
+                 removing redundancy}
+}
+
+@inproceedings{mukherjee2003,
+  author    = {S. S. Mukherjee and C. Weaver and J. Emer and
+               S. K. Reinhardt and T. Austin},
+  title     = {A Systematic Methodology to Compute the Architectural
+               Vulnerability Factors for a High-Performance Microprocessor},
+  booktitle = {36th Annual IEEE/ACM International Symposium on
+               Microarchitecture (MICRO-36)},
+  year      = {2003},
+  note      = {[V]; the author list beyond the first two is [P]. Origin of
+               AVF, ACE/un-ACE, SDC and DUE}
+}
+
+@book{mukherjee2008,
+  author    = {S. S. Mukherjee},
+  title     = {Architecture Design for Soft Errors},
+  publisher = {Morgan Kaufmann}, year = {2008},
+  note      = {[V]}
+}
+
+@inproceedings{cho2013,
+  author    = {H. Cho and S. Mirkhani and C.-Y. Cher and J. A. Abraham and
+               S. Mitra},
+  title     = {Quantitative Evaluation of Soft Error Injection Techniques for
+               Robust System Design},
+  booktitle = {50th ACM/EDAC/IEEE Design Automation Conference (DAC)},
+  year      = {2013},
+  doi       = {10.1145/2463209.2488859},
+  note      = {[V]. The outcome taxonomy this paper's classes map onto, and
+               the measurement of what a higher abstraction level costs}
+}
+
+@inproceedings{leveugle2009,
+  author    = {R. Leveugle and A. Calvez and P. Maistri and P. Vanhauwaert},
+  title     = {Statistical Fault Injection: Quantified Error and Confidence},
+  booktitle = {Design, Automation and Test in Europe (DATE)},
+  year      = {2009},
+  doi       = {10.1109/DATE.2009.5090716},
+  note      = {[P], DOI reconstructed. How many faults must be injected for
+               a stated margin}
+}
+
+@inproceedings{shivakumar2002,
+  author    = {P. Shivakumar and M. Kistler and S. W. Keckler and D. Burger
+               and L. Alvisi},
+  title     = {Modeling the Effect of Technology Trends on the Soft Error
+               Rate of Combinational Logic},
+  booktitle = {International Conference on Dependable Systems and Networks
+               (DSN)},
+  pages     = {389--398}, year = {2002},
+  note      = {[V], DOI not established. Logical, electrical and
+               latching-window masking}
+}
+
+@inproceedings{rogenmoser2023,
+  author    = {M. Rogenmoser and L. Benini},
+  title     = {Trikarenos: A Fault-Tolerant {RISC-V}-based Microcontroller
+               for {CubeSats} in 28nm},
+  booktitle = {IEEE International Conference on Electronics, Circuits and
+               Systems (ICECS)},
+  year      = {2023},
+  note      = {[V]; arXiv:2310.02045}
+}
+
+@inproceedings{odrg2022,
+  author    = {M. Rogenmoser and N. Wistoff and P. Vogel and
+               F. K. G{\"u}rkaynak and L. Benini},
+  title     = {On-Demand Redundancy Grouping: Selectable Soft-Error Tolerance
+               for a Multicore Cluster},
+  booktitle = {IEEE Computer Society Annual Symposium on VLSI (ISVLSI)},
+  pages     = {398--401}, year = {2022},
+  doi       = {10.1109/ISVLSI54635.2022.00089},
+  note      = {[V]; arXiv:2205.12580}
+}
+
+@article{santos2023,
+  author  = {D. A. Santos and A. M. P. Mattos and D. R. Melo and L. Dilillo},
+  title   = {Enhancing Fault Awareness and Reliability of a Fault-Tolerant
+             {RISC-V} System-on-Chip},
+  journal = {Electronics},
+  volume  = {12}, number = {12}, pages = {2557}, year = {2023},
+  doi     = {10.3390/electronics12122557},
+  note    = {[V]. The closest published work to this paper's angle: its
+             stated contribution is extending fault OBSERVABILITY}
+}
+
+@inproceedings{tcls2016,
+  author    = {X. Iturbe and B. Venu and E. Ozer and S. Das},
+  title     = {A Triple Core Lock-Step ({TCLS}) {ARM} {Cortex-R5} Processor
+               for Safety-Critical and Ultra-Reliable Applications},
+  booktitle = {46th Annual IEEE/IFIP International Conference on Dependable
+               Systems and Networks Workshop (DSN-W)},
+  year      = {2016},
+  note      = {[V], DOI not established}
+}
+
+@article{tcls2019,
+  author  = {X. Iturbe and B. Venu and E. Ozer and J.-L. Poupat and
+             G. Gimenez and H.-U. Zurek},
+  title   = {The {Arm} Triple Core Lock-Step ({TCLS}) Processor},
+  journal = {ACM Transactions on Computer Systems},
+  year    = {2019},
+  doi     = {10.1145/3323917},
+  note    = {[V]; the extended author list is [P]}
+}
+
+@inproceedings{safede2021,
+  author    = {S. Alcaide and L. Kosmidis and C. Hernandez and J. Abella},
+  title     = {{SafeDE}: A Flexible Diversity Enforcement Hardware Module for
+               Light-Lockstepping},
+  booktitle = {IEEE International Symposium on On-Line Testing and Robust
+               System Design (IOLTS)},
+  year      = {2021},
+  note      = {[V]; the full author list is [P]}
+}
+
+@article{mitra2002,
+  author  = {S. Mitra and N. R. Saxena and E. J. McCluskey},
+  title   = {A Design Diversity Metric and Analysis of Redundant Systems},
+  journal = {IEEE Transactions on Computers},
+  volume  = {51}, number = {5}, year = {2002},
+  doi     = {10.1109/TC.2002.1004589},
+  note    = {[P], DOI reconstructed. The citation against identical
+             replication: identical replicas have diversity near zero
+             against correlated physical disturbances}
+}
+
+@article{clear2018,
+  author  = {E. Cheng and S. Mirkhani and L. G. Szafaryn and C.-Y. Cher and
+             H. Cho and K. Skadron and M. R. Stan and K. Lilja and
+             J. A. Abraham and P. Bose and S. Mitra},
+  title   = {Tolerating Soft Errors in Processor Cores Using {CLEAR}},
+  journal = {IEEE Transactions on Computer-Aided Design of Integrated
+             Circuits and Systems},
+  volume  = {37}, number = {9}, pages = {1839--1852}, year = {2018},
+  doi     = {10.1109/TCAD.2017.2752705},
+  note    = {[V], DOI [P]; arXiv:1709.09921. 586 cross-layer resilience
+             combinations against cost and residual SDC}
+}
+
+@inproceedings{kumar2023,
+  author    = {A. Kumar},
+  title     = {Pragmatic Formal Verification of Sequential Error Detection
+               and Correction Codes ({ECCs}) Used in Safety-Critical Design},
+  booktitle = {Design and Verification Conference (DVCon) U.S.},
+  year      = {2023},
+  note      = {[V]; arXiv:2404.18270. Formally proving an ECC is routine
+               industrial practice}
+}
+
+@article{lamb2022,
+  author  = {C. Lamb and S. Zacchiroli},
+  title   = {Reproducible Builds: Increasing the Integrity of Software Supply
+             Chains},
+  journal = {IEEE Software},
+  volume  = {39}, number = {2}, pages = {62--70}, year = {2022},
+  doi     = {10.1109/MS.2021.3073045},
+  note    = {[V]; arXiv:2104.06020. The framework citation for hash pinning}
+}
+
+@misc{sky130rhbd,
+  author       = {R. Ridley and Z. Wilson and L. Burleson and J. E. Stine},
+  title        = {{sky130RHBDlib}: An Open-Source Radiation-Hardened-by-Design
+                  Standard Cell Library for {SkyWater} 130\,nm},
+  howpublished = {\url{https://github.com/stineje/sky130RHBDlib}},
+  year         = {2023},
+  note         = {[V] for the repository and contributors. Exists, and is
+                  NOT used by this design, which maps to stock cells}
+}
+
+@misc{kumaresan2026,
+  author       = {P. Kumaresan and S. Sivasubramani},
+  title        = {An Open-Source {LFSR}-Based Stochastic Leaky
+                  Integrate-and-Fire Neuron in {SkyWater} 130\,nm},
+  howpublished = {arXiv:2606.23532}, year = {2026},
+  note         = {[V]}
+}
+
+@misc{nijsink2026,
+  author       = {W. Nijsink and B. {Endres Forlin} and A. Yousefzadeh and
+                  M. Ottavi},
+  title        = {Shooting Neutrons at Neurons: Radiation Testing of a Spiking
+                  Neural Network on Flash-Based {FPGAs}},
+  howpublished = {arXiv:2605.00030}, year = {2026},
+  note         = {[V]. Beam data for an SNN; the evidence tier this paper
+                  explicitly does not reach}
+}
+
+@misc{naoukin2023,
+  author       = {J. Naoukin and M. Isik and K. Tiwari},
+  title        = {A Survey Examining Neuromorphic Architecture in Space and
+                  Challenges from Radiation},
+  howpublished = {arXiv:2311.15006}, year = {2023},
+  note         = {[V]}
+}
+
+@misc{openspike2023,
+  author       = {F. Modaresi and M. Guthaus and J. K. Eshraghian},
+  title        = {{OpenSpike}: An {OpenRAM} {SNN} Accelerator},
+  howpublished = {arXiv:2302.01015}, year = {2023},
+  note         = {[V]. Fully open EDA and open PDK, taped out in SkyWater
+                  130\,nm at roughly thirty times this design's scale. An
+                  SNN on an open PDK is not a contribution}
+}
+
+@inproceedings{openlane2020,
+  author    = {M. Shalan and T. Edwards},
+  title     = {Building {OpenLANE}: A 130nm {OpenROAD}-based Tapeout-Proven
+               Flow},
+  booktitle = {IEEE/ACM International Conference on Computer-Aided Design
+               (ICCAD)},
+  year      = {2020},
+  doi       = {10.1145/3400302.3415735},
+  note      = {[V]}
+}
+
+@article{frenkel2019,
+  author  = {C. Frenkel and M. Lefebvre and J.-D. Legat and D. Bol},
+  title   = {A 0.086-mm$^2$ 12.7-pJ/SOP 64k-Synapse 256-Neuron Online-Learning
+             Digital Spiking Neuromorphic Processor in 28-nm {CMOS}},
+  journal = {IEEE Transactions on Biomedical Circuits and Systems},
+  year    = {2019},
+  doi     = {10.1109/TBCAS.2018.2880425},
+  note    = {[V]. ODIN, the substrate Nijsink et al. irradiated}
+}
+
+@techreport{ecss60_15c,
+  author      = {{European Cooperation for Space Standardization}},
+  title       = {Space Product Assurance --- Radiation Hardness Assurance:
+                 {EEE} Components},
+  institution = {ESA-ESTEC}, number = {ECSS-Q-ST-60-15C}, year = {2012},
+  note        = {[V]. Rev.1 issued 2025. The standard whose evidence tiers
+                 this work does not reach}
+}

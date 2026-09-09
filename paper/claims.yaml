@@ -1,0 +1,203 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CC-BY-4.0
+#
+# Every number the paper prints, with what backs it.
+#
+# The paper's own thesis is that a green result gets read wider than what
+# it looked at. A paper making that claim while printing figures nobody
+# re-derives would be the thesis committed in its own text, so this file
+# exists and paper/check_claims.py runs it.
+#
+# `check:` says how a claim is verified:
+#   run      -- a command is executed and its output parsed; the value must match
+#   blob     -- a git blob hash must match
+#   file     -- a string must be present in a named file
+#   manual   -- a human read an artefact once; the file and what was read are named
+#   absent   -- the claim is that something does NOT exist, and that is checked
+#
+# A claim marked `manual` is NOT verified by the checker. It is recorded so
+# that the paper cannot print an unattributed number, and so that the count
+# of manual claims is visible rather than hidden.
+
+claims:
+
+  - id: replica.flops_per_bank
+    value: 55
+    text: "flip-flops in each of the three configuration TMR replicas"
+    check: run
+    cmd: "python3 hw/openlane/replica_placement.py hw/openlane/pilot_ihp/runs/signoff-6x2 --json"
+    json_path: "flops_per_replica.u_pilot.u_cfg_a"
+    needs_run_tree: true
+
+  - id: replica.min_c2c_um
+    value: 3.78
+    text: "minimum cross-replica centre-to-centre distance, micrometres"
+    check: run
+    cmd: "python3 hw/openlane/replica_placement.py hw/openlane/pilot_ihp/runs/signoff-6x2 --json"
+    json_path: "min_c2c_um"
+    needs_run_tree: true
+
+  - id: replica.min_edge_um
+    value: 0.0
+    text: "minimum cross-replica edge-to-edge distance, micrometres; the cells touch"
+    check: run
+    cmd: "python3 hw/openlane/replica_placement.py hw/openlane/pilot_ihp/runs/signoff-6x2 --json"
+    json_path: "min_edge_um"
+    needs_run_tree: true
+
+  - id: replica.abutting_pairs
+    value: 49
+    text: "cross-replica flip-flop pairs whose cell outlines touch"
+    check: run
+    cmd: "python3 hw/openlane/replica_placement.py hw/openlane/pilot_ihp/runs/signoff-6x2 --json"
+    json_path: "abutting_pairs"
+    needs_run_tree: true
+
+  - id: replica.nearest_is_other
+    value: 103
+    text: "of 165 configuration flip-flops whose nearest fellow is in a different replica"
+    check: run
+    cmd: "python3 hw/openlane/replica_placement.py hw/openlane/pilot_ihp/runs/signoff-6x2 --json"
+    json_path: "nearest_is_another_replica"
+    needs_run_tree: true
+
+  - id: replica.unindexed
+    value: 15
+    text: "replica-C flip-flops that cannot be attributed to a bit, making the corresponding-bit figures a lower bound"
+    check: run
+    cmd: "python3 hw/openlane/replica_placement.py hw/openlane/pilot_ihp/runs/signoff-6x2 --json"
+    json_path: "unindexed_per_replica.u_pilot.u_cfg_c"
+    needs_run_tree: true
+
+  - id: eqy.modules_proved
+    value: 3
+    text: "modules proved equivalent between RTL and the sign-off run's own cells"
+    check: manual
+    artefact: "formal/eqy/out/*.log after `make -C formal/eqy`"
+    read: "tmr_voter 2 partitions, secded_enc 1, secded_dec 1, each ending DONE (PASS)"
+
+  - id: eqy.controls_fail
+    value: 2
+    text: "negative controls that must not pass, and do not"
+    check: manual
+    artefact: "formal/eqy/out/voter_mutant.log, formal/eqy/out/secded_dec_mutant.log"
+    read: "neither contains DONE (PASS); the Makefile treats a passing control as an error"
+
+  - id: tmr.balanced_functions
+    value: "2(2^W - 1)"
+    text: "distinct affine storage transforms over W bits; three replicas need six, so W = 3 is the first width at which a third replica has a function left"
+    check: file
+    file: "hw/soc/rtl/soc_tmr_bank.v"
+    contains: "MIX"
+
+  - id: freeze.rtl_files
+    value: 10
+    text: "files in hw/rtl/, pinned by git blob in docs/34 section 2.1"
+    check: run
+    cmd: "bash -c 'ls hw/rtl | wc -l'"
+
+  - id: freeze.blob_tmr_voter
+    value: "e52580002bf6"
+    text: "git blob of hw/rtl/tmr_voter.v after the licence headers"
+    check: blob
+    path: "hw/rtl/tmr_voter.v"
+
+  - id: suite.pytest
+    value: 491
+    text: "Python tests passing at the last recorded clean run"
+    check: file
+    file: "verification-log.tsv"
+    contains: "491"
+
+  # A COUNT IS THE WRONG CLAIM HERE, and the first version of this file
+  # made it anyway. "312 files carry a tag" was true when written and
+  # false one commit later, which would have made the paper's own checker
+  # cry wolf on every addition until someone stopped reading it. What the
+  # paper actually asserts is a PROPERTY -- that no source file is
+  # untagged or mis-tagged -- and a property does not drift.
+  - id: spdx.no_untagged_source
+    value: 0
+    text: "source files that are untagged or tagged against the licence policy"
+    check: run
+    cmd: "python3 scripts/spdx_check.py"
+    regex: "([0-9]+) missing"
+
+  - id: spdx.no_wrong_tag
+    value: 0
+    text: "source files carrying a tag the policy does not allow for their class"
+    check: run
+    cmd: "python3 scripts/spdx_check.py"
+    regex: "([0-9]+) wrong"
+
+  - id: pdk.sram_magic_errors
+    value: 1106478
+    text: "Magic DRC error boxes returned by one RM_IHPSG13 macro, all inside vendor geometry"
+    check: manual
+    artefact: "docs/12 section 7.5"
+    read: "the count, recorded when the macro was integrated; the blocker is upstream, IHP-Open-PDK issue 239"
+
+  - id: soc.setup_violating_endpoints
+    value: 3088
+    text: "slow-corner setup endpoints the SoC layout fails"
+    check: manual
+    artefact: "docs/77 section 9.2, run s77gate"
+    read: "-4.6799 ns WNS on 3,088 violating endpoints"
+
+  - id: silicon.exists
+    value: false
+    text: "there is no silicon, no engineering sample and no schedule for one"
+    check: absent
+    glob: "**/*.gds.fabricated"
+
+  # Section 8's configuration claims. These are the sharpest kind of
+  # evidence available for a scope defect: the scope is a value in a file
+  # the run itself wrote, so the claim is a lookup rather than a reading.
+
+  - id: scope.checker_all_corners
+    value: "['*']"
+    text: "SETUP_VIOLATION_CORNERS -- the checker is bound to every corner"
+    check: json
+    file: hw/soc/pnr/runs/s77gate/resolved.json
+    key: SETUP_VIOLATION_CORNERS
+
+  - id: scope.repair_typ_only
+    value: "['*typ*']"
+    text: "TIMING_VIOLATION_CORNERS -- the repair is bound to the typical corner alone, while the checker above is bound to all three"
+    check: json
+    file: hw/soc/pnr/runs/s77gate/resolved.json
+    key: TIMING_VIOLATION_CORNERS
+
+  - id: scope.placement_not_timing_driven
+    value: "False"
+    text: "PL_TIMING_DRIVEN -- global placement did not consider timing at all"
+    check: json
+    file: hw/soc/pnr/runs/s77gate/resolved.json
+    key: PL_TIMING_DRIVEN
+
+  - id: decks.magic_off
+    value: "False"
+    text: "RUN_MAGIC_DRC on the system-on-chip: the deck was switched off, not run and failed"
+    check: json
+    file: hw/soc/pnr/runs/s77gate/resolved.json
+    key: RUN_MAGIC_DRC
+
+  - id: decks.lvs_off
+    value: "False"
+    text: "RUN_LVS on the system-on-chip"
+    check: json
+    file: hw/soc/pnr/runs/s77gate/resolved.json
+    key: RUN_LVS
+
+  - id: soc.meets_at_typ
+    value: "4.3153"
+    text: "setup worst slack at the typical corner, nanoseconds -- the design meets there and fails only at slow"
+    check: manual
+    artefact: "hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/summary.rpt"
+    read: "the Overall row gives -4.6799 with 3,088 violating endpoints; nom_typ gives +4.3153 with 0 and nom_fast +9.5579 with 0"
+
+  - id: soc.worst_path_slew
+    value: "1.611246"
+    text: "output transition of one minimum-strength nand3 on the worst path, nanoseconds"
+    check: manual
+    artefact: "hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt"
+    read: "cell _42330_ (sg13g2_nand3_1), slew 1.611246, delay 1.396062, driving 0.118899 pF"

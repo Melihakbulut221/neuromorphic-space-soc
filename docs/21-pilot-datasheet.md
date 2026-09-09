@@ -163,7 +163,7 @@ section 9.4]**.
                                         v
    +------------------------------------+-----------------------------+
    |                          REGISTER BANK                           |
-   |   regmap/regmap.yaml subset + 3 pilot-only registers             |
+   |   regmap/regmap.yaml subset + 5 pilot-only registers             |
    |   fault counters (8-bit, saturating), sticky status bits         |
    +---+------------------------+---------------------+---------------+
        |                        |                     |
@@ -239,7 +239,7 @@ events it can still get out.
 ### 2.3 Register bank
 
 The programmer's view. It implements the subset of `regmap/regmap.yaml`
-listed in section 5.3 plus four pilot-only observability registers, all
+listed in section 5.3 plus five pilot-only observability registers, all
 addresses and reset values taken from the generated header
 `hw/rtl/npu_regs.vh` and never hand-copied — an elaboration guard fails
 the build if the generator moves a field this module encodes
@@ -754,10 +754,32 @@ makes an injected upset visible until it is scrubbed (deviation D4).
 **saturate**, not 32 (deviation D1). Reads zero-extend to 32 bits. This
 matters for interpretation and for fault analysis — see section 6.4.
 
-**`FAULT_CLR` bit 5** is a pilot-only clear for `CNT_TMR`. The
-architecture block ignores it, so a host that writes `0x3F` is portable
-across both implementations; that portability is deliberate and is the
-reason bit 5 is used rather than a lower one.
+**`FAULT_CLR` bits 5, 6 and 7** are pilot-only clears: bit 5 for
+`CNT_TMR`, bit 6 for `CNT_EVQ_OUT_OVF`, bit 7 for `CNT_EVQ_PAR`. The
+architecture block ignores every bit above 4, so a host that writes
+**`0xFF`** clears everything in either implementation; that portability
+is deliberate and is the reason the pilot allocates upward from bit 5
+rather than reusing a lower one.
+
+> **CORRECTED 2026-09-09.** Until this date the paragraph above read
+> "**`FAULT_CLR` bit 5** is a pilot-only clear for `CNT_TMR` … a host
+> that writes **`0x3F`** is portable across both implementations". That
+> was true when it was written and only bit 5 existed. It has been
+> wrong since `CNT_EVQ_OUT_OVF` took bit 6 (2026-08-29) and
+> `CNT_EVQ_PAR` took bit 7 (`docs/30`): `hw/rtl/pilot_top.v` line 255,
+> the frozen die, says "the portable clear-everything write is now
+> `0xFF`". The superseded `0x3F` is left visible here rather than
+> deleted. A host that still writes `0x3F` clears `CNT_SEC`, `CNT_DED`,
+> `CNT_EVQ_OVF`, `CNT_AXON_OOR`, `FAULT_ADDR` and `CNT_TMR`, and leaves
+> `CNT_EVQ_OUT_OVF` and `CNT_EVQ_PAR` standing — which on this device
+> is silently reading a stale event-loss count, not a harmless
+> omission. `regmap/regmap.yaml` carried the same stale `0x3F` into the
+> generated `docs/regmap-npu.md` and was corrected on the same date.
+> **`tt/docs/info.md` still says `0x3F` and still lists only three
+> pilot-only registers**; `tt/` is frozen for the shuttle and is not
+> corrected here. `sw/tests/test_tt_submission.py`
+> `test_pilot_only_registers_and_fault_clr_bits_are_documented` pins
+> that gap so it cannot grow, and section 10 records it.
 
 #### aer — queue access and mesh addressing
 
@@ -770,14 +792,29 @@ reason bit 5 is used rather than a lower one.
 
 #### Pilot-only observability registers (deviation D5)
 
-These three occupy the unmapped region of the same window and do not
-change the architecture register-map contract.
+These five occupy the unmapped region of the same window and do not
+change the architecture register-map contract. The list is the decode in
+`hw/rtl/pilot_top.v` (the `SA_*` localparams around line 1181, copied
+byte for byte into `tt/src/pilot_top.v`), not a hand-kept list.
 
 | Offset | Name | Access | Bit fields |
 |---|---|---|---|
 | 0x0A0 | ECC_INJ_POS | RW | POS [6:0], the codeword bit that ECC_INJ.SINGLE flips. ECC_INJ.DOUBLE flips POS and (POS + 1) mod 72, a valid double error for any Hsiao code. Reset 0, so an ECC_INJ write alone is already deterministic |
 | 0x0A4 | TMR_INJ | RW | REP [9:8]: 00 = none, 01 = replica A, 10 = B, 11 = C; BIT [5:0] selects a bit of the voted configuration vector |
 | 0x0A8 | CNT_TMR | RO | Saturating count of voter disagreement episodes, one per rising edge of mismatch; cleared by FAULT_CLR bit 5 |
+| 0x0AC | CNT_EVQ_OUT_OVF | RO | Saturating count of OUTPUT-queue writes that were refused and lost; cleared by FAULT_CLR bit 6. It is not `aer_fifo`'s own drop counter and it is not `CNT_EVQ_OVF` (0x78), which counts the INPUT queue — `hw/rtl/pilot_top.v` section 5.1 is why both exist. Added 2026-08-29 after the fault-injection campaign found an overflow raising `STATUS.OVF_SEEN` with no count behind it |
+| 0x0B0 | CNT_EVQ_PAR | RO | Saturating count of queue entries DISCARDED because the stored word failed its entry parity check, both queue instances in one count; cleared by FAULT_CLR bit 7. `hw/rtl/pilot_top.v` section 5.2 and `docs/30` are why it is one counter and not two |
+
+> **ADDED 2026-09-09.** The last two rows are new to this datasheet, not
+> new to the device: `0x0AC` and `0x0B0` have been in the decode of the
+> frozen die since 2026-08-29 and `docs/30` respectively, and this table
+> said "These three" until today. Nothing checked it. The gap was found
+> by review of `sw/tests/test_tt_submission.py`, whose skip comment
+> claimed these registers were "checked by its own table" when no such
+> check existed anywhere in the tree — a green result read wider than
+> what it looked at, which is the failure mode this corpus names in
+> `docs/64`, occurring live at HEAD. The check now exists and is named
+> above the table.
 
 `TMR_INJ` emulates an upset on one replica's **read path**; the storage
 flip-flops are not disturbed, so no replica resynchronisation is
@@ -810,7 +847,7 @@ is what makes recovery from a parked core possible.
 | D2 | `CFG_NEUR` is read-only and reports the elaborated geometry | The neuron core carries no runtime active-neuron count; implementing one would be RTL with no golden reference. `CFG_AXON` is fully writable and does drive the drop rule |
 | D3 | `W_ADDR` is a weight-word index, not a byte address | One 16-weight word per commit; auto-increments on `W_DATA_HI` exactly as the map specifies |
 | D4 | `W_DATA_LO`/`W_DATA_HI` read back the *stored* ECC data field | They are the physical data field, so an injected upset is visible until it is scrubbed. That is the demonstrator |
-| D5 | Three pilot-only registers at 0x0A0, 0x0A4, 0x0A8 | Observability; unmapped region of the same window |
+| D5 | Five pilot-only registers at 0x0A0, 0x0A4, 0x0A8, 0x0AC, 0x0B0 | Observability; unmapped region of the same window. **Corrected 2026-09-09**: this row said "Three ... at 0x0A0, 0x0A4, 0x0A8" and had done since before `CNT_EVQ_OUT_OVF` (0x0AC, 2026-08-29) and `CNT_EVQ_PAR` (0x0B0, `docs/30`) entered the decode. Section 5.3 carries the full table |
 
 ---
 
@@ -1628,8 +1665,12 @@ are the reason the device exists.
 Write the host-side rule from section 6.4 into the bench script: a
 counter reading nonzero while its sticky bit is clear, or a sticky bit
 set while its counter reads zero, is a *detected fault of the telemetry
-itself*. Also confirm `FAULT_CLR` = `0x3F` clears everything including
-`CNT_TMR`.
+itself*. Also confirm `FAULT_CLR` = `0xFF` clears everything including
+`CNT_TMR`, `CNT_EVQ_OUT_OVF` and `CNT_EVQ_PAR`. **Corrected
+2026-09-09**: this step said `0x3F`, which leaves the last two
+counters standing and would have made the very telemetry cross-check
+this step establishes read a stale value as a live one. Section 5.3
+carries the reasoning and the superseded number.
 
 **Step 10 — driver hygiene, permanently.** Rewrite `W_ADDR` and `CTRL`
 before every use rather than trusting a previously set value; reload the
@@ -1699,6 +1740,32 @@ Recorded, not corrected — these files are owned elsewhere.
    they are not distinguished where they are quoted.
 6. **`docs/15` section 5.1** says 22 cocotb tests in the pilot suite;
    the suite run for this document reports 23.
+7. **`tt/docs/info.md` under-describes the die it ships with.** Added
+   2026-09-09. Its pilot-only register table lists three registers
+   (0x0A0, 0x0A4, 0x0A8) and its `FAULT_CLR` table lists bits 0 to 5,
+   ending "Writing `0x3F` clears everything". The die those files
+   accompany — `tt/src/pilot_top.v`, byte-identical to
+   `hw/rtl/pilot_top.v` — decodes `CNT_EVQ_OUT_OVF` at 0x0AC and
+   `CNT_EVQ_PAR` at 0x0B0 and allocates `FAULT_CLR` bits 6 and 7 to
+   them, and its own line 255 says the portable clear-everything write
+   is `0xFF`. So an operator following the submitted datasheet reads a
+   stale event-loss count and never learns the two counters exist.
+   `tt/` is frozen for the shuttle and `tt/docs/info.md` is generated by
+   `scripts/gen_tt_submission.py`, whose `PILOT_ONLY_REGS` list (around
+   line 162) and `FAULT_CLR` template (around line 1010 to 1020) are
+   where the omission actually lives; neither file is corrected here,
+   and correcting them regenerates `tt/`. Section 5.3 of this document
+   is now complete and is the reference to use in the meantime.
+   `sw/tests/test_tt_submission.py`
+   `test_pilot_only_registers_and_fault_clr_bits_are_documented` pins
+   the omission to exactly these two registers and exactly this clear
+   value, so a third undocumented register or a further-drifted mask
+   fails the suite instead of passing it.
+8. **`docs/15` section 3 deviation D5 says four pilot-only registers**
+   and lists 0x0A0, 0x0A4, 0x0A8, 0x0AC. There are five; `CNT_EVQ_PAR`
+   at 0x0B0 arrived with `docs/30` and D5 was not revisited. `docs/15`
+   is a historical plan record and is not edited to match today; this
+   entry is the correction, and section 5.3 above carries the live list.
 
 ## 11. References
 

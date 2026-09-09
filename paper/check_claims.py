@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+"""Re-derive the numbers the paper prints.
+
+    python3 paper/check_claims.py            check every claim
+    python3 paper/check_claims.py --list     what is checked and how
+
+WHY THIS EXISTS
+
+The paper's thesis is that a green result gets read wider than what it
+actually looked at. A paper making that argument while printing figures
+that nobody re-derives would be the thesis committed in its own text.
+
+So `paper/claims.yaml` names every number the paper prints and how it is
+backed, and this script re-derives the ones that can be re-derived. It
+is deliberately unforgiving in one direction: a claim it cannot check is
+reported as UNCHECKED and counted, never quietly passed.
+
+WHAT IT CANNOT DO, AND SAYS SO
+
+Claims marked `manual` are read from an artefact by a person once. This
+script does not verify them; it verifies that each one names an artefact
+and what was read from it. That is weaker than a check and stronger than
+a footnote, and the summary prints how many there are so the ratio is
+visible.
+
+Claims marked `needs_run_tree` depend on a LibreLane run directory,
+which is gitignored build output. In a clone they are reported SKIPPED
+with that reason, not passed.
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def load(path):
+    """A tiny YAML reader for the subset this file uses.
+
+    Deliberately not a dependency: this script has to run in a bare
+    clone, and a checker that needs `pip install` before it can check
+    anything is a checker that does not get run.
+    """
+    claims, cur = [], None
+    for raw in path.read_text().splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        if raw.startswith("claims:"):
+            continue
+        stripped = raw.strip()
+        if stripped.startswith("- "):
+            cur = {}
+            claims.append(cur)
+            stripped = stripped[2:]
+        if cur is None or ":" not in stripped:
+            continue
+        k, _, v = stripped.partition(":")
+        v = v.strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        elif v in ("true", "false"):
+            v = v == "true"
+        else:
+            try:
+                v = int(v)
+            except ValueError:
+                try:
+                    v = float(v)
+                except ValueError:
+                    pass
+        cur[k.strip()] = v
+    return claims
+
+
+def dig(obj, path):
+    for part in path.split("."):
+        if isinstance(obj, dict) and part in obj:
+            obj = obj[part]
+        else:
+            # A key with dots in it, e.g. an instance path.
+            for k in list(obj):
+                if path.endswith(k):
+                    return obj[k]
+            return None
+    return obj
+
+
+def run(cmd):
+    return subprocess.run(cmd, shell=True, cwd=ROOT, capture_output=True,
+                          text=True)
+
+
+def check(c):
+    """Return (state, detail). State is PASS, FAIL, SKIP or UNCHECKED."""
+    kind = c.get("check")
+
+    if kind == "manual":
+        if not c.get("artefact") or not c.get("read"):
+            return "FAIL", "manual claim names no artefact or no reading"
+        return "UNCHECKED", f"read once from {c['artefact']}"
+
+    if kind == "blob":
+        out = run(f"git hash-object {c['path']}")
+        if out.returncode != 0:
+            return "FAIL", out.stderr.strip()
+        got = out.stdout.strip()[:len(str(c["value"]))]
+        return ("PASS", got) if got == c["value"] else ("FAIL", f"{got} != {c['value']}")
+
+    if kind == "file":
+        p = ROOT / c["file"]
+        if not p.is_file():
+            return "FAIL", f"{c['file']} missing"
+        return (("PASS", "present") if str(c["contains"]) in p.read_text()
+                else ("FAIL", f"{c['contains']!r} not in {c['file']}"))
+
+    if kind == "json":
+        # A value read straight out of a file the run itself wrote. This is
+        # the strongest evidence available for a claim about how something
+        # was configured: the artefact is the configuration.
+        f = ROOT / c["file"]
+        if not f.is_file():
+            return "SKIP", (f"{c['file']} is build output and is not in this "
+                            "checkout")
+        try:
+            got = json.loads(f.read_text())[c["key"]]
+        except KeyError:
+            return "FAIL", f"key {c['key']!r} absent from {c['file']}"
+        except json.JSONDecodeError as exc:
+            return "FAIL", f"not JSON: {exc}"
+        return (("PASS", repr(got)) if str(got) == str(c["value"])
+                else ("FAIL", f"{got!r} != {c['value']!r}"))
+
+    if kind == "absent":
+        hits = list(ROOT.glob(c["glob"]))
+        return (("PASS", "nothing matches, as claimed") if not hits
+                else ("FAIL", f"{len(hits)} match {c['glob']}"))
+
+    if kind == "run":
+        if c.get("needs_run_tree"):
+            probe = ROOT / "hw/openlane/pilot_ihp/runs/signoff-6x2/final/def"
+            if not probe.is_dir():
+                return "SKIP", ("the sign-off run tree is gitignored build "
+                                "output and is not in this checkout")
+        out = run(c["cmd"])
+        if out.returncode != 0:
+            return "FAIL", (out.stderr or out.stdout).strip()[:200]
+        if "json_path" in c:
+            try:
+                got = dig(json.loads(out.stdout), c["json_path"])
+            except json.JSONDecodeError as exc:
+                return "FAIL", f"not JSON: {exc}"
+        elif "regex" in c:
+            m = re.search(c["regex"], out.stdout)
+            got = m.group(1) if m else None
+        else:
+            got = out.stdout.strip()
+        if got is None:
+            return "FAIL", "value not found in output"
+        try:
+            ok = abs(float(got) - float(c["value"])) < 1e-6
+        except (TypeError, ValueError):
+            ok = str(got) == str(c["value"])
+        return ("PASS", str(got)) if ok else ("FAIL", f"{got} != {c['value']}")
+
+    return "FAIL", f"unknown check kind {kind!r}"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--list", action="store_true")
+    args = ap.parse_args()
+
+    claims = load(ROOT / "paper" / "claims.yaml")
+    if args.list:
+        for c in claims:
+            print(f"{c['id']:34s} {c.get('check','?'):9s} {c.get('text','')}")
+        return 0
+
+    tally = {"PASS": 0, "FAIL": 0, "SKIP": 0, "UNCHECKED": 0}
+    bad = []
+    for c in claims:
+        state, detail = check(c)
+        tally[state] += 1
+        mark = {"PASS": "ok  ", "FAIL": "FAIL", "SKIP": "skip",
+                "UNCHECKED": "man "}[state]
+        print(f"{mark} {c['id']:34s} {detail}")
+        if state == "FAIL":
+            bad.append(c["id"])
+
+    print(f"\n{tally['PASS']} re-derived, {tally['UNCHECKED']} read from a "
+          f"named artefact by hand, {tally['SKIP']} need build output not in "
+          f"this checkout, {tally['FAIL']} wrong")
+    if tally["UNCHECKED"]:
+        print("The hand-read claims are the paper's weakest evidence and the "
+              "count is printed\nso the ratio is visible rather than implied.")
+    if bad:
+        print("\nwrong: " + ", ".join(bad))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

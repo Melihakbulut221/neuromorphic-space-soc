@@ -46,7 +46,7 @@ place and not copied. Section 13 lists every file.
 | Isn't this the duplication `docs/38` declined `SecureIbex` over? | **No, and the document says so rather than leaving it to be noticed.** `docs/38` section 8.5 objected to *two SECDED codecs on one die*. There is still one: `hw/rtl/secded_{enc,dec}.v`, read in place. What has changed is that lockstep *detects* and this *corrects*, over the 45 % of the core's flip-flops that carry most of its measured failure rate. Section 6.1 |
 | What does the window cost in false positives? | **A bound on the jitter of the software's kick cadence, and — measured — seven spurious escalations in 1,232 survivable upsets.** `WINS = s` requires `i_max / i_min < 1/(1 − 2^-s)`. The `docs/42` workload, written the ordinary way, measures **25 kicks at intervals of 30 to 1,716 clocks, a ratio of 57.2** **[fact]**, and can use no window at all; rewritten to kick once per round it measures **1.018**, and one notch tighter than the shipped setting turns **every one of a healthy program's kicks** into a violation **[fact]**. `docs/41`'s zero-spurious-escalation headline does not survive this feature. Sections 4 and 8.4 |
 | What stops software or an upset from widening the window? | Three things, and the third is the load-bearing one: W5's key, the fact that neither field can *disarm* the block, and that both live inside W6's protected word. Section 4.5 |
-| Measured area | **The core: +38,050.5762 um2, +13.80 %, +222 flip-flops** **[fact]**, against a baseline re-measured in the same session that reproduces `docs/38`'s 275,682.6198 um2 exactly. **The watchdog: +4,904.0964 um2 for W7 and W8**, against a `WINDOW = 0` build of the same file. Section 7 |
+| Measured area | **The core: +38,050.5762 um2, +13.80 %, +222 flip-flops** **[fact]**, against a baseline re-measured in the same session that reproduces `docs/38`'s 275,682.6198 um2 exactly. **The watchdog: +4,904.0964 um2 for W7 and W8**, against a `WINDOW = 0` build of the same file. **That +13.80 % is the core as this document built it**, before `docs/44` added the fast-correction path and the fault-report port; the core as shipped is `docs/44` section 7.1's 316,051.6590 um2, **+14.64 %**, and section 7.1's note of 2026-09-05 says which to quote where. Section 7 |
 | Measured timing | **62.6 MHz becomes 56.8 MHz, −9.3 %**, bisected on both configurations with `docs/38` section 8.6's method **[fact]**. The decoder is on the register read path and the register read path feeds the ALU, so unlike lockstep — which `docs/38` measured at 0.27 ns because a shadow core runs in parallel — this correction is *in series* with the thing it protects. Section 7.4 |
 | Did the hardening change any behaviour? | **No, and it is measured rather than argued.** The whole-SoC run is cycle-identical to `docs/40` and `docs/41`: 22 checks, stage 1 at cycle 174,128, core asleep after 185,443 cycles, 587 console characters, 0 framing errors. The escalation demo is identical too **[fact]**. Section 9.1 |
 | Does the redundancy survive synthesis? | **Counted, not assumed.** 992 data + 217 check + 5 scrub-pointer flip-flops in the mapped netlist, on two technology mappers, dropping to 992 at `HARDEN = 0` **[fact]**. And the check field is **seven** bits per register and not eight, for a reason that is proved rather than observed. Sections 6.3 and 9.4 |
@@ -525,9 +525,49 @@ the distinction is the one `docs/38` section 8.5 drew for itself:
   storage, and the program never sees it.
 - **And the price is now known on both sides.** `SecureIbex` is
   +309,550 um2 and +112 % for detection over the whole core; this is
-  +37,983 um2 and +13.8 % for correction over 45 % of its flip-flops
-  **[fact, section 7]**. That is **12.3 % of the cost** **[estimate,
-  arithmetic on two measurements]**.
+  ~~+37,983 um2~~ **+38,050.5762 um2** and +13.80 % for correction over
+  45 % of its flip-flops **[fact, section 7.1]**. That is **12.3 % of
+  the cost** **[estimate, arithmetic on two measurements]**.
+
+  **CORRECTED 2026-09-09.** This line read **+37,983 um2** and cited
+  section 7 for it. Section 7 has never said that. Section 7.1's table
+  is 313,733.1960 um2 against a 275,682.6198 um2 baseline measured in
+  the same session, whose difference is **+38,050.5762 um2**, and that
+  is the figure section 1's verdict row, section 7.1's own pull-quote
+  and section 7.2's "20 % larger" comparison all carry. The struck
+  number is **67.5762 um2 low** and no file in this repository produces
+  it: it is a transcription into a prose bullet, not a superseded
+  reading, and nothing was re-synthesised to correct it **[fact,
+  arithmetic on the section 7.1 table]**. It is left visible by the rule
+  `docs/64` section 2 states. **The 12.3 % ratio does not move**:
+  37,983/309,550 is 12.27 % and 38,050.5762/309,550 is 12.29 %, and the
+  conclusion the bullet draws is unchanged **[estimate, arithmetic]**.
+
+  **And +13.80 % is this document's build, not the core that ships.**
+  Both that percentage and the +38,050.5762 are measured over
+  **313,733.1960 um2**, which is the core carrying the register file *as
+  section 3 substituted it*, before `docs/44` added either the
+  fast-correction read path or the fault-report port — at the time of
+  this document there was nothing to report to, which is section 6.5.
+  It is **not** `docs/44`'s `FASTCORR = 0` row: that row is 314,212.7268
+  and is a later file with the parameter present and the port
+  unconnected, 479.5308 um2 away from this one **[fact, `docs/44`
+  section 7.1 rows 2 and 3]**.
+  The core as shipped is `docs/44` section 7.1's **316,051.6590 um2,
+  +14.64 % over the same baseline** **[fact, `docs/44` section 7.1]**,
+  and `docs/45` section 6.2 and `docs/60` section 5 carry that one. The
+  2,318.4630 um2 between them is content `docs/44` added — the
+  fast-correction read path and the report cone — and not a
+  re-measurement of this one, which `docs/44` reproduces byte-identically
+  **[estimate, the difference of two measurements]**. **Neither figure
+  supersedes the other and neither is deleted**: quote +38,050.5762 and
+  +13.80 % for what the register-file protection alone cost, and
+  316,051.6590 um2 and +14.64 % for the core in the SoC. Section 7.1's
+  note of 2026-09-05 and `docs/64` section 3.3 say this at the table
+  that carries the number; it is repeated here because this bullet is
+  where a reader comparing against lockstep meets the figure first, and
+  a percentage quoted without its configuration is the defect `docs/64`
+  section 3.3 was opened for.
 
 ### 6.2 Why (72,64) and not a (39,32) of its own
 
