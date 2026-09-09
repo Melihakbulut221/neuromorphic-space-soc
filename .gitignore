@@ -131,3 +131,6 @@ hw/soc/pnr/config-ecc-clint*.json
 
 # scripts/run_cocotb.sh single-run lock
 .run_cocotb.lock
+
+# formal/eqy build output
+formal/eqy/out/

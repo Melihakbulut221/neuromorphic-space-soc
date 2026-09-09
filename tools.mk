@@ -31,6 +31,7 @@ OSS_CAD_SUITE_YOSYS_PIN ?= 0.67+146
 TOOL_BIN := $(OSS_CAD_SUITE)/bin
 
 SBY       := $(TOOL_BIN)/sby
+EQY       := $(TOOL_BIN)/eqy
 YOSYS     := $(TOOL_BIN)/yosys
 IVERILOG  := $(TOOL_BIN)/iverilog
 VVP       := $(TOOL_BIN)/vvp
@@ -41,6 +42,9 @@ VERILATOR := $(TOOL_BIN)/verilator
 # error with a name rather than a mysterious command-not-found later.
 ifeq ($(wildcard $(SBY)),)
 SBY := $(shell command -v sby 2>/dev/null)
+endif
+ifeq ($(wildcard $(EQY)),)
+EQY := $(shell command -v eqy 2>/dev/null)
 endif
 ifeq ($(wildcard $(YOSYS)),)
 YOSYS := $(shell command -v yosys 2>/dev/null)
