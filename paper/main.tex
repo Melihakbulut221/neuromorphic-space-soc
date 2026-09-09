@@ -1,11 +1,12 @@
 % SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
 % SPDX-License-Identifier: CC-BY-4.0
 %
-% Every number printed in this paper is registered in paper/claims.yaml
-% and re-derived by paper/check_claims.py, which runs in CI. A claim that
-% cannot be re-derived is recorded there as read-by-hand from a named
-% artefact, and the count of those is printed in Section 10 rather than
-% left implicit.
+% The numbers this paper's argument turns on are registered in
+% paper/claims.yaml and checked by paper/check_claims.py in CI. The
+% registry is NOT a census of every number printed here -- the body
+% prints about 174 numeric literals and the registry holds 27 -- and the
+% checker's own summary says how many of its claims are re-derived by a
+% command and how many are read once by hand from a named artefact.
 
 \documentclass[11pt,a4paper]{article}
 
@@ -14,20 +15,21 @@
 \usepackage{lmodern}
 \usepackage[margin=1in]{geometry}
 \usepackage{booktabs}
-\usepackage{longtable}
 \usepackage{array}
 \usepackage{amsmath}
 \usepackage{siunitx}
 \usepackage{microtype}
-\usepackage[hidelinks]{hyperref}
-\usepackage{xcolor}
 \usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}   % loaded last, as it patches others
 
-\sisetup{group-separator={,}, group-minimum-digits=4, detect-weight=true}
+% group-digits=integer, or group-minimum-digits puts a comma inside every
+% four-digit DECIMAL fraction: "1.226,2 ns". detect-weight is a siunitx
+% v2 key; v3 spells it text-series-to-math.
+\sisetup{group-separator={,}, group-minimum-digits=4,
+         group-digits=integer, text-series-to-math=true}
 
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcommand{\file}[1]{\texttt{\small #1}}
-\newcommand{\um}{\si{\micro\meter}}
 
 \title{Triplicated in the Netlist, Adjacent in the Die:\\
 Instrumenting a Redundancy Claim Across an Open 130\,nm Flow}
@@ -54,25 +56,33 @@ fails 3{,}088 setup endpoints at the slow corner, and no Magic DRC,
 KLayout DRC or Netgen LVS result exists for it---the decks were switched
 off on the strength of a single-macro experiment in which the vendor SRAM
 macro produced \num{1106478} Magic errors, \emph{every one of them inside
-the macro footprint and none outside}, and we report below what happens
-when they are switched back on.
+the macro footprint and none outside}; \S\ref{sec:decks} states the scope
+they were switched off at, and no result from re-running them is reported
+in this version.
 What we do have is a design whose redundancy claim was checked at three
 levels and was wrong at two of them.
 At the register-transfer level the claim was true. In the mapped netlist
 it was false---the synthesiser's structural hashing had collapsed three
-declared replicas into one physical bank, and the register-transfer-level
+declared replicas into one physical bank at the geometry then being
+hardened, and the register-transfer-level
 fault-injection campaign that was supposed to detect this produced
 \emph{bit-identical} output on the defective and the repaired design,
 because it deposits into signals the netlist no longer contains.
 Repaired, and confirmed by a per-instance-path census of mapped
 flip-flops that is mutation-checked and runs in two independent
 technology mappers.
-In the die it is false again, and this is measured here for the first
-time: the three replica banks share one region of the layout, the minimum
-cross-replica cell separation is \SI{3.78}{\micro\meter} centre-to-centre
-and \SI{0.00}{\micro\meter} edge-to-edge---the cells touch---49 pairs
-abut, and for 103 of 165 configuration flip-flops the nearest other
-configuration flip-flop belongs to a \emph{different} replica.
+In the die the three banks are triplicated but not physically
+independent, and we publish the measurement with the instrument that
+makes it re-runnable: the banks share one region of the layout, the
+minimum cross-replica separation is \SI{3.78}{\micro\meter}
+centre-to-centre, which is the floor for two cells in adjacent rows, and
+49 pairs abut. Against a null model that shuffles only the replica
+labels over the same placed positions, the banks are statistically
+indistinguishable from an arbitrary labelling; what \emph{is} measured is
+a \textbf{4.1-fold concentration on corresponding bits}---median
+\SI{27.52}{\micro\meter} against \SI{113.47}{\micro\meter} over all
+cross-replica pairs---which is the shape a shared voter's wirelength
+would leave.
 Nothing in the flow asked for separation, and the census that establishes
 the redundancy runs on the synthesis netlist and cannot see placement by
 construction.
@@ -117,10 +127,14 @@ The mapped netlist did not contain three replicas. Yosys's
 \texttt{opt\_dff} normalises hold-multiplexers into enable flip-flops and
 \texttt{opt\_merge} then hashes cells on their (D, EN, reset-value)
 signature; three replicas written from the same expression hash
-identically and become one. The netlist that fed a hardening run contains
-362 references to \texttt{cfg\_a}, none to \texttt{cfg\_b} and none to
-\texttt{cfg\_c}. The RTL declares \num{1161} flip-flops; the netlist has
-\num{1045}.
+identically and become one. The netlist that fed the \textbf{4$\times$2}
+hardening run contains 362 references to \texttt{cfg\_a}, none to
+\texttt{cfg\_b} and none to \texttt{cfg\_c}; at that geometry the RTL
+declares \num{1161} flip-flops and the netlist has \num{1045}. The
+geometry is printed because Section~\ref{sec:design} states the rule
+that it must be---the frozen design, the placement measurement and the
+55/55/55 census are all 6$\times$2---and an earlier draft of this paper
+broke that rule five times in the document that states it.
 
 This is not a new phenomenon. It is documented in the FPGA
 radiation-hardening literature~\cite{kastensmidt2005}, in vendor
@@ -193,8 +207,9 @@ in a limitations section at the end.
 \begin{table}[htbp]
 \centering
 \caption{What has been built and measured, and what has not.
-Every figure is re-derived by \file{paper/check\_claims.py} or is recorded
-there as read once from the named artefact.}
+Figures registered in \file{paper/claims.yaml} are checked by
+\file{paper/check\_claims.py}; the rest are read from the run reports and
+documents cited in the text and are not machine-checked.}
 \label{tab:inventory}
 \small
 \begin{tabularx}{\textwidth}{L{4.6cm}X}
@@ -215,7 +230,9 @@ Timing & slow-corner setup \textbf{+\SI{1.2262}{\nano\second}} at a
 \midrule
 Geometry & \SI{2306.40}{\micro\meter} $\times$ \SI{2075.22}{\micro\meter}
 = \SI{4.7863}{\milli\meter\squared} \\
-Mapped cells & \num{42518} cells, \num{5263} flip-flops \\
+Mapped cells & \num{176447} instances including fill and six SRAM
+macros; \num{5872} flip-flops --- run \texttt{s77gate}, the same run the
+timing below is measured on \\
 Timing & \textbf{$-$\SI{4.6799}{\nano\second} slow-corner setup on
 \num{3088} violating endpoints}; hold met at all three corners;
 detailed-route DRC 0 \\
@@ -234,8 +251,9 @@ abstracted \\
 \multicolumn{2}{l}{\textbf{What does not exist}}\\
 \midrule
 Silicon & none, no engineering sample, no schedule for one \\
-Radiation data & none of any kind. Neither SkyWater 130\,nm nor IHP
-SG13G2 publishes TID, SEE or SER characterisation \\
+Radiation data & none we could find. We located no published TID, SEE or
+SER characterisation for either PDK, and neither ships such data in its
+own release \\
 Application accuracy & no classification result for this design on any
 task, and none has ever existed \\
 A clock frequency for the SoC & withheld. \SI{50}{\mega\hertz} is not
@@ -353,19 +371,44 @@ The available affine transforms over $W$ bits give exactly
 2\,(2^{W}-1)
 \]
 distinct coordinate functions---2 at $W=1$, 6 at $W=2$, 14 at $W=3$.
-Three replicas need six distinct functions, and one of the three is the
-identity, so \textbf{three bits is the first width at which a third
-replica has a function left to take}. Below it, structural hashing
-collapses one replica whatever the source says.
+
+Three replicas of a $W$-bit word need $3W$ pairwise-distinct coordinate
+functions, which at $W=2$ is exactly the six available, \textbf{so
+counting alone does not settle $W=2$}: the assignment
+$A=(x_1,x_2)$, $B=(\bar x_1, x_1\!\oplus\!x_2)$,
+$C=(\bar x_2, \overline{x_1\!\oplus\!x_2})$ gives three distinct
+invertible replicas at two bits. What settles it is the construction
+this design uses. With $A$ on the identity and \emph{$B$ pinned to the
+polarity transform}, the two of them consume
+$\{x_1,x_2,\bar x_1,\bar x_2\}$, and the two functions that remain are
+complements of one another---so a third replica built from them would
+store one bit twice and determine nothing. \textbf{Under this transform
+family, with $B$ on polarity, three bits is the first width at which a
+third replica has functions left to take.}
+
+The implementation is narrower still, and says so at elaboration:
+\file{hw/soc/rtl/soc\_tmr\_bank.v} refuses $W<4$, because below four
+bits the mixing layer's rotation degenerates and a stored row can fall
+back to weight one. A reader following the counting rule alone would
+reach an elaboration error in this repository, which is why the rule is
+printed with its restriction rather than as a bound.
 
 This is a statement about defeating a specific optimisation over a
-specific family of transforms, not an information-theoretic bound, and it
-should be read that way. It is nonetheless a design rule with immediate
+specific family of transforms, under a specific choice for the second
+replica---not an information-theoretic bound, and not a general claim
+about three affine replicas of a two-bit word, which exist. It should be
+read that way, and an earlier draft of this paper did not: it printed the
+$W=3$ conclusion directly under an arithmetic that makes $W=2$
+sufficient, with ``one of the three is the identity'' standing in for the
+argument. That is the paper's own subject in the paper's own contribution,
+and it was caught in review rather than in writing. It is nonetheless a design rule with immediate
 consequences that are visible in the source: a one-bit flag gets two
 rails and detection only, never a triple; a two-bit state gets a check
 field rather than a third copy; and scattered one-bit flags are
-\emph{bundled} into 22-, 23-, 25- and 29-bit words before triplication,
-because the bundle has functions to spare and the flags do not.
+\emph{bundled} into words of 22 or 29 bits (one bank in its two
+configurations), 23 and 25 before triplication, because a bundle has
+functions to spare and a flag does not. Three structures; an earlier
+draft listed four by counting one bank's two configurations separately.
 We found no statement of this bound in the surveyed literature, though
 the underlying problem is thoroughly documented~\cite{kastensmidt2005,
 esa_ftmr,tmrg2017}.
@@ -399,11 +442,15 @@ Costs are measured against \emph{the same design with hardening disabled},
 never against the earlier design. The difference is not pedantic. When a
 hardening change is accompanied by a refactor---and it usually is---
 measuring against the earlier design credits the refactor to the
-hardening. The project records four instances where this was caught after
-the fact, of \SI{683.1216}{\micro\meter\squared},
+hardening. The project records five instances where this was caught after
+the fact, and \textbf{four of the five were in the direction that
+understates the cost}: \SI{683.1216}{\micro\meter\squared},
 \SI{58.17}{\micro\meter\squared}, \SI{27.216}{\micro\meter\squared} and
-\SI{25.4394}{\micro\meter\squared}, and \textbf{every one of them was in
-the direction that understates the cost}.
+\SI{25.4394}{\micro\meter\squared}. The fifth,
+\SI{10.9242}{\micro\meter\squared}, runs the other way, and the document
+that found it says so in bold. An earlier draft of this paragraph printed
+the universal --- in the subsection about the rule that makes a cost
+figure mean anything.
 
 The register-file SEC-DED substitution costs
 \SI{38050.5762}{\micro\meter\squared} (+13.80\,\%) and 222 flip-flops on
@@ -423,9 +470,17 @@ shipped one, which measures \SI{316051.6590}{\micro\meter\squared}
 
 There are 23 SymbiYosys job files defining \textbf{118 tasks}: 54 over
 the frozen pilot and 64 over the system-on-chip fabric and peripherals.
-By mode, \textbf{51 are \texttt{prove}} by $k$-induction---the only
-unbounded results anywhere in the project---36 are bounded model
-checking and 31 are cover, with depths from 1 to 220. All 118 have a
+By mode, \textbf{51 are \texttt{prove}} by $k$-induction, 36 are bounded
+model checking and 31 are cover, with depths from 1 to 220.
+\textbf{Mode is not the same axis as boundedness}, and an earlier draft
+of this paper conflated them by calling the $k$-induction results ``the
+only unbounded results anywhere in the project''. Ten \texttt{bmc} tasks
+are \emph{exhaustive} rather than bounded because their models are
+stateless: the two SEC-DED codecs, the LIF codec and the voter at three
+widths run at depth~1 over free symbolic inputs, so one step ranges over
+the whole input space---and the voter's own job file says so in its
+header. The equivalence proofs of Section~\ref{sec:evidence} are
+unbounded for the same reason. All 118 have a
 result directory and all 118 report \texttt{DONE (PASS)}. The task set
 and the result-directory set are exactly equal: 118 expected, 118
 present, none missing, none orphaned.
@@ -449,10 +504,12 @@ resets and nothing recovers.
 \paragraph{Whether the verdicts match the current source is checkable,
 and nothing in the project was checking it.}
 A SymbiYosys run copies its sources into the task directory. Comparing
-all 336 such copies against their tracked originals: raw comparison says
-336 differ, and the entire difference is a three-line licence header
-added later. Stripping only those headers gives \textbf{336 identical, no
-real difference}, so the verdicts do correspond to the design as it
+all 351 such copies against their tracked originals---336 \texttt{.v} and
+15 \texttt{.vh}, the header files being the class where drift is
+likeliest and the class an earlier draft silently dropped---raw
+comparison says they differ, and the entire difference is a three-line
+licence header added later. Stripping only those headers gives
+\textbf{351 identical, no real difference}, so the verdicts do correspond to the design as it
 stands. This was established once, by hand, for this paper, and it is now a
 check.
 
@@ -477,21 +534,44 @@ recorder's ability to contradict them did.}
 
 \subsection{The assumption ledger}
 
-Across 25 property files there are 106 \texttt{assume} statements, 6
-symbolic constants, and \textbf{zero} \texttt{restrict}. Six property
-files carry \emph{no} assumptions at all---the SEC-DED codec, the
-byte-lane codec, the register-file codec, the memory ECC integration, the
-LIF memory codec and the TMR voter---and these are the strongest results
-in the project. The SEC-DED property file states each property as an
-implication on Hamming weight rather than assuming one.
+Across 25 property files there are 106 \texttt{assume} statements, 15
+\texttt{\$anyconst} symbolic constants and 9 \texttt{\$anyseq} symbolic
+sequences, and \textbf{zero} \texttt{restrict}. Ten further
+\texttt{assume} statements live in the processor harness wrapper, and
+they are the ones Section~\ref{sec:rvformal} criticises---an earlier
+draft's ledger excluded them and then attacked two of them.
 
-The load-bearing assumption is stated plainly because it bounds
-everything: \textbf{the single-fault assumption appears in 14 of the 25
-property files.} Every fault-tolerance proof in this work is scoped to at
-most one bad replica and at most one flipped bit, by construction. It
-follows that no proof here can express a multiple-bit upset, and
-Section~\ref{sec:placement} is precisely about a geometry in which
-multiple-bit upsets are the relevant question.
+\emph{Five} property files are the top of their own proof and carry
+\textbf{no} assumptions at all: the SEC-DED codec, the byte-lane codec,
+the register-file codec, the LIF memory codec and the TMR voter. These
+are the strongest results in the project, and the SEC-DED file states
+each property as an implication on Hamming weight rather than assuming
+one. A sixth, the memory-ECC integration set, carries no assumption of
+its own and is \texttt{`include}d into a model that assumes reset at
+time zero and no request while in reset; it is counted here as assumed,
+because \textbf{an assumption count per \emph{file} is not an assumption
+count per \emph{proof}}---and counting it at the wrong level returned a
+green result inside the ledger built to prevent that.
+
+The load-bearing assumption is narrower than an earlier draft claimed.
+\textbf{Every fault-tolerance proof about a \emph{voted} structure is
+scoped to at most one bad replica}: the injection vectors in the FIFO,
+configuration-voter and watchdog property sets are constrained to one
+replica at a time. Nothing below that is assumed---the voter's masking
+theorem quantifies over \emph{every} value of the third replica, so it
+covers a fault of any weight in one replica, and the SEC-DED proofs
+drive a free 72-bit error vector and state weight as an implication,
+including the two-bit case.
+
+What no proof here can express is an upset that corrupts \emph{two of
+three replicas}, and Section~\ref{sec:placement} is precisely about a
+geometry in which that is the relevant question. The earlier draft said
+``the single-fault assumption appears in 14 of the 25 property files'',
+a count that appears in no document, script or registry in this
+repository and that swept in one-hot \emph{functional} assertions which
+are not fault-model assumptions---and it stood three lines below a file
+with no assumptions at all whose header says it covers every fault of
+every weight.
 
 \subsection{The processor: 79 checks, none of them unbounded}
 \label{sec:rvformal}
@@ -504,7 +584,9 @@ verification harness in two configurations, upstream and substituted.
 \begin{table}[htbp]
 \centering
 \caption{RISC-V formal checks, both configurations, parsed from every
-generated task's own log.}
+generated \texttt{bmc} task's own log. The same configuration also
+generates 79 \texttt{cover} jobs per run into a separate directory; all
+79 pass in both and they are not tabulated here.}
 \label{tab:rvformal}
 \small
 \begin{tabular}{lrr}
@@ -530,9 +612,11 @@ is proved for all time by this harness; it is checked to a depth.
 
 \paragraph{The failing and stopped sets are identical across the two
 configurations}---\texttt{insn\_div}, \texttt{insn\_rem} and
-\texttt{liveness} fail in both, and the six multiply and unsigned-divide
-checks stop in both. That identity is the substance of the claim that the
-substitution changed nothing, and it holds.
+\texttt{liveness} fail in both, and the six multiply, unsigned-divide and
+unsigned-remainder checks stop in both. That identity is the substance of
+the claim that the substitution changed nothing, and it holds.
+\texttt{liveness} is a statement about the bound rather than about the
+core: a 37-cycle divide has not retired by the check's cycle 50.
 
 \paragraph{The one check that behaved differently did not time out, and
 the project said it did.}
@@ -559,7 +643,9 @@ here is evidence that it breaks it.}
 Zero control-and-status-register checks are generated, because the core's
 formal interface exposes no CSR ports. Memory-protection enforcement is
 unproved, and two assumptions exist to keep it from biting. Eight of the
-70 base instructions have no verdict in either run. Bus errors are
+70 instruction models have no verdict in either run, and they are
+\emph{all eight} multiply-divide instructions---25 of the 70 are
+compressed, and none of the eight is base-integer. Bus errors are
 assumed away while the fabric raises one on every unmapped address. Trap
 destination and the three trap CSRs are unchecked.
 
@@ -571,6 +657,17 @@ the \emph{unsigned} result, confirmed on four counterexamples from two
 independent runs and checkable by hand from the language standard's
 sign-extension rules. Corrected copies are carried in this repository
 with the upstream licence notice inline.
+
+Running them is the second half of the result, and it is a negative one:
+\textbf{neither closed}. The two checks were stopped without a verdict
+after 40\,m\,43\,s and 48\,m\,52\,s. Against the \emph{defective} model
+the checks failed quickly, because exhibiting one counterexample is a
+satisfiability question; against the \emph{corrected} model nothing was
+proved. \textbf{Correcting a specification made the proof harder rather
+than easier}, and the consequence is that all eight instructions of the
+multiply-divide extension have no formal result in this project at all.
+A paper whose stated policy is to publish negative results stopped one
+sentence before its own.
 
 The general point is the sharpest available demonstration of a thing this
 paper keeps returning to: \textbf{a trusted specification is a trusted
@@ -649,8 +746,9 @@ wait loop racing its own cycle counter. Over a 1{,}400-injection
 campaign, \textbf{686 deposits landed one clock edge after the cycle
 their record names}, and 714 landed on it.
 
-This bench passed its own per-deposit verification on all 2{,}800 runs
-of that campaign---each injection is checked to have flipped the bit it
+This bench passed its own per-deposit verification on all
+1{,}400 injections of that campaign (2{,}800 simulations, golden and
+injected)---each injection is checked to have flipped the bit it
 names---and it passed a uniquely-determined cross-design trace alignment.
 Both are real checks and neither can see the defect, because both ask
 \emph{was the right bit flipped} and the defect is \emph{when}.
@@ -660,9 +758,9 @@ every mapped flip-flop between the register-transfer and gate-level
 models of the same record. On the first record whose outcome depended on
 the edge, the two levels disagreed completely---an upset that derailed
 the register-transfer model with 64 traps and a nonzero exit status was,
-one edge earlier, \emph{a golden run}. Before the repair, that control
-reported 2, 1 and 1 differing flip-flops out of 964 on the three records
-it passed; after, it reports \textbf{0 of 964 over 18{,}681 cycles on all
+one edge earlier, \emph{a golden run}. Before the repair that control
+passed on three records and failed outright on the fourth; after, it
+reports \textbf{0 of 964 differing flip-flops over 18{,}681 cycles on all
 four}.
 
 The consequence was not a patch. A 450-record gate-level pass, seven
@@ -681,13 +779,15 @@ where they do the mechanism is nameable}
 On the frozen pilot, 370 of 370 like-for-like injections classify
 identically between the register-transfer model and the sign-off netlist.
 On the system-on-chip, of 1{,}175 records replayed at gate level,
-\textbf{1{,}158 classify identically and 17 disagree}. Every disagreement
-class was characterised rather than reported as noise: the synthesiser
-storing two register-transfer registers in one flip-flop each, so the
-netlist is strictly worse on a subset; state-machine re-encoding
-producing netlist flip-flops with no register-transfer twin, which are
-the most lethal storage in the design per bit; and one class where the
-netlist is better.
+\textbf{1{,}158 classify identically and 17 disagree}. Both disagreement
+structures were characterised rather than reported as noise: fifteen are
+injections into an instruction register that the synthesiser stored once
+for two register-transfer copies, so the netlist is strictly worse on all
+fifteen; two are the multiplier's re-encoded state, where the netlist is
+\emph{better}---silent corruption at register-transfer level, detected on
+the netlist. Separately, 75 injections went into netlist flip-flops with
+no register-transfer twin, the most lethal storage in the design per bit,
+and those have no register-transfer record to disagree with at all.
 
 We draw the conclusion the numbers support and no more: at this scale,
 on this design, register-transfer-level injection is a good
@@ -945,22 +1045,38 @@ sites wide and exactly one row high.
 \begin{table}[htbp]
 \centering
 \caption{Replica placement in the frozen sign-off layout, 33{,}564
-components. Every row is re-derived by \file{paper/check\_claims.py}.}
+components. Every row is produced by one invocation of
+\file{hw/openlane/replica\_placement.py}; six are additionally pinned in
+\file{paper/claims.yaml}, and the per-replica count is registered for
+replica~A alone, the tool reporting 55 for all three on the same run.}
 \label{tab:placement}
 \small
 \begin{tabular}{lr}
 \toprule
 Flip-flops per replica & 55 / 55 / 55 \\
 Cross-replica pairs & \num{9075} \\
-Centre-to-centre, minimum & \SI{3.78}{\micro\meter} (one row) \\
-Centre-to-centre, median & \SI{113.47}{\micro\meter} \\
-\textbf{Edge-to-edge, minimum} & \textbf{\SI{0.00}{\micro\meter}} \\
-Pairs whose cell outlines touch & \textbf{49} \\
+\midrule
+\multicolumn{2}{l}{\emph{The measurement of the mechanism}}\\
+Centre-to-centre median, all cross-replica pairs & \SI{113.47}{\micro\meter} \\
+\textbf{Centre-to-centre median, corresponding bits} &
+\textbf{\SI{27.52}{\micro\meter} --- 4.1$\times$ closer} \\
+\midrule
+\multicolumn{2}{l}{\emph{Absence of segregation, against its own null model}}\\
+Nearest fellow flip-flop is in another replica & 103 of 165 \\
+\quad 200 label permutations of the same positions & $110.73 \pm 8.26$ \\
+\quad analytic expectation & $110.67$ \\
+\quad so the observed value is & \textbf{0.94\,sd \emph{below} chance} \\
+\midrule
+\multicolumn{2}{l}{\emph{Distances, which are floors as much as findings}}\\
+Centre-to-centre, minimum & \SI{3.78}{\micro\meter} --- one row, and the
+floor: the cell is \SI{12.96}{} by \SI{3.78}{\micro\meter} on a
+\SI{3.78}{\micro\meter} row pitch \\
+Edge-to-edge, minimum & \SI{0.00}{\micro\meter}, structurally guaranteed
+for any two cells in adjacent rows whose spans overlap \\
+Pairs whose cell outlines touch & 49 (41 in adjacent rows, 8 in the same row) \\
 Pairs within one \SI{0.48}{\micro\meter} site & 51 \\
 Corresponding-bit pairs, minimum & \SI{3.78}{\micro\meter} \\
 Corresponding-bit pairs touching & 18 (a lower bound; see below) \\
-\textbf{Nearest fellow configuration flip-flop is in another replica} &
-\textbf{103 of 165} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -969,10 +1085,27 @@ The closest pairs are the same bit of the same word. Two replicas of
 configuration bit 35 sit in adjacent rows at the identical horizontal
 span, sharing all 27 sites of width; bit 32 is the same case.
 
-The row that needs no threshold and no interpretation is the last one.
-For \textbf{103 of the 165 configuration flip-flops, the nearest other
-configuration flip-flop belongs to a different replica.} Three separated
-banks give the opposite.
+\textbf{The 103-of-165 row needs a baseline, and with one it is not the
+finding it looks like.} Shuffling only the replica \emph{labels} over the
+same 165 placed positions, keeping the 55/55/55 partition, gives
+$110.73 \pm 8.26$ over 200 permutations against an analytic expectation
+of $110.67$: the observed value is \textbf{0.94 standard deviations
+\emph{below} chance}. So the statistic does not say the placer drew the
+replicas together. It says the three banks are interleaved to the point
+of being indistinguishable from an arbitrary assignment of labels to
+these positions---which is a finding, and a different one. Three
+separated banks would give a value near zero, many standard deviations
+away, and that is what it would detect.
+
+\textbf{The row that measures the mechanism is a ratio.} A shared voter
+ties the three copies of one bit together and nothing else, so if
+wirelength minimisation is what co-locates them the effect belongs on
+\emph{corresponding} bits rather than on cross-replica pairs at large.
+It is there: \SI{27.52}{\micro\meter} against
+\SI{113.47}{\micro\meter}, \textbf{4.1 times closer}. The instrument had
+printed both on every run since it was written; an earlier draft
+asserted the mechanism in bold and omitted the number in its own tool's
+output that evidences it.
 
 \subsection{The mechanism, which matters more than the numbers}
 
@@ -980,12 +1113,20 @@ This is not a bug and not an unlucky seed. \textbf{The placer is
 minimising wirelength to a shared voter, and that objective pulls the
 three copies of each bit together.} It is what was asked of it.
 
-One consequence was not designed and is worth recording. Replica C is
-the best-separated bank, and the reason is the mixing transform of
-Section~\ref{sec:mechanisms}, which was chosen for a purely logical
-reason---to stop structural hashing merging it. \textbf{A defence chosen
-against the synthesiser bought physical margin by accident}, for one of
-the three pairings, when a vote needs only two replicas corrupted.
+One asymmetry was not designed and is worth recording with its size.
+Per pairing the minima are A--B \SI{3.78}{\micro\meter}, A--C
+\SI{4.75}{\micro\meter}, B--C \SI{3.90}{\micro\meter}, and of the 49
+abutting pairs 31 are A--B, 11 A--C and 7 B--C; the medians are
+indistinguishable, so the whole effect sits in the abutment tail. C
+carries the mixing transform of Section~\ref{sec:mechanisms}---and C is
+also the most internally clustered bank, and no build with that
+transform disabled was ever placed. \textbf{We record the asymmetry and
+do not attribute it}, for the same reason
+Section~\ref{sec:determinism} refuses to credit a clock-gating
+improvement to a repair: a rule suspended when a result goes your way is
+not a rule. In any case it buys nothing that matters---A--B, the pairing
+the transform does not touch, is the worst of the three, and a vote
+needs only two replicas corrupted.
 
 \subsection{What the tool undercounts, and says}
 
@@ -996,9 +1137,15 @@ be optimised away. The corresponding-bit figures are therefore a
 when it reports them. A deeper one-off analysis that resolved the
 remaining fifteen through the decode network found 165 corresponding-bit
 pairs, 28 of them touching, and two of three voter inputs in contact on
-30 of the 55 bits; the committed tool reports the conservative figure,
-because a lower bound quoted as a measurement is the failure this paper
-is about.
+30 of the 55 bits. \emph{That analysis was run once by hand, is not
+committed, is reproducible from no script in this tree and is asserted
+by no test: these three are the only figures in this section a reader
+cannot re-derive, and they are printed to bound the direction of the
+undercount and for nothing else.} The committed tool reports the
+conservative figure and prints the word \textsc{undercount}, because a
+lower bound quoted as a measurement is the failure this paper is
+about---and printing those three unmarked, one sentence before saying
+so, was that failure.
 
 \subsection{It is not one layout}
 
@@ -1010,7 +1157,8 @@ instance names and the cells must be reached through fan-in cones.
 Per-bit critical separations are \SI{4.48}{\micro\meter},
 \SI{7.58}{\micro\meter} and \SI{3.90}{\micro\meter} minimum, with
 different-replica cells holding the same output bit abutting in the same
-row. Two designs, four layouts, three attribution methods, one answer.
+row. Two designs, three layouts, three attribution methods---only one of
+which is committed---and one answer.
 
 \subsection{What this does not say, in the paper's own voice}
 
@@ -1062,7 +1210,9 @@ rectangle but cannot fence a group into one and are useless alone.
 The price is known from the one time this project constrained placement,
 on an unrelated block: the region form \emph{did not route}, and the
 manual-placement form routed but cost roughly \SI{7}{\nano\second} of
-worst negative slack and moved the problem rather than solving it,
+worst negative slack at the intermediate stage where it was first
+measured---\SI{4.88}{\nano\second} at sign-off---and moved the problem
+rather than solving it,
 because a constraint that captures one half of a co-placed cluster moves
 the crossing to the cut. For triplication that means each replica must
 move together with its own fan-in and fan-out cone, not merely its 55
@@ -1111,7 +1261,7 @@ The voted word decoded combinationally onto the asynchronous reset of
 every flip-flop \\
 \addlinespace
 \textbf{Evidence the property was absent} &
-Netlist: 362 references to \texttt{cfg\_a}, \textbf{0} to
+At 4$\times$2: 362 references to \texttt{cfg\_a}, \textbf{0} to
 \texttt{cfg\_b}, \textbf{0} to \texttt{cfg\_c}; \num{1045} mapped
 flip-flops against \num{1161} declared. Reproduced on a second PDK &
 Reset-cone census: of five asynchronous-reset fan-in source sets, one has
@@ -1268,13 +1418,20 @@ cannot; and check the die by measuring where the cells are. We did the
 first three. We did the fourth for the first time while writing this
 paper, and it failed.
 
-\section{Flow determinism, and why every delta in this paper is
-attributable}
+\section{Flow determinism, and what it licenses}
 \label{sec:determinism}
 
-Every cost figure here is a difference between two runs of the same flow.
-That difference means nothing unless the flow is deterministic, so we
-measured it.
+Several cost figures here are differences between two runs of the same
+flow. That difference means nothing unless the flow is deterministic, so
+we measured it---on \emph{one} netlist, the system-on-chip's protected
+boot block, through \emph{one} 62-step flow configuration on one host.
+It licenses the cell-count deltas of Section~\ref{sec:mechanisms} and
+the four-arm comparison of Section~\ref{sec:w9}. It is \emph{not} a
+measurement of the pilot's sign-off flow, which was never re-run, so the
+pilot figures in Table~\ref{tab:inventory} and the layout of
+Section~\ref{sec:placement} carry no repeatability evidence of their
+own. An earlier draft's section title generalised one netlist through
+one configuration into ``every delta in this paper''.
 
 The same netlist through the same 62-step flow twice: the sign-off
 metrics file is byte-identical on all 199 keys; the routed design
@@ -1340,9 +1497,10 @@ injection sites, so a 528-cell decoder is outside every campaign in this
 paper.
 
 \paragraph{The proofs are scoped to one fault.}
-The single-fault assumption appears in 14 of 25 property files. No proof
-here can express the failure mode that Section~\ref{sec:placement}'s
-geometry makes relevant.
+Every proof about a voted structure is scoped to one bad replica at a
+time. No proof here can express the failure mode that
+Section~\ref{sec:placement}'s geometry makes relevant: two of three
+replicas corrupted.
 
 \paragraph{Physical independence is measured and absent.}
 Section~\ref{sec:placement}. And the measurement itself is of cell
@@ -1490,6 +1648,18 @@ that lives at that level, and a mutation proving the instrument can fail.
 The two places where ours could not are published above, and the third is
 the one we found by asking which measurement would embarrass us most.
 
+\section*{Reading the bibliography}
+
+Each entry's note carries a verification key. \textbf{[V]} means
+existence, authorship and venue were corroborated by an authoritative
+source; \textbf{[P]} means existence and venue were corroborated and one
+metadata field---a DOI, a page range, part of an author list---was
+reconstructed from convention or taken from a secondary source and not
+independently confirmed. References that reached only \emph{unverified}
+are not cited here at all; four are named in
+Section~\ref{sec:limits} instead, because ``the literature contains
+$X$'' is itself a claim and an unverified one belongs with the others.
+
 \bibliographystyle{plain}
 \bibliography{refs}
 
@@ -1503,7 +1673,8 @@ records are build output and are not tracked; digests are published in
 their place, and a digest establishes identity, not correctness.
 
 \begin{verbatim}
-# every number this paper prints
+# the numbers this paper registers -- not every number it prints
+python3 paper/check_claims.py --list
 python3 paper/check_claims.py
 
 # the placement measurement of Section 8

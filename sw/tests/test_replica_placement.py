@@ -76,15 +76,55 @@ def test_the_replicas_are_not_separated_on_the_die(measured):
         f"{measured['abutting_pairs']}")
 
 
-def test_most_flops_neighbour_a_different_replica(measured):
-    """The sharpest single number, because it needs no threshold.
+def test_the_banks_are_not_segregated(measured):
+    """103 of 165 nearest neighbours are in another replica -- AND THAT
+    NUMBER MEANS NOTHING WITHOUT ITS BASELINE.
 
-    For 103 of the 165 configuration flip-flops the nearest other
-    configuration flip-flop belongs to a *different* replica. Three
-    separated banks would give the opposite.
+    REWRITTEN 2026-09-09. This test was called
+    `test_most_flops_neighbour_a_different_replica` and its docstring
+    called 103 "the sharpest single number, because it needs no
+    threshold". It needs a baseline, which is not the same as a
+    threshold, and it did not have one.
+
+    Shuffling only the replica LABELS over the same 165 placed positions,
+    preserving the 55/55/55 partition, gives 110.73 +/- 8.26 over 200
+    permutations, against an analytic expectation of 110.67. The observed
+    103 is **0.94 standard deviations BELOW chance**.
+
+    So the statistic does not say the placer drew replicas together. It
+    says the three banks are interleaved to the point of being
+    indistinguishable from an arbitrary assignment of replica labels to
+    these positions. Three separated banks would give a value near zero,
+    many standard deviations away, and that is what this test would
+    catch.
     """
     assert measured["nearest_is_another_replica"] == 103
     assert measured["nearest_is_own_replica"] == 62
+    assert measured["nearest_other_null_analytic"] == pytest.approx(110.67,
+                                                                    abs=0.01)
+    assert abs(measured["nearest_other_sigma_from_chance"]) < 2.0, (
+        "the observed value has moved more than two standard deviations "
+        "from chance; docs/79 reports it as indistinguishable and would "
+        "have to be rewritten")
+
+
+def test_corresponding_bits_are_concentrated(measured):
+    """This is the measurement of the mechanism, and it is a ratio.
+
+    A shared voter ties the three copies of one bit together, so if
+    wirelength minimisation is what co-locates them the effect should
+    appear on CORRESPONDING bits and not on cross-replica pairs at
+    large. It does: the median over all 9,075 cross-replica pairs is
+    113.47 um and over corresponding-bit pairs 27.52 um, 4.1 times
+    closer.
+
+    The tool has printed both since it was written. The document quoted
+    the mechanism in bold and omitted the ratio that evidences it.
+    """
+    ratio = measured["median_c2c_um"] / measured["same_bit_median_c2c_um"]
+    assert ratio == pytest.approx(4.12, abs=0.05), (
+        "the corresponding-bit concentration moved from 4.12x; docs/79 "
+        "section 1.3 rests on it")
 
 
 def test_the_corresponding_bit_figures_are_declared_a_lower_bound(measured):

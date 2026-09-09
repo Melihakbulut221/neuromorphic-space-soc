@@ -66,7 +66,10 @@ one row high.
 | Cross-replica pairs | 9,075 |
 | Centre-to-centre, minimum | **3.78 um** — one row |
 | Centre-to-centre, median | 113.47 um |
-| Nearest fellow configuration flop is in **another** replica | **103 of 165** |
+| Nearest fellow configuration flop is in **another** replica | 103 of 165 |
+| *the same statistic under 200 label permutations of the same positions* | *110.73 +/- 8.26, analytic 110.67* |
+| *so the observed value is* | ***0.94 sd BELOW chance*** |
+| **Corresponding-bit median, against 113.47 um over all pairs** | **27.52 um -- 4.12x closer** |
 | Edge-to-edge, minimum | 0.00 um -- the cells touch, which in a row-based layout is the floor for any two cells in adjacent rows |
 | Pairs abutting | 49 |
 | Pairs within one 0.48 um site | 51 |
@@ -80,32 +83,58 @@ same case. **Three replicas placed as three banks would put a flop's
 nearest neighbour in its own bank. Here it is in another one, for 103
 of the 165.**
 
-**Which row carries the finding, and it is not the quotable one.
-Reordered 2026-09-09.** `0.00 um edge-to-edge` is the most repeatable
+**Which row carries the finding, and it was none of the ones printed
+first. Reordered and corrected 2026-09-09.** `0.00 um edge-to-edge` is the most repeatable
 line in the table and the least informative: in a row-based
 standard-cell layout **any** two cells in vertically adjacent rows whose
 x-spans overlap are exactly 0.00 um apart, and 3.78 um centre-to-centre
 is the floor for any two distinct flip-flops not sharing a row. Neither
 figure alone separates *the placer clustered the replicas* from *this is
-the geometric floor and something had to sit there*. The row that does
-separate them is a **comparison against the median of 113.47 um** rather
-than a distance, and it needs no threshold -- and it had been printed
-last and unbolded beneath the two that are merely quotable. It is now
-first. This document spends its length on the difference between a
-measurement and what a reader wants it to mean, and that was the one
-place it did the thing it describes.
+the geometric floor and something had to sit there*. **And the row this document promoted to the top on the first pass --
+103 of 165 -- needs a baseline, which it did not have.** Shuffling only
+the replica LABELS over the same 165 placed positions, keeping the
+55/55/55 partition, gives **110.73 +/- 8.26 over 200 permutations**
+against an analytic expectation of **110.67**. The observed 103 is
+**0.94 standard deviations BELOW chance** [fact, 2026-09-09,
+`hw/openlane/replica_placement.py`, seed fixed at 20260909].
+
+So that row does not say the placer drew the replicas together. It says
+**the three banks are not segregated** -- interleaved to the point of
+being indistinguishable from an arbitrary assignment of replica labels
+to these positions. Three separated banks would give a value near zero,
+many standard deviations away. That is still a finding, and it is a
+different one from the finding the document was making.
+
+**The row that measures the mechanism is a ratio, and the tool had been
+printing it since it was written.** A shared voter ties the three copies
+of one bit together, so if wirelength minimisation is what co-locates
+them, the effect belongs on CORRESPONDING bits rather than on
+cross-replica pairs at large. The median over all 9,075 cross-replica
+pairs is **113.47 um**; over corresponding-bit pairs it is
+**27.52 um** -- **4.12 times closer**. That comparison is the evidence,
+and section 1.3 asserted the mechanism in bold while omitting the number
+in its own instrument's standard output that supports it.
+
+This document spends its length on the difference between a measurement
+and what a reader wants it to mean, and it took two passes to stop doing
+that to its own headline row.
 
 ### 1.3 The mechanism, which matters more than the numbers
 
 **The likely mechanism is wirelength minimisation to a shared voter,
-which pulls the three copies of each bit together [estimate].** Nothing
-in this flow requested separation, and nothing in the flow supplies it
-by default.
+which pulls the three copies of each bit together**, and the measurement
+of it is the **4.12x concentration on corresponding bits** in section
+1.2: 27.52 um against 113.47 um over all cross-replica pairs. A shared
+voter ties corresponding bits and nothing else, so that is where the
+effect should be and that is where it is. Nothing in this flow requested
+separation, and nothing in the flow supplies it by default.
 
-**Corrected 2026-09-09.** This read *"It is not a bug and it is not an
-unlucky seed: it is what the objective function asks for"*, in bold, as
-a measured fact. It is not one. **No objective function was varied and
-no seed was varied** -- `docs/71` records that this flow's only seed is
+**Corrected 2026-09-09, twice.** This read *"It is not a bug and it is
+not an unlucky seed: it is what the objective function asks for"*, in
+bold, as a measured fact. The concentration ratio above is now the
+evidence for the mechanism and it is a real one; what remains
+unmeasured is the *cause*. **No objective function was varied and no
+seed was varied** -- `docs/71` records that this flow's only seed is
 `detailed_route -or_seed 42`, hard-coded in LibreLane with no
 configuration variable, so a seed sweep cannot be run here without
 patching the tool. What IS measured is section 1.6: the outcome

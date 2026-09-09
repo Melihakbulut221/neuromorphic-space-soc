@@ -119,6 +119,27 @@ def check(c):
         return (("PASS", "present") if str(c["contains"]) in p.read_text()
                 else ("FAIL", f"{c['contains']!r} not in {c['file']}"))
 
+    if kind == "tsv":
+        # The LAST row of an append-only log, by column name. Substring
+        # matching anywhere in the file -- which is what this claim used
+        # to do -- is green on any file that happens to contain the
+        # digits, including in a superseded row the log deliberately
+        # keeps standing.
+        f = ROOT / c["file"]
+        if not f.is_file():
+            return "FAIL", f"{c['file']} missing"
+        rows = [l for l in f.read_text().split("\n")
+                if l.strip() and not l.startswith("#")]
+        if len(rows) < 2:
+            return "FAIL", "no data rows"
+        head, last = rows[0].split("\t"), rows[-1].split("\t")
+        if c["column"] not in head:
+            return "FAIL", f"no column {c['column']!r}"
+        got = last[head.index(c["column"])]
+        return (("PASS", f"{got} (last row, {last[1]})")
+                if str(got) == str(c["value"])
+                else ("FAIL", f"{got} != {c['value']} in the last row"))
+
     if kind == "grep":
         # How many live documents still make a claim the evidence no longer
         # supports. The paper asserts that a sweep happened; this counts

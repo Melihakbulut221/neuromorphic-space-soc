@@ -33,12 +33,35 @@ jobs:
       - name: Install a TeX distribution
         run: |
           sudo apt-get update -qq
+          # texlive-science carries siunitx and texlive-latex-extra does
+          # not; lmodern.sty is in the `lmodern` package, which
+          # texlive-base only RECOMMENDS and --no-install-recommends
+          # therefore drops. Without both, pdflatex exits non-zero on the
+          # first \usepackage and no run of this workflow could ever have
+          # been green -- which made "it compiles" the assumed claim this
+          # job exists to stop being one. Found in review, 2026-09-09.
           sudo apt-get install -y --no-install-recommends \
-            texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended
+            texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended texlive-science lmodern
 
       - name: Build the paper
         working-directory: paper
         run: make
+
+      - name: The bibliography must not be empty
+        working-directory: paper
+        run: |
+          set -eu
+          # arXiv does not run BibTeX: it compiles the tarball as given,
+          # so a missing main.bbl renders all 29 citations as [?] -- and
+          # that is a WARNING, so an unchecked build goes green on an
+          # empty bibliography. Fail here instead.
+          test -s main.bbl || { echo "main.bbl absent: arXiv would render [?]"; exit 1; }
+          if grep -qE 'Citation .* undefined|There were undefined references' main.log; then
+            grep -nE 'Citation .* undefined|undefined references' main.log
+            exit 1
+          fi
+          echo "bibliography resolved, $(grep -c '^.bibitem' main.bbl) entries"
 
       - uses: actions/upload-artifact@v4
         with:

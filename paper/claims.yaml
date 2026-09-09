@@ -83,12 +83,18 @@ claims:
     artefact: "formal/eqy/out/voter_mutant.log, formal/eqy/out/secded_dec_mutant.log"
     read: "neither contains DONE (PASS); the Makefile treats a passing control as an error"
 
-  - id: tmr.balanced_functions
-    value: "2(2^W - 1)"
-    text: "distinct affine storage transforms over W bits; three replicas need six, so W = 3 is the first width at which a third replica has a function left"
-    check: file
-    file: "hw/soc/rtl/soc_tmr_bank.v"
-    contains: "MIX"
+  # THIS CHECK USED TO BE `contains: "MIX"`, which is green on any file
+  # that mentions the transform and cannot refute anything about the
+  # width rule it was attached to. A review named it, correctly, as this
+  # paper's own defect inside this paper's own checker. It now checks the
+  # thing the paper's restriction actually rests on: that the module
+  # refuses widths below four at elaboration.
+  - id: tmr.width_guard_fires_below_four
+    value: 1
+    text: "the storage-transform bank refuses W < 4 at elaboration, which is why the counting rule is printed with its restriction"
+    check: grep
+    pattern: "ERROR_soc_tmr_bank_W_below_4_disarms_the_MIX_transform"
+    paths: "hw/soc/rtl/soc_tmr_bank.v"
 
   - id: freeze.rtl_files
     value: 10
@@ -102,12 +108,30 @@ claims:
     check: blob
     path: "hw/rtl/tmr_voter.v"
 
+  # WAS `contains: "491"` over the whole file, which is green on any file
+  # containing those digits anywhere -- including in a row the log keeps
+  # standing precisely because it was WRONG. Named in review as one of
+  # three checks in this registry that could not refute what they named.
   - id: suite.pytest
-    value: 491
-    text: "Python tests passing at the last recorded clean run"
-    check: file
+    value: 498
+    text: "Python tests passing in the last recorded run"
+    check: tsv
     file: "verification-log.tsv"
-    contains: "491"
+    column: "pytest_pass"
+
+  - id: suite.pytest_fail
+    value: 0
+    text: "Python tests failing in the last recorded run"
+    check: tsv
+    file: "verification-log.tsv"
+    column: "pytest_fail"
+
+  - id: suite.cocotb
+    value: 401
+    text: "cocotb tests passing in the last recorded run"
+    check: tsv
+    file: "verification-log.tsv"
+    column: "cocotb_pass"
 
   # A COUNT IS THE WRONG CLAIM HERE, and the first version of this file
   # made it anyway. "312 files carry a tag" was true when written and
@@ -143,11 +167,17 @@ claims:
     artefact: "docs/77 section 9.2, run s77gate"
     read: "-4.6799 ns WNS on 3,088 violating endpoints"
 
-  - id: silicon.exists
-    value: false
-    text: "there is no silicon, no engineering sample and no schedule for one"
-    check: absent
-    glob: "**/*.gds.fabricated"
+  # WAS a glob for `**/*.gds.fabricated`, an extension no tool in this
+  # flow emits, so the check could never have failed. A claim about the
+  # world is not checkable from a repository; what IS checkable is that
+  # the corpus states it, and the rest is the reader's to take on the
+  # author's word. Named as such rather than dressed as a measurement.
+  - id: silicon.absence_is_stated
+    value: 1
+    text: "the datasheet states, in its own first section, that no silicon exists"
+    check: grep
+    pattern: "no silicon"
+    paths: "docs/60-soc-datasheet.md"
 
   # Section 8's configuration claims. These are the sharpest kind of
   # evidence available for a scope defect: the scope is a value in a file

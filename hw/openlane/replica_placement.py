@@ -52,6 +52,7 @@ import argparse
 import itertools
 import json
 import math
+import random
 import re
 import statistics
 import sys
@@ -59,6 +60,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+
+# Label permutations for the null model of `nearest_is_another_replica`.
+PERMUTATIONS = 200
 
 # The flip-flop this flow maps to, and its geometry from the PDK LEF.
 FF_CELL = "sg13g2_dfrbpq_1"
@@ -203,6 +207,55 @@ def measure(run_dir, replicas):
                          for q in pts[r2].values())
             own, other = (own + 1, other) if mine < theirs else (own, other + 1)
 
+    # THE NULL MODEL, without which the count above means nothing.
+    #
+    # "The nearest fellow is in another replica for 103 of 165" reads as a
+    # measurement of clustering, and it is not one until you know what
+    # chance gives. Keep the 165 placed POSITIONS exactly as the placer
+    # left them and shuffle only the replica LABELS, preserving the
+    # 55/55/55 partition: that is the distribution of the same statistic
+    # over layouts that differ from this one in nothing but which bank a
+    # cell is called.
+    #
+    # The analytic expectation is n*(n-m)/(n-1) for n cells in m equal
+    # banks -- for each cell, the chance its nearest neighbour among the
+    # other n-1 carries a different label. The permutation gives the
+    # spread as well, which is what decides whether an observed value is
+    # a finding.
+    #
+    # This was added on 2026-09-09 after a review pointed out that the
+    # observed value sits BELOW the expectation. The statistic does not
+    # establish that the placer drew replicas together; it establishes
+    # that the banks are not segregated. Those are different findings and
+    # the first one was the one being printed.
+    positions, labels = [], []
+    for r in sorted(pts):
+        for k, q in pts[r].items():
+            positions.append(q)
+            labels.append(r)
+    n = len(positions)
+    nearest = []
+    for i, a in enumerate(positions):
+        best, bj = math.inf, -1
+        for j, b in enumerate(positions):
+            if i == j:
+                continue
+            dist = c2c(a, b)
+            if dist < best:
+                best, bj = dist, j
+        nearest.append(bj)
+    sizes = sorted(len(pts[r]) for r in pts)
+    analytic = (n * (n - max(sizes)) / (n - 1)) if n > 1 else 0.0
+    rng = random.Random(20260909)   # fixed, so the figure is reproducible
+    perm = []
+    for _ in range(PERMUTATIONS):
+        shuffled = labels[:]
+        rng.shuffle(shuffled)
+        perm.append(sum(1 for i, j in enumerate(nearest)
+                        if shuffled[i] != shuffled[j]))
+    mean = sum(perm) / len(perm)
+    sd = (sum((x - mean) ** 2 for x in perm) / (len(perm) - 1)) ** 0.5
+
     def gap_count(seq, thr):
         return sum(1 for a in seq if a[1] <= thr + 1e-9)
 
@@ -231,6 +284,12 @@ def measure(run_dir, replicas):
         "same_bit_abutting": gap_count(same, 0.0),
         "nearest_is_own_replica": own,
         "nearest_is_another_replica": other,
+        "nearest_other_null_mean": round(mean, 4),
+        "nearest_other_null_sd": round(sd, 4),
+        "nearest_other_null_analytic": round(analytic, 4),
+        "nearest_other_sigma_from_chance":
+            round((other - mean) / sd, 4) if sd else None,
+        "permutations": PERMUTATIONS,
         "closest": [
             {"a": f"{r1}[{k1}]", "b": f"{r2}[{k2}]",
              "c2c_um": round(cc, 4), "edge_um": round(ee, 4)}
@@ -278,6 +337,13 @@ def main():
     print(f"\nnearest fellow replica flop is in its OWN replica for "
           f"{res['nearest_is_own_replica']}, in ANOTHER for "
           f"{res['nearest_is_another_replica']}")
+    print(f"  null model, {res['permutations']} label permutations over the "
+          f"same positions:\n  chance gives {res['nearest_other_null_mean']} "
+          f"+/- {res['nearest_other_null_sd']} "
+          f"(analytic {res['nearest_other_null_analytic']}), so the observed "
+          f"value is\n  {res['nearest_other_sigma_from_chance']} sigma from "
+          f"chance. A value NEAR chance says the banks are not segregated;\n"
+          f"  it does not say the placer drew them together.")
     print("\nclosest pairs:")
     for c in res["closest"]:
         print(f"  {c['a']:16s} {c['b']:16s} c2c {c['c2c_um']:8.2f}  "

@@ -1,0 +1,197 @@
+{
+    "//": "LibreLane configuration for placing and routing soc_top -- the WHOLE SoC, core, fabric, peripherals and six RM_IHPSG13 SRAM macros -- on IHP SG13G2. docs/45 section 9 item 1 asked for this and stated why: the design's binding check was a reset net that place-and-route builds, its worst hold path is a two-flop chain a resizer fixes, and its closing frequency was measured on a netlist with no clock tree. Nothing under hw/soc/ had ever been placed. docs/47 is the run.",
+    "//frozen": "THE PILOT IS NOT TOUCHED BY THIS FILE. docs/34 pins the TTIHP26b submission by hash and hw/openlane/ is read and never written. This directory is a SEPARATE design; hw/soc/flow/pnr_soc_top.sh writes its run directories to hw/soc/pnr/runs/, which is gitignored, and refuses to run if its config directory is inside hw/openlane/. hw/openlane/sram_pilot/config.json and hw/openlane/pilot_ihp/config.json are the sources of several settings below and are cited where they are.",
+    "DESIGN_NAME": "soc_top",
+    "PDK": "ihp-sg13g2",
+    "STD_CELL_LIBRARY": "sg13g2_stdcell",
+    "//verilog": "VERILOG_FILES is NOT in this file. It is 40-odd paths -- 36 sv2v-converted Ibex sources whose selection depends on IBEX_REGFILE and IBEX_FAULT_PORT, plus the SoC blocks -- and hw/soc/flow/ibex_sources.sh is the one place that knows how to choose them. pnr_soc_top.sh merges that list into a resolved copy of this file in the output directory and ASSERTS that VERILOG_FILES is the only key it added, so this file stays the whole of the design decision and the generator cannot quietly change anything else. docs/34 section 8.5's trap was a generator silently deleting a hand-added fix; the assertion is the guard against repeating it.",
+    "//vinc": "TWO directories since docs/61. hw/soc/rtl/ carries soc_memmap.vh, soc_pnp_rom.vh, soc_apb_pnp_rom.vh and soc_npu_regs.vh; hw/rtl/ carries npu_regs.vh, which hw/rtl/pilot_top.v includes and which soc_npu.v pulls into the design by INSTANTIATING the frozen pilot rather than copying it. The reported runs hand LibreLane a netlist and skip synthesis, so no step in them reads either directory; a `-T OpenROAD.STAPrePNR` probe does, and a missing include path there fails as an unresolved module rather than as a missing file.",
+    "VERILOG_INCLUDE_DIRS": [
+        "dir::../rtl",
+        "dir::../../rtl"
+    ],
+    "CLOCK_PORT": "clk_i",
+    "CLOCK_NET": "clk_i",
+    "CLOCK_PERIOD": 20,
+    "//clock": "20 ns, 50 MHz: the target docs/09 set and the one docs/45 measured 54.9 MHz against, so this run answers the question that was asked rather than an easier one. Pre-layout, with the reset fix of docs/47 section 5 and the real macros, the same netlist bisects to 16.13 ns (62.0 MHz) with hw/soc/flow/sta_soc_top.sh.",
+    "SYNTH_HIERARCHY_MODE": "flatten",
+    "//hierarchy": "THIS FLOW DOES NOT SYNTHESISE. hw/soc/flow/pnr_soc_top.sh hands LibreLane the netlist hw/soc/flow/syn_soc_top.sh produced and starts the flow at OpenROAD.CheckSDCFiles, and the key above is recorded only to say which of LibreLane's two modes was tried and rejected. Both are wrong for this design, in opposite directions, and neither is fixable from a configuration file:\n\n  deferred_flatten -- what hw/openlane/pilot_ihp uses -- synthesises hierarchically and re-synthesises the mapped netlist flat afterwards. The constant soc_top.v drives into ibex_top's `cheriot_enable_i` therefore stops at the module boundary during optimisation and THE CHERIOT LOGIC SURVIVES: that netlist carries 55 lines naming cheriot or trvk where the project's own carries ZERO, it is 32 % larger, and OpenROAD.STAPrePNR reports its worst clk_i-group path at -9.9731 ns at the slow corner BEFORE ANY PLACEMENT EXISTS, against +3.8711 ns for the project netlist under OpenSTA. docs/44 section 5.1 is the whole subject of what that constant does to a timing report when it is not folded.\n\n  flatten flattens during synthesis, which folds the constant -- and then leaves hw/soc/rtl/soc_tmr_bank.v's three instances standing, because that file carries `keep_hierarchy` as one of its two anti-merge defences (docs/41) and LibreLane has no way to RELEASE the attribute after technology mapping. Checker.YosysUnmappedCells counts the three submodules and the run stops.\n\n  hw/soc/flow/syn_soc_top.sh does both: it holds the attribute through optimisation and abc and removes it before the final flatten, which is exactly what docs/41 requires and exactly what the whole-design areas of docs/45 were measured on. Handing that netlist to LibreLane keeps the protection AND folds the constant AND makes every number in docs/47 directly comparable with docs/38 through docs/45, which no re-synthesis here could. docs/47 section 6.3.",
+    "RUN_LINTER": 1,
+    "LINTER_INCLUDE_PDK_MODELS": 1,
+    "//linter": "Kept on. ERROR_ON_LINTER_WARNINGS is LibreLane's default False and is left there, so lint WARNINGS do not gate this run -- that is docs/36 section 3.3's fifth checker-gap, dispositioned there as policy rather than oversight because the disabling key is named. Lint ERRORS and timing constructs DO gate (ERROR_ON_LINTER_ERRORS and ERROR_ON_LINTER_TIMING_CONSTRUCTS default True and are not overridden). The warning count is reported in docs/47 rather than left in a log.",
+    "//====== THE FLOOR PLAN ======": "",
+    "FP_SIZING": "absolute",
+    "DIE_AREA": [
+        0,
+        0,
+        2306.4,
+        2075.22
+    ],
+    "CORE_AREA": [
+        60.0,
+        45.36,
+        2246.4,
+        2029.86
+    ],
+    "//die": "2306.40 x 2075.22 um = 4.7863 mm2. A relative-sized die cannot be used with fixed macros: it does not reserve room for them. The core box is site-aligned by construction -- 2186.40 um wide is exactly 4555 sg13g2 sites of 0.48 um, 1984.50 um tall is exactly 525 rows of 3.78 um -- so OpenROAD.CutRows starts from a whole grid. Every macro origin below is likewise an integer number of sites from the core's left edge and an integer number of rows from its bottom.",
+    "//floorplan": "TWO MACRO ROWS FACING A CENTRAL STANDARD-CELL CHANNEL, and the reason is the macros' pin geometry rather than taste. Every RM_IHPSG13 part puts ALL of its signal pins on ONE edge, at local y = 0, on Metal2 and Metal3 -- 352 of them on the 2048x64 and 190 on the 1024x32 (measured from the LEF; docs/12 section 6.4c found the same on the 512x32). A macro whose pin edge faces another macro is a macro the router has to reach the long way round. So the lower row is placed FS, which mirrors about X and puts its pin edge at its TOP, and the upper row is placed N, which leaves its pin edge at its BOTTOM: both rows' pins face the 700.08 um channel between them, and every standard cell in the design sits in that channel or in the two pockets the shorter ROM macros leave above and below it.",
+    "MACROS": {
+        "RM_IHPSG13_1P_2048x64_c2_bm_bist": {
+            "gds": [
+                "pdk_dir::libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_2048x64_c2_bm_bist.gds"
+            ],
+            "lef": [
+                "pdk_dir::libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_2048x64_c2_bm_bist.lef"
+            ],
+            "vh": [
+                "dir::RM_IHPSG13_1P_2048x64_c2_bm_bist_bb.v"
+            ],
+            "lib": {
+                "nom_typ_1p20V_25C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "nom_slow_1p08V_125C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_slow_1p08V_125C.lib"
+                ],
+                "nom_fast_1p32V_m40C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_2048x64_c2_bm_bist_fast_1p32V_m55C.lib"
+                ]
+            },
+            "instances": {
+                "u_ram.g_ram_2048x64.u_b0": {
+                    "location": [
+                        120.0,
+                        60.48
+                    ],
+                    "orientation": "FS"
+                },
+                "u_ram.g_ram_2048x64.u_b1": {
+                    "location": [
+                        944.64,
+                        60.48
+                    ],
+                    "orientation": "FS"
+                },
+                "u_ram.g_ram_2048x64.u_b2": {
+                    "location": [
+                        120.0,
+                        1387.26
+                    ],
+                    "orientation": "N"
+                },
+                "u_ram.g_ram_2048x64.u_b3": {
+                    "location": [
+                        944.64,
+                        1387.26
+                    ],
+                    "orientation": "N"
+                }
+            }
+        },
+        "RM_IHPSG13_1P_1024x32_c2_bm_bist": {
+            "gds": [
+                "pdk_dir::libs.ref/sg13g2_sram/gds/RM_IHPSG13_1P_1024x32_c2_bm_bist.gds"
+            ],
+            "lef": [
+                "pdk_dir::libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x32_c2_bm_bist.lef"
+            ],
+            "vh": [
+                "dir::RM_IHPSG13_1P_1024x32_c2_bm_bist_bb.v"
+            ],
+            "lib": {
+                "nom_typ_1p20V_25C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x32_c2_bm_bist_typ_1p20V_25C.lib"
+                ],
+                "nom_slow_1p08V_125C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x32_c2_bm_bist_slow_1p08V_125C.lib"
+                ],
+                "nom_fast_1p32V_m40C": [
+                    "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_1024x32_c2_bm_bist_fast_1p32V_m55C.lib"
+                ]
+            },
+            "instances": {
+                "u_rom.g_rom_1024x32.u_b0": {
+                    "location": [
+                        1769.28,
+                        60.48
+                    ],
+                    "orientation": "FS"
+                },
+                "u_rom.g_rom_1024x32.u_b1": {
+                    "location": [
+                        1769.28,
+                        1387.26
+                    ],
+                    "orientation": "N"
+                }
+            }
+        }
+    },
+    "//vh": "The vh entry is not optional and the reason is measured: Verilator.Lint runs BEFORE synthesis and aborts with 'Cannot find file containing module: RM_IHPSG13_...' without it, and the PDK's own behavioural .v cannot be used because it instantiates SRAM_1P_behavioral_bm_bist from a second file. docs/12 section 7. The two _bb.v files here are transcribed from the PDK models by machine, not by hand.",
+    "//fastcorner": "THE FAST LIBERTY IS A CROSS-CORNER MAP AND IT IS NOT A TYPO. The standard cells ship fast_1p32V_m40C; the SRAM macros ship fast_1p32V_m55C. There is no -40 C macro file in the PDK, so the -55 C one is attached to the nom_fast_1p32V_m40C corner ID and the hold analysis at that corner therefore uses a macro characterised 15 C COLDER than the cells around it. docs/12 section 6.4a found this; hw/openlane/sram_pilot/config.json makes the same map. It is stated at every place it is done rather than in one of them, and docs/47 section 9 carries it as a limit on the hold result.",
+    "FP_MACRO_HORIZONTAL_HALO": 10,
+    "FP_MACRO_VERTICAL_HALO": 10,
+    "//halo": "LibreLane's defaults, set explicitly because they are load-bearing here. The RM_IHPSG13 GDS extends 0.225 um BELOW the LEF SIZE origin on layer 31/0 (NWell), and the governing NWell space rule is 0.62 um, so a macro placed flush against another object is a DRC error the LEF cannot predict. A 10 um halo covers it; a hand-tuned tight one would not. docs/12 section 6.4d.",
+    "PL_TARGET_DENSITY_PCT": 40,
+    "//density": "Set explicitly rather than left to the default. hw/openlane/sram_pilot's global placement DIVERGED (GPL-0323, reverting to the min-HPWL snapshot) with 589 standard cells at 5.3 % utilization around one large fixed block, and docs/12 section 7.6 recommends setting this for a macro floorplan. THE CHANNEL WAS SIZED FROM A MEASUREMENT AND NOT FROM THE OTHER SYNTHESIS. hw/soc/flow/syn_soc_top.sh reports 27,565 cells and 396,177.6420 um2 for this identical source list; LibreLane's own Yosys recipe, on the same 50 files, reports 37,895 instances and 523,809.6444 um2 -- 32.3 % more area, measured in the `probe` run. The two recipes are not the same recipe and neither is wrong; docs/47 section 6.2 states the difference rather than reconciling it. The channel is sized for LibreLane's number: 523,810 um2 of cells in 1,772,507 um2 of channel plus the two pockets the shorter ROM macros leave is 29.6 % before repair and CTS buffers, and 40 % is set as the placer target so it neither clusters nor spreads across the whole channel.",
+    "//====== POWER ======": "",
+    "VDD_PIN": "VPWR",
+    "GND_PIN": "VGND",
+    "PDN_CFG": "dir::pdn_macro.tcl",
+    "PDN_MACRO_CONNECTIONS": [
+        "u_ram\\.g_ram_2048x64\\.u_b[0-3] VPWR VGND VDD! VSS!",
+        "u_ram\\.g_ram_2048x64\\.u_b[0-3] VPWR VGND VDDARRAY! VSS!",
+        "u_rom\\.g_rom_1024x32\\.u_b[01] VPWR VGND VDD! VSS!",
+        "u_rom\\.g_rom_1024x32\\.u_b[01] VPWR VGND VDDARRAY! VSS!"
+    ],
+    "//pdn": "THREE SUPPLIES PER MACRO, TWO ENTRIES EACH. The macro LEF pins carry the trailing '!' global-net marker (VDD!, VSS!, VDDARRAY!) while its Liberty pg_pins do not; PDN hookup matches on the LEF names. VPWR/VGND are this PDK's top-level design power and ground net names; the standard-cell LEF pins are VDD/VSS. VDDARRAY! is a SEPARATE ARRAY SUPPLY with no standard-cell counterpart, so it does not fall out of the default hookup and needs its own entry. Tying it to the core VPWR domain is the single-domain choice; a product design would decide separately whether to split it. docs/12 section 6.4b.",
+    "//pdn_cfg": "pdn_macro.tcl is NOT a tuning. Without it the six macros have no power and the flow does not notice until IR drop, 35 steps later; see that file's header for the mechanism and for what a silent unpowered macro looks like on the way through placement, CTS and detailed routing.",
+    "MAGIC_MACRO_STD_CELL_SOURCE": "PDK",
+    "//streamout": "Not the default. With 'macro', Magic.StreamOut runs get_bbox.tcl over the macro GDS and reads FIXED_BBOX, which sg13g2's Magic tech derives from prBoundary (calma 189/4) -- and the RM_IHPSG13 GDS has no 189/4 layer at all, so the run aborts with 'Failed to extract PR boundary from GDSII view of macro'. 'PDK' takes get_bbox out of the flow, at the stated cost that Magic then uses the PDK's cell definitions inside the macro rather than the vendor GDS hierarchy. docs/12 section 7.4.",
+    "//====== WHAT THIS RUN DOES AND DOES NOT RUN ======": "",
+    "RUN_MAGIC_DRC": 0,
+    "RUN_KLAYOUT_DRC": 0,
+    "RUN_KLAYOUT_XOR": 0,
+    "RUN_LVS": 1,
+    "//signoff_decks": "OFF, AND NOT BECAUSE THEY ARE SLOW. hw/openlane/sram_pilot ran all three decks over ONE RM_IHPSG13 macro in a registered wrapper and they do not close: Magic DRC 1,106,478 errors of which 1,106,478 are inside the macro footprint and 0 outside, KLayout DRC 2,316 attributed to 57 cells all inside the macro hierarchy, and Netgen LVS 359 because the GDS cell names and the CDL subcircuit names disagree and the bus delimiters differ, so none of the 188 bus pins match. docs/12 sections 7.5 and 8 record that as a NO-GO on RM_IHPSG13 for this PDK version and it is a property of the PDK, not of this design. Running the decks here would reproduce six macros' worth of the same numbers at a cost of hours and would tell a reader nothing this repository does not already know. The consequence is stated plainly in docs/47 section 9: THIS RUN IS NOT A PHYSICAL SIGN-OFF. It has no DRC result, no LVS result and no XOR result, and it must not be read as though it had.",
+    "RUN_EQY": 0,
+    "//eqy": "Off. Yosys.EQY compares the pre- and post-synthesis netlists formally; on a 27,500-cell design with six blackboxes it is a large job whose answer this run does not depend on, and hw/soc/formal/ is where this project does equivalence work. Named here so that its absence is a decision on the record rather than a default nobody looked at.",
+    "RUN_CTS": 1,
+    "RUN_DRT": 1,
+    "RUN_POST_GRT_DESIGN_REPAIR": 1,
+    "RUN_POST_GRT_RESIZER_TIMING": 1,
+    "//postgrt": "BOTH OF THESE DEFAULT TO **FALSE** IN LIBRELANE 3.0.5, and a run without them looks exactly like a run with them. They are the two optimisation stages that operate on GLOBAL-ROUTE parasitics rather than on the placement estimate, and on this design that is where the timing is: OpenROAD.STAMidPNR-2, after post-CTS resizing and before global routing, reports -0.1577 ns at the slow corner with 106 violating endpoints; OpenROAD.STAMidPNR-3, on the same netlist after global routing, reports -6.8764 with 2,426. Real wire capacitance costs this floorplan 6.72 ns and by default nothing is asked to recover it. Nothing in any report says the steps did not run -- the only evidence is one line of the flow log reading \"Gating variable for step 'OpenROAD.ResizerTimingPostGRT' set to 'False'\". This is the same shape as the four checker defects above, one layer down: a DEFAULT IS NOT A DECISION. RUN_HEURISTIC_DIODE_INSERTION is left at its default False, which IS a decision and a measured one -- docs/12 section 4 measured it inserting 4,641 antenna cells for the same zero-violation result three cells achieve. docs/47 section 8.2.",
+    "RUN_SPEF_EXTRACTION": 1,
+    "RUN_MCSTA": 1,
+    "RUN_IRDROP_REPORT": 1,
+    "//on": "The steps that produce the number this document exists for are on and are named rather than assumed: a clock tree, detailed routing, parasitic extraction and multi-corner post-layout STA. IR drop is on because it is the step that catches an unpowered macro; VSRC_LOC_FILES is unset, so its VOLTAGE numbers are indicative and only its CONNECTIVITY result is quoted.",
+    "//====== THE CHECKERS, AND WHICH CORNERS THEY ARE BOUND TO ======": "",
+    "//gate_preamble": "Every key in this block exists because a checker in this flow, in its shipped configuration, examines less than a reader would assume. None of them was found here: docs/28 sections 4.4 and 4.4a, docs/34 section 8.5, docs/36 and docs/23 found them on the pilot, late and expensively, and docs/41 section 6.6 lists them as a class. They are set here BEFORE the first run so they cannot be rediscovered. hw/openlane/checker_audit.py, run against this run directory, recomputes from the installed LibreLane's own step classes whether each checker can in fact fail, and exits 1 if any is PARTIAL or NO-GATE.",
+    "TIME_DERATING_CONSTRAINT": 5.0,
+    "//derate": "A FLOAT, and the difference is 0.9910 ns of slack. The PDK sets this as the INTEGER 5, and LibreLane's base.sdc and io.tcl consume it with Tcl integer division: `expr 5 / 100` is 0, so the flow applies NO DERATE while logging 'Setting timing derate to: 5%', and the written SDC contains no set_timing_derate line at all. Written as 5.0 the division is real and the SDC gains `set_timing_derate -early 0.9500` and `-late 1.0500`. docs/28 section 4.4. AUDIT TRAP, from docs/31 sections 3.2 and 10.3: resolved.json is LOSSY for this key -- it records 5 in both cases -- so the three artifacts that decide are the step _env.tcl, the flow log line ('5.0%' not '5%'), and the flow-written SDC. docs/47 section 8 quotes the SDC.",
+    "SETUP_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "//setup": "Without this key Checker.SetupViolations resolves its corner list as SETUP_VIOLATION_CORNERS or TIMING_VIOLATION_CORNERS, SETUP_VIOLATION_CORNERS has no default, and this PDK ships TIMING_VIOLATION_CORNERS as ['*typ*'] -- so the checker would examine nom_typ_1p20V_25C and NOTHING ELSE, and nom_slow_1p08V_125C, the corner that decides whether the part works, would be gated by no checker at all. Four published 'the corner closes' claims on the pilot came from runs in that state. docs/28 section 4.4a. With ['*'] it is bound to all three corners.",
+    "HOLD_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "//hold": "Already LibreLane's default, set explicitly anyway. A default is not a decision, and the whole class of defect this block guards against is a default that nobody wrote down. If upstream ever narrows it, this run does not narrow with it.",
+    "MAX_CAP_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "MAX_SLEW_VIOLATION_CORNERS": [
+        "*"
+    ],
+    "//capslew": "A DIFFERENT MECHANISM FROM THE SETUP ONE, and the obvious fix is inert. Checker.MaxCapViolations and Checker.MaxSlewViolations each declare corner_override = [''] in librelane/steps/checker.py, and get_corner_variable() promotes that into the Variable's DEFAULT. [''] is a non-empty list, so the `or` in get_corner_wildcards() is satisfied and these two NEVER consult TIMING_VIOLATION_CORNERS at all -- raising that key would change nothing. The list is then filtered of the '' match-none wildcard and comes out EMPTY, no corner is matched, every violation lands in warn_violating_corner, and the step WARNS while the flow exits 0. Neither PDK ships either key, so the design configuration is the only place that can bind them. docs/34 section 8.5 recorded it; docs/36 closed it and demonstrated the gate is live by driving the checker with a synthetic violation at the slow corner: with [''] it warns and passes, with ['*'] it raises DeferredStepError.",
+    "PNR_CORNERS": [
+        "nom_typ_1p20V_25C",
+        "nom_slow_1p08V_125C"
+    ],
+    "//pnrcorners": "The two corners the resizer and CTS optimise against mid-flow. Sign-off STA (OpenROAD.STAPostPNR) and all four timing checkers still see all three; this narrows what is OPTIMISED, never what is CHECKED. Same subset hw/openlane/pilot_ihp uses.",
+    "//ungated": "TWO THINGS IN THIS FLOW STILL GATE NOTHING AND ARE NOT FIXED HERE, because inventing a threshold records the tool rather than the design (the docs/20 section 11 rule). (1) Checker.WireLength: WIRE_LENGTH_THRESHOLD is Optional, neither PDK ships a value, so MetricChecker.run() warns and skips -- present in 34 of 34 qualifying runs in this repository. (2) design__max_fanout_violation__count: THERE IS NO MAX-FANOUT CHECKER STEP IN THE CLASSIC FLOW AT ALL, so the metric is computed and never judged, and the pilot carried 84 of them behind a green design__violations. Both numbers are read out and reported in docs/47 section 8 instead, which is the only honest thing available. The max-fanout one matters here more than it did on the pilot: MAX_FANOUT_CONSTRAINT is the PDK's 10 while the library declares default_max_fanout : 8, and the reset net this run exists to build has 2,611 sinks.",
+    "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
+    "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.05,
+    "//holdmargin": "The pilot's values, which closed hold at all three corners there. They are quoted from hw/openlane/pilot_ihp/config.json rather than tuned, so that a hold result here is comparable with docs/31's. The macros make this harder than it was on the pilot: RM_IHPSG13 A_ADDR carries a hold requirement of 1.3801 ns at the slow corner, which is larger than any standard-cell flip-flop's in the library.",
+    "//lvs_run_B": "Run B of the 2026-09-09 LVS investigation. THE VENDOR MACRO IS A BLACK BOX. EXTRA_SPICE_MODELS is deliberately absent: with no CDL for RM_IHPSG13_1P_2048x64_c2_bm_bist or RM_IHPSG13_1P_1024x32_c2_bm_bist in circuit2, netgen builds a pin-list-only cell for each from the powered netlist and compares it against the pin-list-only cell Magic extracted from the macro LEF. LVS then checks what this project drew: every net, every standard-cell connection, and net-by-net which top-level net lands on which macro pin -- and NOT the macro internals, which the vendor certifies and which docs/12 section 7.5 measured as un-signoff-able in this PDK version. The macro pin lists were checked against the vendor CDL out of band: 355 pins for the 2048x64 and 193 for the 1024x32, identical sets after normalising the CDL's '<n>' bus delimiter to the layout's '[n]' and dropping the trailing '!' on VDD!/VSS!/VDDARRAY!, so nothing is hidden by the abstraction except the transistors inside it."
+}
