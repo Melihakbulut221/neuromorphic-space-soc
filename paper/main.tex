@@ -1031,11 +1031,24 @@ track defeats the vote'' does not appear in this paper, because it
 silently supplies a conversion from micrometres to a coincidence
 probability that we do not have.
 
-What it does establish, and what we did change, is the wording of every
-claim this project makes about the state in question. \textbf{``Protected
-by triple modular redundancy'' is false as stated and now reads
-``triplicated in the netlist'' throughout.} That is a correctness change,
-not a style preference.
+What it does establish, and what it obliges, is a change to the wording
+of every claim this project makes about the state in question.
+\textbf{``Protected by triple modular redundancy'' is unsupported at the
+die and must read ``triplicated \emph{in the netlist}''.} Note the verb:
+the measurement does not make those sentences \emph{false}---that would
+need exactly the conversion from micrometres to a coincidence probability
+that the paragraph above forbids---it removes their evidence. That is a
+correctness change and not a style preference.
+
+An earlier draft of this paragraph said the corpus ``now reads
+`triplicated in the netlist' throughout''. It did not: the sweep was
+announced in the sentence that was supposed to record it, which is this
+paper's own subject committed in the sentence claiming the fix. The
+sweep has since been made, across the project's front page, both
+datasheets, four hardening documents, two register-transfer headers and
+two test docstrings; \file{paper/claims.yaml} carries an entry that
+greps for the unqualified phrase, so the claim is now checked rather
+than asserted.
 
 \subsection{A constraint exists, and it is not free}
 
@@ -1459,9 +1472,10 @@ We set out to show that a design's configuration state was protected by
 triple modular redundancy. At the source it was. In the mapped netlist it
 was not, and the campaign built to detect exactly that produced identical
 output on the broken design and the fixed one. We repaired it and built
-an instrument that lives at the netlist. In the die it is still not
-protected, and the instrument we built cannot see that, because it runs
-before the die exists.
+an instrument that lives at the netlist. At the die we cannot show it is
+protected: the replicas are not separated, nothing ever established that
+they would be, and the instrument we built runs before the die exists and
+could not have told us either way.
 
 Separately, a protection mechanism that worked perfectly---174 of 174
 upsets corrected, no error, no wrong answer---restarted the machine every

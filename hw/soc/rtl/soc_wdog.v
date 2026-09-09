@@ -178,8 +178,14 @@
 // `rst_seen` and the bootstrap latch are written once in a mission. The
 // bank is therefore written unconditionally from the VOTED word on
 // every edge, which makes the voter a continuous scrubber: the window
-// in which a second upset in a different replica is uncorrectable is
-// one clock cycle rather than the rest of the mission.
+// in which a second INDEPENDENT upset in a different replica is
+// uncorrectable is one clock cycle rather than the rest of the mission.
+//
+// CORRECTED 2026-09-09. That sentence read "a second upset" and bounded
+// it at one cycle. It bounds ACCUMULATION OVER TIME and nothing else.
+// docs/79 measured this design's own replica cells abutting on two
+// hardens; a second upset from the SAME event is not separated in time
+// at all, so there is no interval for this window to bound.
 //
 // WHAT THIS DOES NOT BUY, stated here so it is not read as more:
 //   * The unprotected registers above are still unprotected.

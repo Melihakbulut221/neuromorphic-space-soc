@@ -119,6 +119,29 @@ def check(c):
         return (("PASS", "present") if str(c["contains"]) in p.read_text()
                 else ("FAIL", f"{c['contains']!r} not in {c['file']}"))
 
+    if kind == "grep":
+        # How many live documents still make a claim the evidence no longer
+        # supports. The paper asserts that a sweep happened; this counts
+        # what is left, so the assertion is checked rather than announced.
+        import fnmatch
+        pats = [x.strip() for x in c["pattern"].split("||")]
+        globs = [g.strip() for g in c["paths"].split(",")]
+        hits = []
+        files = sorted({f for g in globs for f in ROOT.glob(g)})
+        for f in files:
+            rel = f.relative_to(ROOT)
+            try:
+                text = f.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
+                continue
+            for i, line in enumerate(text.split("\n"), 1):
+                if any(pat in line for pat in pats):
+                    hits.append(f"{rel}:{i}")
+        got = len(hits)
+        detail = str(got) + ("" if not hits else "  " + ", ".join(hits[:4]))
+        return (("PASS", detail) if got == int(c["value"])
+                else ("FAIL", f"{detail} != {c['value']}"))
+
     if kind == "json":
         # A value read straight out of a file the run itself wrote. This is
         # the strongest evidence available for a claim about how something

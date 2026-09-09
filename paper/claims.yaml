@@ -201,3 +201,17 @@ claims:
     check: manual
     artefact: "hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt"
     read: "cell _42330_ (sg13g2_nand3_1), slew 1.611246, delay 1.396062, driving 0.118899 pF"
+
+  # The paper says a wording sweep was made. An earlier draft said it had
+  # been made when it had not, which is this paper's own subject committed
+  # in the sentence announcing the fix. This is the check that keeps the
+  # claim honest: it counts what is LEFT, over the live documents only --
+  # historical run records keep their wording by docs/64's rule, and the
+  # frozen shuttle text is a decision recorded in docs/21 section 6.6
+  # rather than an edit.
+  - id: tmr.no_unqualified_die_claim
+    value: 0
+    text: "live documents still calling the configuration state protected by TMR without the netlist qualifier"
+    check: grep
+    pattern: "state is now protected || is now protected**, which || The backstop is protected"
+    paths: "README.md, ROADMAP.md, docs/5*.md, docs/6*.md, docs/7*.md

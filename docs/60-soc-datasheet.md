@@ -186,8 +186,10 @@ disagreement**.
   stage 3 latches an external pin. **Armed at reset, not disableable by
   software, with a fixed time base no register reaches** and keyed
   register writes **[measured, `hw/soc/rtl/soc_wdog.v` W1–W5, `docs/40` section 5]**
-- **The watchdog's own persistent state is triple-redundant and
-  continuously voted**, and it survives the reset it causes, so a
+- **The watchdog's own persistent state is triple-redundant in the
+  netlist and continuously voted** (the replicas are **not**
+  placement-separated — section 9.9), and it survives the reset it
+  causes, so a
   watchdog reset is distinguishable from a power cycle
   **[measured, `docs/41-watchdog-hardening.md`]**
 - **Thirteen interrupt sources on Ibex's fifteen fast local interrupt
@@ -214,7 +216,7 @@ disagreement**.
   **[measured, `docs/51` and `sw/tests/test_soc_npu_guards.py`]**
 - **8 neurons, 8 axons, 64 four-bit signed synapses**, event-driven
   leaky-integrate-and-fire, `(72,64)` Hsiao SECDED on the weight word,
-  55 triple-redundant configuration bits, four fault pins
+  55 configuration bits triplicated in the netlist, four fault pins
   **[measured, `docs/21-pilot-datasheet.md`]**
 - **A 256 MiB fabric window carrying sixteen 4 KiB per-node register
   windows**, of which **one node is instantiated** and the other
@@ -337,9 +339,17 @@ power-on reset, cannot be disabled by software, has a time base that no
 register reaches, requires a key in the upper half-word of every
 register write, escalates in three stages rather than resetting, and
 keeps its own state in the power-on domain so that it survives the
-reset it causes. Its persistent state is triple-redundant and the voter
-runs every cycle rather than on write, so a second coincident upset has
-a one-cycle window rather than an unbounded one.
+reset it causes. Its persistent state is triplicated in the netlist and
+the voter runs every cycle rather than on write, so a second
+**independent** upset has a one-cycle window rather than an unbounded
+one.
+
+**Corrected 2026-09-09.** That sentence said *coincident* and bounded
+the exposure at one cycle, which is a bound on **accumulation over
+time** and on nothing else. `docs/79` measured this design's replicas
+touching on the die, and two cells that touch can be reached by one
+event in one cycle — a case the one-cycle window does not bound at all,
+because there is no interval between the two upsets to bound.
 
 The **NPU node** is the frozen pilot die, instantiated out of `hw/rtl/`
 rather than copied, driven over a hardware serial master that shifts
@@ -716,7 +726,7 @@ against them.
 | **W3** | **Three-stage escalation.** Stage 1, counter reaches zero: raise `nmi_o` into Ibex's `irq_nm_i` and reload — non-maskable on purpose, because the state this fires in is one where `mstatus.MIE` is quite likely already zero. Stage 2, counter reaches zero again with stage 1 unacknowledged: assert system reset for `RST_CYCLES`; the core is not involved and cannot prevent it. Stage 3, after `ESCALATE` = 2 watchdog resets since power-on: assert `wdog_no`, the external pin, latched until power-on reset |
 | **W4** | **Its state survives the reset it causes.** Everything in the file is in the power-on reset domain. After a watchdog reset the boot code reads `WDOGSTAT` and finds `WDOGRST` set and `RSTCNT` non-zero, so a watchdog reset is distinguishable from a power cycle. Demonstrated across three boots in one simulation |
 | **W5** | **Keyed writes.** `wdata[31:16]` must equal `KEY` = `0xA51F` for *any* register write, not just the kick, so a runaway cannot hold off stage 2 by clearing the acknowledge |
-| **W6** | **The persistent, silent state is triple-redundant and continuously voted.** Section 9.5 |
+| **W6** | **The persistent, silent state is triple-redundant in the netlist and continuously voted.** The replicas are not placement-separated; sections 9.5 and 9.9 |
 | **W7** | **A windowed kick mode.** Built, measured, and **recommended for removal** — section 9.6 |
 | **W8** | **A kick-budget mode.** Built, measured, kept |
 
@@ -734,8 +744,10 @@ transform. Deliberately unprotected: `counter` (16), `reload` (16),
 which bounds what an upset in them can do.
 
 **The voter runs every cycle rather than on write.** That makes it a
-continuous scrubber and bounds a second coincident upset's exposure to
-one clock cycle.
+continuous scrubber and bounds a second **independent** upset's exposure
+to one clock cycle. *Corrected 2026-09-09: it does not bound a
+common-mode upset. `docs/79` measured the replica cells abutting, and
+cells that touch are reached in the same cycle by the same event.*
 
 **Survival through synthesis was measured, not assumed**: **102 mapped
 flip-flops** — 36 unprotected plus 3 x 22 protected — counted after
@@ -1133,16 +1145,16 @@ from noise.
 | Structure | Mechanism | Reported through |
 |---|---|---|
 | Ibex architectural register file `x1`–`x31` | (39,32) SECDED, single-bit corrected inline, plus a background scrub that walks the file and re-encodes | `BUSSTAT.CNT_RFSEC`, `CNT_RFRD`, `CNT_RFDED`, stickies, interrupt |
-| Watchdog persistent state, 22 bits | Triple modular redundancy, **voted every cycle**, with a per-replica storage transform | `BUSSTAT.CNT_TMRERR`, `WDOGSTAT` |
+| Watchdog persistent state, 22 bits | Triplicated **in the netlist**, voted every cycle, with a per-replica storage transform; replicas not placement-separated (section 9.9) | `BUSSTAT.CNT_TMRERR`, `WDOGSTAT` |
 | Watchdog software runaway | Three-stage escalation: NMI, then reset, then an external pin | `nmi_o`, `wdog_rst_o`, `wdog_no`, `WDOGSTAT.RSTCNT` |
 | NPU serial transport | Bounded frame wait with timeout | `NPUCFG.IRQCAUSE.SER_TO` |
 | NPU node window | Bounded response wait plus an orphan-response check | `IRQCAUSE.WIN_TO` |
-| NPU connection configuration and cause bank | Triple modular redundancy, 21 bits | `IRQCAUSE.CFG_TMR` |
+| NPU connection configuration and cause bank | Triplicated in the netlist, 21 bits; replicas not placement-separated | `IRQCAUSE.CFG_TMR` |
 | NPU event queues | `aer_fifo`'s pointer voting, entry parity, dual-rail valid flags and drop counting | `IRQCAUSE.Q_COR`, `Q_DET`, `INJ_OVF`, `CNT_DROP` |
 | NPU show-ahead adapter | Bounded wait with timeout | `IRQCAUSE.OH_TO` |
 | NPU AER input strobe | Strobe-versus-qualifier agreement check | `IRQCAUSE.AER_MM` |
 | Die weight word | (72,64) Hsiao SECDED, corrected inline, double-bit detected with zero substitution | die `CNT_SEC`, `CNT_DED`, SEC and DED pins, into `IRQCAUSE` |
-| Die configuration, 55 bits | Triple modular redundancy, majority voted | die `CNT_TMR`, TMR pin, into `IRQCAUSE` |
+| Die configuration, 55 bits | Triplicated in the netlist, majority voted; measured **not** placement-separated on the frozen layout (`docs/79`) | die `CNT_TMR`, TMR pin, into `IRQCAUSE` |
 | Die neuron-core FSM | Hamming-distance-2 parity state encoding, park in a safe state | die `ERR` pin, into `IRQCAUSE` |
 | Die neuron state and synapse array | SECDED check fields | die counters |
 | Unmapped address, sub-word write to the node window | Error slave; Ibex access fault | `mcause` |
@@ -1461,6 +1473,20 @@ hang-class faults, where the window caught **0 of 4**.
 
 ### 9.9 Bounds on all of section 9
 
+- **EVERY TRIPLICATED ROW IN THIS SECTION IS A NETLIST PROPERTY, NOT A
+  PROPERTY OF A DIE.** *Added 2026-09-09.*
+  `docs/79-replica-placement-and-equivalence.md` measured the frozen
+  pilot's three replica banks on the sign-off layout's own DEF: the
+  three banks share one region, **103 of the 165 configuration
+  flip-flops have their nearest fellow in a different replica** against
+  a median separation of 113.47 um, and 49 cross-replica pairs abut. The
+  picture reproduces on this design's own `soc_top` layouts across three
+  triplicated structures and three hardens. No placement constraint was
+  applied and none is available before the shuttle. **A distance is not
+  a safety argument in either direction** — nothing measured here says a
+  common-mode upset occurs at any fluence, and nothing says a different
+  separation would prevent one. What it removes is the evidence for
+  reading any row above as a statement about the manufactured part.
 - **The fault model is single-bit, flip-flop-only, at RTL, with zero
   delay.** No multi-bit upsets, no single-event transients in
   combinational logic — so every codec, voter and multiplexer is

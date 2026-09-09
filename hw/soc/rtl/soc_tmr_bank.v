@@ -40,8 +40,12 @@
 //      between rewrites the first. Writing unconditionally makes the
 //      voter a continuous scrubber: the corrected word goes back into
 //      all three replicas on the very next edge, so the domain is
-//      exposed to a coincident second upset for one clock cycle rather
-//      than for the mission.
+//      exposed to a second INDEPENDENT upset for one clock cycle rather
+//      than for the mission. That is a bound on accumulation over time
+//      and on nothing else -- corrected 2026-09-09, it read "coincident".
+//      docs/79 measured replicas of this shape sharing rows and
+//      abutting, so a single event reaching two of them is not bounded
+//      by this at all.
 //
 //      That is also why this bank is cheaper than pilot_cfg_bank per
 //      bit: with no partial write there is no read-modify-write, so the

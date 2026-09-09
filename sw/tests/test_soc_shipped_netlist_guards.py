@@ -50,6 +50,12 @@ WHAT IT DOES **NOT** COVER
     `test_the_voter_is_the_blob_the_pilot_freeze_pins`.
   * It says nothing about timing, DRC, LVS or equivalence. The layouts
     it may read have none of those (`docs/71` section 11).
+  * IT SAYS NOTHING ABOUT PLACEMENT, which is the one thing it reads a
+    place-and-route run and still cannot see. It walks a netlist; where
+    the cells ended up is in the DEF beside it.
+    `sw/tests/test_replica_placement.py` is that level and it measures
+    the replica banks as not separated. Added 2026-09-09, because a
+    green result here reads as covering the part and does not.
   * The cone stops at flip-flops and at macros. A replica held in an
     SRAM macro would be invisible, and none is.
 

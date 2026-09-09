@@ -1,8 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
 # SPDX-License-Identifier: Apache-2.0
 
-"""Synthesis guards: structures whose FUNCTION is to exist physically must
-survive synthesis, and only the netlist can say whether they did.
+"""Synthesis guards: structures whose FUNCTION is to exist as separate
+hardware must survive synthesis, and only the netlist can say whether
+they survived SYNTHESIS.
+
+WHAT THIS FILE DOES NOT SAY, first because it has been read the other
+way. A pass here is a statement about the NETLIST and not about the die.
+`hw/openlane/replica_placement.py` and `sw/tests/test_replica_placement.py`
+are the level below, and on the frozen sign-off layout they measure the
+three banks this file counts as NOT placement-separated: 103 of the 165
+configuration flip-flops have their nearest fellow in a different
+replica. See `docs/79-replica-placement-and-equivalence.md`. This
+docstring said "exist physically ... only the netlist can say", which is
+where that reading came from; corrected 2026-09-09.
 
 Why this file exists
 --------------------

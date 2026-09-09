@@ -1289,8 +1289,12 @@ is the largest unmeasured thing this document leaves.
 **And one thing that should be said about what this work licenses.** It
 licenses *"the connection's only lethal failure is bounded, the bound
 cannot fire on a healthy frame, the queues' protection is now countable
-by an operator, and the cause register survives a single upset in any
-one replica."* It does **not** license "the NPU connection is
+by an operator, and the cause register survives, in simulation and under
+a single-upset-in-one-replica fault model, an upset in any one
+replica."* *Amended 2026-09-09: `docs/79` added a fourth thing it does
+not license. The replicas are triplicated in the netlist and are **not**
+placement-separated, so "one replica" is a modelling assumption and not
+a measured property of the layout.* It does **not** license "the NPU connection is
 adequately protected": the transport still corrupts frames silently, the
 event engine is untouched, and `docs/52`'s 4.17 points of silent
 corruption were never what this wave was aimed at. Section 8 says what

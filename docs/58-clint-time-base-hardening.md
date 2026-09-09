@@ -12,9 +12,10 @@ clock for ever, and every deadline software computes as `mtime + delta`
 is then wrong — but it **cannot disarm anything**, so the backstop went
 first.
 
-The backstop is protected (`docs/41`). The core's register file is
-protected (`docs/43`). The connection to the NPU is protected
-(`docs/55`, `docs/56`). This is what is left, and this document builds
+The backstop is triplicated in the netlist (`docs/41`). The core's
+register file is SECDED-protected (`docs/43`). The connection to the NPU
+is triplicated in the netlist (`docs/55`, `docs/56`). This is what is
+left, and this document builds
 it.
 
 **The answer is not triple modular redundancy, and the reason is the

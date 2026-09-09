@@ -58,7 +58,8 @@ happens only when an event arrives, which is what makes the style
 attractive for a power-limited spacecraft payload. Around that
 event-processing datapath the device carries the fault-tolerance
 machinery that is the actual point of the exercise: error-correcting
-codes on the weight storage, triple-redundant voted configuration
+codes on the weight storage, configuration registers triplicated and
+voted in the netlist *(section 6.6)*
 registers, a scrub path that repairs a corrected word in place, fault
 counters, and four dedicated output pins that make every one of those
 events visible on an oscilloscope with no host software running. It is
@@ -113,7 +114,7 @@ plainly, and binding on every public description of this part
 | Membrane potential | 16-bit signed per neuron | [measured] |
 | Event queues | 2 x 4 entries, 16-bit words | [measured] |
 | Weight word protection | (72,64) Hsiao SECDED, single-error correcting, double-error detecting | [measured] |
-| Configuration protection | 55 bits, triple modular redundancy, majority voted | [measured] |
+| Configuration protection | 55 bits, triple modular redundancy, majority voted **in the netlist** | [measured] *See section 6.6, added 2026-09-09.* |
 | Host interface | Mode-0 SPI slave, 40-bit frames | [measured] |
 | Total flip-flops, mapped netlist | 1155 | [measured, in flux] |
 | Clock target | 50 MHz | [target] |
@@ -1284,6 +1285,41 @@ is quoted:
   is **4 of 6 SDC** **[fact, the same key at HEAD]**, so a stream-only
   campaign would report 2; which structures the four sit in is not
   read out here.*
+
+---
+
+### 6.6 Correction, 2026-09-09: the three replicas are not separated on the die
+
+Sections 1.1, 3 and 6.1 above say the configuration is protected by
+triple modular redundancy, and they are **left standing** because they
+were true of what had been measured when they were written: three banks
+of 55 flip-flops in the mapped netlist, counted by cells rather than by
+names, in two synthesis flows and with every preservation attribute
+stripped. Section 6.3 is the record of how that came to be measured at
+all.
+
+`docs/79-replica-placement-and-equivalence.md` measured the other half,
+on **this device's own frozen sign-off layout**, from the run's final
+DEF **[fact, 2026-09-09]**: the three banks share one region;
+**103 of the 165 configuration flip-flops have their nearest fellow
+configuration flip-flop in a different replica**, against a median
+cross-replica separation of 113.47 um; 49 cross-replica pairs abut; and
+the closest pairs are the same bit of the same word. No placement
+constraint was applied, none was requested, and none is available before
+the shuttle.
+
+So the correct statement about this part is that the configuration is
+**triplicated in the netlist**. Section 6.2's campaign result stands as
+an RTL result and section 6.3's census stands as a netlist result;
+neither is a statement about a die whose replicas touch.
+
+Section 1.2's rule applies unchanged and now has a third clause: no
+total-dose figure, no cross-section, **and no separation**. A distance
+is not a safety argument in either direction --- nothing here says a
+common-mode upset occurs at any fluence, and nothing here says a
+different separation would prevent one. What the measurement removes is
+the evidence for reading section 6.1 as a property of the manufactured
+die.
 
 ---
 

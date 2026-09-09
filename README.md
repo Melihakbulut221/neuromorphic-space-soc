@@ -63,7 +63,10 @@ runs end to end across three boots of the SoC in one simulation.
 `docs/40` is the record, and it argues the decision *not* to build a
 platform interrupt controller rather than assuming it.
 
-The watchdog's own state is now protected, and `docs/41` is the record.
+The watchdog's own state is now triplicated in the netlist, and
+`docs/41` is the record — with the limit `docs/79` later measured: the
+three replicas are **not placement-separated**, so this is a netlist
+property and not yet a property of a part.
 The eight fields nothing rewrites — the bootstrap latch, the stage-1
 pending flag, the reset record and count, the reset stretch — are
 bundled into one word and tripled under the pilot's own proved voter,
@@ -142,7 +145,7 @@ since `docs/39`. The 28-check bring-up program now runs from RAM out of
 a flash image: **220,256 cycles for the program and 415,324 for the
 run**, against 217,630 for the identical program fetched from the ROM.
 *Added 2026-09-05:* **and the block that decides whether it boots again
-is now protected**, which `docs/68` section 16 asked for and
+is now triplicated in the netlist**, which `docs/68` section 16 asked for and
 `docs/69-boot-hardening.md` is the record of. Eighteen of that block's
 92 flip-flops are bundled into one word and tripled under the same
 proved voter the watchdog uses; the other 74 get nothing, and 64 of

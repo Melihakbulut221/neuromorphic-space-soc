@@ -66,12 +66,12 @@ one row high.
 | Cross-replica pairs | 9,075 |
 | Centre-to-centre, minimum | **3.78 um** — one row |
 | Centre-to-centre, median | 113.47 um |
-| **Edge-to-edge, minimum** | **0.00 um — the cells touch** |
-| Pairs abutting | **49** |
+| Nearest fellow configuration flop is in **another** replica | **103 of 165** |
+| Edge-to-edge, minimum | 0.00 um -- the cells touch, which in a row-based layout is the floor for any two cells in adjacent rows |
+| Pairs abutting | 49 |
 | Pairs within one 0.48 um site | 51 |
 | Corresponding-bit pairs, minimum | 3.78 um |
 | Corresponding-bit pairs abutting | **18** (a lower bound, see 1.4) |
-| Nearest fellow configuration flop is in **another** replica | **103 of 165** |
 
 The closest pairs are the same bit of the same word.
 `u_cfg_a[35]` and `u_cfg_b[35]` sit in adjacent rows at the identical x
@@ -80,16 +80,44 @@ same case. **Three replicas placed as three banks would put a flop's
 nearest neighbour in its own bank. Here it is in another one, for 103
 of the 165.**
 
+**Which row carries the finding, and it is not the quotable one.
+Reordered 2026-09-09.** `0.00 um edge-to-edge` is the most repeatable
+line in the table and the least informative: in a row-based
+standard-cell layout **any** two cells in vertically adjacent rows whose
+x-spans overlap are exactly 0.00 um apart, and 3.78 um centre-to-centre
+is the floor for any two distinct flip-flops not sharing a row. Neither
+figure alone separates *the placer clustered the replicas* from *this is
+the geometric floor and something had to sit there*. The row that does
+separate them is a **comparison against the median of 113.47 um** rather
+than a distance, and it needs no threshold -- and it had been printed
+last and unbolded beneath the two that are merely quotable. It is now
+first. This document spends its length on the difference between a
+measurement and what a reader wants it to mean, and that was the one
+place it did the thing it describes.
+
 ### 1.3 The mechanism, which matters more than the numbers
 
-**The placer is minimising wirelength to a shared voter, and that pulls
-the three copies of each bit together.** It is not a bug and it is not
-an unlucky seed: it is what the objective function asks for. Nothing in
-this flow requested separation, and nothing in the flow supplies it by
-default.
+**The likely mechanism is wirelength minimisation to a shared voter,
+which pulls the three copies of each bit together [estimate].** Nothing
+in this flow requested separation, and nothing in the flow supplies it
+by default.
+
+**Corrected 2026-09-09.** This read *"It is not a bug and it is not an
+unlucky seed: it is what the objective function asks for"*, in bold, as
+a measured fact. It is not one. **No objective function was varied and
+no seed was varied** -- `docs/71` records that this flow's only seed is
+`detailed_route -or_seed 42`, hard-coded in LibreLane with no
+configuration variable, so a seed sweep cannot be run here without
+patching the tool. What IS measured is section 1.6: the outcome
+reproduces across two designs, three triplicated structures and three
+hardens, which rules out a one-run accident **without establishing the
+cause**. In a document whose subject is the gap between what was
+measured and what a reader wants it to mean, this was that gap.
 
 One consequence is worth stating because it was not designed:
-**replica C is the best-separated bank**, and the reason is `MIX = 1`.
+**replica C is the best-separated bank**, and the likely reason is
+`MIX = 1` **[estimate: no `MIX = 0` layout was built, so the cause is
+inferred and not measured]**.
 `docs/33` gave C a different storage transform for a purely logical
 reason — to stop structural hashing merging it with A and B. A defence
 chosen against the synthesiser bought physical margin by accident. It
@@ -105,7 +133,10 @@ abutting — are a **lower bound**. Recovering the remaining 15 needs the
 decode network walked, which the committed tool does not do; a deeper
 one-off analysis that did resolve them by the `cfg_dec` gate signature
 found 165 pairs and 28 abutting, and on 30 of the 55 value bits two of
-the three voter inputs in contact. **The committed tool reports the
+the three voter inputs in contact **[estimate, marked 2026-09-09: that
+analysis is not committed, is not reproducible from this tree and is
+asserted by no test. This subsection is about not quoting an
+unreproducible number as a measurement, and it quoted three]**. **The committed tool reports the
 conservative number and prints the word UNDERCOUNT**, because a lower
 bound quoted as a measurement is the failure this project keeps finding
 in itself.
@@ -232,9 +263,18 @@ rather than the design.
   somewhere in a 12.96 x 3.78 um rectangle and this document does not
   say where.
 - **EVERY UNQUALIFIED SENTENCE SAYING THE CONFIGURATION IS "PROTECTED BY
-  TMR" IS NOW WRONG AS STATED** and must read "triplicated **in the
-  netlist**". That is a correctness change to the corpus's own prose,
-  not a style preference, and it applies to any paper drawn from it.
+  TMR" IS UNSUPPORTED AT THE DIE** and must read "triplicated **in the
+  netlist**". **Corrected 2026-09-09**: this bullet said *wrong as
+  stated*. To convict those sentences of being wrong you need precisely
+  the micrometres-to-coincidence-probability conversion the bullet above
+  declares inadmissible -- the document was convicting the corpus on
+  evidence it had just ruled out. The measurement does not make them
+  false; **it removes their evidence**. What is established is that the
+  redundancy is a netlist property, that this layout permits a
+  common-mode upset over much of the protected word, and that nothing
+  here has measured whether one occurs. That is a correctness change to
+  the corpus's own prose, not a style preference, and it applies to any
+  paper drawn from it.
 - **NO PLACEMENT CONSTRAINT WAS APPLIED.** Three mechanisms exist and
   two have been exercised here before: `MANUAL_GLOBAL_PLACEMENTS`, which
   the pilot flow already runs as step 33 and which no-ops when unset;
@@ -264,7 +304,9 @@ rather than the design.
   connectivity, not geometry**: it would not notice if a cell moved.
   Extracting cell origins from the GDS and diffing against the DEF would
   close it.
-- **ONE LAYOUT PER DESIGN, ONE FLOW, ONE SEED.**
+- **ONE FLOW, ONE SEED; one layout for the pilot and three for
+  `soc_top`.** *Corrected 2026-09-09: this read "one layout per design",
+  which section 1.6 of this same document contradicts.*
 
 ---
 
