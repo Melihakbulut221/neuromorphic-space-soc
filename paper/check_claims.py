@@ -176,6 +176,16 @@ def check(c):
         # broken, in the shape of a clean result.
         empty = [g for g in globs if not list(ROOT.glob(g))]
         if empty:
+            # A glob into a gitignored build tree is EMPTY IN A CLONE and
+            # that is not a broken claim, it is an absent artefact. The
+            # first version could not tell the two apart and failed the
+            # LVS claim on a GitHub runner where no run directory can
+            # exist. `needs_run_tree` is the same distinction the `run`
+            # and `json` kinds already make.
+            if c.get("needs_run_tree"):
+                return "SKIP", ("the run tree these globs point into is "
+                                "gitignored build output and is not in "
+                                "this checkout")
             return "FAIL", ("these path globs match no file, so the check "
                             "looked at nothing: " + ", ".join(empty))
         files = sorted({f for g in globs for f in ROOT.glob(g)})

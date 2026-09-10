@@ -2317,6 +2317,18 @@ def test_the_pnr_flow_refuses_a_config_outside_its_own_directory():
     assert r.returncode != 0, (
         "hw/soc/flow/pnr_soc_top.sh accepted a PNR_CONFIG outside "
         "hw/soc/pnr/")
+    # The script checks its toolchain BEFORE it checks PNR_CONFIG, so on
+    # a machine without the rootless shims it exits non-zero for the
+    # wrong reason and this test would pass without having tested
+    # anything. That is what it did on a GitHub runner on 2026-09-10:
+    # "missing shims at /home/runner/.local/opt/llbin". Assert the
+    # refusal is the one we asked for, and skip where it cannot be
+    # reached -- a green result for the wrong reason is worse than a
+    # skip that says why.
+    if "missing shims" in (r.stdout + r.stderr):
+        pytest.skip("the flow's toolchain check fires first on this "
+                    "machine, so the PNR_CONFIG refusal is unreachable "
+                    "here: " + (r.stdout + r.stderr).strip().splitlines()[0])
     assert "refusing" in (r.stderr + r.stdout)
 
 

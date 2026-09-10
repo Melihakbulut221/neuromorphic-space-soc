@@ -116,9 +116,28 @@ started because recent account payments have failed or your spending
 limit needs to be increased"* -- and the Tiny Tapeout GDS action is the
 one step of this project that has no local substitute, because the
 artefact that reaches the fab is produced by that job from `tt/src`.
-Everything else, including the hosted precheck, now runs here. Clear the
-billing and prove it with a throwaway workflow that both runs a step and
-uploads an artefact, **before** pushing `tt/`, not after.
+~~the Tiny Tapeout GDS action is the one step of this project that has
+no local substitute~~ **— and that is false, measured 2026-09-10.**
+`tt/tt/tt_tool.py --harden --ihp --no-docker` IS the substance of
+`tt-gds-action`: the composite action is six shell steps around
+`tt_tool.py` and nothing else. It ran here in **24 min 11 s**, all 74
+flow steps, exit 0, and reproduced the frozen submission **bit for
+bit** — the netlist joins the `52b2debf…` family, and the powered
+netlist, DEF, LEF, SPICE, SDC and `metrics.csv` all hash equal, with
+`metrics.json` agreeing on **194 of 194 keys** and the GDS byte-identical
+once its 46 timestamp records are zeroed.
+
+What is genuinely runner-only is four things, none of them the
+artefact: the Pages upload; place-and-route inside the LibreLane
+*container* rather than against the rootless shim set (synthesis is
+provably the same `pyosys 0.67` wheel, P&R is not proven); whatever
+`tt-support-tools@main` is on push day, since `tools-ref` is unpinned;
+and independent re-execution itself.
+
+**And the billing wall is in front of PRIVATE minutes, not public
+ones.** The public mirror's first push started a run six seconds later
+that executed for 75 seconds. So a Tiny Tapeout submission repository —
+public by definition — is not blocked by it.
 
 Gate G1: TT submission accepted by precheck; formal/CI targets green;
 hour-budgeted WBS in docs/06 held within its go/no-go checkpoints.

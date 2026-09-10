@@ -158,6 +158,22 @@ def citation_count(stem):
     return n
 
 
+def executable_paths():
+    """The paths git records as mode 100755.
+
+    A generated tree that carries a script's CONTENT and not its MODE
+    produces a repository whose every entry point is unrunnable. That is
+    what happened on 2026-09-10: the mirror's first CI run died in 75
+    seconds on `scripts/ci_local.sh: Permission denied`, exit 126, and
+    all 67 executables in this repository had arrived as 0644. The bytes
+    were right and the tree was useless.
+    """
+    out = subprocess.run(["git", "ls-files", "-s"], cwd=ROOT, check=True,
+                         capture_output=True, text=True).stdout
+    return {line.split("\t", 1)[1] for line in out.split("\n")
+            if line.startswith("100755") and "\t" in line}
+
+
 def build():
     """Return the mirror as {relative path: bytes}."""
     files = {}
@@ -233,15 +249,33 @@ def build():
 
 def write(out, files):
     out.mkdir(parents=True, exist_ok=True)
+    execs = executable_paths()
     for rel, data in sorted(files.items()):
         p = out / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(data)
+        # The mode is part of the file. See executable_paths().
+        p.chmod(0o755 if rel in execs else 0o644)
     return len(files)
 
 
-def check(out, files):
+def check_modes(out, files):
+    """Every path git calls executable must be executable in the mirror."""
+    execs = executable_paths()
     bad = []
+    for rel in sorted(files):
+        p = out / rel
+        if not p.is_file():
+            continue
+        want = rel in execs
+        have = bool(p.stat().st_mode & 0o111)
+        if want != have:
+            bad.append(f"{'not executable' if want else 'executable'}: {rel}")
+    return bad
+
+
+def check(out, files):
+    bad = check_modes(out, files)
     for rel, data in sorted(files.items()):
         p = out / rel
         if not p.is_file():

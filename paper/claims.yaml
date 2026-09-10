@@ -272,6 +272,7 @@ claims:
     check: grep
     pattern: "Circuits match uniquely"
     paths: "hw/soc/pnr/runs/s77lvs-b-blackbox/*/*.log"
+    needs_run_tree: true
 
   - id: timing.closes_at
     value: "25.00"
