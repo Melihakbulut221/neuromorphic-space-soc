@@ -196,10 +196,31 @@ run where it is most needed.
 
 ## 5. What this does NOT cover
 
-- **NOTHING IS PUBLISHED BY THIS DOCUMENT OR BY THIS GENERATOR.** The
-  mirror has been written to a directory and committed locally. Creating
-  a public repository and pushing to it is the owner's act and has not
-  been taken.
+- ~~**NOTHING IS PUBLISHED BY THIS DOCUMENT OR BY THIS GENERATOR.**~~
+  **PUBLISHED 2026-09-10**, on the owner's instruction, to
+  <https://github.com/Melihakbulut221/nssoc> — 518 files, one commit,
+  source revision `93757c9`, tree digest `8aece676a9c97684`. The
+  generator still does not push; the push was a separate act, and the
+  mirror's own checks were run in the generated tree first: SPDX 329
+  tagged with 0 missing and 0 wrong, and 94 link tests.
+
+  **One thing was found in the check before the push and is recorded
+  rather than fixed.** `docs/37-external-check.md` is not in the held
+  set and carries the shuttle's cost figures — EUR 70 per tile, EUR 955
+  for the frozen 6x2 — which is the class `docs/06` is held for. It is
+  published anyway, for a stated reason: those figures are **Tiny
+  Tapeout's own published prices**, and `docs/37` verifies them against
+  the vendor's public pricing asset, whose URL it prints. They are a
+  fact-check of an external party's public numbers rather than this
+  project's commercial material.
+
+  **One fragment in it is genuinely this project's and is not covered by
+  that reason**: the phrase *"WP3's 3,500 envelope absorbs either"*
+  quotes a work-package budget line out of the held `docs/06`. It is one
+  clause, it is published, and it is named here so the decision to leave
+  it is on the record rather than in the gap between two documents. A
+  reader who wants it removed regenerates with `docs/37` added to
+  `HELD_SECTIONS`.
 - **THE COMMIT HISTORY HAS STILL NOT BEEN AUDITED.** This decision routes
   around that question rather than answering it. If the repository is
   ever made public directly, the audit is still owed.
