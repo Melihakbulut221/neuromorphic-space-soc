@@ -248,3 +248,32 @@ python3 scripts/spdx_check.py                       # 0 missing, 0 wrong
 <repo>/.venv/bin/python -m pytest sw/tests/test_doc_links.py -q   # 90 passed
 cd <repo> && python3 scripts/gen_public_mirror.py --out /tmp/nssoc-public --check
 ```
+
+---
+
+## 7. Republished 2026-09-11
+
+`24023bb` on the mirror, from `26f4494` here. **529 files**, tree digest
+`3102e217587b13bb`; `--check` matches the generator **[fact]**.
+
+Fifty-two paths moved, and one of them is the reason this section exists
+rather than a line in a commit message. `tt/docs/info.md` — the shuttle
+page an operator reads — told them to write `0x3F` to `FAULT_CLR` when
+the mask has been eight bits since `docs/55` added two counters. The
+correction was made in this repository on 2026-09-10 and **the published
+copy went on saying `0x3F` for a day**, because regenerating the mirror
+is a thing a person does and nothing was watching. The public copy now
+carries `0xFF` and the superseded value left standing beside it with its
+date, per `docs/64`.
+
+`scripts/ci_local.sh mirror` is the answer to the general form: it runs
+the generator and its `--check`, so a generator that has stopped
+selecting what it claims to select is caught locally. It does **not**
+check the published repository and cannot — nothing here can reach it.
+**Regenerating and pushing is still an act, by a person, and the gap
+between this repository and what a stranger reads is still measured in
+whenever that last happened.**
+
+Section 6's reproduction still holds; the pytest count in it was 90 when
+it was written and is 95 today, which is a document count and not a
+finding.
