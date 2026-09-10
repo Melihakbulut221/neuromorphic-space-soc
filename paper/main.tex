@@ -2,7 +2,9 @@
 % SPDX-License-Identifier: CC-BY-4.0
 %
 % The numbers this paper's argument turns on are registered in
-% paper/claims.yaml and checked by paper/check_claims.py in CI. The
+% paper/claims.yaml and checked by paper/check_claims.py, which is
+% configured to run in CI and has not been able to since 2026-09-03 --
+% see Section 12. The
 % registry is NOT a census of every number printed here -- the body
 % prints about 174 numeric literals and the registry holds 27 -- and the
 % checker's own summary says how many of its claims are re-derived by a
@@ -1704,6 +1706,21 @@ harnesses, and must re-run to obtain a single verdict. The run trees that
 back the fault-injection campaigns are likewise build output; digests are
 published in their place, and a digest establishes identity, not
 correctness.
+
+\paragraph{The checks are configured to run in CI and do not.}
+Every workflow run on this repository since 3 September 2026 has been
+\emph{refused before starting}, with the annotation \emph{``the job was
+not started because recent account payments have failed or your spending
+limit needs to be increased''}. That is nine runs of the licence check,
+four of the claim checker and every documentation build: not nine
+failures, nine non-starts. So every sentence in this paper and in the
+repository that says a check ``runs in CI'' describes a configuration
+and not an observed fact, and they have been corrected to say so. The
+checks run locally, which is where every result reported here was
+obtained; what is missing is the independent re-execution that CI is
+for. Discovered on 10 September 2026 while auditing what was still
+open---by looking, which is the only way this class of thing is ever
+found.
 
 \paragraph{Who checked the checker.}
 Every audit reported here was performed by the author of the thing

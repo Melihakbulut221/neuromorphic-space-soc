@@ -273,7 +273,13 @@ The map is checked rather than asserted:
 python3 scripts/spdx_check.py
 ```
 
-It fails on an untagged or mis-tagged source file and runs in CI. Two
+It fails on an untagged or mis-tagged source file. **It is configured to
+run in CI and, as of 2026-09-10, has never run there**: every workflow
+run since 2026-09-03 was refused before starting, with the annotation
+*"The job was not started because recent account payments have failed or
+your spending limit needs to be increased."* Nine `licence` runs, four
+`paper` runs, zero starts. Run it locally; the claim that CI runs it is
+not currently true. Two
 files are under a licence this project did not choose —
 `hw/soc/rvformal/insns/insn_div.v` and `insn_rem.v` are corrected copies
 of riscv-formal's models and carry upstream's ISC notice inline.

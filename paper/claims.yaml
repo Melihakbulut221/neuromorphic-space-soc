@@ -300,3 +300,15 @@ claims:
     check: json
     file: hw/soc/pnr/runs/s81ptd/final/metrics.json
     key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
+
+  # A claim about this repository's own continuous integration, which is
+  # the thing the paper was asserting without looking. It is checked the
+  # only way it can be from inside the tree: the workflow files exist.
+  # Whether they RUN is not knowable from here, which is the point, and
+  # section 12 states the observed answer instead.
+  - id: ci.workflows_are_configured
+    value: 3
+    text: "workflow files configured to run the checks; whether they execute is not checkable from the repository and section 12 reports that they have not since 2026-09-03"
+    check: grep
+    pattern: "workflow_dispatch"
+    paths: ".github/workflows/*.yml"

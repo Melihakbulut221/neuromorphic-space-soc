@@ -89,7 +89,12 @@ python3 scripts/spdx_check.py --list   # the classification of all 471 files
 
 309 files carry an inline tag; 162 are covered by path in
 `.reuse/dep5`, each with a stated reason for why it cannot carry one.
-The check runs in CI. It is the same standard the flow guards apply to
+The check is configured to run in CI and **has never actually run
+there**: since 2026-09-03 every workflow run on this repository has been
+refused before starting on a billing annotation, so the nine `licence`
+runs are nine non-starts rather than nine passes. Corrected 2026-09-10;
+until that is resolved the check is a local one. It is the same standard
+the flow guards apply to
 themselves: the claim is made mechanically, not editorially.
 
 Generated files carry their tag because **their generator emits it** --
