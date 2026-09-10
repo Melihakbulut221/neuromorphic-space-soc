@@ -128,6 +128,11 @@ print("every claim names a command or an artefact")
 PY
     run "the paper source is structurally sound" \
         python3 scripts/tex_lint.py paper/main.tex
+    # The renderer exits non-zero on a macro it does not know, so this
+    # is a real gate and not a convenience: a new command in the source
+    # fails here rather than appearing as raw LaTeX in the reading copy.
+    run "the reading copy renders with no unknown macro" \
+        python3 paper/render_html.py paper/main.tex paper/main.html
     if command -v pdflatex >/dev/null 2>&1; then
         run "build the paper" make -C paper
         run "the bibliography is not empty" bash -c '

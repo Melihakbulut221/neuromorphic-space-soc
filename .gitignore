@@ -138,3 +138,6 @@ formal/eqy/out/
 # scripts/ci_local.sh build output
 _site/
 _site_builtin/
+
+# paper/render_html.py output
+paper/main.html
