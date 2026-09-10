@@ -134,3 +134,7 @@ hw/soc/pnr/config-ecc-clint*.json
 
 # formal/eqy build output
 formal/eqy/out/
+
+# scripts/ci_local.sh build output
+_site/
+_site_builtin/

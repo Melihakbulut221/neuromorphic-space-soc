@@ -302,13 +302,15 @@ claims:
     key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
 
   # A claim about this repository's own continuous integration, which is
-  # the thing the paper was asserting without looking. It is checked the
-  # only way it can be from inside the tree: the workflow files exist.
-  # Whether they RUN is not knowable from here, which is the point, and
-  # section 12 states the observed answer instead.
-  - id: ci.workflows_are_configured
-    value: 3
-    text: "workflow files configured to run the checks; whether they execute is not checkable from the repository and section 12 reports that they have not since 2026-09-03"
+  # the thing the paper was asserting without looking. Whether a workflow
+  # RUNS is not knowable from inside the tree -- section 12 states the
+  # observed answer, which is that none has since 2026-09-03. What IS
+  # checkable, and is the property that matters after that discovery, is
+  # that the workflow does not define its own copy of any check: it calls
+  # the same script the developer runs, so the two cannot drift.
+  - id: ci.workflow_calls_the_local_script
+    value: 1
+    text: "the workflow invokes scripts/ci_local.sh rather than defining its own copy of any check"
     check: grep
-    pattern: "workflow_dispatch"
+    pattern: "scripts/ci_local.sh all"
     paths: ".github/workflows/*.yml"

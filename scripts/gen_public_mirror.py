@@ -190,26 +190,40 @@ def build():
     # failure shape this corpus names most often -- a claim read wider
     # than what it looked at -- so the reason is rewritten here rather
     # than left to be believed.
-    wf = ".github/workflows/docs.yml"
-    if wf in files:
-        text = files[wf].decode()
-        marker = "#      * This repository is private, and stays private."
-        if marker not in text:
-            raise SystemExit(
-                "gen_public_mirror.py: the docs workflow no longer carries "
-                "the private-repository line this script rewrites; re-read "
-                "it before regenerating")
-        text = text.replace(
-            marker,
-            "#      * ~~This repository is private.~~ IN THIS MIRROR IT IS\n"
-            "#        NOT. The line above is the development repository's\n"
-            "#        reason and does not hold here; it is kept struck\n"
-            "#        through rather than deleted so that the two trees can\n"
-            "#        be diffed. The deploy stays off because turning it on\n"
-            "#        publishes a site, which is the owner's act and not a\n"
-            "#        generator's: enable Pages, restore the deploy job, add\n"
-            "#        `pages: write` and `id-token: write`.")
-        files[wf] = text.encode()
+    # THE ABSENCE OF THE FILE MUST BE AN ERROR, and on 2026-09-10 it was
+    # not. This block used to read `if wf in files:`, so when the three
+    # workflows were replaced by one and `docs.yml` was deleted, the
+    # guard did not fire -- it was skipped, silently, and the generator
+    # wrote 511 files as though nothing were owed. A check that cannot
+    # fail when the thing it checks is absent is not a check, and this
+    # repository has now found that shape in its own mirror generator as
+    # well as in its licence checker and its verification recorder.
+    wf = ".github/workflows/checks.yml"
+    if wf not in files:
+        raise SystemExit(
+            f"gen_public_mirror.py: {wf} is not in the published set. This "
+            "script rewrites a sentence in it that is FALSE in the mirror, "
+            "so its absence is a defect and not a no-op. If the workflows "
+            "have moved again, re-read them and update this block.")
+    text = files[wf].decode()
+    marker = "# The two environment differences are handled by the script"
+    if marker not in text:
+        raise SystemExit(
+            "gen_public_mirror.py: the checks workflow no longer carries the "
+            "line this script anchors on; re-read it before regenerating")
+    text = text.replace(
+        "#   \"The job was not started because recent account payments have failed\n"
+        "#    or your spending limit needs to be increased.\"",
+        "#   \"The job was not started because recent account payments have failed\n"
+        "#    or your spending limit needs to be increased.\"\n"
+        "#\n"
+        "# IN THIS MIRROR that history is the DEVELOPMENT repository's and\n"
+        "# not this one's: this repository has its own runner, its own\n"
+        "# billing and no run history at all at the moment of generation.\n"
+        "# The paragraph is kept rather than deleted because it is why the\n"
+        "# checks live in a script instead of in this file, and that reason\n"
+        "# holds wherever the file is.")
+    files[wf] = text.encode()
 
     readme = files["README.md"].decode()
     files["README.md"] = (readme.rstrip() + "\n"

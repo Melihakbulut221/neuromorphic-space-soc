@@ -273,13 +273,23 @@ The map is checked rather than asserted:
 python3 scripts/spdx_check.py
 ```
 
-It fails on an untagged or mis-tagged source file. **It is configured to
-run in CI and, as of 2026-09-10, has never run there**: every workflow
-run since 2026-09-03 was refused before starting, with the annotation
-*"The job was not started because recent account payments have failed or
-your spending limit needs to be increased."* Nine `licence` runs, four
-`paper` runs, zero starts. Run it locally; the claim that CI runs it is
-not currently true. Two
+It fails on an untagged or mis-tagged source file.
+
+**Run every check the way the workflow does, without the workflow:**
+
+```bash
+scripts/ci_local.sh all --record
+```
+
+That script is the definition; `.github/workflows/checks.yml` is a
+wrapper that calls it, so the two cannot drift. It exists because every
+workflow run on this repository since 2026-09-03 has been *refused
+before starting* -- *"the job was not started because recent account
+payments have failed or your spending limit needs to be increased"* --
+so the checks had never executed there at all while three documents said
+they did. Two checks skip locally, with the reason printed, because this
+machine has no pandoc and no TeX; a skip is not a pass and the summary
+says how many there were. Two
 files are under a licence this project did not choose —
 `hw/soc/rvformal/insns/insn_div.v` and `insn_rem.v` are corrected copies
 of riscv-formal's models and carry upstream's ISC notice inline.

@@ -139,6 +139,29 @@ turning the deploy on would take. It **refuses to run** if that line is
 no longer in the file, rather than silently emitting an unrewritten
 copy.
 
+**AMENDED 2026-09-10, and the amendment is a defect this section
+claimed the opposite of.** The three workflows have been replaced by
+one, `.github/workflows/checks.yml`, whose checks live in
+`scripts/ci_local.sh` so that the runner and the developer's machine
+share one definition. The rewrite above was anchored on `docs.yml` and
+was written as `if wf in files:` — so when that file was deleted **the
+guard did not fire; it was skipped**, and the generator wrote 511 files
+as though nothing were owed. The sentence above says it "refuses to run
+if that line is no longer in the file". It refused if the line had
+changed and **not** if the file had gone, and the second is the case
+that actually arrived.
+
+A check that cannot fail when the thing it checks is absent is not a
+check. That is the third instance of this exact shape found in this
+repository's own instruments — after the licence checker that read its
+own prose as its own licence, and the verification recorder whose glob
+could not reach the results it was counting — and it is the first one
+found in a guard written to prevent the shape.
+
+It now raises on absence, and it anchors on the paragraph in
+`checks.yml` recording the billing history, which is the sentence that
+belongs to the development repository and not to the mirror.
+
 ---
 
 ## 4. What the mirror is checked against

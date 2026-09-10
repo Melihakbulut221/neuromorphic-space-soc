@@ -1,0 +1,78 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
+name: checks
+
+# THIS WORKFLOW IS A WRAPPER AND NOTHING ELSE. Every check it runs is
+# defined in scripts/ci_local.sh, which is also how they are run on the
+# developer's machine.
+#
+# It replaces three workflows -- licence, docs and paper -- whose steps
+# were written inline. That was a second copy of every gate, and a gate
+# that exists twice disagrees with itself eventually. It also meant the
+# checks could only ever run where the runner ran, and since 2026-09-03
+# the runner has not: every workflow run on this repository was refused
+# before starting, with
+#
+#   "The job was not started because recent account payments have failed
+#    or your spending limit needs to be increased."
+#
+# Nine licence runs, four paper runs, and every docs build since that
+# date -- not failures, NON-STARTS. So the SPDX policy check had never
+# executed here once, while three documents said it "runs in CI".
+#
+# The fix is not to wait for the runner. It is to make the runner
+# unnecessary: scripts/ci_local.sh is the definition, this file calls
+# it, and the result is the same either way. When the runner comes back
+# this file adds independent re-execution, which is the one thing local
+# running cannot provide and the only reason to want CI at all.
+#
+# The two environment differences are handled by the script, which
+# SKIPS with a stated reason rather than passing silently: pandoc and a
+# TeX distribution exist here and not on the developer's machine, so the
+# pandoc site build and the paper build run only in this job.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Tools the developer's machine does not have
+        run: |
+          python3 -m pip install --disable-pip-version-check pytest
+          sudo apt-get update -qq
+          # texlive-science carries siunitx; texlive-latex-extra does not.
+          # lmodern.sty is in `lmodern`, which texlive-base only Recommends
+          # and --no-install-recommends therefore drops.
+          sudo apt-get install -y --no-install-recommends \
+            pandoc texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended texlive-science lmodern
+
+      - name: Every check, from the same script the developer runs
+        run: scripts/ci_local.sh all
+
+      - name: The paper must have built here, even though it cannot there
+        run: |
+          test -s paper/main.pdf
+          test -s paper/main.bbl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper-and-site
+          path: |
+            paper/main.pdf
+            _site
+          retention-days: 30
