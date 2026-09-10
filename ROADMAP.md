@@ -70,7 +70,7 @@ pinned tool and PDK versions in `docs/12-sg13g2-flow-bringup.md`.
 ### P1 — TTIHP26b pilot (to 2026-09-21) — engineering complete, owner actions open
 
 **Status 2026-09-05: unchanged from 2026-08-31 in substance, and the
-deadline is now sixteen days out.** The pilot is signed off at
+deadline is now eleven days as of 2026-09-10 out.** The pilot is signed off at
 6x2 = 12 tiles and the RTL is frozen. Every geometric and timing counter
 reads zero on the run built from the file the Tiny Tapeout tooling
 actually hardens, the derate is proven applied in the flow-written
@@ -91,32 +91,59 @@ devkit subsidised to EUR 100 while 88 of the first 100 remain, plus
 EUR 15 of shipping **[fact, docs/37 section 3]** — and a push to a
 repository so the GDS action and the hosted precheck can run.
 
-**The push is blocked, and the block has not moved since 2026-08-25.** A
-Tiny Tapeout submission is a public repository; `tt/LICENSE.PENDING.md`
+~~**The push is blocked, and the block has not moved since 2026-08-25.**
+A Tiny Tapeout submission is a public repository; `tt/LICENSE.PENDING.md`
 in the generated tree says so in its own words and refuses to carry a
 `LICENSE` file until `docs/14` is signed. `docs/14` is unsigned, its own
 signature deadline of 2026-08-31 has passed, and there is no `LICENSE`
 file at the repository root **[fact, `ls` at HEAD `ed51de0`]**. This is
-the single item on this roadmap where sixteen days of engineering
-capacity cannot substitute for one signature.
+the single item on this roadmap where eleven days as of 2026-09-10 of engineering
+capacity cannot substitute for one signature.~~
+
+**UNBLOCKED 2026-09-09, and this file was the last place still saying
+otherwise.** All four of that paragraph's facts are now false:
+`docs/14-licensing-decision.md` carries `SIGNED 2026-09-09`, the root
+`LICENSE` exists, `tt/LICENSE` is the full CERN-OHL-W-2.0 text, and
+`tt/LICENSE.PENDING.md` has been deleted. `scripts/ci_local.sh` asserts
+the negation of all four on every run and has been green for a day,
+`README.md` says "signed", and this file kept directing the work queue
+from a state that no longer existed. It is struck rather than deleted,
+`docs/64`'s rule, because what it recorded was true on its date.
+
+**THE ONE THING THAT IS ACTUALLY BLOCKING, as of 2026-09-10.** GitHub
+Actions is refusing to start jobs on this account -- *"the job was not
+started because recent account payments have failed or your spending
+limit needs to be increased"* -- and the Tiny Tapeout GDS action is the
+one step of this project that has no local substitute, because the
+artefact that reaches the fab is produced by that job from `tt/src`.
+Everything else, including the hosted precheck, now runs here. Clear the
+billing and prove it with a throwaway workflow that both runs a step and
+uploads an artefact, **before** pushing `tt/`, not after.
 
 Gate G1: TT submission accepted by precheck; formal/CI targets green;
 hour-budgeted WBS in docs/06 held within its go/no-go checkpoints.
 
-**G1 status: met locally, not yet met hosted, and the reason is
-unchanged.** The precheck passes ten of ten on the sign-off GDS and the
-formal and CI targets are green. The hosted half — the Tiny Tapeout GDS
-action — has never run, because running it requires the repository to be
-pushed. The local precheck needs KLayout 0.30.9; the system 0.28.16
-aborts the PDK deck and reports a failure that is not real.
+**G1 status: met locally, not yet met hosted, and the reason has
+changed.** The precheck passes ten of ten on the sign-off GDS and the
+formal and CI targets are green. *Re-established 2026-09-10 on the
+frozen submission GDS `4091b468…` from a rootless virtualenv in 70
+seconds, with the resulting `drc_sg13g2.xml` byte-identical to the
+2026-08-31 run, and then made to go red eleven times including on an
+injected 0.05 × 2.00 um Metal1 width violation.* The hosted half — the
+Tiny Tapeout GDS action — has never run, because running it requires the
+repository to be pushed, and that is now waiting on the account rather
+than on a signature. The local precheck needs KLayout 0.30.9; the system
+0.28.16 aborts the PDK deck and reports a failure that is not real.
 
 ### P2 — NLnet Restack application (to 2026-11-03)
 
-- **Open-licensing decision: still open, and now on the critical path
-  for two deadlines rather than one.** It gates the shuttle push
-  (P1, sixteen days) before it gates the application (fifty-nine days).
-  `docs/14` was rewritten 2026-09-05 to be decidable in one sitting and
-  is still unsigned.
+- ~~**Open-licensing decision: still open, and now on the critical path
+  for two deadlines rather than one.**~~ **CLOSED 2026-09-09.**
+  `docs/14` section 11 is signed: rows 1 to 9 accepted as defaulted,
+  CERN-OHL-W-2.0 for hardware, Apache-2.0 for tooling, CC-BY-4.0 for
+  documents and data, and stage 1's mechanics executed the same day.
+  Rows 10 and 11 remain scheduled, and row 11 — `docs/02` open question
+  2 — still forbids any public claim of independent implementation.
 - Application package: `docs/13`, rewritten 2026-09-05 against the
   evidence that now exists. The scope it asks NLnet to fund had to move
   again, because NLnet cannot pay for work completed before the grant
@@ -270,7 +297,7 @@ binding practice:
    upset on the same machine with no backstop says whether the machine
    was in fact dead.
 
-## 4. Near-term work queue (next sixteen days, to the shuttle close)
+## 4. Near-term work queue (next eleven days as of 2026-09-10, to the shuttle close)
 
 Ordered by what blocks what, not by size.
 

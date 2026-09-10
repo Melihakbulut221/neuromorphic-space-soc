@@ -91,11 +91,17 @@ python3 scripts/spdx_check.py --list   # the classification of all 471 files
 `.reuse/dep5`, each with a stated reason for why it cannot carry one.
 The check runs from `scripts/ci_local.sh`, which is what
 `.github/workflows/checks.yml` calls, so it is the same check either
-way. It had never actually executed in CI: since 2026-09-03 every
-workflow run on this repository has been refused before starting on a
-billing annotation, so nine `licence` runs were nine non-starts rather
-than nine passes. Corrected 2026-09-10 by moving the definition out of
-the workflow. It is the same standard the flow guards apply to
+way.
+
+**Corrected 2026-09-10.** This paragraph said the check "has never
+actually run there" because every workflow run since 2026-09-03 was
+"refused before starting". That is wrong: 53 of the 61 runs since that
+date executed, and only the eight from 2026-09-10 are non-starts. The
+`licence` runs did execute and did fail, eight times, on
+`ModuleNotFoundError: No module named 'yaml'` — a defect in the
+workflow, not in the account. The wrong claim came from reading one
+day's annotation backwards over a week. It is the same standard the flow
+guards apply to
 themselves: the claim is made mechanically, not editorially.
 
 Generated files carry their tag because **their generator emits it** --

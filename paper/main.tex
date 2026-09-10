@@ -54,8 +54,9 @@ to each.
 neither open PDK involved publishes total-ionising-dose or single-event
 data}; every reliability figure here is a seeded fault-injection
 measurement on RTL and on placed netlists, and the system-on-chip layout
-fails 3{,}088 setup endpoints at the slow corner and closes only at
-\SI{25}{\nano\second}. Its geometric decks had been switched off for
+fails 3{,}088 setup endpoints at the slow corner and closes at
+\SI{25}{\nano\second}, or \SI{24}{\nano\second} after a repair we report
+in full including the arm that made it worse. Its geometric decks had been switched off for
 three years' worth of runs on the strength of one experiment; we ran
 them, and \textbf{of \num{39969214} Magic errors and \num{9668} KLayout
 errors, zero fall outside the vendor SRAM macros}, while Netgen matches
@@ -1163,7 +1164,16 @@ slew 0.75 / cap 0.10 & $\mathbf{-5.2145}$ & $-3.0306$ \\
 \textbf{The explicit limits alone made setup worse by
 \SI{0.5346}{\nano\second}}, cost 6.98\,\% of standard-cell area and
 1.29\,\% of routed wire, and pushed the minimum period from 24.68 to
-\SI{25.21}{\nano\second}. The diagnosis that ranked them first had
+\SI{25.21}{\nano\second}. \emph{All four arms, because printing two of
+them was the thing this section is against:} minimum period 24.68 for
+the baseline, 25.21 for the limits alone, \textbf{23.36} for
+timing-driven placement alone and \textbf{23.03} for both, and the
+period at which each closes with zero violating endpoints is
+\SI{25}{\nano\second}, \SI{25}{\nano\second}, \textbf{\SI{24}{\nano\second}}
+and \textbf{\SI{24}{\nano\second}}. An earlier draft printed the
+baseline and the harmful arm and drew ``it did not close'' from them,
+which is selective reporting inside the experiment offered as the
+antidote to it. It was caught in audit, not in writing. The diagnosis that ranked them first had
 modelled them at $+4.3$ to $+\SI{5.5}{\nano\second}$: \textbf{wrong by
 about five nanoseconds and in the wrong direction}. Timing-driven
 placement alone bought $+\SI{1.3245}{\nano\second}$; together they buy
@@ -1172,9 +1182,14 @@ slack, endpoint count, area, wirelength and power, \emph{timing-driven
 placement alone is the better layout}, and its endpoint count is 2{,}102
 against 2{,}746.
 
-\textbf{It did not close.} $-\SI{3.0306}{\nano\second}$ with 2{,}746
-violating endpoints. What closes this design is the clock period, and
-Section~\ref{sec:limits} says what that means for the frequency this
+\textbf{It did not close at \SI{20}{\nano\second}}:
+$-\SI{3.0306}{\nano\second}$ with 2{,}746 violating endpoints. It does
+close at \SI{24}{\nano\second}, at $+\SI{0.9694}{\nano\second}$ with
+none, and at \SI{23}{\nano\second} it is one endpoint short at
+$-\SI{0.0306}{\nano\second}$. So the repair moved the period at which
+this layout closes from 25 to \SI{24}{\nano\second} and did not reach
+the target. What closes this design is the clock period, and
+Section~\ref{sec:inventory} says what that means for the frequency this
 paper does and does not print.
 
 This is the paper's own method turned on the paper's own repair, and it
@@ -1707,20 +1722,26 @@ back the fault-injection campaigns are likewise build output; digests are
 published in their place, and a digest establishes identity, not
 correctness.
 
-\paragraph{The checks are configured to run in CI and do not.}
-Every workflow run on this repository since 3 September 2026 has been
-\emph{refused before starting}, with the annotation \emph{``the job was
-not started because recent account payments have failed or your spending
-limit needs to be increased''}. That is nine runs of the licence check,
-four of the claim checker and every documentation build: not nine
-failures, nine non-starts. So every sentence in this paper and in the
-repository that says a check ``runs in CI'' describes a configuration
-and not an observed fact, and they have been corrected to say so. The
-checks run locally, which is where every result reported here was
-obtained; what is missing is the independent re-execution that CI is
-for. Discovered on 10 September 2026 while auditing what was still
-open---by looking, which is the only way this class of thing is ever
-found.
+\paragraph{The continuous integration, and a correction we made to
+ourselves twice.}
+Every result in this paper was obtained locally. What continuous
+integration adds is independent re-execution, and this project has not
+had it reliably: of 61 workflow runs since 3 September 2026, 57 failed.
+Eight, all from 10 September, were \emph{refused before starting} on a
+billing annotation. The rest executed and failed for real reasons, and
+one of them was a missing Python package in the workflow itself, which
+made the licence check fail eight times without ever reaching the check.
+
+We report the sequence because it is this paper's subject twice over.
+First: three documents and this paper's own source header said those
+checks ``run in CI'', which described a configuration and not an
+observed event. Then, correcting that, we wrote that \emph{every} run
+since 3 September had been refused before starting---taking one day's
+annotation and applying it backwards across a week. That is a red result
+read wider than what it looked at, which is the failure this paper
+catalogues, committed in the sentence that announced finding it
+elsewhere. The checks now live in one script that does not need a
+runner, and the workflow calls it.
 
 \paragraph{Who checked the checker.}
 Every audit reported here was performed by the author of the thing

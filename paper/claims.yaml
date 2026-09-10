@@ -244,7 +244,7 @@ claims:
     text: "live documents still calling the configuration state protected by TMR without the netlist qualifier"
     check: grep
     pattern: "state is now protected || is now protected**, which || The backstop is protected"
-    paths: "README.md, ROADMAP.md, docs/5*.md, docs/6*.md, docs/7*.md
+    paths: "README.md, ROADMAP.md, docs/5*.md, docs/6*.md, docs/7*.md"
 
   # Section 8's measurements. The two deck splits are the strongest
   # numbers in this paper that a reader can check without re-running a
@@ -271,7 +271,7 @@ claims:
     text: "Netgen LVS reports the circuits match uniquely with the macros abstracted"
     check: grep
     pattern: "Circuits match uniquely"
-    paths: "hw/soc/pnr/runs/s77lvs-b-blackbox/*/*.log, hw/soc/pnr/runs/s77lvs-b-blackbox/reports/*"
+    paths: "hw/soc/pnr/runs/s77lvs-b-blackbox/*/*.log"
 
   - id: timing.closes_at
     value: "25.00"

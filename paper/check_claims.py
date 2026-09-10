@@ -43,10 +43,30 @@ ROOT = Path(__file__).resolve().parent.parent
 def load(path):
     """A tiny YAML reader for the subset this file uses.
 
+    IT MUST NOT BE MORE TOLERANT THAN YAML. On 2026-09-10 an
+    unterminated quote made claims.yaml invalid, and this reader --
+    which takes the rest of the line and shrugs -- accepted it, so the
+    registry was broken for a day and every check still ran. It now
+    refuses a file that PyYAML would refuse, when PyYAML is available,
+    and says so when it is not.
+
     Deliberately not a dependency: this script has to run in a bare
     clone, and a checker that needs `pip install` before it can check
     anything is a checker that does not get run.
     """
+    try:
+        import yaml
+    except ImportError:
+        print("note: PyYAML absent, so claims.yaml is parsed leniently and "
+              "a syntax error in it would go unnoticed", file=sys.stderr)
+    else:
+        try:
+            yaml.safe_load(path.read_text())
+        except yaml.YAMLError as exc:
+            raise SystemExit(
+                f"{path} is not valid YAML and the registry is therefore "
+                f"not trustworthy:\n{exc}")
+
     claims, cur = [], None
     for raw in path.read_text().splitlines():
         if not raw.strip() or raw.lstrip().startswith("#"):
@@ -148,6 +168,16 @@ def check(c):
         pats = [x.strip() for x in c["pattern"].split("||")]
         globs = [g.strip() for g in c["paths"].split(",")]
         hits = []
+        # A GLOB THAT MATCHES NOTHING IS A FAILURE, not a zero. On
+        # 2026-09-10 an unterminated quote in claims.yaml swallowed the
+        # rest of the line, so this claim's first glob was the literal
+        # `"README.md` and matched no file -- and the check reported 0
+        # hits and passed. It was reporting that its own paths were
+        # broken, in the shape of a clean result.
+        empty = [g for g in globs if not list(ROOT.glob(g))]
+        if empty:
+            return "FAIL", ("these path globs match no file, so the check "
+                            "looked at nothing: " + ", ".join(empty))
         files = sorted({f for g in globs for f in ROOT.glob(g)})
         for f in files:
             rel = f.relative_to(ROOT)

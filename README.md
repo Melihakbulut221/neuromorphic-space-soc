@@ -282,14 +282,17 @@ scripts/ci_local.sh all --record
 ```
 
 That script is the definition; `.github/workflows/checks.yml` is a
-wrapper that calls it, so the two cannot drift. It exists because every
-workflow run on this repository since 2026-09-03 has been *refused
-before starting* -- *"the job was not started because recent account
-payments have failed or your spending limit needs to be increased"* --
-so the checks had never executed there at all while three documents said
-they did. Two checks skip locally, with the reason printed, because this
-machine has no pandoc and no TeX; a skip is not a pass and the summary
-says how many there were. Two
+wrapper that calls it, so the two cannot drift, and the checks do not
+depend on a runner. Two checks skip locally, with the reason printed,
+because this machine has no pandoc and no TeX; a skip is not a pass and
+the summary says how many there were.
+
+*Corrected 2026-09-10: this said the checks "had never executed" in CI
+because every run since 2026-09-03 was refused before starting. 53 of
+the 61 runs since then executed; only the eight from 2026-09-10 are
+non-starts. The `licence` job failed for a real reason —
+`ModuleNotFoundError: No module named 'yaml'` — which is now fixed.*
+Two
 files are under a licence this project did not choose —
 `hw/soc/rvformal/insns/insn_div.v` and `insn_rem.v` are corrected copies
 of riscv-formal's models and carry upstream's ISC notice inline.

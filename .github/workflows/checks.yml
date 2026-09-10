@@ -9,17 +9,27 @@ name: checks
 #
 # It replaces three workflows -- licence, docs and paper -- whose steps
 # were written inline. That was a second copy of every gate, and a gate
-# that exists twice disagrees with itself eventually. It also meant the
-# checks could only ever run where the runner ran, and since 2026-09-03
-# the runner has not: every workflow run on this repository was refused
-# before starting, with
+# that exists twice disagrees with itself eventually. It also means the
+# checks no longer depend on the runner.
+#
+# CORRECTED 2026-09-10, AND THE CORRECTION IS THE POINT. An earlier
+# version of this comment said every run since 2026-09-03 had been
+# "refused before starting" -- "nine non-starts, not nine failures". The
+# API says otherwise: 53 of the 61 runs since that date EXECUTED. Only
+# the eight from 2026-09-10 are non-starts, on
 #
 #   "The job was not started because recent account payments have failed
 #    or your spending limit needs to be increased."
 #
-# Nine licence runs, four paper runs, and every docs build since that
-# date -- not failures, NON-STARTS. So the SPDX policy check had never
-# executed here once, while three documents said it "runs in CI".
+# The rest failed for real reasons, and one was in this file: the licence
+# job failed eight times on 09-08 and 09-09 with ModuleNotFoundError: No
+# module named 'yaml', because it installed pytest and ci_local.sh
+# re-runs regmap/generate.py, which imports yaml. Fixed below.
+#
+# The earlier claim came from reading today's annotation and applying it
+# backwards across a week -- a red result read wider than what it looked
+# at, which is the shape this project keeps finding, committed here in
+# the commit that announced finding it elsewhere.
 #
 # The fix is not to wait for the runner. It is to make the runner
 # unnecessary: scripts/ci_local.sh is the definition, this file calls
@@ -52,7 +62,11 @@ jobs:
 
       - name: Tools the developer's machine does not have
         run: |
-          python3 -m pip install --disable-pip-version-check pytest
+          # PyYAML too: ci_local.sh re-runs regmap/generate.py, which
+          # imports yaml, and its absence is why the licence job failed
+          # eight times on 09-08 and 09-09 with ModuleNotFoundError. Not
+          # a billing failure -- a real one, in this file.
+          python3 -m pip install --disable-pip-version-check pytest pyyaml
           sudo apt-get update -qq
           # texlive-science carries siunitx; texlive-latex-extra does not.
           # lmodern.sty is in `lmodern`, which texlive-base only Recommends

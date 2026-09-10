@@ -6,6 +6,7 @@
 #
 #   scripts/ci_local.sh              all three jobs
 #   scripts/ci_local.sh licence      one of them
+#   scripts/ci_local.sh suite        the whole pytest suite, ~8 min
 #   scripts/ci_local.sh all --record append a row to ci-local-log.tsv
 #
 # WHY THIS EXISTS, AND IT IS NOT CONVENIENCE
@@ -86,6 +87,16 @@ job_licence() {
 }
 
 # ------------------------------------------------------------------- docs
+job_suite() {
+    echo "== suite"
+    # THE WHOLE PYTEST SUITE, and the header used to say "every check the
+    # GitHub workflows run" while the only pytest invocation in this file
+    # was the doc-link one. "The checks pass" then meant SPDX, links and
+    # the claim table, and nothing about the hardware. Added 2026-09-10.
+    # It is about eight minutes.
+    run "the whole pytest suite" "$PY" -m pytest sw/tests -q
+}
+
 job_docs() {
     echo "== docs"
     run "link integrity across the corpus" \
@@ -149,8 +160,9 @@ case "$JOB" in
     licence) job_licence ;;
     docs)    job_docs ;;
     paper)   job_paper ;;
-    all)     job_licence; echo; job_docs; echo; job_paper ;;
-    *) echo "usage: $0 [licence|docs|paper|all] [--record]" >&2; exit 2 ;;
+    suite)   job_suite ;;
+    all)     job_licence; echo; job_docs; echo; job_paper; echo; job_suite ;;
+    *) echo "usage: $0 [licence|docs|paper|suite|all] [--record]" >&2; exit 2 ;;
 esac
 
 echo

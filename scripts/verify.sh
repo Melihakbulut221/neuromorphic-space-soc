@@ -159,12 +159,34 @@ cd "$(dirname "$0")/.."
 REC=verification-log.tsv
 MODE="${1:-record}"
 
-py=$(timeout 1800 .venv/bin/pytest -q 2>&1 | tail -1)
+# THE EXIT STATUS IS NOT OPTIONAL. This used to be a bare pipeline into
+# `tail -1`, so pytest's status was discarded and only its last line was
+# parsed. A collection error, an import failure or the 1800 s timeout
+# produces a last line with no "passed" in it, and the row went in as
+# pytest_pass=0, pytest_fail=0 -- which then PASSED the gate at the end
+# of this file, because zero failures is what it looks for. A recorder
+# that logs a zero for "the suite did not run" is the shape this file
+# exists to stop, and it had it. Found in audit 2026-09-10.
+py_out=$(timeout 1800 .venv/bin/pytest -q 2>&1); py_rc=$?
+py=$(printf '%s' "$py_out" | tail -1)
+if ! printf '%s' "$py" | grep -qE '[0-9]+ (passed|failed|error)'; then
+    printf '%s\n' "$py_out" | tail -15 >&2
+    echo "verify.sh: pytest produced no summary line (rc=$py_rc)." >&2
+    echo "No record written -- a zero here would look like a measurement." >&2
+    exit 3
+fi
 py_n=$(printf '%s' "$py" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo 0)
 py_f=$(printf '%s' "$py" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo 0)
+py_e=$(printf '%s' "$py" | grep -oE '[0-9]+ error' | grep -oE '[0-9]+' || echo 0)
+py_f=$((py_f + py_e))
 
 cc_out=$(timeout 3600 ./scripts/run_cocotb.sh 2>&1); cc_rc=$?
 cc=$(printf '%s' "$cc_out" | tail -1)
+# The runner's own third field is "N suite(s) not clean", and it was
+# parsed by nothing: a total build failure prints "0 passed, 0 failed"
+# and gated GREEN. Added 2026-09-10 with the pytest fix above.
+cc_dirty=$(printf '%s' "$cc" | grep -oE '[0-9]+ suite\(s\) not clean' \
+    | grep -oE '^[0-9]+' || echo 0)
 # Exit 2 is the runner refusing a concurrent run. Recording 0 passed for
 # that would put a zero in the log that looks like a measurement, which
 # is the shape this whole file exists to stop.
@@ -265,7 +287,7 @@ fmnote="$fmnote,formal-unchecked=$fm_unchk,formal-src-comment-drift=$fm_cmt"
 line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$(date -u +%Y-%m-%dT%H:%MZ)" "$head" "$py_n" "$py_f" "$cc_n" "$cc_f" \
     "$fm_pass" "$fm_other" \
-    "formal-logs-oldest=$fm_oldest,$fmnote,tree-dirty=$dirty,frozen-dirty=$frozen${NOTE:+,$NOTE}")
+    "formal-logs-oldest=$fm_oldest,$fmnote,cocotb-suites-not-clean=$cc_dirty,tree-dirty=$dirty,frozen-dirty=$frozen${NOTE:+,$NOTE}")
 
 if [ "$MODE" = "--check" ]; then
     printf 'now:  %s\n' "$line"
