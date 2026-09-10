@@ -51,14 +51,13 @@ to each.
 \textbf{No silicon exists, no radiation testing has been performed, and
 neither open PDK involved publishes total-ionising-dose or single-event
 data}; every reliability figure here is a seeded fault-injection
-measurement on RTL and on placed netlists, the system-on-chip layout
-fails 3{,}088 setup endpoints at the slow corner, and no Magic DRC,
-KLayout DRC or Netgen LVS result exists for it---the decks were switched
-off on the strength of a single-macro experiment in which the vendor SRAM
-macro produced \num{1106478} Magic errors, \emph{every one of them inside
-the macro footprint and none outside}; \S\ref{sec:decks} states the scope
-they were switched off at, and no result from re-running them is reported
-in this version.
+measurement on RTL and on placed netlists, and the system-on-chip layout
+fails 3{,}088 setup endpoints at the slow corner and closes only at
+\SI{25}{\nano\second}. Its geometric decks had been switched off for
+three years' worth of runs on the strength of one experiment; we ran
+them, and \textbf{of \num{39969214} Magic errors and \num{9668} KLayout
+errors, zero fall outside the vendor SRAM macros}, while Netgen matches
+the layout to the netlist uniquely with those macros abstracted.
 What we do have is a design whose redundancy claim was checked at three
 levels and was wrong at two of them.
 At the register-transfer level the claim was true. In the mapped netlist
@@ -236,17 +235,15 @@ timing below is measured on \\
 Timing & \textbf{$-$\SI{4.6799}{\nano\second} slow-corner setup on
 \num{3088} violating endpoints}; hold met at all three corners;
 detailed-route DRC 0 \\
-Geometric sign-off & \textbf{none as of the run this paper measures}. The
-decks are switched off in the configuration and were never run on this
-design \\
-Why & a single-macro experiment: one \texttt{RM\_IHPSG13} returns
-\num{1106478} Magic DRC error boxes \emph{of which none falls outside the
-macro footprint}, \num{2316} KLayout errors all naming cells inside the
-macro hierarchy, and 359 Netgen LVS errors that are a \emph{name and bus
-delimiter} mismatch rather than a geometric one. An upstream integration
-failure, not a defect of this design---and see \S\ref{sec:decks} for what
-happens when the decks are pointed at this design with the vendor macro
-abstracted \\
+Geometric decks & Run for this paper, having been off in the
+configuration since the design existed. Magic DRC \num{39969214} error
+boxes and KLayout \num{9668}, \textbf{all of both inside the six vendor
+SRAM macros and none outside}; Netgen LVS \emph{circuits match uniquely}
+with those macros abstracted to their pin lists. \S\ref{sec:decks} \\
+Not covered by that & metal density and antenna are separate runsets and
+were not invoked; LVS excludes the macro internals by construction. The
+vendor macro itself fails at a rate linear in its bit count and cannot be
+fixed here \\
 \midrule
 \multicolumn{2}{l}{\textbf{What does not exist}}\\
 \midrule
@@ -256,10 +253,11 @@ SER characterisation for either PDK, and neither ships such data in its
 own release \\
 Application accuracy & no classification result for this design on any
 task, and none has ever existed \\
-A clock frequency for the SoC & withheld. \SI{50}{\mega\hertz} is not
-achieved and the measured non-closure is not a specification. The
-\emph{pilot's} figure is published above because it signs off on every
-deck an open flow can run \\
+A clock frequency for the SoC & the \SI{20}{\nano\second} target is not
+met and a measured non-closure is not a specification. What \emph{is}
+measurable is the period at which this layout closes,
+\SI{25}{\nano\second}, and \S\ref{sec:decks} prints it as the property of
+one layout rather than as a specification of a design \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -296,10 +294,21 @@ That reasoning is sound and the option space was not. \textbf{A third
 route existed and was not examined}: abstracting the vendor macro so that
 the deck reads its boundary rather than descending into its geometry,
 which is what an integrator ordinarily does with a hard macro whose
-internals the vendor certifies. It is not deck relaxation---it changes
-what is looked at, not what counts as an error---and the diagnosis above
-is precisely the evidence that it would work, because a deck that never
-enters the macro cannot report the errors that are all inside it.
+internals the vendor certifies. It is not deck relaxation---it changes what is looked at, not what
+counts as an error---and the diagnosis above is precisely the evidence
+that it would work, because a deck that never enters the macro cannot
+report errors that are all inside it.
+
+\textbf{That reasoning is sound and, for one of the two decks, it is
+also wrong}, which we could only learn by running both.
+Section~\ref{sec:decks} reports the measurement: abstracting the macro
+for Magic's deck \emph{introduces} 123 violations that do not exist in
+the mask data, because the tool paints the macro's boundary obstructions
+as though they were drawn metal and four wide-metal rules then fire on
+them. So the option that was never examined turns out to be the wrong
+one here---and the seventeen-hour run over real geometry, which is what
+we did instead, is the one that answers the question. The general
+argument survives; its application to this deck does not.
 
 We record this as an instance of the paper's own subject arriving one
 level up from a check: \emph{the option space was described as explored
@@ -920,15 +929,94 @@ outside split calls into question for this PDK version---and that is a
 statement about the vendor's macro, which is the finding, not a
 concealment of it.
 
-\paragraph{What is being measured.}
-\textsc{[Results pending: the three decks are running over this design's
-final mask data---Magic DRC classified by whether each error falls inside
-one of the six macro bounding boxes, KLayout DRC classified by the cell
-each violation names, and Netgen LVS with the macro declared a black box
-so that the connectivity of everything else is compared. The claim this
-section will make is bounded in advance: at most ``no design-rule error
-in the geometry this project drew, with the vendor macro abstracted and
-that exclusion named''---never ``the design is DRC-clean''.]}
+\paragraph{What the decks say when they are run.}
+All three were run over this design's own final mask data. The claim was
+bounded in advance---at most ``no design-rule error in the geometry this
+project drew'', never ``the design is DRC-clean''---and the results are
+inside that bound.
+
+\begin{table}[htbp]
+\centering
+\caption{The three geometric decks over run \texttt{s77gate}, unmodified,
+at the pinned tool and PDK versions. The split is a geometric test of
+every error coordinate against the six macro footprints taken from the
+placement, not an attribution by cell name.}
+\label{tab:decks}
+\small
+\begin{tabularx}{\textwidth}{L{2.9cm}rrX}
+\toprule
+Deck & inside the macros & outside & \\
+\midrule
+Magic DRC, full & \num{39969214} & \textbf{0} & 17\,h\,11\,m, 16\,GiB
+peak. Also 0 straddling a macro edge and 0 outside the die \\
+KLayout DRC & \num{9668} & \textbf{0} & 3 of 173 rules fire; every item
+names a cell inside the vendor hierarchy \\
+Netgen LVS & --- & --- & \textbf{Circuits match uniquely}: \num{62256}
+devices and \num{61912} nets on both sides, all seven counters zero \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Four things make that table a measurement rather than an assertion.
+
+\emph{The classifier was validated against a published answer before it
+was pointed at anything new.} Run against the retained report of the
+earlier single-macro experiment it returns \num{1106478} boxes,
+\num{1106478} inside, 0 outside, and reproduces that experiment's
+ten-row rule histogram line for line.
+
+\emph{The macro was calibrated on its own.} The same deck over each
+vendor macro standing alone, with no design near it, gives
+\num{8808860} and \num{2210913} boxes---and both scale \emph{linearly
+with bit count} off the single-macro figure ($1.9985\times$ and
+$7.9611\times$), which is the signature of a per-bitcell defect rather
+than anything contextual. Six instances predict \num{39657266} against
+\num{39969214} measured, a surplus of \num{311948} or 0.79\,\%, and
+every box of that surplus still lands inside a macro.
+
+\emph{The count is a box count, not a violation count}, and the report
+says so itself: its last line reads \emph{``should be divided by 3 or
+4''}, so the distinct-violation figure is roughly 10.0 to 13.3 million.
+The divisor changes the inside number and does not touch the outside
+number, which is zero either way.
+
+\emph{The zero is not the deck declining to look.} A positive control---
+the same deck, same version, same options, on a top cell carrying
+deliberate metal width and spacing violations---returns those
+violations.
+
+\paragraph{The exclusions, which are not small.}
+Metal density and antenna are \emph{separate top-level runsets} in this
+PDK and neither was invoked, by this check or by the flow. Density bears
+directly on the routing and fill this project drew, so ``zero KLayout
+errors'' must not be read as including it. And the LVS result excludes
+the macro internals by construction: what survives is the pin
+\emph{list} (355 and 193 names, checked against the vendor's own circuit
+netlist and identical as sets), the instance count, and the net on all
+\num{2130} macro pin connections---a swapped data bit or a supply
+strapped to the wrong rail would have shown, half a million bitcells
+would not.
+
+\paragraph{And the standard integrator's move is the wrong answer here,
+which we did not expect.}
+Section~\ref{sec:inventory} argued that abstracting a hard macro changes
+\emph{what is looked at} rather than \emph{what counts as an error}. For
+this deck and this macro that is \textbf{false}, and the measurement is
+what says so. The abstracted run returns 123 error boxes where the full
+run returns none outside the macros, and all 123 are artefacts: every
+rule involved requires metal wider than \SI{10}{\micro\meter}, and
+sizing the vendor macro's own geometry by $\pm\SI{5}{\micro\meter}$
+leaves \emph{zero} surviving polygons on any of those layers---as does
+the same test on this design's mask data in the exact windows where the
+boxes were reported. The wide metal exists only in the abstraction,
+because the macro's boundary description carries blanket obstruction
+rectangles and the tool paints an obstruction as drawn metal.
+
+So the seventeen-hour run reading real geometry is not the expensive
+route to the same answer. It is the only one of the two that is right,
+and an integrator who took the cheap route here would have shipped 123
+violations that do not exist. We recommend nothing from this beyond the
+measurement: it is one deck, one macro, one tool.
 
 \subsection{The timing scope, which is the same defect inverted}
 
@@ -995,17 +1083,103 @@ ten times its comfortable load is a resizer that did not run at that
 corner}, and the 33 capacitance and 67 transition violations at the same
 corner are the same fact counted a different way.
 
-\paragraph{What is being measured.}
-\textsc{[Results pending: which corner the resizer optimises is being
-verified from the flow's own step classes rather than inferred from the
-key names; the 3{,}088 endpoints are being histogrammed by slack to
-establish whether this is a cliff or a plateau, which decides whether a
-configuration change can close it at all; and a re-hardening with the
-repair bound to the corner it is checked at, with timing-driven
-placement, is running into a new directory. Whatever it returns will be
-reported against the attribution rule of Section~\ref{sec:determinism}:
-an improvement is not credited to a change unless it can be separated
-from the netlist landing differently.]}
+\paragraph{The scope hypothesis was wrong, and the flow's own source
+says so.}
+The paragraph above reads as though the corner split were the cause. It
+is not, and we report that because the reasoning is the paper's subject.
+\file{RSZ\_CORNERS} is unset, and the resizer step resolves
+\texttt{RSZ\_CORNERS or STA\_CORNERS}---\emph{not}
+\texttt{PNR\_CORNERS}---so it falls back to all three corners and had
+been optimising the slow one all along. The resizer's own log confirms
+it, loading the slow standard-cell and macro libraries.
+\texttt{TIMING\_VIOLATION\_CORNERS} never reaches it: it feeds the
+checker steps, where the explicit setting already overrides it.
+\textbf{There is no one-key corner fix, and setting the key would have
+narrowed what is optimised rather than widening it.} The table stays
+because the scope split is real and worth a reader's attention; the
+causal reading of it does not survive.
+
+\paragraph{It is a plateau, not a cliff.}
+Mean slack $-\SI{2.68}{\nano\second}$, median $-\SI{2.58}{\nano\second}$;
+eight endpoints lie inside $-\SI{0.25}{\nano\second}$ and 87\,\% are
+worse than $-\SI{1.5}{\nano\second}$. Repairing the worst handful buys
+nothing. An independent static-timing sweep on the final netlist and
+extracted parasitics reproduces sign-off exactly and closes the design
+at \textbf{\SI{25}{\nano\second}}: $+\SI{0.3201}{\nano\second}$, zero
+total negative slack, zero violating endpoints. The design's own clock
+report had said as much---\texttt{period\_min = 24.68}.
+
+\paragraph{Two hard floors, neither of them the optimiser's fault.}
+The SRAM read is \SIrange{8.88}{9.29}{\nano\second} at the slow corner
+from the vendor's own timing library, so \textbf{46\,\% of a
+\SI{20}{\nano\second} budget is spent inside the macro before a single
+gate}. And the cell library runs out: of the driver stages on the worst
+thousand violating paths, \textbf{39\,\% are already at the largest
+drive strength this library offers}, and design-wide 36.5\,\% of
+standard cells belong to families with \emph{no} larger variant at all.
+Only buffers and inverters reach the higher strengths.
+
+Logic depth is not the wall. Substituting, on the worst path, the
+fastest instance of each cell type seen anywhere in the report gives
+\SI{8.801}{\nano\second} for its 73 stages against a
+\SI{19.874}{\nano\second} budget---\textbf{the design runs about
+$2.7\times$ slower than its own gates can go}, and what it is paying for
+is load and the slew that load creates.
+
+\paragraph{The violation counts were a red herring, and the inverse is
+the finding.}
+None of the 30 standard-cell slew violations and none of the five
+standard-cell capacitance violations lies on any of the worst thousand
+paths. Repairing all of them buys approximately nothing. \textbf{The
+finding is that the limits are too loose to catch what hurts}: the only
+transition limit in force is the library's own per-pin
+\SI{2.5074}{\nano\second}, which is 12.5\,\% of the clock period in a
+single transition, so the repair step legitimately left \num{4316} pins
+alone. The gate we singled out earlier at \SI{2.4715}{\nano\second} sits
+\emph{just under} that limit. The constraint was the problem, not the
+tool.
+
+\paragraph{The repair, run as a factorial, and it inverts its own
+diagnosis.}
+Two mechanisms were available: constrain transition and capacitance
+explicitly, and make global placement timing-driven. They were run as a
+$2\times2$ rather than bundled, because bundled they are unattributable.
+
+\begin{center}
+\small
+\begin{tabular}{lrr}
+\toprule
+slow corner, \SI{20}{\nano\second} & placement not timing-driven &
+timing-driven \\
+\midrule
+no explicit limits & $-4.6799$ (baseline) & $-3.3554$ \\
+slew 0.75 / cap 0.10 & $\mathbf{-5.2145}$ & $-3.0306$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{The explicit limits alone made setup worse by
+\SI{0.5346}{\nano\second}}, cost 6.98\,\% of standard-cell area and
+1.29\,\% of routed wire, and pushed the minimum period from 24.68 to
+\SI{25.21}{\nano\second}. The diagnosis that ranked them first had
+modelled them at $+4.3$ to $+\SI{5.5}{\nano\second}$: \textbf{wrong by
+about five nanoseconds and in the wrong direction}. Timing-driven
+placement alone bought $+\SI{1.3245}{\nano\second}$; together they buy
+$+\SI{1.6493}{\nano\second}$ on worst slack---but on total negative
+slack, endpoint count, area, wirelength and power, \emph{timing-driven
+placement alone is the better layout}, and its endpoint count is 2{,}102
+against 2{,}746.
+
+\textbf{It did not close.} $-\SI{3.0306}{\nano\second}$ with 2{,}746
+violating endpoints. What closes this design is the clock period, and
+Section~\ref{sec:limits} says what that means for the frequency this
+paper does and does not print.
+
+This is the paper's own method turned on the paper's own repair, and it
+went against the diagnosis. A careful, measured analysis mis-ranked its
+two candidate repairs by five nanoseconds and put the harmful one first.
+The factorial caught it; a single bundled run would have reported
+$+\SI{1.6493}{\nano\second}$ and credited it to both.
 
 \section{Where the replicas actually are}
 \label{sec:placement}

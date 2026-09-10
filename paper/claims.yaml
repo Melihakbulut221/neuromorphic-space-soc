@@ -245,3 +245,58 @@ claims:
     check: grep
     pattern: "state is now protected || is now protected**, which || The backstop is protected"
     paths: "README.md, ROADMAP.md, docs/5*.md, docs/6*.md, docs/7*.md
+
+  # Section 8's measurements. The two deck splits are the strongest
+  # numbers in this paper that a reader can check without re-running a
+  # seventeen-hour job: the run directories are gitignored build output,
+  # so these are pinned by digest in docs/80 and read from the run's own
+  # metrics here.
+
+  - id: decks.magic_outside
+    value: 0
+    text: "Magic DRC error boxes falling outside the six vendor SRAM macro footprints"
+    check: manual
+    artefact: "hw/soc/pnr/runs/s77gate-drc-full/classification.txt"
+    read: "39,969,214 boxes, 39,969,214 inside, 0 straddling, 0 outside, 0 outside the die; the classifier reproduces the earlier single-macro report's 1,106,478 before being pointed here"
+
+  - id: decks.klayout_outside
+    value: 0
+    text: "KLayout DRC items naming a cell outside the vendor macro hierarchy"
+    check: manual
+    artefact: "hw/soc/pnr/runs/s77gate-klayoutdrc/reports/drc.klayout.lyrdb"
+    read: "9,668 items in 3 of 173 rules; all 60 base cell names are RM_IHPSG13_1P_* or RSC_IHPSG13_*; not one names soc_top or any sg13g2_* standard cell"
+
+  - id: decks.lvs_matches
+    value: 1
+    text: "Netgen LVS reports the circuits match uniquely with the macros abstracted"
+    check: grep
+    pattern: "Circuits match uniquely"
+    paths: "hw/soc/pnr/runs/s77lvs-b-blackbox/*/*.log, hw/soc/pnr/runs/s77lvs-b-blackbox/reports/*"
+
+  - id: timing.closes_at
+    value: "25.00"
+    text: "clock period, nanoseconds, at which this layout closes setup at the slow corner with zero violating endpoints"
+    check: manual
+    artefact: "hw/soc/pnr/runs/s81-sta-compare/"
+    read: "an OpenSTA sweep on the final netlist and SPEF reproduces sign-off at 20.00 ns (-4.6799, 3088) and gives +0.3201 with TNS 0 and 0 endpoints at 25.00 ns; the run's own clock.rpt says period_min = 24.68"
+
+  - id: timing.repair_did_not_close
+    value: "-3.030638936699411"
+    text: "slow-corner setup worst slack after the repair; it improved and did not close"
+    check: json
+    file: hw/soc/pnr/runs/s81timing/final/metrics.json
+    key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
+
+  - id: timing.drv_alone_made_it_worse
+    value: "-5.214497425892334"
+    text: "slow-corner worst slack with the explicit transition and capacitance limits alone, against a baseline of -4.6799: the diagnosis ranked this repair first"
+    check: json
+    file: hw/soc/pnr/runs/s81drv/final/metrics.json
+    key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
+
+  - id: timing.ptd_alone
+    value: "-3.355394279620113"
+    text: "slow-corner worst slack with timing-driven placement alone"
+    check: json
+    file: hw/soc/pnr/runs/s81ptd/final/metrics.json
+    key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
