@@ -1,0 +1,121 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
+# cocotb + Icarus suite for hw/soc/rtl/soc_uart.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_uart        run the suite
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_uart lint   Verilator lint
+#
+# WHY THIS SUITE IS NEW, LATE, AND SHOULD HAVE BEEN FIRST. soc_uart.v is
+# the oldest peripheral in hw/soc/rtl and until this file existed it had
+# no simulation of its own, no property set and no guard. It is also the
+# block the other four APB suites name as the contract they follow --
+# test_soc_gpio.py line 17, test_soc_qspi.py line 22 and
+# test_soc_busstat.py line 23 each cite "the AMBA 3 APB slave contract
+# soc_uart.v ... already obey(s)" as the reason their own PREADY and
+# PSLVERR expectations are what they are, and test_soc_gptimer.py line 33
+# cites it for PSLVERR alone. Line numbers read at HEAD cf2ece6. Four
+# suites were therefore anchored to an unmeasured block. What they cited
+# was soc_uart.v's header comment, not a run.
+#
+# What ran before this file: the whole-SoC simulation drove the console
+# through Ibex and hw/soc/tb/tb_soc.v decoded tx_o, which covers the
+# serialiser and the TE path at one scaler value and nothing else. No
+# run in this repository has ever written CTRL bit 3, so irq_o was
+# identically zero in every simulation ever recorded here -- see
+# test_soc_uart.py's interrupt tests and the report that added them.
+#
+# The expectations in test_soc_uart.py come from docs/08 section 2.5
+# (the APBUART offsets, quoted there from grip.pdf table 126), the AMBA
+# 3 APB slave protocol, the generated memory map sw/golden/memmap_gen.py,
+# docs/42 section 8.4 item 3 for what "transmitter empty" means on this
+# part, and soc_uart.v's own header for the subset it declares. grip.pdf
+# is NOT in this tree, so the STATUS and CTRL bit POSITIONS could not be
+# re-derived from the source document here; test_soc_uart.py says so in
+# its header rather than implying a check that did not happen.
+#
+# Standalone by design, same structure and the same rootless tool
+# discovery as Makefile.soc_gpio: iverilog from PATH, cocotb from the
+# project venv hw/.venv -- if cocotb-config is not already on PATH the
+# recipe re-invokes make with the venv prepended, because make < 4.4 does
+# not pass an exported PATH into $(shell ...), which the cocotb makefiles
+# rely on. The venv is three directories up from here (hw/.venv), not in
+# hw/soc.
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+# SOC_UART_SRC exists so a mutation run can point the same suite at a
+# modified copy of the RTL without editing the tree, which is how the
+# claim "these tests can fail" was demonstrated:
+#   make -f Makefile.soc_uart SOC_UART_SRC=/path/to/mutant.v \
+#        SIM_BUILD=sim_build_mut COCOTB_RESULTS_FILE=results_mut.xml
+#
+# MUTATION RECORD, 2026-09-10, against 14/14 passing on committed RTL.
+# Seven single-line edits to a scratch copy of soc_uart.v, all caught:
+#
+#   ovs_cnt[1:0] == 2'd3 for ovs_cnt == 3'd7 (4x oversampling)  6 failed
+#   scaler_cnt <= scaler + 12'd1 (reload off by one)            6 failed
+#   irq_o = ctrl_ti (interrupt ignores the holding register)    1 failed
+#   ctrl_ti <= pwdata_i[2] (CTRL.TI decoded off by one bit)     5 failed
+#   shifter loaded most significant bit first                   3 failed
+#   wr = psel_i && pwrite_i (write decoded in SETUP)            1 failed
+#   STATUS.TE tied high                                         1 failed
+#
+# AND ONE MUTATION THAT PROVED NOTHING, recorded because it is the more
+# useful half. The first divider mutation was `ovs_cnt == 3'd3` for
+# `3'd7`, and the suite stayed green -- correctly. ovs_cnt is a free
+# running 3-bit counter, so comparing it against 3 instead of 7 moves the
+# PHASE of the bit tick and leaves the PERIOD at eight scaler ticks. The
+# mutant was behaviourally identical to the original and a green run
+# against it says nothing about the test. A mutation has to change what
+# the block does before its survival means anything, and the same trap
+# waits in every mutation campaign in this repository.
+SOC_UART_SRC ?= $(RTL)/soc_uart.v
+
+VERILOG_SOURCES = $(SOC_UART_SRC)
+TOPLEVEL = soc_uart
+MODULE = test_soc_uart
+
+# Per-block build and results paths so this suite can run alongside the
+# others without clobbering their artifacts.
+SIM_BUILD ?= sim_build_soc_uart
+COCOTB_RESULTS_FILE ?= results_soc_uart.xml
+export COCOTB_RESULTS_FILE
+
+# This block includes nothing, but -I$(RTL) keeps the invocation identical
+# to the sibling fabric suites and to the flow scripts.
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+# Default-flag Verilator lint. This block is four registers, a shifter
+# and a baud divider; any warning here is a real one.
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+.PHONY: lint
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(RTL) $(SOC_UART_SRC)
+
+endif

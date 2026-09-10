@@ -1,0 +1,151 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+
+# cocotb + Icarus suite for the two device tables,
+# hw/soc/rtl/soc_pnp.v and hw/soc/rtl/soc_apb_pnp.v.
+#
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_pnp        both tables
+#   cd hw/soc/tb/cocotb && make -f Makefile.soc_pnp lint   Verilator lint
+#
+# TWO TOP MODULES, ONE SUITE, TWO RUNS. The default goal runs the suite
+# twice, once with each table as TOPLEVEL, into its own build directory
+# and its own results XML. scripts/run_cocotb.sh sums every XML written
+# during a suite's run, so both arms are counted.
+#
+# The arms are not the same shape and the suite does not pretend they
+# are. soc_pnp is a system-bus slave with req/gnt/rvalid and a registered
+# one-cycle response, and it ANSWERS A WRITE WITH ERR. soc_apb_pnp is a
+# combinational APB slave with no clock and no reset at all, and it
+# ACCEPTS AND DISCARDS a write. Both refusals are checked, each against
+# what its own file says it does.
+#
+# WHY THIS IS NEW. Neither table had a test of any kind before this file:
+# they were read by the whole-SoC simulation only where boot software
+# happened to look at them, and the write path -- the only path either
+# block has that can go wrong in a way a read does not show -- had never
+# been driven at all. The three-word reads in test_soc_pnp.py are also
+# the first check that the GENERATED VERILOG and the GENERATED PYTHON
+# agree: soc_pnp_rom.vh and sw/golden/memmap_gen.py come out of the same
+# regmap/memmap.yaml through the same generator, but nothing had ever
+# compared what the RTL returns with what the software golden expects.
+#
+# The suite decodes the record fields rather than only comparing the two
+# generated files word for word, so a generator that emitted the same
+# wrong encoding into both artefacts still fails. test_soc_pnp.py's
+# header says which words are read and which are not.
+#
+# Standalone by design, same rootless tool discovery as
+# Makefile.soc_gpio: iverilog from PATH, cocotb from the project venv
+# hw/.venv -- if cocotb-config is not already on PATH the recipe
+# re-invokes make with the venv prepended, because make < 4.4 does not
+# pass an exported PATH into $(shell ...), which the cocotb makefiles
+# rely on. The venv is three directories up from here (hw/.venv).
+
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),all)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+
+else
+
+RTL = $(PWD)/../../rtl
+
+# Overridable so a mutation run can point the suite at a modified copy
+# without editing the tree. PNP_INC is the include path the two `include
+# lines resolve against, so a mutated soc_pnp_rom.vh can be dropped in a
+# scratch directory and used from there.
+#
+# MUTATION RECORD, 2026-09-10, against 6/6 passing on each arm of the
+# committed RTL. Six edits to scratch copies, all caught:
+#
+#   soc_pnp err_o <= 1'b0 (stops refusing writes)         1 failed (sys)
+#   soc_pnp rvalid_o <= 1'b1 (response never falls)       5 failed (sys)
+#   soc_pnp_rom.vh: one record word hand-edited           1 failed (sys)
+#   soc_apb_pnp word_addr + 1 (decodes one word high)     3 failed (apb)
+#   soc_apb_pnp pslverr_o = psel_i && pwrite_i            1 failed (apb)
+#   SOC_PNP_ARM=sys while elaborating soc_apb_pnp         6 failed (apb)
+#
+# The last one is the arm guard checking itself: the suite is told it has
+# the system table, is given the peripheral one, and says so in its first
+# test rather than running six tests against the wrong block.
+#
+# The hand-edited record word was reached through PNP_INC pointing at a
+# scratch directory holding a copy of soc_pnp.v beside the modified
+# soc_pnp_rom.vh -- the copy is needed because Icarus resolves a quoted
+# `include against the including file's own directory first, so pointing
+# -I somewhere else while leaving the source in hw/soc/rtl silently picks
+# up the original table and the mutation proves nothing:
+#   make -f Makefile.soc_pnp PNP_ARM=sys \
+#        SOC_PNP_SRC=/scratch/soc_pnp.v PNP_INC=/scratch \
+#        SIM_BUILD=/scratch/build COCOTB_RESULTS_FILE=/scratch/r.xml sim
+SOC_PNP_SRC     ?= $(RTL)/soc_pnp.v
+SOC_APB_PNP_SRC ?= $(RTL)/soc_apb_pnp.v
+PNP_INC         ?= $(RTL)
+
+ifeq ($(PNP_ARM),)
+
+# ---- outer: run both arms ----
+.PHONY: all clean lint sim
+all:
+	@$(MAKE) -f $(THIS_MK) --no-print-directory PNP_ARM=sys sim
+	@$(MAKE) -f $(THIS_MK) --no-print-directory PNP_ARM=apb sim
+
+sim: all
+
+clean:
+	@$(MAKE) -f $(THIS_MK) --no-print-directory PNP_ARM=sys clean
+	@$(MAKE) -f $(THIS_MK) --no-print-directory PNP_ARM=apb clean
+
+VERILATOR ?= $(firstword $(shell command -v verilator 2>/dev/null) \
+	$(wildcard $(HOME)/oss-cad-suite/bin/verilator \
+	           $(HOME)/Documents/gt2n-soc/tools/oss-cad-suite/bin/verilator \
+	           $(HOME)/Downloads/oss-cad-suite-linux-x64-20260804/oss-cad-suite/bin/verilator))
+
+lint:
+	@test -n "$(VERILATOR)" || \
+		{ echo "verilator not found: install oss-cad-suite or put it on PATH"; exit 1; }
+	$(VERILATOR) --lint-only -I$(PNP_INC) --top-module soc_pnp $(SOC_PNP_SRC)
+	$(VERILATOR) --lint-only -I$(PNP_INC) --top-module soc_apb_pnp $(SOC_APB_PNP_SRC)
+
+else
+
+# ---- inner: one arm ----
+ifeq ($(PNP_ARM),sys)
+VERILOG_SOURCES = $(SOC_PNP_SRC)
+TOPLEVEL = soc_pnp
+else
+VERILOG_SOURCES = $(SOC_APB_PNP_SRC)
+TOPLEVEL = soc_apb_pnp
+endif
+
+MODULE = test_soc_pnp
+
+# The Makefile tells the suite which table it ASKED for; test_soc_pnp.py
+# then measures which one it GOT, by a port only that arm has. Two runs
+# of the same table would otherwise look exactly like two passing arms,
+# which is the shape of defect Makefile.soc_mem's header records one
+# scale down.
+export SOC_PNP_ARM = $(PNP_ARM)
+
+SIM_BUILD ?= sim_build_soc_pnp_$(PNP_ARM)
+COCOTB_RESULTS_FILE ?= results_soc_pnp_$(PNP_ARM).xml
+export COCOTB_RESULTS_FILE
+
+# Both blocks textually include their generated table body, so the
+# include path is load-bearing here and not decoration.
+COMPILE_ARGS += -I$(PNP_INC)
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+
+include $(shell cocotb-config --makefiles)/Makefile.sim
+
+endif
+endif

@@ -168,14 +168,26 @@ counter, in the architecture register map's order:
 |---|---|
 | 0 | `CNT_SEC`, and the SEC pin |
 | 1 | `CNT_DED` |
-| 2 | `CNT_EVQ_OVF` |
+| 2 | `CNT_EVQ_OVF`, the INPUT queue drop counter |
 | 3 | `CNT_AXON_OOR` |
 | 4 | `FAULT_ADDR` |
 | 5 | `CNT_TMR`, and the TMR pin (pilot-only, see below) |
+| 6 | `CNT_EVQ_OUT_OVF`, the OUTPUT queue drop counter (pilot-only, see below) |
+| 7 | `CNT_EVQ_PAR` (pilot-only, see below) |
 
-Bits 0 to 4 are the architecture register map's own assignment. Bit 5 is
-this pilot's, because `CNT_TMR` is a pilot-only register and the map
-leaves bits 5 and up unassigned. Writing `0x3F` clears everything.
+Bits 0 to 4 are the architecture register map's own assignment. Bits 5,
+6, 7 are this pilot's, because `CNT_TMR`, `CNT_EVQ_OUT_OVF`,
+`CNT_EVQ_PAR` are pilot-only registers and the map leaves bits 5 and up
+unassigned. Writing `0xFF` clears everything.
+
+*CORRECTED 2026-09-10. This datasheet published `0x3F`, which was the
+whole mask only while `CNT_TMR` was the pilot's sole extra clear bit.
+`CNT_EVQ_OUT_OVF` and `CNT_EVQ_PAR` took bits 6 and 7 when they were
+added, and a host that writes `0x3F` clears six of the eight counters
+and leaves those two counting. `regmap/regmap.yaml` carries the same
+correction, dated 2026-09-09; the superseded `0x3F` is left standing in
+this sentence rather than deleted.*
+
 `STATUS_CLR` clears the sticky `STATUS` bits, and with them the DED pin;
 the ERR pin follows `STATUS.ERR_CFG` and `STATUS.OVF_SEEN`.
 
@@ -219,7 +231,7 @@ shifted right by two. `W1C` = write one to clear, `WO` = write only,
 | 0x098 | EVQ_OUT | RO | Pops one 16-bit event word from the output queue. |
 | 0x09C | NODE_ID | RW | Node identifier carried in emitted events. |
 
-Three registers exist only on this pilot. They sit in the unmapped
+Five registers exist only on this pilot. They sit in the unmapped
 region of the same window and do not change the architecture's register
 map:
 
@@ -227,7 +239,9 @@ map:
 |---|---|---|---|
 | 0x0A0 | ECC_INJ_POS | RW | Bit position, 0..71, that ECC_INJ corrupts in the stored codeword. |
 | 0x0A4 | TMR_INJ | RW | {REP[1:0], BIT[5:0]}: holds one bit of one configuration replica wrong. |
-| 0x0A8 | CNT_TMR | RO | Voter disagreements masked since the last FAULT_CLR. Saturating. Cleared by FAULT_CLR bit 5. |
+| 0x0A8 | CNT_TMR | RO | Voter disagreements masked since the last FAULT_CLR. Saturating. |
+| 0x0AC | CNT_EVQ_OUT_OVF | RO | Output-queue writes refused and lost. Saturating. Not the input-queue counter CNT_EVQ_OVF. |
+| 0x0B0 | CNT_EVQ_PAR | RO | Queue entries discarded for a failed entry parity check, both queues in one count. Saturating. |
 
 `W_BASE` and `PASS_ID` of the architecture register map are not
 implemented here: both are multi-pass sequencer bookkeeping with no

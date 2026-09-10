@@ -141,3 +141,16 @@ _site_builtin/
 
 # paper/render_html.py output
 paper/main.html
+
+# pdflatex output. Deliberately NOT tracked, and the reason is the same
+# one docs/80 section 4 gives about digests: there is no pdflatex on the
+# development machine, so a committed PDF is a binary this repository
+# cannot rebuild, cannot diff and cannot check against paper/main.tex.
+# The published mirror's CI compiles it on every push and uploads it as
+# a build artefact, which is where a downloadable copy comes from.
+paper/main.pdf
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out

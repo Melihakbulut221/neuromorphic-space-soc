@@ -845,8 +845,47 @@ module soc_npu #(
   wire       win_bad    = !win_in_reg || !win_align
                        || (we_i && (be_i != 4'hF));
 
-  assign gnt_o = req_i && (win_state == W_IDLE);
-
+  // THE GRANT IS QUALIFIED ON THE HANDSHAKE AND NOT ON THE STATE ALONE,
+  // for the reason the bound below is armed by the grant and not by the
+  // state, and it is the same defect one level up.
+  //
+  // `win_state == W_IDLE` says this FSM believes it is free. `win_out`
+  // says the FABRIC is still owed an rvalid. The two move together in
+  // every cycle of a healthy access -- `win_out` is set on the only
+  // transition out of W_IDLE and cleared by the `rvalid_o` that W_RESP
+  // raises as it returns -- so on a healthy part this term is always
+  // true and changes nothing. They come apart on exactly docs/52's
+  // sixth dead machine: `win_state` bit 1 flipped takes W_WAIT to
+  // W_IDLE with a granted request unanswered, and the unqualified form
+  // then ADVERTISES THE SLAVE AS FREE WHILE IT OWES A RESPONSE.
+  //
+  // What that costs is not one wrong response, it is the bound. A grant
+  // in that state restarts the window -- W_IDLE captures the new
+  // payload and goes to W_ISSUE -- and `win_guard` is cleared by
+  // `gnt_o`, so the counter that was five cycles from expiring goes back
+  // to zero. A master that holds `req_i` up, which is what Ibex's
+  // prefetch buffer does, re-arms it on every access for ever and the
+  // bound never fires: the slave stays exactly one rvalid short of the
+  // fabric's response-ownership queue and every later response goes to
+  // the wrong master. The bound docs/55 section 8.2 built to catch this
+  // shape is defeated by the grant that the same shape lets through.
+  //
+  // WHY THE SECOND TERM IS `|| rvalid_o` AND NOT JUST `!win_out`. The
+  // block above says it out loud: W_RESP returns to W_IDLE in the cycle
+  // it raises `rvalid_o`, and `win_out` is not cleared until the end of
+  // that same cycle, so a healthy back-to-back access is granted in a
+  // cycle where `win_out` is still 1. `!win_out` alone would insert a
+  // dead cycle into every back-to-back pair of accesses -- a
+  // performance change on the healthy path, in a slave that already
+  // costs 172 cycles -- and would do it to fix nothing, because the
+  // response the fabric is owed is ON THE WIRE in that cycle. The
+  // disjunction is soc_bus.v rule 3 read literally: refuse only while a
+  // response is owed AND not being returned.
+  //
+  // The assignment itself is BELOW the `win_out` block and not here,
+  // where the decode it reads is: `win_out` is a reg and Verilog-2005
+  // wants it declared before it is used, and its declaration belongs
+  // with the argument for it rather than being pulled up here.
   reg win_err_q;
 
   // -------------------------------------------------------------------
@@ -894,6 +933,8 @@ module soc_npu #(
     else if (gnt_o)     win_out <= 1'b1;
     else if (rvalid_o)  win_out <= 1'b0;
   end
+
+  assign gnt_o = req_i && (win_state == W_IDLE) && (!win_out || rvalid_o);
 
   // `>=` rather than `==`, for soc_npu_ser.v's reason: an upset that
   // pushes the counter above the bound must expire now, not wrap.
@@ -979,8 +1020,36 @@ module soc_npu #(
         win_state <= W_RESP;
       end else
       case (win_state)
+        // THE ARM IS `gnt_o` AND NOT `req_i`, and until the grant was
+        // qualified above the two were the same expression inside this
+        // state -- `gnt_o` was `req_i && (win_state == W_IDLE)`, so in
+        // W_IDLE it WAS `req_i`. They are no longer the same, and
+        // leaving `req_i` here would have made the qualification worse
+        // than useless: the window would sit in W_IDLE refusing the
+        // grant and START THE ACCESS ANYWAY, capture a payload the
+        // fabric never broadcast for it (soc_bus.v S2 says the buses
+        // are valid only in the cycle req and gnt are both high), and
+        // raise an rvalid with no grant behind it -- which is the
+        // spurious response `win_orphan` exists to prevent. Measured
+        // while writing this fix, in the third test of
+        // hw/soc/tb/cocotb/test_soc_npu_defects.py: the window ran a
+        // second, ungranted frame and answered the FIRST request with
+        // it, so the counts came out right and the bound never fired.
+        // The access now begins on the same wire the fabric was told
+        // about, which is what it should always have said.
+        //
+        // ONE CASE THIS ARM IS NOT REACHED IN, named rather than left to
+        // be discovered: `win_expire` is tested BEFORE this case, so a
+        // grant in the same cycle as an expiry would be a grant nothing
+        // captured. It cannot happen. `win_expire` needs `win_out` set
+        // with `win_guard` at WIN_MAX, and the qualified `gnt_o` needs
+        // `!win_out || rvalid_o`, so the two coincide only with
+        // `rvalid_o` high -- and `rvalid_o` is one cycle, raised out of
+        // W_RESP, which is reached only from an arm that has just
+        // zeroed `win_guard`. The counter is therefore at 1, not at
+        // WIN_MAX, in every cycle `rvalid_o` is high.
         W_IDLE: begin
-          if (req_i) begin
+          if (gnt_o) begin
             // Captured in the grant cycle, the only cycle the fabric
             // guarantees the broadcast payload (soc_bus.v S2).
             win_err_q <= win_bad;
@@ -1366,6 +1435,53 @@ module soc_npu #(
   reg [3:0]  ev_wait;
   reg [15:0] cnt_in, cnt_out;
 
+  // -------------------------------------------------------------------
+  // E_DECIDE'S ESCAPE, AND WHY IT NEEDS A BIT OF ITS OWN
+  //
+  // E_DECIDE holds while the die's input queue is full, and the hold had
+  // no bound and no way out. That is a DEADLOCK and not a stall, because
+  // of the interlock the header states three paragraphs above: a full
+  // EVQ_OUT on the die stalls its update pipeline, a stalled pipeline
+  // stops consuming EVQ_IN, and a full EVQ_IN is exactly what holds
+  // E_DECIDE. The only thing that unblocks the die is a DRAIN, and
+  // E_DRN_RQ was reachable from E_IDLE alone. Reproduced with the pilot
+  // in the loop, no upset injected, in
+  // hw/soc/tb/cocotb/test_soc_npu_defects.py: eight spikes and a tick
+  // into an 8 x 8 node with the host not draining leaves `ev_state` at
+  // E_DECIDE and `node_aer_in_rdy` low for ever, and turning CTRL.OUT_EN
+  // on afterwards -- which is the operator's whole recovery -- changes
+  // nothing, because nothing in E_DECIDE ever looks at it again.
+  //
+  // THE REVIEW'S SUGGESTION WAS "GO TO E_DRN_RQ", AND ON ITS OWN IT
+  // LOSES AN EVENT. E_DRN_RQ and E_DRN_W both end at E_IDLE, and E_IDLE
+  // pops the next word out of the injection queue. The event already
+  // sitting in `ev_word` -- popped, counted against nothing, never
+  // delivered -- would be silently dropped, and docs/10 section 7.2 is
+  // that spikes are never dropped. So the diversion has to be a
+  // DETOUR AND NOT A RESTART, and this bit is what makes it one: set on
+  // the way out of E_DECIDE, tested by E_DRN_W, which returns to
+  // E_DECIDE with `ev_word` untouched instead of to E_IDLE.
+  //
+  // ONE MORE FLIP-FLOP, AND IT IS UNPROTECTED, on soc_npu.v's own
+  // accounting for `win_out` and `oh_guard`. Its two corruptions are not
+  // symmetric and neither is a new way to lose an event:
+  //
+  //   * upset to 1 with no detour in progress: the next drain that
+  //     completes returns to E_DECIDE instead of E_IDLE. `ev_word` still
+  //     holds whatever it last held, so the engine either re-delivers
+  //     one event or -- if that word was a SYNC -- sends one extra
+  //     serial frame. It is a DUPLICATE, which the die counts, and the
+  //     engine leaves E_DECIDE by its normal exits.
+  //   * upset to 0 during a detour: the drain completes and the engine
+  //     returns to E_IDLE, which is the pre-fix behaviour for that one
+  //     event -- it is dropped. One event, once, and the deadlock is
+  //     still gone.
+  //
+  // It is NOT in `hw/soc/fi/npu_targets.py`, so no campaign draws into
+  // it yet and the two paragraphs above are reasoning and not
+  // measurement. That is stated rather than netted off.
+  reg        ev_resume;
+
   wire drain_want = ctrl_out_en && node_aer_out_vld && !cap_full;
   wire inject_want = ctrl_in_en && !inj_empty;
 
@@ -1380,6 +1496,7 @@ module soc_npu #(
       ev_state    <= E_IDLE;
       ev_word     <= 16'd0;
       ev_wait     <= 4'd0;
+      ev_resume   <= 1'b0;
       ev_start    <= 1'b0;
       ev_we       <= 1'b0;
       ev_addr     <= 7'd0;
@@ -1400,6 +1517,10 @@ module soc_npu #(
       if (!blk_rst_n) begin
         ev_state   <= E_IDLE;
         aer_in_stb <= 1'b0;
+        // CTRL.FLUSH empties the queues and the engine, and a detour
+        // back to an event that no longer exists is exactly the state
+        // this pulse is for getting rid of.
+        ev_resume  <= 1'b0;
       end else begin
       case (ev_state)
         E_IDLE: begin
@@ -1416,11 +1537,21 @@ module soc_npu #(
         // Bounded wait. aer_fifo discards an entry whose stored parity
         // fails and holds rd_valid low; without this the engine would
         // stop for ever on a single upset.
+        //
+        // `>=` AND NOT `==`, which is this file's own rule and was
+        // applied at the window bound (`win_guard >= WIN_MAX`) and at
+        // the show-ahead bound (`oh_guard >= OH_MAX_G`) and not here.
+        // The reason is soc_npu_ser.v's and it is the same one: an upset
+        // that pushes the counter ABOVE the bound must expire now, not
+        // count on through 4'hF, wrap to zero and take the long way
+        // round -- which is a stall inside the guard that exists to
+        // remove stalls, and `ev_wait` is exactly four bits, so the long
+        // way round is up to fifteen extra cycles per upset.
         E_FETCH: begin
           if (inj_rd_valid) begin
             ev_word  <= inj_rd_data;
             ev_state <= E_DECIDE;
-          end else if (ev_wait == FETCHMAX_4) begin
+          end else if (ev_wait >= FETCHMAX_4) begin
             ev_state <= E_IDLE;
           end else begin
             ev_wait <= ev_wait + 4'd1;
@@ -1434,11 +1565,46 @@ module soc_npu #(
             aer_in_tick <= ev_word[14];
             aer_in_addr <= ev_word[3:0];
             ev_state    <= E_PIN_A;
+          end else if (drain_want) begin
+            // THE ESCAPE. The die has no room and it has an event to
+            // give up; take the detour, and come back here to the same
+            // `ev_word` when the drain completes. The declaration of
+            // `ev_resume` above is why this is a detour and not a
+            // restart, and why the review's shorter form -- go to
+            // E_DRN_RQ and let it end at E_IDLE -- drops this event.
+            //
+            // THE ORDER OF THESE THREE ARMS IS THE WHOLE OF THE HEALTHY
+            // PATH BEING UNCHANGED. `node_aer_in_rdy` is tested first,
+            // so an engine that CAN deliver still delivers, and this arm
+            // is unreachable unless the die is refusing. That is not an
+            // inversion of "DRAIN OUTRANKS INJECT": that rule is E_IDLE's
+            // and it still holds there. Here the injection is already in
+            // flight -- the word is popped and the queue no longer has
+            // it -- and draining first on every event that found the die
+            // busy would put a 172-cycle frame in front of an event that
+            // was about to go over the pins in five cycles.
+            ev_resume <= 1'b1;
+            ev_state  <= E_DRN_RQ;
           end
           // else: hold here until the die's input queue has room.
           // AER_IN_RDY is !full on the die; a strobe into a full queue
           // would be counted as a software-port drop, which is the one
           // thing this engine must never make the die report.
+          //
+          // AND THE HOLD IS STILL UNBOUNDED, which is stated rather than
+          // implied by the arm above. The escape covers the interlock --
+          // the die is full BECAUSE its output has nowhere to go -- and
+          // that is the deadlock the engine could construct on its own.
+          // It does NOT cover a die that refuses with nothing to drain,
+          // nor one whose drain is switched off at CTRL.OUT_EN, nor a
+          // capture queue software has stopped reading: in all three
+          // `drain_want` is low and this state waits. Those are ended by
+          // CTRL.FLUSH, which is a register write and therefore
+          // something software still has to do. A bound here would have
+          // to end the wait by DISCARDING `ev_word`, and that needs a
+          // cause bit to report the discard with; there is no spare one
+          // in the protected word and adding one is a register-map
+          // change. It is left open on purpose and named here.
         end
 
         // The die two-flop synchronizes AER_IN_ADDR and AER_IN_TICK
@@ -1459,8 +1625,16 @@ module soc_npu #(
 
         // The strobe must return low and be SEEN low before the next
         // rising edge, which is two synchronizer stages away.
+        //
+        // `>=` for E_FETCH's reason. This one is the cheapest of the
+        // three to get wrong and the easiest to miss: the bound is 2, so
+        // an upset in the high bits of `ev_wait` sends the engine round
+        // the whole four-bit range while the die's strobe is already
+        // low and the queue already has room -- thirteen cycles of
+        // nothing, on a state whose entire job is to be three cycles
+        // long.
         E_PIN_G: begin
-          if (ev_wait == 4'd2) begin
+          if (ev_wait >= 4'd2) begin
             if (cnt_in != 16'hFFFF) cnt_in <= cnt_in + 16'd1;
             ev_state <= E_IDLE;
           end else begin
@@ -1508,7 +1682,13 @@ module soc_npu #(
               cap_wr_data <= ser_rdata[15:0];
               if (cnt_out != 16'hFFFF) cnt_out <= cnt_out + 16'd1;
             end
-            ev_state <= E_IDLE;
+            // The detour returns to the event it left, not to E_IDLE.
+            // `ev_word` was not touched by either drain state, so
+            // E_DECIDE re-runs its own decode on the same word. It is
+            // cleared unconditionally, so a return to E_IDLE cannot
+            // leave the next drain believing it is a detour.
+            ev_resume <= 1'b0;
+            ev_state  <= ev_resume ? E_DECIDE : E_IDLE;
           end
         end
 
@@ -1572,8 +1752,15 @@ module soc_npu #(
 
   assign irq_o = |(cause & irq_mask);
 
+  // `>=` because E_FETCH's own exit is `>=`, and the two have to be the
+  // SAME predicate or the sticky bit stops describing the state
+  // machine. With `==` here and `>=` there, an upset that pushed
+  // `ev_wait` past the bound would end the fetch and report NOTHING:
+  // C_FETCH_ER is the only durable record that an injected event was
+  // abandoned, and an expiry nobody records is docs/16 section 5.1's
+  // defect back again.
   wire fetch_expire = (ev_state == E_FETCH) && !inj_rd_valid
-                   && (ev_wait == FETCHMAX_4);
+                   && (ev_wait >= FETCHMAX_4);
 
   // ---- the seven sticky events, in cause-bit order -------------------
   //

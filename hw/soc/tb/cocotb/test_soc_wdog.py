@@ -155,7 +155,25 @@ async def por(dut, dis=0):
         await RisingEdge(dut.clk_i)
     await Timer(T_DRIVE, unit="ns")
     dut.rst_por_ni.value = 1
-    await RisingEdge(dut.clk_i)
+    # THREE clocks, not one, and the number is the design's rather than a
+    # margin. `dis_i` is a board strap: soc_wdog.v puts it through a
+    # two-flop synchroniser and then a two-count hold-off, and `dis_seen`
+    # -- the term that makes `armed` mean anything -- cannot be set until
+    # both have settled. Reading CTRL on the first clock after release
+    # reads a part that is disarmed BY CONSTRUCTION and reports itself so,
+    # which is what test_armed_out_of_power_on_reset and
+    # test_the_bootstrap_pin_disables_it_and_says_so both saw at 81 ns.
+    #
+    # It is fixed here rather than in the two tests because this helper is
+    # what claims power-on reset has been applied and released, and a
+    # part whose strap has not been sampled has not finished coming out of
+    # it. Any test written later against por() gets the same guarantee
+    # without knowing about the synchroniser.
+    #
+    # hw/soc/formal/soc_wdog_props.v's `f_armed_ready` is the same fact on
+    # the proof side, and its comment states what that window costs.
+    for _ in range(3):
+        await RisingEdge(dut.clk_i)
     return Wdog(dut)
 
 

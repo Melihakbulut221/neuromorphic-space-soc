@@ -27,13 +27,31 @@ Read `docs/00-index.md` for the full what-exists-and-what-does-not, and
 
 *Exists, and is verified.* An event-driven LIF inference core, its AER
 event queues, a register bank generated from a single-source map, a
-SECDED codec, a TMR voter and a scrub controller — 6,856 lines of
-Verilog. Verification is 234 Python tests against frozen bit-exact golden
-models, 166 cocotb tests, 54 SymbiYosys proof tasks, a seeded
-fault-injection campaign of 378 upsets classified against the golden
-model, and a gate-level run in which 370 of 370 comparable injections
-classify identically to RTL. `docs/34-pilot-freeze.md` pins the whole
-artifact set by hash.
+SECDED codec, a TMR voter and a scrub controller — ~~6,856 lines of
+Verilog~~ **6,883 lines of Verilog** (`wc -l hw/rtl/*.v`, nine files;
+7,011 with the generated `npu_regs.vh` header). Verification is
+**166 cocotb tests** (`grep -c '@cocotb.test' hw/tb/test_*.py`, ten
+modules, which is also `docs/34` section 7's figure), **54 SymbiYosys
+proof tasks** (`make -C formal -n everything | grep -c "sby -f"`, which
+is `docs/35` section 5's 54 of 54 DONE/PASS), a seeded fault-injection
+campaign of **378 upsets** classified against the golden model
+(`docs/16`'s headline table, the committed log re-taken at the freeze
+commit `b6738e5`), and a gate-level run in which **370 of 370**
+comparable injections classify identically to RTL (`docs/32` section
+5.1). `docs/34-pilot-freeze.md` pins the whole artifact set by hash.
+
+*Re-counted 2026-09-10, and one of those numerals was carrying a claim
+it cannot support.* This paragraph said **234 Python tests**, and no
+document in the corpus says 234 — the freeze measured 231 and the suite
+has grown with every SoC block and every document since, because
+`sw/tests/test_doc_links.py` parametrises one case per document.
+`.venv/bin/python -m pytest --collect-only -q` collects **503** at the
+repository root today. That is a count of the *whole* tree and not of
+the pilot, so the pilot figure is dropped rather than refreshed: there
+is no command that returns a pilot-only Python count, and a number with
+no command behind it is what this paragraph had. The line count moved
+too, 6,856 to 6,883, and 6,856 appears nowhere else either. The other
+four reproduce, to the digit, from the commands printed beside them.
 
 *Manufacturable, on every check an open flow can run.* The 6x2 pilot
 signs off on IHP SG13G2 with Magic DRC, KLayout DRC, XOR, all four
@@ -166,7 +184,16 @@ it elaborated at the first attempt with no RTL edit, which is worth
 saying because the reason it had never been done was not that it was
 hard. `docs/47` then placed and routed it with six real RM_IHPSG13 SRAM
 macros: it routes clean, and it does not meet timing. The memory is
-**4.29 times the standard-cell logic** and 46.9 % of the die. No
+~~**4.29 times the standard-cell logic**~~ and 46.9 % of the die.
+*Corrected 2026-09-10: 4.29 divides the macro area by a standard-cell
+area that `docs/59` section 6.3 identifies as the **rejected
+`deferred_flatten` netlist's**, not the netlist that was hardened.
+Measured against what is actually placed in `hw/soc/pnr/runs/full3` the
+ratio is **4.2285** (`docs/59` section 11), and on
+`hw/soc/pnr/runs/npu2`, the first layout that contains the accelerator,
+it is **2.7445** (`docs/61` section 13 item 4). The die share is not
+corrected and does not move: the same six macros, 2,246,899.85 um2, sit
+on the same 4,786,287.408 um2 die in both runs.* No
 frequency is published for this design, per `docs/05` section 4 rule 5:
 a number read off a layout that also fails max slew and max cap and has
 never been through Magic DRC or LVS is not a result to put in a front
@@ -193,8 +220,32 @@ before any profile binds.
 And the requirement that `docs/05` actually quantifies is **power**, in
 tens of milliwatts — the only numeral in that section, which five
 documents had read past. `docs/47`'s own sign-off run already carried
-one: **27.8–46.1 mW** across three corners. Energy per inference is
-invariant under the clock to 0.045 %, because it is cycles times
+one: ~~**27.8–46.1 mW** across three corners~~.
+*Corrected 2026-09-10: that range is `report_power` with no switching
+activity annotated at all, and `docs/57-power-under-a-duty-cycle.md`
+measured it against the whole-SoC run's own toggle rates. At the typical corner and 20 ns, on
+`hw/soc/pnr/runs/full3`: **busy 33.890 mW** with the core's clock
+running, **idle 5.539 mW** with it gated in WFI, and **orbit-average
+5.540 mW** at the **0.0044 %** duty cycle `docs/53` section 6.2 sized
+profile 1 at — the orbit average is the idle figure to four decimal
+places, and at that duty cycle it always will be (`docs/57` section
+11.1). The unannotated estimate was right to 2.8 % on the busy case and
+wrong by a factor of **6.29** on the idle one, and the mechanism is a
+clock gate six documents had said this design did not have. **Those
+three figures are for a layout `docs/57` section 3.2 found does not
+contain the accelerator.** On layouts that do,
+`docs/76-the-second-and-third-clock-gates.md` section 8 measures **idle
+8.287 mW and orbit-average 8.289 mW** at the same duty cycle, and
+`docs/77-the-clock-gate-enables-and-what-actually-costs-them.md` section
+9.5 **8.315 mW idle and 22.142 mW computing** on the layout after it —
+and `docs/77` publishes no busy figure as a property of the design,
+because it measures the busy totals as a placement's and not a
+design's. Every one of these is a pre-silicon flow estimate on a layout
+that fails setup at the slow corner, fails max slew and max cap, and has
+never been through Magic DRC, LVS or XOR; `docs/05` section 4 rule 5
+says all of that travels with the number or none of it does.*
+Energy per inference is invariant under the clock to 0.045 %, because
+it is cycles times
 energy-per-cycle and the period appears in neither. Four documents had
 optimised the one term of that product the stated requirement does not
 contain. So 20 ns stays as the SDC constraint and the setup failure
@@ -264,8 +315,17 @@ Three licences, one per kind of thing, decided in
 | Documents in `docs/` and measurement data | `CC-BY-4.0` |
 
 `LICENSES.md` is the map: every tracked path, in or out, with what is
-held back and why. Every source file carries an SPDX tag; the 161 files
-that cannot hold a comment are covered by path in `.reuse/dep5`.
+held back and why. Every source file carries an SPDX tag; the files that
+cannot hold a comment are covered by path in `.reuse/dep5`.
+*Corrected 2026-09-10: this said ~~161 files~~, which is not what the
+checker says. `scripts/spdx_check.py` prints the count on every run —
+`N tagged, N covered by path, 0 missing, 0 wrong` — and it moves
+whenever a file is added under a covered prefix; three runs in the hour
+this was written returned 190, 191 and 191 covered by path, against 329,
+332 and 335 tagged. So the numeral
+is dropped rather than re-pinned. The claim that matters is that the
+files are covered by path and that nothing is missing or wrong, and the
+checker below is what establishes it.*
 
 The map is checked rather than asserted:
 
@@ -322,12 +382,48 @@ of riscv-formal's models and carry upstream's ISC notice inline.
 - `ROADMAP.md` — phased plan with gates
 
 **`docs/00-index.md` is the canonical list and this one stops at 17 on
-purpose.** The corpus is past thirty documents, and a second hand-kept
-list is a list that drifts — this one already had, silently. The index is
-generated against the directory and `sw/tests/test_doc_links.py` fails if
-a document is missing from it or a cross-reference names a file that does
-not exist, so it cannot go stale without the suite saying so. Start
-there.
+purpose.** The corpus is past eighty documents (`ls docs/*.md | wc -l`
+is 85), and a second hand-kept list is a list that drifts — this one
+already had, silently.
+
+*Corrected 2026-09-10, and the correction is narrower than the sentence
+it replaces.* This said the index "is generated against the directory".
+**It is not generated. It is hand-written and checked against the
+directory**, which is a weaker property and the one that is true:
+`sw/tests/test_doc_links.py` discovers every `docs/*.md` plus this file
+and `ROADMAP.md` on disk and fails if a document is not named in the
+index, if the index names a document that does not exist, or if any
+cross-reference in any of them names a file that does not exist. No
+script writes `docs/00-index.md`; `scripts/build_docs.py` only renders
+it, and falls back to a generated listing when it is absent.
+
+**So the set of documents cannot go stale without the suite saying so,
+and the numbers inside them can.** *This paragraph quoted the index as
+opening with "Every count below carries the command that produced it"
+and then argued the index did not support it. The index withdrew that
+sentence itself on 2026-09-10 — its own correction note says the claim
+mattered most here of anywhere in the corpus and that `README.md`
+repeats it, which this file then went on doing for a day.* What the
+index claims now is narrower and holds: every count in **section 2.1**
+names an artefact and carries a command that reads it, and section 6's
+re-measurements each name a command. The gap the old sentence was
+pointing at is still there and is not covered by the narrower claim:
+**section 5, the per-document table that is most of the file, is two
+columns wide, carries hundreds of counts in prose and has no command
+column at all.** Nothing in the suite fails when one of those counts
+drifts.
+
+Run section 2.1's own four commands against the tree and the drift is
+visible in both directions. On **2026-09-10** every one of the four
+disagreed with the row it sat in — 295 Python tests collected against
+503, 145 cocotb functions against 166, 45 formal tasks against 54, and
+"9 `.v` files, 5,366 lines" against 6,883 — and the rows were then
+brought up to date. Re-run on **2026-09-11**, one day later, and one of
+the four has already moved again: **505 tests collected, not 503**.
+Three still hold. Section 6 exists precisely because this keeps
+happening, and it is a record of past drift rather than a guard against
+the next one. Start there anyway — it is the only list of what exists —
+but re-run a count before quoting it.
 
 ## Layout
 

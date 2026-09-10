@@ -351,14 +351,94 @@ set_timing_derate -late 1.0500
 
 ## 4. The submission tree
 
-`tt/` is pinned in full by `tt/MANIFEST.sha256`, **29 files**, and the
+`tt/` is pinned in full by `tt/MANIFEST.sha256`, **31 files**, and the
 manifest itself hashes to **[fact]**:
 
 ```
-8d8988a12ad321f8314f9f2a68c94b7681f69f9da2ce8d5876a067f4ade5b07c  tt/MANIFEST.sha256
+f3a68f9d5afaa6fbf674ed9ae1244d2e5dd1f7eb40b649e3433b9b0d08d914de  tt/MANIFEST.sha256
 ```
 
-*SUPERSEDED 2026-08-31:
+**AMENDED 2026-09-10, and the amendment is overdue by a day.** Every
+superseded value below is retained; the chronology of this pin is
+**[fact, `git show <rev>:tt/MANIFEST.sha256 | sha256sum`]**:
+
+| Manifest SHA-256 | Manifested files | Dated | What moved into it |
+|---|---:|---|---|
+| **`f3a68f9d5afaa6fbf674ed9ae1244d2e5dd1f7eb40b649e3433b9b0d08d914de`** | **31** | **2026-09-10, current** | `README.md`, `info.yaml`, `docs/info.md`, and `LICENSES/CERN-OHL-W-2.0.txt` added |
+| `b9068f6ae359ca96f87d254e2f72557e1366e9df6591bbdfd67ec8f207834df3` | 30 | 2026-09-09 | `docs/14` stage 1: the SPDX header on every file in `src/`, `LICENSE.PENDING.md` out, `LICENSE` and `LICENSES/Apache-2.0.txt` in |
+| `8d8988a12ad321f8314f9f2a68c94b7681f69f9da2ce8d5876a067f4ade5b07c` | 29 | 2026-08-31 | `docs/36`'s two keys into `src/config.json` |
+| `0cea3939f4cc03ff98162602892bbfc5760fe6ce7855a27a7c8cd64e904ba747` | 29 | before 2026-08-31 | — |
+
+**The 2026-09-09 row was never written into this section**, and that is
+the part worth stating plainly rather than quietly correcting. Section
+2.1 was amended that day, `tt/src/` was regenerated that day, and this
+section went on pinning the pre-SPDX tree — so from 2026-09-09 the
+section 9.4 procedure, which is this document's own mechanical answer to
+"is what I am submitting what was verified", **failed on its own two
+`sha256sum` lines** for anyone who ran it. The manifest was right; the
+record of it was a day stale. A pin that is only sometimes maintained is
+worse than no pin, because it is read as verification.
+
+What moved on 2026-09-10, and nothing else did **[fact, `git diff --stat
+-- tt/`]**:
+
+| File | Now | Superseded 2026-09-10 |
+|---|---|---|
+| `tt/README.md` | `c1c0d15135a43c05421e23156eef2bf5751ad4c5b11633342cc275d080370840` | `87faee259c44eb6273c82337fc8fb52851cf8d103d711e0687fb3018a91f7b09` |
+| `tt/info.yaml` | `dc230e13b33ef4e33d8b23c0e048ecb12daf6529f8b0e9a87f7c2d1904ff27d6` | `55a701b8d232a969886279ef0aada43bede71ce02e48956b5829429c091bbab0` |
+| `tt/docs/info.md` | `408d3f3b27a2f6dfeca9468de91b0842761af0c9f1abcc927865f9211f85500a` | `7f714dc5dc63931c0323a64c51868c257ca0feeee935ade700cf66ec72423f2a` |
+| `tt/LICENSES/CERN-OHL-W-2.0.txt` | `c1432111d0aeefc9d1ced8105d2d4ed07d5dcb1fd43abb5d4616c4f9ef96e08f` | did not exist |
+
+Four defects, all in prose and one in a missing licence text, none in
+the netlist path:
+
+1. `tt/README.md` claimed `src/config.json` was byte-identical to
+   upstream and named `--diff-template` as the proof. It has carried the
+   appended `CONFIG_OVERRIDES` keys since 2026-08-26 — **this section
+   says so two paragraphs down** — and `--diff-template` compared the
+   generator's recorded copy of the upstream file rather than the built
+   one, so the named proof could not have seen the difference. The claim
+   is corrected and the comparison now runs against the built bytes.
+2. `tt/README.md` and `tt/info.yaml` quoted 185,840 um2 and 47.29 % —
+   the `docs/23` tile-shape A/B run, superseded by `docs/27` and then by
+   the frozen `signoff-6x2`. Both now carry **191,588 um2** and
+   **48.7516 %**, which is what section 3.3 above, `docs/31` section 6
+   and `docs/80`'s digest rows for the pilot sign-off have carried
+   all along. *(Group renamed 2026-09-11: the digest groups are
+   `pilot-signoff-gated` and `pilot-signoff-superseded`, split when
+   `docs/80` was re-measured; there is no group called
+   `pilot-signoff` any more, and this sentence named one.)*
+3. `tt/LICENSES/` held `Apache-2.0.txt` alone while every file in
+   `tt/src/` carries `SPDX-License-Identifier: CERN-OHL-W-2.0`, so the
+   published repository did not resolve its own tags. The text is now
+   emitted at `tt/LICENSES/CERN-OHL-W-2.0.txt` as well as at `LICENSE`.
+4. `tt/docs/info.md` told an operator that `FAULT_CLR` = `0x3F` clears
+   everything and listed three pilot-only registers. The die decodes
+   five and allocates clear bits 6 and 7, so that write clears six of
+   eight counters and the two it leaves — `CNT_EVQ_OUT_OVF` and
+   `CNT_EVQ_PAR` — are then read as live. `regmap/regmap.yaml` was
+   corrected for this on 2026-09-09; the datasheet did not follow
+   because the mask and the register list were typed into
+   `scripts/gen_tt_submission.py` by hand and nothing compared them to
+   anything. They are now read from `regmap/regmap.yaml` and from the
+   `SA_*` and `PILOT_BIT_FAULT_CLR_*` constants in
+   `hw/rtl/pilot_top.v`, and the generator exits non-zero if the three
+   disagree.
+
+**No re-harden is owed, and the reason is the same one section 9.3
+gives.** Nothing under `tt/src/` moved: `git diff --stat -- tt/src` is
+empty, the ten blobs of section 2.1 are untouched, and section 2.3 still
+reports no `DIFFERS` line. The four files that moved are `README.md`,
+`info.yaml`, `docs/info.md` and a licence text — none of them is read by
+Yosys, LibreLane or the `gds` action, and `info.yaml`'s only functional
+fields (`tiles`, `top_module`, `source_files`, `clock_hz`, the pinout)
+are byte-for-byte what they were; only a comment block moved. The
+netlist equality at the end of section 9.4 was re-run all the same and
+all four paths still print
+`52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989`
+**[fact, 2026-09-10]**.
+
+*SUPERSEDED 2026-08-31, retained:
 `0cea3939f4cc03ff98162602892bbfc5760fe6ce7855a27a7c8cd64e904ba747`.
 Exactly two of the 29 manifested files moved, and only one of them by
 content: `src/config.json` gained the two `docs/36` keys, and the
@@ -368,14 +448,19 @@ manifest line for it changed with it **[fact]**.*
 |---|---|---|
 | `tt/src/config.json` | `56d3738469a2cfaecfed57dc4901e66df2c90b657f08ee54b6fbb5ffc04c9407` | `0cfb05a9c3367f0a8f3012554b3fe694b5adfe546dff728deb9dc3b4f15c2c0b` |
 
-Verified 2026-08-31: **29 of 29 OK, exit 0**, and
-`gen_tt_submission.py --check` reports `tt/ matches the generator (30
-files)` **[fact]**.
+*That row still holds: `src/config.json` did not move on 2026-09-09 or
+on 2026-09-10, and `56d37384…` is its line in the current manifest
+**[fact]**.*
 
-`gen_tt_submission.py --check` reports **30 files**, not 29, and the two
-numbers do not contradict: the generator's set is the 29 manifested
+Verified 2026-09-10: **31 of 31 OK, exit 0**, and
+`gen_tt_submission.py --check` reports `tt/ matches the generator (32
+files)` **[fact]**. *Superseded 2026-09-10: verified 2026-08-31, **29 of
+29 OK, exit 0**, `tt/ matches the generator (30 files)`.*
+
+`gen_tt_submission.py --check` reports **32 files**, not 31, and the two
+numbers do not contradict: the generator's set is the 31 manifested
 files **plus `MANIFEST.sha256` itself**, which it writes last from the
-other 29 **[fact, `scripts/gen_tt_submission.py`]**. `src/user_config.json`
+other 31 **[fact, `scripts/gen_tt_submission.py`]**. `src/user_config.json`
 and `src/config_merged.json` are produced by the Tiny Tapeout tooling
 rather than by this generator and are in neither count.
 
@@ -929,6 +1014,43 @@ variants match`; and a green suite **apart from the one known
 `test_doc_links.py` index failure of section 10 item 7 [amended
 2026-08-31]**.
 
+**AMENDED 2026-09-10. Every line above was run at the re-pin and the
+expected output has moved twice** **[fact]**:
+
+- `sha256sum tt/MANIFEST.sha256` now prints `f3a68f9d…` and
+  `sha256sum -c` prints **31 of 31 OK**, per the amended section 4.
+  `gen_tt_submission.py --check` prints `tt/ matches the generator (32
+  files)`. The other seven lines print exactly what this section already
+  says, unchanged: the same ten blobs, no `DIFFERS` line, `OK: 6 pinned
+  config(s) … 0 derived config(s)`, `all 8 variants match`, `yosys
+  version = 0.67+146 (pinned 0.67+146)`.
+- **The `test_doc_links.py` exception is retired.** `docs/00-index.md`
+  names `docs/36`, and `pytest sw/tests/test_doc_links.py -q` is **94
+  passed** **[fact, 2026-09-10]**. Section 10 item 7 is closed below.
+- **A different suite failure stands in its place, and it is the
+  intended kind.** `sw/tests/test_tt_submission.py::test_pilot_only_registers_and_fault_clr_bits_are_documented`
+  fails with `Pinned: ['CNT_EVQ_OUT_OVF', 'CNT_EVQ_PAR']. Now: []`. That
+  test deliberately pins the gap in the frozen datasheet — the two
+  pilot-only registers it omitted and the stale `0x3F` clear mask — and
+  says in its own words that if the gap closes, the pin is to be deleted
+  rather than widened. Section 4's 2026-09-10 amendment closed it. The
+  failing assertion is therefore a **retirement notice, not a
+  regression**: `FROZEN_INFO_MD_MISSING`, `FROZEN_INFO_MD_STALE_CLEAR`
+  and `docs/21` section 10 item 7 are owed a deletion, in files this
+  document does not own. Until that is done, one failure of the last
+  line above is expected and is this one.
+
+  The measured run was **9 failed, 495 passed, 1 skipped in 1567.94 s**
+  **[fact, `.venv/bin/python -m pytest -q`, 2026-09-10]**, and the other
+  eight belong to work in flight elsewhere in the same working tree, not
+  to this amendment: seven in
+  `sw/tests/test_soc_synthesis_guards.py` reading `soc_wdog` at 136
+  flip-flops against a derived budget of 132, and one in
+  `sw/tests/test_flow_evidence.py` on an `aer_fifo` configuration. None
+  of the eight touches `hw/rtl/`, `tt/` or anything this document pins;
+  they are named here so that "9 failed" is not read as this section's
+  expected output once they land.
+
 Add one line, which the amendment makes checkable and which nothing else
 here checks — that the two gates of `docs/36` are actually bound:
 
@@ -1001,9 +1123,22 @@ configurations and two dates.
    `docs/18` portability comparison, the shuttle is ihp-sg13g2 where the
    metric is 0, and LibreLane defers this class of error so a failing
    run still writes its full artifact set. `docs/36` section 4.
-7. **Added 2026-08-31: `docs/00-index.md` does not name `docs/36`**, so
+7. ~~**Added 2026-08-31: `docs/00-index.md` does not name `docs/36`**, so
    `sw/tests/test_doc_links.py::test_every_document_is_reachable_from_the_index`
    fails, 1 failed against 233 passed. `docs/36` section 7 item 5 carries
    the row to add. Both files are outside that document's ownership;
    this is the same disposition `docs/31` section 10.8 item 5 recorded
-   for `docs/32`.
+   for `docs/32`.~~
+   **CLOSED 2026-09-10.** The index names `docs/36` and
+   `pytest sw/tests/test_doc_links.py -q` is **94 passed** **[fact]**.
+8. **Added 2026-09-10: the frozen-datasheet pin in
+   `sw/tests/test_tt_submission.py` is owed a deletion.** Section 4's
+   amendment corrected `tt/docs/info.md`, which is what
+   `FROZEN_INFO_MD_MISSING` and `FROZEN_INFO_MD_STALE_CLEAR` were
+   waiting for; the test now fails by design and says so in its own
+   assertion text. `docs/21` section 10 item 7 is the written record
+   that goes with them. All three are outside this document's
+   ownership — same disposition as item 7 above, and as `docs/31`
+   section 10.8 item 5. Nothing about the submission depends on it: the
+   datasheet the shuttle reads is now correct, and the pin is the
+   scaffolding that was holding the door open until it was.

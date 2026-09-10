@@ -17,9 +17,10 @@ Usage:
     python3 scripts/gen_tt_submission.py            # write tt/
     python3 scripts/gen_tt_submission.py --check    # fail on drift, write nothing
     python3 scripts/gen_tt_submission.py --diff-template
-                                                    # network: prove that the
-                                                    # files this script claims
-                                                    # are verbatim really are
+                                                    # network: re-fetch the
+                                                    # template and compare it
+                                                    # against the files this
+                                                    # tree actually ships
 
 Upstream provenance (recorded, not fetched at generation time so that the
 generator is reproducible offline):
@@ -42,6 +43,7 @@ import argparse
 import hashlib
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -158,13 +160,92 @@ REG_SUBSET = [
 ]
 
 # Pilot-only registers. They live in the unmapped region of the same
-# window and are deliberately not part of regmap/regmap.yaml, so they are
-# spelled out here (docs/15 section 3, deviation D5).
+# window and are deliberately not part of regmap/regmap.yaml, so their
+# MEANINGS are spelled out here (docs/15 section 3, deviation D5).
+#
+# CORRECTED 2026-09-10. This list carried three registers and stopped at
+# CNT_TMR. The die decodes five: CNT_EVQ_OUT_OVF at 0x0AC (docs/29,
+# pilot_top.v section 5.1) and CNT_EVQ_PAR at 0x0B0 (docs/30, section
+# 5.2) were added to hw/rtl/pilot_top.v and never reached this table, so
+# the shipped datasheet described six of eight counters and an operator
+# following it would never learn the other two exist. The addresses are
+# no longer written here at all: _pilot_decode() reads them out of
+# hw/rtl/pilot_top.v and _pilot_only_table() fails this generator if the
+# two sets disagree, which is the check that did not exist when the
+# registers were added. The same repair covers FAULT_CLR -- see
+# _fault_clr_bits().
 PILOT_ONLY_REGS = [
-    (0x0A0, "ECC_INJ_POS", "RW", "Bit position, 0..71, that ECC_INJ corrupts in the stored codeword."),
-    (0x0A4, "TMR_INJ", "RW", "{REP[1:0], BIT[5:0]}: holds one bit of one configuration replica wrong."),
-    (0x0A8, "CNT_TMR", "RO", "Voter disagreements masked since the last FAULT_CLR. Saturating. Cleared by FAULT_CLR bit 5."),
+    ("ECC_INJ_POS", "RW", "Bit position, 0..71, that ECC_INJ corrupts in the stored codeword."),
+    ("TMR_INJ", "RW", "{REP[1:0], BIT[5:0]}: holds one bit of one configuration replica wrong."),
+    ("CNT_TMR", "RO", "Voter disagreements masked since the last FAULT_CLR. Saturating."),
+    ("CNT_EVQ_OUT_OVF", "RO", "Output-queue writes refused and lost. Saturating. Not the input-queue counter CNT_EVQ_OVF."),
+    ("CNT_EVQ_PAR", "RO", "Queue entries discarded for a failed entry parity check, both queues in one count. Saturating."),
 ]
+
+# One-line meaning for each FAULT_CLR bit, keyed by the field name the
+# register map gives it (bits 0..4) or the name hw/rtl/pilot_top.v gives
+# its PILOT_BIT_FAULT_CLR_* constant (the pilot bits). Bit POSITIONS are
+# deliberately not written here: they come from the two sources above,
+# and _fault_clr_bits() fails if a name here has no bit or a bit has no
+# name.
+FAULT_CLR_MEANING = {
+    "CNT_SEC": "`CNT_SEC`, and the SEC pin",
+    "CNT_DED": "`CNT_DED`",
+    "CNT_EVQ_OVF": "`CNT_EVQ_OVF`, the INPUT queue drop counter",
+    "CNT_AXON_OOR": "`CNT_AXON_OOR`",
+    "FAULT_ADDR": "`FAULT_ADDR`",
+    "CNT_TMR": "`CNT_TMR`, and the TMR pin (pilot-only, see below)",
+    "CNT_EVQ_OUT_OVF": "`CNT_EVQ_OUT_OVF`, the OUTPUT queue drop counter (pilot-only, see below)",
+    "CNT_EVQ_PAR": "`CNT_EVQ_PAR` (pilot-only, see below)",
+}
+
+# A pilot-only register is exactly one whose decode address is a literal,
+# because the architecture register map does not carry it; an
+# architecture register takes its decode address from the generated
+# header (`SA_X = ADDR_X >> 2`). Same two expressions
+# sw/tests/test_tt_submission.py reads, against the same die.
+_PILOT_DECODE_RE = re.compile(
+    r"^\s*localparam\s*\[6:0\]\s*SA_(\w+)\s*=\s*12'h([0-9A-Fa-f]{3})\s*>>\s*2\s*;",
+    re.MULTILINE,
+)
+_PILOT_FAULT_CLR_BIT_RE = re.compile(
+    r"^\s*localparam\s+integer\s+PILOT_BIT_FAULT_CLR_(\w+)\s*=\s*(\d+)\s*;",
+    re.MULTILINE,
+)
+
+_NUMBER_WORDS = {
+    1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five",
+    6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten",
+}
+
+
+def _count_word(n: int) -> str:
+    return _NUMBER_WORDS.get(n, str(n))
+
+
+def _pilot_decode():
+    """({register: offset}, {clear name: bit}) read out of the die itself.
+
+    The source is hw/rtl/pilot_top.v, which is what src/ ships byte for
+    byte, so the datasheet is checked against the decode rather than
+    against another document.
+    """
+    body = (ROOT / "hw" / "rtl" / "pilot_top.v").read_text(encoding="utf-8")
+    regs = {n: int(off, 16) for n, off in _PILOT_DECODE_RE.findall(body)}
+    bits = {n: int(b) for n, b in _PILOT_FAULT_CLR_BIT_RE.findall(body)}
+    if not regs:
+        raise SystemExit(
+            "no literal SA_* decode constants found in hw/rtl/pilot_top.v; "
+            "the pilot-only block moved or was rewritten. Fix this reader "
+            "deliberately rather than letting it report an empty set"
+        )
+    if not bits:
+        raise SystemExit(
+            "no PILOT_BIT_FAULT_CLR_* constants found in hw/rtl/pilot_top.v; "
+            "see the note on _pilot_decode()"
+        )
+    return regs, bits
+
 
 PINOUT_UI = [
     ("SER_SCK", "Serial clock, mode 0 (CPOL 0, CPHA 0), at most clk/4"),
@@ -299,8 +380,17 @@ CONFIG_OVERRIDES: "dict[str, object]" = {
 }
 
 # =====================================================================
-# Files taken verbatim from the upstream template. --diff-template proves
-# that claim against the live repository.
+# Files taken from the upstream template. Every one of them is shipped
+# byte for byte EXCEPT src/config.json, which is shipped as the upstream
+# file plus the CONFIG_OVERRIDES keys appended under a "//" marker --
+# see config_json() below and the EXTENDED tuple it feeds.
+#
+# --diff-template checks that against the live repository, and it checks
+# the BUILT bytes: for src/config.json it re-applies the same append to
+# the freshly fetched upstream file and compares the result with what
+# build() puts in the tree. Until 2026-09-10 it compared the literal in
+# this file instead, so the one file that is not verbatim was reported
+# "verbatim" and the check could not have seen the difference.
 # =====================================================================
 
 VERBATIM = {}
@@ -625,11 +715,13 @@ Delete it when you are done. A stale netlist left in place makes
 `GATES=yes` silently test the previous revision.
 """
 
-# The upstream src/config.json, byte for byte. CONFIG_OVERRIDES, when
-# non-empty, is appended as extra keys; tt-support-tools config_utils
-# reads this file with json.load, which keeps the last value for a
-# duplicated key and then drops every "//" comment key, so appending is
-# safe and the upstream comments survive in the file for a human reader.
+# The upstream src/config.json, byte for byte. This literal is the
+# RECORDED upstream file, not the file this tree ships: config_json()
+# below appends CONFIG_OVERRIDES to it and that is what lands in
+# src/config.json. tt-support-tools config_utils reads the shipped file
+# with json.load, which keeps the last value for a duplicated key and
+# then drops every "//" comment key, so appending is safe and the
+# upstream comments survive in the file for a human reader.
 VERBATIM["src/config.json"] = """{
   "//": "DO NOT EDIT THIS FILE before reading the comments below:",
 
@@ -706,6 +798,36 @@ VERBATIM["src/config.json"] = """{
 }
 """
 
+# The one file in VERBATIM that this tree does not ship byte for byte.
+# Named here rather than tested for inline so that build() and
+# diff_template() cannot disagree about which file is extended.
+EXTENDED = ("src/config.json",)
+
+
+def config_json(base: str = "") -> str:
+    """The shipped src/config.json: upstream, plus CONFIG_OVERRIDES.
+
+    `base` defaults to the recorded upstream literal above. --diff-template
+    passes the file it has just fetched from the template, so that what it
+    compares is the claim this tree actually makes about the SHIPPED file
+    rather than a claim about a literal in this script.
+    """
+    text = base or VERBATIM["src/config.json"]
+    if not CONFIG_OVERRIDES:
+        return text
+    cfg = text.rstrip().rstrip("}").rstrip()
+    extra = ",\n".join(
+        f'  "{k}": {v!r}'.replace("'", '"') for k, v in CONFIG_OVERRIDES.items()
+    )
+    return (
+        cfg
+        + ",\n\n"
+        + "  \"//\": \"Added by scripts/gen_tt_submission.py:\",\n"
+        + extra
+        + "\n}\n"
+    )
+
+
 # Upstream .gitignore, plus one entry. Not in the verbatim set.
 GITIGNORE_UPSTREAM = """.DS_Store
 .idea
@@ -769,15 +891,22 @@ def info_yaml() -> str:
     lines.append("  # repository.")
     lines.append(f"  clock_hz:     {CLOCK_HZ}")
     lines.append("")
-    lines.append("  # Tile shape. docs/23: placed, this design is 185,840 um2 of")
-    lines.append("  # sg13g2 standard cells, which no longer fits the 70 % planning")
-    lines.append("  # criterion in a 4x2 core of 259,837 um2 (docs/22 measures")
-    lines.append("  # 71.489 %). 6x2 offers 392,988 um2 and a full local harden")
-    lines.append("  # there closes at 47.29 % utilization with zero detailed-route")
-    lines.append("  # DRC errors, zero Magic and KLayout DRC, zero LVS errors and")
-    lines.append("  # zero antenna violations. The alternative twelve-tile shape,")
-    lines.append("  # 3x4, was hardened too and is the runner-up on every count")
-    lines.append("  # except utilization; docs/23 has both side by side.")
+    lines.append("  # Tile shape. 4x2 was dropped because it no longer fits the")
+    lines.append("  # 70 % planning criterion: docs/22 places 185,755 um2 of sg13g2")
+    lines.append("  # standard cells into a 4x2 core of 259,837 um2, 71.489 %. 6x2")
+    lines.append("  # offers a 392,988 um2 core, and the frozen run there,")
+    lines.append("  # signoff-6x2 (docs/31 section 6), places 191,588 um2 for")
+    lines.append("  # 48.7516 % utilization with zero detailed-route DRC errors,")
+    lines.append("  # zero Magic and KLayout DRC, zero LVS errors and zero antenna")
+    lines.append("  # violations. The alternative twelve-tile shape, 3x4, was")
+    lines.append("  # hardened too and is the runner-up on every count except")
+    lines.append("  # utilization; docs/23 has both side by side.")
+    lines.append("  #")
+    lines.append("  # CORRECTED 2026-09-10: this comment published 185,840 um2 and")
+    lines.append("  # 47.29 %, which are the docs/23 tile-shape A/B run's numbers,")
+    lines.append("  # superseded twice since -- by docs/27 (185,595) and then by the")
+    lines.append("  # frozen sign-off run above. The docs/80 digest ledger already")
+    lines.append("  # carried stdcell_um2=191588;util=0.487516.")
     lines.append(f'  tiles: "{TILES}"')
     lines.append("")
     lines.append(f'  top_module:  "{TOP_MODULE}"')
@@ -826,10 +955,110 @@ def _reg_table(addr, access):
 
 
 def _pilot_only_table():
+    """The pilot-only register table, with its offsets read from the die.
+
+    Cross-checked both ways: a register the die decodes outside the map
+    and this generator does not describe is a datasheet that hides part
+    of the chip, and a register described here that the die does not
+    decode is a datasheet that invents one. Either fails the build.
+    """
+    decoded, _ = _pilot_decode()
+    described = [name for name, _acc, _desc in PILOT_ONLY_REGS]
+    if sorted(described) != sorted(decoded):
+        raise SystemExit(
+            "the pilot-only register table in scripts/gen_tt_submission.py "
+            "disagrees with the decode in hw/rtl/pilot_top.v.\n"
+            f"  described here: {', '.join(sorted(described))}\n"
+            f"  decoded by the die: "
+            + ", ".join(f"{n}=0x{o:03X}" for n, o in sorted(decoded.items()))
+            + "\n  Update PILOT_ONLY_REGS."
+        )
     rows = ["| Offset | Register | Access | Meaning |", "|---|---|---|---|"]
-    for off, name, acc, desc in PILOT_ONLY_REGS:
-        rows.append(f"| 0x{off:03X} | {name} | {acc} | {desc} |")
+    for name, acc, desc in sorted(PILOT_ONLY_REGS, key=lambda r: decoded[r[0]]):
+        rows.append(f"| 0x{decoded[name]:03X} | {name} | {acc} | {desc} |")
     return "\n".join(rows)
+
+
+def _fault_clr_bits(fields):
+    """{bit: name} for FAULT_CLR, from the map and from the die.
+
+    Bits 0..4 come from regmap/regmap.yaml through sw/golden/regmap_gen.py.
+    The pilot bits come from the PILOT_BIT_FAULT_CLR_* constants that
+    hw/rtl/pilot_top.v decodes. Nothing here is a literal, which is the
+    whole point: regmap/regmap.yaml was corrected on 2026-09-09 to say
+    the portable clear-everything write is 0xFF and not 0x3F, and the
+    datasheet went on publishing 0x3F because the mask was typed into
+    this file by hand and no check compared the two.
+    """
+    arch = dict(fields["FAULT_CLR"])
+    regs, pilot = _pilot_decode()
+    clash = sorted(set(arch) & set(pilot))
+    if clash:
+        raise SystemExit(
+            f"FAULT_CLR: {clash} is both an architecture field in "
+            "regmap/regmap.yaml and a pilot-only clear in hw/rtl/pilot_top.v"
+        )
+    bits = {}
+    for name, bit in sorted(arch.items()) + sorted(pilot.items()):
+        if bit in bits:
+            raise SystemExit(
+                f"FAULT_CLR bit {bit} is claimed by both {bits[bit]} and {name}"
+            )
+        bits[bit] = name
+    unnamed = [n for n in bits.values() if n not in FAULT_CLR_MEANING]
+    if unnamed:
+        raise SystemExit(
+            f"FAULT_CLR bits clear {sorted(unnamed)}, which FAULT_CLR_MEANING "
+            "in scripts/gen_tt_submission.py does not describe. A clear bit "
+            "the datasheet does not mention is a counter an operator leaves "
+            "standing"
+        )
+    for name in pilot:
+        if name not in regs:
+            raise SystemExit(
+                f"FAULT_CLR clears {name}, which is neither in "
+                "regmap/regmap.yaml nor decoded as a pilot-only register"
+            )
+    for name, off in regs.items():
+        if name.startswith("CNT_") and name not in pilot:
+            raise SystemExit(
+                f"pilot-only counter {name} at 0x{off:03X} has no FAULT_CLR "
+                "bit; a counter that cannot be cleared reads a lifetime total"
+            )
+    return bits
+
+
+def _fault_clr_mask(fields):
+    mask = 0
+    for bit in _fault_clr_bits(fields):
+        mask |= 1 << bit
+    return mask
+
+
+def _fault_clr_table(fields):
+    bits = _fault_clr_bits(fields)
+    rows = ["| Bit | Clears |", "|---|---|"]
+    for bit in sorted(bits):
+        rows.append(f"| {bit} | {FAULT_CLR_MEANING[bits[bit]]} |")
+    return "\n".join(rows)
+
+
+def _fault_clr_prose(fields):
+    """The sentence under the FAULT_CLR table, wrapped like the prose."""
+    arch = dict(fields["FAULT_CLR"])
+    _, pilot = _pilot_decode()
+    top = max(arch.values())
+    order = sorted(pilot.items(), key=lambda kv: kv[1])
+    pilot_bits = ", ".join(str(b) for _n, b in order)
+    pilot_names = ", ".join(f"`{n}`" for n, _b in order)
+    return textwrap.fill(
+        f"Bits 0 to {top} are the architecture register map's own "
+        f"assignment. Bits {pilot_bits} are this pilot's, because "
+        f"{pilot_names} are pilot-only registers and the map leaves bits "
+        f"{top + 1} and up unassigned. Writing "
+        f"`0x{_fault_clr_mask(fields):02X}` clears everything.",
+        width=72,
+    )
 
 
 def _pin_table(pins, kind):
@@ -839,7 +1068,7 @@ def _pin_table(pins, kind):
     return "\n".join(rows)
 
 
-def info_md(addr, access) -> str:
+def info_md(addr, access, fields) -> str:
     return f"""<!--
 GENERATED by scripts/gen_tt_submission.py in the neuromorphic-space-soc
 repository. Do not edit here; edit the source repository and regenerate.
@@ -1006,18 +1235,18 @@ Clear them with `STATUS_CLR` once it is recorded.
 **Clearing.** `FAULT_CLR` is a write-1-to-clear mask, one bit per
 counter, in the architecture register map's order:
 
-| Bit | Clears |
-|---|---|
-| 0 | `CNT_SEC`, and the SEC pin |
-| 1 | `CNT_DED` |
-| 2 | `CNT_EVQ_OVF` |
-| 3 | `CNT_AXON_OOR` |
-| 4 | `FAULT_ADDR` |
-| 5 | `CNT_TMR`, and the TMR pin (pilot-only, see below) |
+{_fault_clr_table(fields)}
 
-Bits 0 to 4 are the architecture register map's own assignment. Bit 5 is
-this pilot's, because `CNT_TMR` is a pilot-only register and the map
-leaves bits 5 and up unassigned. Writing `0x3F` clears everything.
+{_fault_clr_prose(fields)}
+
+*CORRECTED 2026-09-10. This datasheet published `0x3F`, which was the
+whole mask only while `CNT_TMR` was the pilot's sole extra clear bit.
+`CNT_EVQ_OUT_OVF` and `CNT_EVQ_PAR` took bits 6 and 7 when they were
+added, and a host that writes `0x3F` clears six of the eight counters
+and leaves those two counting. `regmap/regmap.yaml` carries the same
+correction, dated 2026-09-09; the superseded `0x3F` is left standing in
+this sentence rather than deleted.*
+
 `STATUS_CLR` clears the sticky `STATUS` bits, and with them the DED pin;
 the ERR pin follows `STATUS.ERR_CFG` and `STATUS.OVF_SEEN`.
 
@@ -1029,7 +1258,7 @@ shifted right by two. `W1C` = write one to clear, `WO` = write only,
 
 {_reg_table(addr, access)}
 
-Three registers exist only on this pilot. They sit in the unmapped
+{_count_word(len(PILOT_ONLY_REGS))} registers exist only on this pilot. They sit in the unmapped
 region of the same window and do not change the architecture's register
 map:
 
@@ -1097,17 +1326,25 @@ Tiny Tapeout TTIHP26b submission, {TILES} tiles, IHP SG13G2.
 ## Status
 
 The design has been taken through a full local LibreLane `Classic` run
-at {TILES} against this repository's own `src/config_merged.json`. It closes
-at 47.29 % utilization with zero detailed-route DRC errors, zero Magic
-DRC errors, zero KLayout DRC errors, zero Netgen LVS errors, zero antenna
-violations, and zero setup, hold, max-cap and max-slew violations across
-all three PVT corners. The tile shape was chosen on measured area, and
-re-chosen when the design outgrew the first choice: placed, the design is
-185,840 um2 of standard cells, which overruns the 70 % planning criterion
-in a 4x2 core of 259,837 um2. Both twelve-tile shapes were then hardened
-rather than estimated, and {TILES} won. Full working in
-`docs/15-pilot-tile-plan.md` and `docs/23-tile-shape-decision.md` in the
-source repository.
+at {TILES} against this repository's own `src/config_merged.json`. The
+frozen run is `signoff-6x2`: placed, the design is 191,588 um2 of
+standard cells in a 392,988 um2 core, 48.7516 % utilization, with zero
+detailed-route DRC errors, zero Magic DRC errors, zero KLayout DRC
+errors, zero Netgen LVS errors, zero antenna violations, and zero setup,
+hold, max-cap and max-slew violations across all three PVT corners. The
+tile shape was chosen on measured area, and re-chosen when the design
+outgrew the first choice: the 4x2 candidate placed 185,755 um2 into a
+259,837 um2 core, 71.489 %, which overruns the 70 % planning criterion.
+Both twelve-tile shapes were then hardened rather than estimated, and
+{TILES} won. Full working in `docs/15-pilot-tile-plan.md`,
+`docs/22-reharden-wave5.md`, `docs/23-tile-shape-decision.md` and
+`docs/31-signoff-6x2.md` in the source repository.
+
+*Corrected 2026-09-10: this file published 185,840 um2 and 47.29 %.
+Those are the tile-shape A/B run's numbers and the design has been
+re-hardened twice since; the frozen sign-off run above is what the
+submission is built from, and `docs/80-artefact-digests.tsv` already
+recorded `stdcell_um2=191588;util=0.487516` for it.*
 
 That local run is evidence, not a substitute for the GDS action and the
 Tiny Tapeout precheck, which are what actually gate a submission.
@@ -1135,10 +1372,33 @@ are ported from the upstream Tiny Tapeout template:
     {TEMPLATE_URL}
     commit {TEMPLATE_COMMIT}
 
-`src/config.json` is byte-identical to upstream. Running
-`scripts/gen_tt_submission.py --diff-template` in the source repository
-re-fetches the template and proves that claim for every file that carries
-it.
+Every one of those files is byte-identical to upstream except
+`src/config.json`, which is the upstream file with
+{len(CONFIG_OVERRIDES)} keys appended under an
+`"Added by scripts/gen_tt_submission.py:"` marker:
+`SYNTH_HIERARCHY_MODE`, six keys that are what makes this design meet
+timing at the slow corner, and two that make the max-cap and max-slew
+checkers able to fail. Nothing upstream wrote is edited or removed, and
+no appended key repeats an upstream one.
+
+Running `scripts/gen_tt_submission.py --diff-template` in the source
+repository re-fetches the template and compares it against the files
+this tree actually ships — `src/config.json` included: it re-applies
+the same appended keys to the freshly fetched upstream file and reports
+`CHANGED` if the result is not byte for byte what `src/config.json`
+holds. What it can see is upstream moving, and this generator's recorded
+copy of upstream being wrong. What it cannot see is a change to the
+appended keys themselves — both sides of the comparison move together,
+which is correct, because the tree then still is upstream plus the keys
+— or a hand-edit of a file in this tree, which is what `MANIFEST.sha256`
+and `--check` are for.
+
+*Corrected 2026-09-10: this section said `src/config.json` was
+byte-identical to upstream and named `--diff-template` as the proof. It
+was neither. The file has carried appended keys since 2026-08-26, and
+`--diff-template` compared the generator's recorded copy of the upstream
+file rather than the built one, so the named proof could not have seen
+the difference in the one file that has one.*
 
 ## Licence
 
@@ -1150,6 +1410,13 @@ Two licences, because this tree has two origins.
   there.
 * **The scaffolding listed above** stays `Apache-2.0` as received from
   the upstream template; its text is in `LICENSES/Apache-2.0.txt`.
+
+Both texts are also in `LICENSES/` under their SPDX identifiers —
+`LICENSES/CERN-OHL-W-2.0.txt` and `LICENSES/Apache-2.0.txt` — which is
+where the REUSE specification says a tool must look for the licence
+named by a file's `SPDX-License-Identifier` tag. `LICENSE` at the root
+is the same CERN-OHL-W-2.0 text, kept because that is the file a reader
+and GitHub look for.
 
 The decision behind the split is `docs/14-licensing-decision.md` in the
 source repository, signed 2026-09-09.
@@ -1166,16 +1433,27 @@ Requires `iverilog` and the packages in `test/requirements.txt`.
 
 
 def license_texts() -> "dict[str, bytes]":
-    """The two licence files this tree ships, read from LICENSES/.
+    """The licence files this tree ships, read from LICENSES/.
 
     Read rather than embedded so that there is one copy of each text in
     the repository and no way for this generator to drift from it.
     `docs/14` section 6.4 is the decision; `scripts/spdx_check.py` is
     the policy that keeps `src/` tagged to match.
+
+    CORRECTED 2026-09-10. This emitted `LICENSES/Apache-2.0.txt` alone
+    while every file in `src/` carries
+    `SPDX-License-Identifier: CERN-OHL-W-2.0`. REUSE resolves that tag
+    to `LICENSES/CERN-OHL-W-2.0.txt`, so the published submission
+    repository was not REUSE-conformant against its own tags: the
+    licence text was present at the root as `LICENSE` and absent from
+    the one directory a tool reads. Both are now emitted, and `LICENSE`
+    stays because it is what a reader and GitHub look for.
     """
     out = {}
     lic = ROOT / "LICENSES"
-    out["LICENSE"] = (lic / "CERN-OHL-W-2.0.txt").read_bytes()
+    cern = (lic / "CERN-OHL-W-2.0.txt").read_bytes()
+    out["LICENSE"] = cern
+    out["LICENSES/CERN-OHL-W-2.0.txt"] = cern
     out["LICENSES/Apache-2.0.txt"] = (lic / "Apache-2.0.txt").read_bytes()
     return out
 
@@ -1650,18 +1928,18 @@ def _load_regmap():
     if sw not in sys.path:
         sys.path.insert(0, sw)
     try:
-        from golden.regmap_gen import ACCESS, ADDR  # type: ignore
+        from golden.regmap_gen import ACCESS, ADDR, FIELDS  # type: ignore
     except ImportError as exc:  # pragma: no cover - environment problem
         raise SystemExit(
             f"cannot import sw/golden/regmap_gen.py ({exc}); run "
             f"regmap/generate.py first"
         )
-    return ADDR, ACCESS
+    return ADDR, ACCESS, FIELDS
 
 
 def build() -> "dict[str, bytes]":
     """Return the whole submission tree as {relative path: bytes}."""
-    addr, access = _load_regmap()
+    addr, access, fields = _load_regmap()
     files: "dict[str, bytes]" = {}
 
     for path, text in VERBATIM.items():
@@ -1672,24 +1950,16 @@ def build() -> "dict[str, bytes]":
     files["README.md"] = readme_md().encode()
     files.update(license_texts())
     files["info.yaml"] = info_yaml().encode()
-    files["docs/info.md"] = info_md(addr, access).encode()
+    files["docs/info.md"] = info_md(addr, access, fields).encode()
     files["test/Makefile"] = test_makefile().encode()
     files["test/tb.v"] = test_tb_v().encode()
     files["test/tb.gtkw"] = test_gtkw().encode()
     files["test/test.py"] = test_py(addr).encode()
 
-    if CONFIG_OVERRIDES:
-        cfg = VERBATIM["src/config.json"].rstrip().rstrip("}").rstrip()
-        extra = ",\n".join(
-            f'  "{k}": {v!r}'.replace("'", '"') for k, v in CONFIG_OVERRIDES.items()
-        )
-        files["src/config.json"] = (
-            cfg
-            + ",\n\n"
-            + "  \"//\": \"Added by scripts/gen_tt_submission.py:\",\n"
-            + extra
-            + "\n}\n"
-        ).encode()
+    # The one VERBATIM entry this tree does not ship byte for byte. Built
+    # through config_json() so that --diff-template checks these exact
+    # bytes rather than the literal they are built from.
+    files["src/config.json"] = config_json().encode()
 
     for name in RTL_SOURCES + RTL_INCLUDES:
         src = ROOT / "hw" / "rtl" / name
@@ -1785,7 +2055,14 @@ def check(files, target: Path) -> "list[str]":
 
 
 def diff_template() -> int:
-    """Re-fetch the upstream template and check the verbatim claim."""
+    """Re-fetch the upstream template and check the claim tt/README.md makes.
+
+    Compares the BUILT bytes, so the one extended file is checked as
+    upstream-plus-CONFIG_OVERRIDES rather than being skipped. It sees
+    upstream moving and it sees a mis-ported VERBATIM literal; it does
+    not see a change to CONFIG_OVERRIDES (both sides move together) and
+    it does not read the tree on disk at all, which is --check's job.
+    """
     import shutil
     import subprocess
     import tempfile
@@ -1805,18 +2082,32 @@ def diff_template() -> int:
         print(f"upstream {TEMPLATE_URL} {TEMPLATE_REF} = {head}")
         if head != TEMPLATE_COMMIT:
             print(f"NOTE: recorded TEMPLATE_COMMIT is {TEMPLATE_COMMIT}")
+        # Build the tree and compare the SHIPPED bytes, not the literals
+        # they are built from. src/config.json is the file that makes the
+        # difference: it is the upstream file plus CONFIG_OVERRIDES, so
+        # the honest comparison is upstream-plus-the-same-append against
+        # what build() actually wrote. Comparing the literal, which is
+        # what this did until 2026-09-10, reported "verbatim" for the one
+        # file in the set that is not.
+        files = build()
         bad = 0
-        for rel, text in sorted(VERBATIM.items()):
+        for rel in sorted(VERBATIM):
             up = clone / rel
             if not up.is_file():
                 print(f"GONE      {rel}: no longer in the template")
                 bad += 1
                 continue
-            if up.read_bytes() != text.encode():
+            if rel in EXTENDED:
+                expected = config_json(up.read_text()).encode()
+                label = f"extended  {rel} (+{len(CONFIG_OVERRIDES)} keys)"
+            else:
+                expected = up.read_bytes()
+                label = f"verbatim  {rel}"
+            if files[rel] != expected:
                 print(f"CHANGED   {rel}")
                 bad += 1
             else:
-                print(f"verbatim  {rel}")
+                print(label)
         # .gitignore is the one derived file with a byte-exact upstream
         # base (the generator only appends to it), so drift in it is
         # detectable the same way. test/Makefile, test/tb.v and
@@ -1833,6 +2124,10 @@ def diff_template() -> int:
             print(f"{'unchanged' if same else 'CHANGED':9} {rel} "
                   f"(upstream base of a derived file)")
             bad += 0 if same else 1
+        print("\n\"extended\" means the shipped file is the upstream file "
+              "plus the CONFIG_OVERRIDES\nkeys; the comparison re-applies "
+              "them to the fetched upstream file, so a\nchange on either "
+              "side reports CHANGED.")
         print("\nRewritten from the template, re-port by hand if upstream "
               "changed them:\n  test/Makefile, test/tb.v, test/tb.gtkw, "
               "README.md, docs/info.md, info.yaml")

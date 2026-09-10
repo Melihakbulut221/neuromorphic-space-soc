@@ -4,11 +4,23 @@
 % The numbers this paper's argument turns on are registered in
 % paper/claims.yaml and checked by paper/check_claims.py, which is
 % configured to run in CI and has not been able to since 2026-09-03 --
-% see Section 12. The
-% registry is NOT a census of every number printed here -- the body
-% prints about 174 numeric literals and the registry holds 27 -- and the
-% checker's own summary says how many of its claims are re-derived by a
-% command and how many are read once by hand from a named artefact.
+% see the limitations section, which is where the observed answer is
+% stated rather than the configured one.
+%
+% The registry is NOT a census of every number printed here. It holds
+% the figures the argument turns on and nothing else, so it is always
+% smaller than the body's stock of numeric literals, and it grows when a
+% claim is added rather than when a number is. That is the property; the
+% size is not. An earlier version of this header printed both as counts
+% -- "the body prints about 174 numeric literals and the registry holds
+% 27" -- and the second was already stale when it was read, because a
+% count of a file that grows goes stale silently while still reading as
+% a fact, and nothing was checking it. Naming a count here would only
+% move the same defect one line down, so this header names none.
+% `python3 paper/check_claims.py --list` prints the registry as
+% it stands, and the checker's own summary says how many of its claims
+% are re-derived by a command and how many are read once by hand from a
+% named artefact.
 
 \documentclass[11pt,a4paper]{article}
 
@@ -58,8 +70,14 @@ fails 3{,}088 setup endpoints at the slow corner and closes at
 \SI{25}{\nano\second}, or \SI{24}{\nano\second} after a repair we report
 in full including the arm that made it worse. Its geometric decks had been switched off for
 three years' worth of runs on the strength of one experiment; we ran
-them, and \textbf{of \num{39969214} Magic errors and \num{9668} KLayout
-errors, zero fall outside the vendor SRAM macros}, while Netgen matches
+them, and \textbf{of \num{39969214} Magic error \emph{boxes} and
+\num{9668} KLayout \emph{markers}, zero fall outside the vendor SRAM
+macros}. Neither headline is a count of distinct violations and we
+caveat both: Magic's own report ends by saying to divide it by 3 or 4,
+and \num{3918} of the KLayout markers are one population of shapes
+reported a second time by a second rule, leaving \num{5750} distinct.
+Every one of those divisors moves the inside number and none of them
+touches the outside number, which is zero throughout. Netgen matches
 the layout to the netlist uniquely with those macros abstracted.
 What we do have is a design whose redundancy claim was checked at three
 levels and was wrong at two of them.
@@ -202,6 +220,49 @@ most of what this design does.
 \section{What exists and what does not}
 \label{sec:inventory}
 
+\paragraph{Every layout-derived number in this paper predates a
+register-transfer change made after it was written, and that is stated
+here rather than discovered.}
+On 11 September 2026, four defects were repaired in the system-on-chip's
+accelerator and watchdog sources: an unbounded state in the event
+engine's decision state from which it could not drain the die's queue, an
+asynchronous board strap sampled into three triplicated replicas with no
+synchroniser, a slave that advertised itself free while it still owed the
+fabric a response, and three counter comparisons written as equality
+where the file's own rule is inequality. All four are real, all four are
+repaired, and each carries a test that fails on the unrepaired source.
+
+\textbf{None of the layouts this paper measures contains them.} Every
+\file{soc\_top} run cited here---the inventory of
+Table~\ref{tab:inventory}, the deck results, the $2\times2$ timing
+factorial, the corrected-upset campaign of Section~\ref{sec:w9} and the
+gate-level divergence of Section~\ref{sec:fi-results}---was hardened
+before the repair, and the repair adds five flip-flops and about
+twenty-three cells. \emph{Those numbers remain true of those runs}, which
+is what the digest ledger pins and what
+Section~\ref{sec:determinism}'s determinism licenses. What is no longer
+true is the implicit reading that they describe the design as it now
+stands in the repository.
+
+We report it this way, rather than re-hardening, for a stated reason: a
+re-harden plus a re-run of the deck, LVS and static-timing evidence is
+seventeen hours for the Magic deck alone, and it would replace a set of
+numbers whose provenance is complete with a set measured in a hurry
+against a deadline. The honest alternative is the marker. What it costs
+is that a reader who clones the repository and hardens it will not
+reproduce the figures below, and the difference is five flip-flops.
+
+\textbf{And the reason this is printed at the top of the inventory rather
+than in the limitations is the shape of how it was nearly missed.} On the
+same day the design moved, one instrument pinned 156 new digest rows
+attesting exactly the superseded evidence and another made this paper's
+numbers about that evidence more precise. Both were correct---identity is
+identity, and 1{,}806 really is the right pin count---and the effect of
+the two together is that every check in the repository now reports green
+over evidence that has quietly stopped describing its subject. That is
+this paper's own subject, arriving through the door marked \emph{success}
+rather than \emph{failure}, and no single check could have seen it.
+
 Table~\ref{tab:inventory} is the inventory, and the rows saying
 \emph{does not exist} are the reason it is on the second page rather than
 in a limitations section at the end.
@@ -240,8 +301,11 @@ Timing & \textbf{$-$\SI{4.6799}{\nano\second} slow-corner setup on
 detailed-route DRC 0 \\
 Geometric decks & Run for this paper, having been off in the
 configuration since the design existed. Magic DRC \num{39969214} error
-boxes and KLayout \num{9668}, \textbf{all of both inside the six vendor
-SRAM macros and none outside}; Netgen LVS \emph{circuits match uniquely}
+boxes, which the report itself says to divide by 3 or 4, and KLayout
+\num{9668} markers, of which \num{3918} are a second rule repeating the
+first rule's shapes, so \num{5750} distinct; \textbf{all of both inside
+the six vendor SRAM macros and none outside}, on every one of those
+divisors; Netgen LVS \emph{circuits match uniquely}
 with those macros abstracted to their pin lists. \S\ref{sec:decks} \\
 Not covered by that & metal density and antenna are separate runsets and
 were not invoked; LVS excludes the macro internals by construction. The
@@ -953,7 +1017,9 @@ Deck & inside the macros & outside & \\
 Magic DRC, full & \num{39969214} & \textbf{0} & 17\,h\,11\,m, 16\,GiB
 peak. Also 0 straddling a macro edge and 0 outside the die \\
 KLayout DRC & \num{9668} & \textbf{0} & 3 of 173 rules fire; every item
-names a cell inside the vendor hierarchy \\
+names a cell inside the vendor hierarchy. \num{3918} of the markers are
+\texttt{Sdiod.e} repeating \texttt{Sdiod.d}'s shapes exactly, so the
+distinct-marker count is \num{5750}; the outside column is 0 either way \\
 Netgen LVS & --- & --- & \textbf{Circuits match uniquely}: \num{62256}
 devices and \num{61912} nets on both sides, all seven counters zero \\
 \bottomrule
@@ -971,22 +1037,51 @@ ten-row rule histogram line for line.
 \emph{The macro was calibrated on its own.} The same deck over each
 vendor macro standing alone, with no design near it, gives
 \num{8808860} and \num{2210913} boxes---and both scale \emph{linearly
-with bit count} off the single-macro figure ($1.9985\times$ and
+with bit count} off the single-macro figure ($1.9982\times$ and
 $7.9611\times$), which is the signature of a per-bitcell defect rather
 than anything contextual. Six instances predict \num{39657266} against
 \num{39969214} measured, a surplus of \num{311948} or 0.79\,\%, and
 every box of that surplus still lands inside a macro.
 
-\emph{The count is a box count, not a violation count}, and the report
-says so itself: its last line reads \emph{``should be divided by 3 or
-4''}, so the distinct-violation figure is roughly 10.0 to 13.3 million.
-The divisor changes the inside number and does not touch the outside
-number, which is zero either way.
+\emph{Neither headline is a violation count, and the two overstate for
+different reasons.} Magic's figure is a box count and the report says so
+itself: its last line reads \emph{``should be divided by 3 or 4''}, so
+the distinct-violation figure is roughly 10.0 to 13.3 million.
+KLayout's \num{9668} needs the same treatment and an earlier draft of
+this paper gave it none, printing it uncaveated in the abstract, in
+Table~\ref{tab:inventory} and in Table~\ref{tab:decks} while caveating
+Magic's in all three: \texttt{Sdiod.d} and \texttt{Sdiod.e} are
+evaluated over the same derived layer and flag the \emph{identical}
+\num{3918} (cell, geometry) pairs---intersection \num{3918}, symmetric
+difference zero---so one population of shapes is reported twice and the
+distinct-marker count is \num{5750}. That the two rules are one
+population was established on the single-macro case in the project's own
+record and reproduces here on the whole system-on-chip. The same record
+measured the opposite error in the same number: a deep-mode marker count
+\emph{understates} the shape count, by a factor of 53 on the single
+macro, and we have not measured that factor here. So the KLayout
+headline is wrong in both directions at once and its true shape count is
+not known to us. In every case the divisor changes the inside number and
+does not touch the outside number, which is zero on all of them.
 
-\emph{The zero is not the deck declining to look.} A positive control---
-the same deck, same version, same options, on a top cell carrying
-deliberate metal width and spacing violations---returns those
-violations.
+\emph{The zero is not the deck declining to look---and that is
+established by a planted control for \textbf{one} of the three decks,
+not for the table.} The control is KLayout's alone: the same deck, same
+version, same options---deep mode, recommended rules off---on a
+synthetic top cell carrying one \SI{0.10}{\micro\meter} Metal1 wire
+against a \SI{0.16}{\micro\meter} minimum width and two wires
+\SI{0.10}{\micro\meter} apart against a \SI{0.18}{\micro\meter} minimum
+space. It returns exactly those two violations, \texttt{M1.a} and
+\texttt{M1.b}, and nothing else. \textbf{No control with a planted
+answer was built for Magic or for Netgen}, and an earlier draft of this
+paragraph sat under a three-deck table and read as though one had been.
+What stands in its place is weaker and is named as weaker: for Magic,
+that the same invocation returned \num{39969214} boxes on the macros, so
+the deck was reading geometry rather than skipping it; for Netgen, that
+four of the seven sibling arms of the same comparison on the same design
+return \emph{``Netlists do not match''}. Those are runs that came back red, not
+controls with a known answer, and the difference is the one this paper
+spends its length on.
 
 \paragraph{The exclusions, which are not small.}
 Metal density and antenna are \emph{separate top-level runsets} in this
@@ -994,11 +1089,14 @@ PDK and neither was invoked, by this check or by the flow. Density bears
 directly on the routing and fill this project drew, so ``zero KLayout
 errors'' must not be read as including it. And the LVS result excludes
 the macro internals by construction: what survives is the pin
-\emph{list} (355 and 193 names, checked against the vendor's own circuit
-netlist and identical as sets), the instance count, and the net on all
-\num{2130} macro pin connections---a swapped data bit or a supply
+\emph{list} (355 names on each of the four \texttt{2048x64} macros and
+193 on each of the two \texttt{1024x32}, checked against the vendor's own
+circuit netlist and identical as sets), the instance count, and the net
+on all \num{1806} macro pin connections---a swapped data bit or a supply
 strapped to the wrong rail would have shown, half a million bitcells
-would not.
+would not. An earlier draft printed \num{2130} for that last figure,
+which is $6\times355$: the wide macro's pin list charged to all six
+instances, when two of the six are the narrow one.
 
 \paragraph{And the standard integrator's move is the wrong answer here,
 which we did not expect.}
@@ -1006,14 +1104,34 @@ Section~\ref{sec:inventory} argued that abstracting a hard macro changes
 \emph{what is looked at} rather than \emph{what counts as an error}. For
 this deck and this macro that is \textbf{false}, and the measurement is
 what says so. The abstracted run returns 123 error boxes where the full
-run returns none outside the macros, and all 123 are artefacts: every
-rule involved requires metal wider than \SI{10}{\micro\meter}, and
+run returns none outside the macros. \textbf{Three of the four rules
+involved, covering 122 of the 123 boxes}---\texttt{M3.f} with 99,
+\texttt{M4.f} with 16 and \texttt{M2.f} with 7---require metal wider
+than \SI{10}{\micro\meter}, and
 sizing the vendor macro's own geometry by $\pm\SI{5}{\micro\meter}$
 leaves \emph{zero} surviving polygons on any of those layers---as does
 the same test on this design's mask data in the exact windows where the
 boxes were reported. The wide metal exists only in the abstraction,
 because the macro's boundary description carries blanket obstruction
 rectangles and the tool paints an obstruction as drawn metal.
+
+\textbf{The remaining box is not covered by that argument, and an
+earlier draft of this paragraph said ``every rule involved'' and swept
+it in.} It is a single \texttt{M4.e} marker---\emph{Metal4 $>$
+\SI{0.39}{\micro\meter} with runlength $>$ \SI{1.0}{\micro\meter}
+spacing to unrelated m4}, a minimum-spacing rule whose width threshold
+is \SI{0.39}{\micro\meter} and not \SI{10}{\micro\meter}---on a
+\SI{0.02}{\micro\meter} by \SI{5.48}{\micro\meter} Metal4 sliver whose
+lower-left corner the report gives, in micrometres, as
+$(904.700, 1386.255)$, outside every macro's drawn
+extent. What is known about it is that the full run over the real
+geometry reports nothing at that coordinate, so it too is present only
+in the abstracted view. What is \emph{not} known is a mechanism for it:
+the sizing test that explains the other 122 is a test about wide metal
+and says nothing about a rule that fires at
+\SI{0.39}{\micro\meter}. One box in 123 does not change what the
+comparison decides, and rounding it into the explained ones would have
+been the move this section exists to object to.
 
 So the seventeen-hour run reading real geometry is not the expensive
 route to the same answer. It is the only one of the two that is right,
@@ -1330,13 +1448,43 @@ remaining fifteen through the decode network found 165 corresponding-bit
 pairs, 28 of them touching, and two of three voter inputs in contact on
 30 of the 55 bits. \emph{That analysis was run once by hand, is not
 committed, is reproducible from no script in this tree and is asserted
-by no test: these three are the only figures in this section a reader
-cannot re-derive, and they are printed to bound the direction of the
-undercount and for nothing else.} The committed tool reports the
+by no test, and the three figures are printed to bound the direction of
+the undercount and for nothing else.} The committed tool reports the
 conservative figure and prints the word \textsc{undercount}, because a
 lower bound quoted as a measurement is the failure this paper is
 about---and printing those three unmarked, one sentence before saying
 so, was that failure.
+
+\textbf{An earlier draft added that those three were ``the only figures
+in this section a reader cannot re-derive'', and that sentence does not
+survive being checked against what the tool prints.} Read against the
+output of \file{hw/openlane/replica\_placement.py} and against
+\file{paper/claims.yaml}, the two between them do cover the per-replica
+counts, the cross-replica pair count, both medians, the minimum
+centre-to-centre and edge-to-edge distances, the abutting and
+within-one-site counts, the corresponding-bit minimum and abutment, the
+103-of-165 statistic with both its permutation and its analytic null,
+the fifteen unattributed flip-flops, and the die, site, row and cell
+geometry. What they do not cover, and no other file in this repository
+covers either, is the per-pairing minimum A--C \SI{4.75}{\micro\meter}
+and the 31/11/7 split of the 49 abutting pairs across the three
+pairings---the tool breaks out neither, its list of closest pairs
+happens to expose the A--B and B--C minima, and there is no per-pairing
+table anywhere---together with the statement that C is the most
+internally clustered bank, which no committed figure supports. The three
+system-on-chip per-bit separations in the next subsection sit one tier
+down rather than outside: they are written into the project's record,
+but the attribution method that produced them is not committed, as that
+subsection says, so a reader can read them and cannot re-derive them.
+The figures in the last
+subsection---core utilisation, unoccupied area, the longest routed net,
+the pilot's slack and the cost of the one placement constraint this
+project has ever applied---are read from run reports and from documents
+cited in the text, which is the tier
+Table~\ref{tab:inventory}'s caption describes and not this section's
+instrument. \textbf{So the count was wrong and the shape of the error is
+this paper's own: a sentence bounding what a reader cannot check,
+written without checking it against the tool it was bounding.}
 
 \subsection{It is not one layout}
 
@@ -1889,7 +2037,7 @@ their place, and a digest establishes identity, not correctness.
 python3 paper/check_claims.py --list
 python3 paper/check_claims.py
 
-# the placement measurement of Section 8
+# the placement measurement of "Where the replicas actually are"
 python3 hw/openlane/replica_placement.py \
         hw/openlane/pilot_ihp/runs/signoff-6x2
 
@@ -1901,7 +2049,7 @@ python3 hw/openlane/replica_placement.py \
 # is an error
 make -C formal/eqy
 
-# the netlist censuses of Section 9
+# the netlist censuses of "When the evidence was wrong"
 .venv/bin/python -m pytest sw/tests/test_synthesis_guards.py -q
 
 # the suites, recorded rather than asserted

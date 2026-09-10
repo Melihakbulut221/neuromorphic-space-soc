@@ -21,15 +21,22 @@ project:
   # repository.
   clock_hz:     50000000
 
-  # Tile shape. docs/23: placed, this design is 185,840 um2 of
-  # sg13g2 standard cells, which no longer fits the 70 % planning
-  # criterion in a 4x2 core of 259,837 um2 (docs/22 measures
-  # 71.489 %). 6x2 offers 392,988 um2 and a full local harden
-  # there closes at 47.29 % utilization with zero detailed-route
-  # DRC errors, zero Magic and KLayout DRC, zero LVS errors and
-  # zero antenna violations. The alternative twelve-tile shape,
-  # 3x4, was hardened too and is the runner-up on every count
-  # except utilization; docs/23 has both side by side.
+  # Tile shape. 4x2 was dropped because it no longer fits the
+  # 70 % planning criterion: docs/22 places 185,755 um2 of sg13g2
+  # standard cells into a 4x2 core of 259,837 um2, 71.489 %. 6x2
+  # offers a 392,988 um2 core, and the frozen run there,
+  # signoff-6x2 (docs/31 section 6), places 191,588 um2 for
+  # 48.7516 % utilization with zero detailed-route DRC errors,
+  # zero Magic and KLayout DRC, zero LVS errors and zero antenna
+  # violations. The alternative twelve-tile shape, 3x4, was
+  # hardened too and is the runner-up on every count except
+  # utilization; docs/23 has both side by side.
+  #
+  # CORRECTED 2026-09-10: this comment published 185,840 um2 and
+  # 47.29 %, which are the docs/23 tile-shape A/B run's numbers,
+  # superseded twice since -- by docs/27 (185,595) and then by the
+  # frozen sign-off run above. The docs/80 digest ledger already
+  # carried stdcell_um2=191588;util=0.487516.
   tiles: "6x2"
 
   top_module:  "tt_um_melihakbulut_nssoc"

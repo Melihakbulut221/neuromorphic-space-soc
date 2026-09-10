@@ -112,25 +112,6 @@ module soc_uart (
         scaler_cnt <= scaler_cnt - 12'd1;
       end
 
-      // ---- register writes ----
-      if (wr) begin
-        case (paddr_i)
-          REG_DATA: begin
-            // Overwriting a full holding register drops the previous
-            // byte. GRLIB's part does the same when the FIFO is full and
-            // reports it through TF; a driver is expected to poll.
-            thr      <= pwdata_i[7:0];
-            thr_full <= 1'b1;
-          end
-          REG_CTRL: begin
-            ctrl_te <= pwdata_i[1];
-            ctrl_ti <= pwdata_i[3];
-          end
-          REG_SCALER: scaler <= pwdata_i[11:0];
-          default: ;
-        endcase
-      end
-
       // ---- serialiser ----
       if (busy) begin
         if (bit_tick) begin
@@ -150,6 +131,57 @@ module soc_uart (
           busy     <= 1'b1;
           thr_full <= 1'b0;
         end
+      end
+
+      // ---- register writes ----
+      //
+      // AFTER THE SERIALISER, AND THE ORDER IS THE FIX. Both blocks
+      // assign `thr_full`, and in one cycle in eight they do it in the
+      // same cycle: a DATA write landing exactly on the bit boundary
+      // where the loader takes the byte. Verilog's last-assignment-wins
+      // then decides which one survives, and with the write block first
+      // the loader won -- `shifter` correctly took the OLD `thr`, `thr`
+      // correctly took the new byte, and `thr_full` was cleared, so the
+      // byte just written was held in a register nothing would ever
+      // load. It was lost silently, and STATUS reported the write
+      // accepted (TF clear) on the way out.
+      //
+      // With the write last, the same cycle sends the old byte and keeps
+      // the new one: `shifter` still takes the old `thr`, and
+      // `thr_full <= 1'b1` wins, so the next boundary loads the byte the
+      // driver wrote. Nothing else is shared between the two blocks --
+      // `busy`, `bit_cnt` and `shifter` are the serialiser's alone, and
+      // `ctrl_te`, `ctrl_ti` and `scaler` are the write block's -- so
+      // the swap changes this one interaction and nothing else.
+      //
+      // Reachable by any driver that writes blind. It is NOT reachable
+      // by the five programs in this tree, which all poll TE first, and
+      // that is why it survived to 2026-09-11.
+      //
+      // MEASURED, not reasoned: hw/soc/tb/cocotb/test_soc_uart_defects.py
+      // walks a second blind write across all eight phases of the bit
+      // boundary at SCALER = 0. On the RTL as it was, phase 3 of 8 put
+      // 0xAA on the line and nothing after it; the other seven were the
+      // two correct outcomes. One byte in eight of a blind writer's
+      // stream. The same file's third test drives a POLLING writer over
+      // the same eight phases and loses nothing on either version, which
+      // is the control that says why nothing here ever saw it.
+      if (wr) begin
+        case (paddr_i)
+          REG_DATA: begin
+            // Overwriting a full holding register drops the previous
+            // byte. GRLIB's part does the same when the FIFO is full and
+            // reports it through TF; a driver is expected to poll.
+            thr      <= pwdata_i[7:0];
+            thr_full <= 1'b1;
+          end
+          REG_CTRL: begin
+            ctrl_te <= pwdata_i[1];
+            ctrl_ti <= pwdata_i[3];
+          end
+          REG_SCALER: scaler <= pwdata_i[11:0];
+          default: ;
+        endcase
       end
     end
   end

@@ -87,6 +87,45 @@ always @(posedge clk_i or negedge rst_por_ni) begin
     end
 end
 
+// f_armed_ready: f_armed_valid, delayed to the clock on which the
+// DESIGN's own sample has landed.
+//
+// WHY THIS EXISTS AND WHAT IT COSTS. `soc_wdog.v`'s `armed` is
+// `dis_seen && !dis_q`, and `dis_seen` cannot be set until the two-flop
+// synchroniser on `dis_i` has settled and the `dis_arm` hold-off has
+// saturated. So the block is DISARMED BY CONSTRUCTION for the first two
+// clocks after power-on reset releases, and reports itself disarmed
+// through CTRL while it is. The ghost above samples the pin at the
+// first clock, which is the right value at the wrong time: W1a failed
+// at step 3 of the bounded check for exactly that reason and for no
+// other.
+//
+// THIS IS A REDUCTION IN PROOF COVERAGE AND IT IS NOT NETTED OFF
+// AGAINST THE DEFECT THAT MOTIVATED IT. The `armed = dis_seen &&
+// !dis_q` change closes a real false-arm window that this proof found:
+// a keyed CTRL write in those two clocks used to raise stage 1 on a
+// part whose strap says NO WATCHDOG. Gating the properties on
+// `f_armed_ready` is how the proof is made to agree with the design's
+// timing -- and it means W1a, W1b, W1c, I1, I2, I3, I4, W4a through
+// W4e and W5 are UNCHECKED for two clocks after every reset release.
+// Nothing here proves the block is well behaved in that window. What
+// carries it instead is narrower and worth stating: `soc_wdog.v`'s
+// `armed` is a conjunction with `dis_seen`, which is 0 throughout the
+// window by construction, so every consumer of `armed` -- `expire`,
+// W7's `early_kick`, W8's `budget_out` -- is held low there
+// structurally rather than by proof. A structural argument is not a
+// proof and this comment is not one either.
+//
+// The counter mirrors the design's rather than counting to a literal,
+// so if `dis_arm`'s width or its saturation point moves and this does
+// not, the two disagree and the proof goes red rather than quiet.
+reg [1:0] f_arm_dly;
+always @(posedge clk_i or negedge rst_por_ni) begin
+    if (!rst_por_ni)           f_arm_dly <= 2'd0;
+    else if (f_arm_dly < 2'd3) f_arm_dly <= f_arm_dly + 2'd1;
+end
+wire f_armed_ready = f_armed_valid && (f_arm_dly == 2'd3);
+
 // f_resets: rising edges of rst_req_o, saturating. Counted from the
 // OUTPUT, so it is not a copy of the design's counter.
 //
@@ -144,7 +183,7 @@ wire f_unkeyed = we_i && (sel_i != 5'd0) && (wdata_i[31:16] != KEY);
 // disagree. Both are also real checks: a block whose reset counter
 // drifted from the number of resets it had actually driven would fail
 // I1, and one whose pin did not follow its own counter would fail I2.
-always @(posedge clk_i) if (rst_por_ni && f_armed_valid) begin
+always @(posedge clk_i) if (rst_por_ni && f_armed_ready) begin
     // I1. The ghost count of rst_req_o rising edges is the design's
     //     saturating reset counter.
     assert (f_resets_now == rst_count);
@@ -168,7 +207,7 @@ end
 // ---------------------------------------------------------------------
 // W1: armed, and software cannot disarm it
 // ---------------------------------------------------------------------
-always @(posedge clk_i) if (rst_por_ni && f_armed_valid) begin
+always @(posedge clk_i) if (rst_por_ni && f_armed_ready) begin
     // W1a. Reading the control register on an armed part always reports
     //      EN, RS and IE set, whatever has been written to it. This is
     //      the property, stated where a driver can observe it.
@@ -180,7 +219,7 @@ always @(posedge clk_i) if (rst_por_ni && f_armed_valid) begin
 
     // W1b. The bootstrap decision is made once. Nothing -- no write, no
     //      later movement of dis_i, no escalation -- changes it.
-    if (f_past_valid && $past(rst_por_ni) && $past(f_armed_valid))
+    if (f_past_valid && $past(rst_por_ni) && $past(f_armed_ready))
         assert (f_armed == $past(f_armed));
 
     // W1c. A part held off by the pin never escalates. This bounds the
@@ -266,7 +305,7 @@ end
 // ---------------------------------------------------------------------
 // W4: the record survives the reset this block causes
 // ---------------------------------------------------------------------
-always @(posedge clk_i) if (rst_por_ni && f_armed_valid) begin
+always @(posedge clk_i) if (rst_por_ni && f_armed_ready) begin
     if (sel_i[3]) begin
         // W4a. WDOGRST reports whether a watchdog reset has happened
         //      since power-on, and reports it correctly in both
@@ -324,7 +363,7 @@ end
 // ---------------------------------------------------------------------
 // W7a: the contract reads back, so a driver can discover it did not take
 // ---------------------------------------------------------------------
-always @(posedge clk_i) if (rst_por_ni && f_armed_valid) begin
+always @(posedge clk_i) if (rst_por_ni && f_armed_ready) begin
     if (sel_i[4]) begin
         assert (rdata_o[3:0] == win_s);
         assert (rdata_o[4]   == bud_arm);

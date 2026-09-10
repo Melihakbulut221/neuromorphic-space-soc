@@ -15,17 +15,25 @@ Tiny Tapeout TTIHP26b submission, 6x2 tiles, IHP SG13G2.
 ## Status
 
 The design has been taken through a full local LibreLane `Classic` run
-at 6x2 against this repository's own `src/config_merged.json`. It closes
-at 47.29 % utilization with zero detailed-route DRC errors, zero Magic
-DRC errors, zero KLayout DRC errors, zero Netgen LVS errors, zero antenna
-violations, and zero setup, hold, max-cap and max-slew violations across
-all three PVT corners. The tile shape was chosen on measured area, and
-re-chosen when the design outgrew the first choice: placed, the design is
-185,840 um2 of standard cells, which overruns the 70 % planning criterion
-in a 4x2 core of 259,837 um2. Both twelve-tile shapes were then hardened
-rather than estimated, and 6x2 won. Full working in
-`docs/15-pilot-tile-plan.md` and `docs/23-tile-shape-decision.md` in the
-source repository.
+at 6x2 against this repository's own `src/config_merged.json`. The
+frozen run is `signoff-6x2`: placed, the design is 191,588 um2 of
+standard cells in a 392,988 um2 core, 48.7516 % utilization, with zero
+detailed-route DRC errors, zero Magic DRC errors, zero KLayout DRC
+errors, zero Netgen LVS errors, zero antenna violations, and zero setup,
+hold, max-cap and max-slew violations across all three PVT corners. The
+tile shape was chosen on measured area, and re-chosen when the design
+outgrew the first choice: the 4x2 candidate placed 185,755 um2 into a
+259,837 um2 core, 71.489 %, which overruns the 70 % planning criterion.
+Both twelve-tile shapes were then hardened rather than estimated, and
+6x2 won. Full working in `docs/15-pilot-tile-plan.md`,
+`docs/22-reharden-wave5.md`, `docs/23-tile-shape-decision.md` and
+`docs/31-signoff-6x2.md` in the source repository.
+
+*Corrected 2026-09-10: this file published 185,840 um2 and 47.29 %.
+Those are the tile-shape A/B run's numbers and the design has been
+re-hardened twice since; the frozen sign-off run above is what the
+submission is built from, and `docs/80-artefact-digests.tsv` already
+recorded `stdcell_um2=191588;util=0.487516` for it.*
 
 That local run is evidence, not a substitute for the GDS action and the
 Tiny Tapeout precheck, which are what actually gate a submission.
@@ -53,10 +61,33 @@ are ported from the upstream Tiny Tapeout template:
     https://github.com/TinyTapeout/ttihp-verilog-template
     commit 6598bef4d3159f19fe471a2a2225df52e6f5ad25
 
-`src/config.json` is byte-identical to upstream. Running
-`scripts/gen_tt_submission.py --diff-template` in the source repository
-re-fetches the template and proves that claim for every file that carries
-it.
+Every one of those files is byte-identical to upstream except
+`src/config.json`, which is the upstream file with
+9 keys appended under an
+`"Added by scripts/gen_tt_submission.py:"` marker:
+`SYNTH_HIERARCHY_MODE`, six keys that are what makes this design meet
+timing at the slow corner, and two that make the max-cap and max-slew
+checkers able to fail. Nothing upstream wrote is edited or removed, and
+no appended key repeats an upstream one.
+
+Running `scripts/gen_tt_submission.py --diff-template` in the source
+repository re-fetches the template and compares it against the files
+this tree actually ships — `src/config.json` included: it re-applies
+the same appended keys to the freshly fetched upstream file and reports
+`CHANGED` if the result is not byte for byte what `src/config.json`
+holds. What it can see is upstream moving, and this generator's recorded
+copy of upstream being wrong. What it cannot see is a change to the
+appended keys themselves — both sides of the comparison move together,
+which is correct, because the tree then still is upstream plus the keys
+— or a hand-edit of a file in this tree, which is what `MANIFEST.sha256`
+and `--check` are for.
+
+*Corrected 2026-09-10: this section said `src/config.json` was
+byte-identical to upstream and named `--diff-template` as the proof. It
+was neither. The file has carried appended keys since 2026-08-26, and
+`--diff-template` compared the generator's recorded copy of the upstream
+file rather than the built one, so the named proof could not have seen
+the difference in the one file that has one.*
 
 ## Licence
 
@@ -68,6 +99,13 @@ Two licences, because this tree has two origins.
   there.
 * **The scaffolding listed above** stays `Apache-2.0` as received from
   the upstream template; its text is in `LICENSES/Apache-2.0.txt`.
+
+Both texts are also in `LICENSES/` under their SPDX identifiers —
+`LICENSES/CERN-OHL-W-2.0.txt` and `LICENSES/Apache-2.0.txt` — which is
+where the REUSE specification says a tool must look for the licence
+named by a file's `SPDX-License-Identifier` tag. `LICENSE` at the root
+is the same CERN-OHL-W-2.0 text, kept because that is the file a reader
+and GitHub look for.
 
 The decision behind the split is `docs/14-licensing-decision.md` in the
 source repository, signed 2026-09-09.

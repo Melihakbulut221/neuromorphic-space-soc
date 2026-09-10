@@ -20,8 +20,19 @@ Sections 2-7 are measured unless a paragraph is marked otherwise.
 
 - **G0 is met.** `aer_fifo` hardened end to end on SG13G2: Magic DRC 0,
   KLayout DRC 0, Netgen LVS 0 errors on every count, XOR 0, antenna 0,
-  timing clean on all three corners. Run `trial-03-signoff`, 80 stages,
-  11.3 minutes of tool time. Section 4. **[fact]**
+  timing clean on all three corners. Run `g0gates2`, 80 stages, 11.6
+  minutes of tool time, on the RTL as it stands, with **17 of 19
+  in-flow checkers gating fully** and setup, hold, max-slew and max-cap
+  each measured at three corners and 0 at all of them. Section 4.
+  **[fact, 2026-09-11]**
+  - *The headline dated 2026-08-25 named run `trial-03-signoff` and 11.3
+    minutes. That run stands as measured and is section 4.7a. It
+    hardened the block BEFORE the queue pointers were replicated, and
+    three of its four corner checkers were bound to no corner or to one
+    of three -- so it is a true measurement of a design this repository
+    no longer contains, made by a flow that would not have stopped had
+    the numbers been bad. Section 4's preamble says how both were
+    found.*
 - **The RM_IHPSG13 macro run was made, and it splits cleanly in two.**
   One `RM_IHPSG13_1P_512x32_c2_bm_bist` in a registered wrapper, placed
   inside an 854.40 x 340.20 um die — the *interpolated* 4x2 Tiny Tapeout
@@ -317,15 +328,61 @@ described where its settings are earned in section 7.
 
 ## 4. Trial harden results — `aer_fifo` [fact]
 
-All numbers in this section come from run tag **`trial-03-signoff`**,
-executed 2026-08-25, 08:50:58 to 09:02:18 local, from
+All numbers in this section come from run tag **`g0gates2`**,
+executed 2026-09-11, 00:27:07 to 00:38:44 local, from
 `hw/openlane/aer_fifo/config.json` exactly as committed, via
-`hw/openlane/run_trial.sh --run-tag trial-03-signoff`. The Classic flow
-reported **80 stages** and produced **76 numbered step directories**;
+`hw/openlane/run_trial.sh --design aer_fifo --run-tag g0gates2`. The
+Classic flow reported **80 stages** and produced **76 numbered step directories**;
 the four that did not run are gated off by default or by this config —
 Repair Design (Post-Global Routing), Heuristic Diode Insertion (4.5),
 Resizer Timing Optimizations (Post-Global Routing), and Equivalence
-Check. Summed step runtime **680.4 s = 11.3 minutes** on 20 threads.
+Check. Summed step runtime **697.8 s = 11.6 minutes** on 20
+threads.
+
+> **WHY THE RUN TAG MOVED, 2026-09-11.** This section named
+> `trial-03-signoff` from 2026-08-25 until today, and that run's numbers
+> are not withdrawn — they were measured, they were right, and
+> `docs/64`'s rule keeps them. What changed is what they are numbers
+> **of**, and it changed twice:
+>
+> 1. **The design moved out from under them.** On 2026-08-31, commit
+>    `b6738e5` replicated the AER queue pointers. `trial-03-signoff`
+>    hardened an `aer_fifo` with **1,071 flip-flops**; the block has
+>    **1,164** now, and the 93 of difference are the replica banks the
+>    whole hardening argument rests on. A sign-off run of a design
+>    without its redundancy is not a sign-off of the design.
+> 2. **Three of its gates were not gates.** `hw/openlane`'s audit found
+>    `Checker.SetupViolations` matching one corner of three on that run
+>    and `Checker.MaxCapViolations` and `Checker.MaxSlewViolations`
+>    matching none at all — the `[""]` match-none default `docs/34`
+>    section 8.5 measured. All three metrics read 0 at all three corners
+>    there, so what was missing was the gate and not the result; but "it
+>    read zero" and "it was checked" are different sentences and G0 was
+>    quoting the second.
+>
+> No re-harden was possible in between, and that is the third finding:
+> under the flatten this config used, yosys honours the twelve
+> `keep_hierarchy` attributes the replication defence needs, nine
+> `$paramod` submodule types survive, and LibreLane counts **every cell
+> type whose name begins with `$`** as unmapped — so a parameterised
+> user module is counted the same as a gate that failed to map. The run
+> stopped at `Checker.YosysUnmappedCells` with *"9 Unmapped Yosys
+> instances found"* and nothing was unmapped. `SYNTH_HIERARCHY_MODE:
+> deferred_flatten` is the answer, and `hw/openlane/pilot_ihp`,
+> `hw/openlane/pilot_sky130` and `tt/src` had all carried it since
+> before the pointers were replicated. For eleven days the block's own
+> sign-off configuration could not build the block's own RTL, and
+> nothing noticed because nothing re-ran it.
+>
+> `g0gates2` is the current RTL, hardened with all four corner checkers
+> live: `hw/openlane/checker_audit.py` reports **17 of 19 in-flow
+> checkers gating fully**, with setup, hold, max-slew and max-cap each
+> **measured at 3 corners and 0 at all of them**. The two that do not
+> gate are `Checker.LintWarnings` (1 warning, `ERROR_ON_LINTER_WARNINGS`
+> is False by default) and `Checker.WireLength` (no threshold set, so it
+> only warns).
+>
+> Section 4.7a below is `trial-03-signoff`'s record, kept.
 
 ### 4.1 Outcome
 
@@ -358,22 +415,27 @@ LibreLane emits reads zero.
 
 ### 4.2 Synthesis
 
-From `06-yosys-synthesis/reports/stat.json`: **4,164 cells**, Yosys area
-**89,320.455 um2**, of which sequential **52,467.005 um2**. Cell mix, the
+From `06-yosys-synthesis/reports/stat.json`: **4,853 cells**, Yosys area
+**99,688.012 um2**, of which sequential **57,022.963 um2**. Cell mix, the
 part that matters:
 
 | Cell | Count | Why |
 |---|---|---|
-| `sg13g2_dfrbpq_1` | 1,071 | 1,024 memory bits + 47 control/pointer bits |
-| `sg13g2_mux2_1` | 1,025 | read mux tree |
-| `sg13g2_tiehi` | 1,024 | one per memory bit, purely to hold `RESET_B` inactive |
-| `sg13g2_a22oi_1` | 497 | |
-| `sg13g2_nand4_1` | 149 | |
-| `sg13g2_nor3_1` | 95 | |
-| others (19 types) | 303 | |
+| `sg13g2_dfrbpq_1` | 1,164 | 1,024 memory bits + 140 control/pointer bits, of which 93 are the three replicated pointer banks |
+| `sg13g2_tiehi` | 1,088 | one per memory bit, purely to hold `RESET_B` inactive, plus 64 for the replica banks |
+| `sg13g2_mux2_1` | 1,055 | read mux tree |
+| `sg13g2_a22oi_1` | 495 | |
+| `sg13g2_nand4_1` | 185 | |
+| `sg13g2_nor3_1` | 79 | |
+| others (21 types) | 787 | |
 
 The 1,024 tie-high cells are not a synthesis mistake; they are what
 SG13G2 costs for an unreset array. Section 5.
+
+*`trial-03-signoff` measured 4,164 cells, 89,320.455 um2 and 1,071
+flip-flops on the block before the queue pointers were replicated. The
++93 flip-flops are the replicas and the +689 cells are them plus the
+voters; `hw/rtl/aer_fifo.v` argues for both.*
 
 ### 4.3 Floorplan and area
 
@@ -382,12 +444,12 @@ From `13-openroad-floorplan/or_metrics_out.json` and
 
 | Quantity | Value |
 |---|---|
-| Die bounding box | 0 0 **484.115 x 502.835** um |
-| Die area | 243,430 um2 = **0.2434 mm2** |
-| Core area | 223,171 um2 |
-| Core bounding box (floorplan) | 5.76 15.12 478.08 **487.62** um |
+| Die bounding box | 0 0 **510.785 x 529.505** um |
+| Die area | 270,463 um2 = **0.2705 mm2** |
+| Core area | 249,081 um2 |
+| Core bounding box (floorplan) | 5.76 15.12 504.96 **514.08** um |
 | Placement utilization (target 40 %) | **40.03 %** |
-| Utilization after fill insertion | 51.35 % |
+| Utilization after fill insertion | 50.88 % |
 
 The core margins are not free parameters: 5.76 um is 12 x the 0.48 um
 `CoreSite` width, 15.12 um is 4 x the 3.78 um row height.
@@ -406,13 +468,12 @@ this trap: the run tag has to be stated, because "the same design" is
 not the same netlist — and, as this row shows, not the same floorplan
 either.
 
-Instance counts through the flow: 4,164 after synthesis; **6,008
+Instance counts through the flow: 4,853 after synthesis; **6,839
 non-fill instances** in the final layout, after CTS and timing repair
-have added to it; 18,166 instances in total once the 12,158 fill cells
-are counted. Timing repair contributed **1,668 buffers** (22,039.5 um2),
-of which 1,095 are hold buffers and **0 are setup buffers** — a direct
-consequence of the loose clock. CTS added 121 clock buffers and 52 clock
-inverters (3,196.97 um2 together).
+have added to it; 20,392 instances in total once the 13,553 fill cells
+are counted. Timing repair contributed **1,770 buffers**, of which 1,150
+are hold buffers and **0 are setup buffers** — a direct consequence of
+the loose clock. CTS added 137 clock buffers and 64 clock inverters.
 
 ### 4.4 Timing, all three corners
 
@@ -421,9 +482,16 @@ OpenRCX:
 
 | Corner | Setup worst slack | Hold worst slack | Setup/hold/slew/cap violations |
 |---|---|---|---|
-| `nom_slow_1p08V_125C` | **18.0553 ns** | 0.6397 ns | 0 |
-| `nom_typ_1p20V_25C` | 20.1784 ns | 0.3024 ns | 0 |
-| `nom_fast_1p32V_m40C` | 21.4717 ns | **0.1130 ns** | 0 |
+| `nom_slow_1p08V_125C` | **11.0738 ns** | 0.7095 ns | 0 |
+| `nom_typ_1p20V_25C` | 15.7496 ns | 0.3322 ns | 0 |
+| `nom_fast_1p32V_m40C` | 17.1220 ns | **0.1295 ns** | 0 |
+
+*`trial-03-signoff` read 18.0553 / 20.1784 / 21.4717 setup and 0.6397 /
+0.3024 / 0.1130 hold, on the design before the queue pointers were
+replicated. Those numbers stand where they were measured; the replicas
+cost about 7 ns of setup slack at every corner, which is what triplicating
+a pointer and voting it costs at 30 ns and is not a regression against
+any constraint.*
 
 The last column is named for exactly the four counters it covers —
 `timing__setup_vio__count`, `timing__hold_vio__count`,
@@ -434,15 +502,17 @@ zero. An earlier revision headed that column bare "Violations", which
 invited the reading "no violations of any kind". That reading is wrong,
 and the correction is 4.4a below.
 
-Setup TNS and hold TNS are 0 at every corner. Clock skew is 0.264-0.277
-ns for setup and -0.265 to -0.273 ns for hold. 68 nets are unannotated by
+Setup TNS and hold TNS are 0 at every corner. Clock skew is 0.295-0.305
+ns for setup and -0.296 to -0.304 ns for hold. 86 nets are unannotated by
 the parasitics extractor, all of which the flow's own filter classifies
 as expected (`timing__unannotated_net_filtered__count = 0`).
 
 Read as frequency: at the slow corner the whole launch-to-capture path
-consumes 30 - 18.0553 = **11.945 ns**, i.e. about **83.7 MHz**. That
-clears the 50 MHz Tiny Tapeout envelope of docs/06 B.2 with roughly 40 %
-margin. **[estimate — this is a single-point extrapolation from a run
+consumes 30 - 11.0738 = **18.926 ns**, i.e. about **52.8 MHz**. That
+still clears the 50 MHz Tiny Tapeout envelope of docs/06 B.2, and the
+margin is now **5.6 %** rather than the 40 % the unreplicated block had.
+That is the honest cost of the pointer TMR at this clock, and it is
+thin enough to be worth stating as a number rather than as "clears". **[estimate — this is a single-point extrapolation from a run
 closed at 30 ns; re-closing at 12 ns would buffer differently and the
 achieved number would move.]**
 
@@ -608,6 +678,76 @@ at 89,320.455 um2. LibreLane drops `//`-prefixed keys without even the
 "An unknown key was provided" warning it gives for a genuine typo
 (2.4c), which is why the comments can be carried in the config at all.
 The committed config is the config that produced section 4. **[fact]**
+
+*The `config-recheck` run above, and the sentence about reproducing
+4,164 cells, are `trial-03-signoff`'s. They were true of the config as it
+stood on 2026-08-25 and are left as they were measured; the equivalent
+statement for `g0gates2` is that its `resolved.json` is checked against
+the committed config on every run of
+`sw/tests/test_flow_evidence.py::test_committed_config_is_the_config_that_produced_the_evidence`,
+with no declared exceptions.*
+
+### 4.7a `trial-03-signoff`, kept
+
+Section 4 named this run from 2026-08-25 to 2026-09-11. Its numbers are
+not withdrawn and they are not corrections of anything — they are what
+the flow measured, on the day, on the design as it then was.
+
+| Quantity | `trial-03-signoff` (2026-08-25) | `g0gates2` (2026-09-11) |
+|---|---:|---:|
+| Flip-flops | 1,071 | **1,164** |
+| Synthesis cells | 4,164 | 4,853 |
+| Instances, final layout | 18,166 | 20,392 |
+| Die area, um2 | 243,430 | 270,463 |
+| Setup worst slack, slow corner | 18.0553 ns | 11.0738 ns |
+| Hold worst slack, fast corner | 0.1130 ns | 0.1295 ns |
+| Magic DRC / KLayout DRC / XOR / LVS | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| Setup / hold / max-slew / max-cap | 0, at 3 corners | 0, at 3 corners |
+| ...checked at | **1 corner, 1 corner, 0, 0** | **3, 3, 3, 3** |
+| In-flow checkers gating fully | not measured then | **17 of 19** |
+
+Two things separate the columns and only one of them is the design.
+
+**The design.** Commit `b6738e5`, 2026-08-31, replicated the AER queue
+pointers. The 93 flip-flops of difference are the three banks, and the
+hardening argument in `hw/rtl/aer_fifo.v` is about them. A sign-off of a
+block without its redundancy is a sign-off of a different block.
+
+**The gates.** `hw/openlane/checker_audit.py` on `trial-03-signoff`'s run
+tree calls `Checker.SetupViolations` PARTIAL — *"matches 1 of 3 measured
+corners; unchecked: nom_fast_1p32V_m40C, nom_slow_1p08V_125C"* — and
+`Checker.MaxCapViolations` and `Checker.MaxSlewViolations` NO-GATE,
+because each declares `corner_override = [""]` in LibreLane's own
+`checker.py`, the `[""]` is filtered to an empty list, and every
+violation lands in a warning while the flow exits 0. All three metrics
+read 0 at all three corners on that run, so **nothing was hidden**; what
+was missing was any mechanism that would have stopped the run had
+something been there. ROADMAP G0's sentence was quoting the gates.
+
+The gap between them is the third finding, and it is the one worth
+carrying forward: **for eleven days no re-harden was possible at all.**
+Under the flatten this config used, yosys honours the twelve
+`keep_hierarchy` attributes the replication defence depends on, nine
+`$paramod` submodule types survive into `stat.json`, and
+`librelane/steps/pyosys.py` counts *every cell type whose name begins
+with `$`* as unmapped:
+
+```python
+safe = ["$assert"]
+unmapped_cells = [cells[y] for y in cells.keys()
+                  if y not in safe and y.startswith("$")]
+```
+
+A parameterised user module is counted the same as a `$_AND_` that
+failed to map, so the flow stopped with *"9 Unmapped Yosys instances
+found"* on a netlist in which every cell inside those nine is an sg13g2
+cell. `SYNTH_HIERARCHY_MODE: deferred_flatten` synthesises
+hierarchically and flattens after technology mapping, which is what
+`hw/openlane/pilot_ihp`, `hw/openlane/pilot_sky130` and `tt/src` have
+all done since before the pointers were replicated —
+`pilot_sky130`'s own comment states this failure mode verbatim. This
+config was the one that did not, and nothing noticed because nothing
+re-ran it.
 
 ---
 

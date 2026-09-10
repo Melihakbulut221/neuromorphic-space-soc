@@ -155,10 +155,19 @@ def _geometry():
     # and the optimiser correctly deletes these five flip-flops.
     report = 1 + tmc_w
 
-    # Deliberately unprotected, W6's second list.
-    # Deliberately unprotected, W6's second list plus W8's down-counter.
-    unprot = width + width + pre_w + kick_w  # reload, counter, pre,
-                                             # kick_left
+    # The strap synchroniser and its hold-off, W1. Two flip-flops of
+    # two-stage synchroniser on `dis_i` plus a two-bit saturating
+    # `dis_arm`, all in the power-on domain and all outside the
+    # protected word on purpose: a synchroniser that is voted is not a
+    # synchroniser, and the hold-off counter is dead two clocks after
+    # reset release, so its corruption changes nothing that is still
+    # being read. `soc_wdog.v` says both in place.
+    strap_sync = 2 + 2  # dis_sync0, dis_sync1, dis_arm[1:0]
+
+    # Deliberately unprotected, W6's second list plus W8's down-counter
+    # and W1's synchroniser.
+    unprot = width + width + pre_w + kick_w + strap_sync
+    # reload, counter, pre, kick_left, dis_sync0/1, dis_arm
 
     # W9's `in_reset_q`, docs/75. It is counted apart from `unprot`
     # because it is not unprotected by the same argument: `reload`,

@@ -4,8 +4,9 @@
 #
 # Every check the GitHub workflows run, run here instead.
 #
-#   scripts/ci_local.sh              all three jobs
+#   scripts/ci_local.sh              every job
 #   scripts/ci_local.sh licence      one of them
+#   scripts/ci_local.sh checkers     the flow's own gates, over the run trees
 #   scripts/ci_local.sh suite        the whole pytest suite, ~8 min
 #   scripts/ci_local.sh all --record append a row to ci-local-log.tsv
 #
@@ -77,13 +78,34 @@ job_licence() {
         test ! -e tt/LICENSE.PENDING.md && test -f tt/LICENSE
         cmp LICENSES/CERN-OHL-W-2.0.txt tt/LICENSE
         cmp LICENSES/Apache-2.0.txt tt/LICENSES/Apache-2.0.txt'
+    # A CHECK MUST NOT WRITE WHAT IT VERIFIES, and this one did. It ran
+    # three generators IN PLACE and then diffed, so on any run where a
+    # generator's output had legitimately changed it left the tree
+    # modified -- including tt/, which docs/34 freezes for a shuttle.
+    # That happened on 2026-09-11: this check rewrote tt/docs/info.md,
+    # tt/MANIFEST.sha256 and tt/README.md as a side effect of being run.
+    #
+    # It now refuses on a dirty tree first, so that restoring afterwards
+    # cannot destroy uncommitted work, and restores what the generators
+    # wrote whether it passed or failed. The drift is still detected;
+    # the tree is not the place it is detected in.
     run "the generators still emit the tag they should" bash -c '
         set -eu
+        paths="hw/rtl hw/soc/rtl hw/soc/tb/sw sw/golden tt"
+        if [ -n "$(git status --porcelain -- $paths)" ]; then
+            echo "refusing: these paths are already modified, and this check"
+            echo "restores them afterwards. Commit or stash first:"
+            git status --short -- $paths
+            exit 1
+        fi
+        rc=0
         python3 regmap/generate.py >/dev/null
         python3 regmap/generate_memmap.py >/dev/null
         python3 scripts/gen_tt_submission.py >/dev/null
         python3 scripts/spdx_check.py >/dev/null
-        git diff --exit-code -- hw/rtl hw/soc/rtl hw/soc/tb/sw sw/golden tt'
+        git diff --exit-code -- $paths || rc=1
+        git checkout -- $paths
+        exit $rc'
 }
 
 # ------------------------------------------------------------------- docs
@@ -114,6 +136,19 @@ job_docs() {
         python3 scripts/build_docs.py --out _site_builtin --renderer builtin >/dev/null
         python3 scripts/ci_gate_docs.py _site_builtin builtin
         test -s _site_builtin/index.html'
+    # --strict, which nothing passed until 2026-09-11. The builder has
+    # carried the flag since it was written and every invocation in this
+    # repository omitted it, so "the site builds" never meant "every
+    # cross-reference resolved". ci_gate_docs.py deliberately runs WITHOUT
+    # it (its own comment says why: it wants to read the manifest rather
+    # than be stopped before writing one), which left the flag inert
+    # everywhere.
+    run "every cross-reference in the corpus resolves (--strict)" bash -c '
+        set -eu
+        out=$(mktemp -d)
+        trap "rm -rf $out" EXIT
+        python3 scripts/build_docs.py --out "$out" --renderer builtin \
+            --strict --quiet' 
 }
 
 # ------------------------------------------------------------------ paper
@@ -156,13 +191,148 @@ PY
     fi
 }
 
+# --------------------------------------------------------------- checkers
+#
+# THE INSTRUMENT THAT FINDS INSTRUMENTS THAT CANNOT FAIL, and until
+# 2026-09-10 it was called by nothing.
+#
+# hw/openlane/checker_audit.py was written for docs/36 to detect one
+# specific shape: a LibreLane Checker.* step that runs, reports green and
+# gates nothing, because its reach is configuration and the configuration
+# is not visible in any report. It found that shape three times in this
+# tree. It was then never wired to a runner, and so it did not find the
+# fourth: hw/openlane/aer_fifo/config.json carried none of the three keys
+# and ROADMAP gate G0's evidence run, trial-03-signoff, had setup bound
+# to the typical corner alone and max cap and max slew bound to the
+# match-none empty string. A detector nothing calls is the same defect
+# one level up. This job calls it.
+#
+# WHAT IT ASSERTS, AND WHY IT IS NOT "exit 0".
+#
+# checker_audit.py exits 1 whenever ANY in-flow checker is PARTIAL or
+# NO-GATE, and two of them always are, by disposition rather than by
+# oversight: Checker.LintWarnings is off by an explicitly named boolean
+# whose default upstream chose (docs/36 section 3.3), and
+# Checker.WireLength has no WIRE_LENGTH_THRESHOLD in either PDK (docs/36
+# section 3.4). docs/71 section 9 corrected five documents that had
+# written "exit 0" for exactly this reason. So the exit status is not
+# the gate here.
+#
+# The gate is the SET. For each run tree below, the checkers that do not
+# gate must be exactly the ones dispositioned in the table, in the order
+# checker_audit.py prints them. That fails in BOTH directions on purpose:
+# a checker that stops gating fails the job, and a disposition that
+# quietly disappears also fails it, because a shrinking list is a green
+# result getting wider without anyone saying so. Adding a row, or
+# changing one, is a deliberate edit with a reason next to it.
+#
+# THE TWO UNBOUND RUN TREES ARE IN THE TABLE ON PURPOSE. sky-14-6x2-rcmodel
+# is the script's own self-test -- its docstring says so -- and it is the
+# only place in this repository where a real, non-synthetic violation sits
+# at a corner the wildcards do not reach: 3,930 max-slew violations
+# reported as a clean flow. trial-03-signoff is the G0 evidence run, left
+# standing with its marker rather than re-run (docs/64). If either ever
+# reports a full set of gates, the run tree has been replaced by something
+# else and the job says so.
+#
+# A SKIP IS NOT A PASS here either. Run trees under hw/openlane/*/runs
+# and hw/soc/pnr/runs are gitignored, so a fresh clone has none of them,
+# and checker_audit.py imports librelane, which the repository venv does
+# not carry -- it needs the flow venv, whose path its own docstring gives
+# and which FLOW_PY overrides.
+FLOW_PY="${FLOW_PY:-$HOME/Documents/caravel-lif-crossbar/.venv-flow/bin/python}"
+
+# run tree | the checkers dispositioned as not gating, verbatim from
+# checker_audit.py's "NOT gating in full:" line | what the run is
+CHECKER_RUNS="\
+hw/openlane/pilot_ihp/runs/signoff-6x2-gated|Checker.LintWarnings, Checker.WireLength|docs/36 s.1, the pilot sign-off run
+hw/openlane/pilot_ihp/runs/submission-6x2-gated|Checker.LintWarnings, Checker.WireLength|docs/36 s.1, the submission-path run
+hw/soc/pnr/runs/s71boot|Checker.LintWarnings, Checker.WireLength|docs/71, the most recent SoC layout
+hw/openlane/pilot_sky130/runs/sky-14-6x2-rcmodel|Checker.LintWarnings, Checker.WireLength, Checker.SetupViolations, Checker.MaxSlewViolations, Checker.MaxCapViolations|checker_audit.py's own self-test; sky130 does not close and the checker was pointed at no corner (docs/18 s.3.3, pilot_sky130/config.json //capslew)
+hw/openlane/aer_fifo/runs/trial-03-signoff|Checker.LintWarnings, Checker.WireLength, Checker.SetupViolations, Checker.MaxSlewViolations, Checker.MaxCapViolations|the 2026-08-25 G0 evidence run, made before aer_fifo/config.json bound the three keys on 2026-09-10; left standing, not re-run, docs/12 s.4.7a
+hw/openlane/aer_fifo/runs/g0gates2|Checker.LintWarnings, Checker.WireLength|ROADMAP gate G0's evidence run since 2026-09-11: the same design the tree contains, with all four corner checkers live. THE ROW ABOVE IS ITS CONTROL -- the two run trees differ in exactly the three keys, and if this row ever grows a corner checker back, a config edit has silently unbound one"
+
+job_checkers() {
+    echo "== checkers"
+    if [ ! -x "$FLOW_PY" ]; then
+        skipped "the flow's own gates still gate" \
+                "no librelane interpreter at $FLOW_PY; set FLOW_PY"
+        return
+    fi
+    while IFS='|' read -r rundir want why; do
+        [ -n "$rundir" ] || continue
+        name="checkers bind as dispositioned: $(basename "$rundir")"
+        if [ ! -f "$rundir/resolved.json" ]; then
+            skipped "$name" "no run tree at $rundir; runs/ is gitignored"
+            continue
+        fi
+        run "$name" env RUN_DIR="$rundir" WANT="$want" WHY="$why" \
+                     FLOW_PY="$FLOW_PY" bash -c '
+            # checker_audit.py exits 1 by contract whenever anything is
+            # PARTIAL or NO-GATE, which is the normal state here, so the
+            # status is discarded and the REPORT is parsed. A missing
+            # summary line is a crashed audit and must not read as an
+            # empty set of ungated checkers -- that would be the exact
+            # false green this whole job exists to catch.
+            out=$("$FLOW_PY" hw/openlane/checker_audit.py "$RUN_DIR" 2>&1) || true
+            summary=$(printf "%s\n" "$out" | \
+                sed -n "s/^ *\([0-9]* of [0-9]*\) in-flow checkers gate fully\./\1/p")
+            if [ -z "$summary" ]; then
+                echo "checker_audit.py wrote no summary line for $RUN_DIR:"
+                printf "%s\n" "$out" | tail -15
+                exit 1
+            fi
+            got=$(printf "%s\n" "$out" | sed -n "s/^ *NOT gating in full: //p")
+            if [ "$got" != "$WANT" ]; then
+                echo "$RUN_DIR ($WHY)"
+                echo "  the set of checkers that do not gate has CHANGED."
+                echo "  dispositioned: ${WANT:-<none>}"
+                echo "  this run tree: ${got:-<none>}"
+                echo "  audit says:    $summary in-flow checkers gate fully"
+                exit 1
+            fi
+            echo "$RUN_DIR: $summary gate; not gating: ${got:-<none>}"'
+    done <<CHECKER_TABLE
+$CHECKER_RUNS
+CHECKER_TABLE
+}
+
+# ----------------------------------------------------------------- mirror
+job_mirror() {
+    echo "== mirror"
+    # THE PUBLISHED SUBSET, WHICH UNTIL NOW NO JOB TOUCHED.
+    #
+    # scripts/gen_public_mirror.py decides what the public repository
+    # contains, and it grew two guards on 2026-09-10 that nothing ran.
+    # That matters more here than for most scripts: the mirror is the only
+    # artefact in this repository a stranger reads, and a defect in the
+    # generator is invisible locally and visible to everyone else. The
+    # shuttle page told an operator to write the wrong FAULT_CLR value for
+    # a day for exactly this reason.
+    #
+    # This does NOT check the published repository -- nothing here can
+    # reach it. It checks that the generator still runs, still selects the
+    # files it claims to, and still refuses what it is supposed to refuse.
+    # Regenerating and pushing is a separate act, by a person.
+    run "the mirror generator runs and selects its files" bash -c '
+        set -eu
+        out=$(mktemp -d)
+        trap "rm -rf $out" EXIT
+        python3 scripts/gen_public_mirror.py --out "$out" | tail -2
+        python3 scripts/gen_public_mirror.py --out "$out" --check'
+}
+
 case "$JOB" in
-    licence) job_licence ;;
-    docs)    job_docs ;;
-    paper)   job_paper ;;
-    suite)   job_suite ;;
-    all)     job_licence; echo; job_docs; echo; job_paper; echo; job_suite ;;
-    *) echo "usage: $0 [licence|docs|paper|suite|all] [--record]" >&2; exit 2 ;;
+    licence)  job_licence ;;
+    docs)     job_docs ;;
+    paper)    job_paper ;;
+    suite)    job_suite ;;
+    checkers) job_checkers ;;
+    mirror)   job_mirror ;;
+    all)      job_licence; echo; job_docs; echo; job_paper; echo; job_checkers
+              echo; job_mirror; echo; job_suite ;;
+    *) echo "usage: $0 [licence|docs|paper|checkers|mirror|suite|all] [--record]" >&2
+       exit 2 ;;
 esac
 
 echo

@@ -227,11 +227,35 @@ def build():
         raise SystemExit(
             "gen_public_mirror.py: the checks workflow no longer carries the "
             "line this script anchors on; re-read it before regenerating")
+    # AND THE SAME DEFECT AGAIN, twenty lines below its own fix. The
+    # assertion above anchors on `marker`, but the rewrite below never
+    # touched that line: it replaced a DIFFERENT two-line string, the
+    # billing paragraph, with no check that the replacement happened. Edit
+    # a word of that paragraph in the workflow and the marker still
+    # matches, the guard still passes, `str.replace` finds nothing,
+    # returns the string unchanged -- and the mirror ships the
+    # unrewritten copy carrying a sentence that is false in it. Which is
+    # exactly what the block above exists to prevent, one string over.
+    # Found and repaired 2026-09-10.
+    #
+    # A replacement is now a mutation that must be OBSERVED: capture the
+    # text, replace, and fail if the two are equal. That holds even if
+    # someone later rewrites the search string and forgets the guard,
+    # because it tests the effect rather than the precondition.
+    billing = (
+        "#   \"The job was not started because recent account payments have failed\n"
+        "#    or your spending limit needs to be increased.\"")
+    if billing not in text:
+        raise SystemExit(
+            "gen_public_mirror.py: the checks workflow no longer carries the "
+            "billing paragraph this script rewrites. That paragraph explains "
+            "a run history belonging to the DEVELOPMENT repository, which is "
+            "not this one's; if it has been reworded or removed, re-read the "
+            "workflow and update this block rather than shipping it as-is.")
+    before = text
     text = text.replace(
-        "#   \"The job was not started because recent account payments have failed\n"
-        "#    or your spending limit needs to be increased.\"",
-        "#   \"The job was not started because recent account payments have failed\n"
-        "#    or your spending limit needs to be increased.\"\n"
+        billing,
+        billing + "\n"
         "#\n"
         "# IN THIS MIRROR that history is the DEVELOPMENT repository's and\n"
         "# not this one's: this repository has its own runner, its own\n"
@@ -239,6 +263,12 @@ def build():
         "# The paragraph is kept rather than deleted because it is why the\n"
         "# checks live in a script instead of in this file, and that reason\n"
         "# holds wherever the file is.")
+    if text == before:
+        raise SystemExit(
+            "gen_public_mirror.py: the mirror rewrite of the billing "
+            "paragraph in " + wf + " changed nothing. The generator must "
+            "not emit an unrewritten copy; re-read the workflow and fix the "
+            "replacement.")
     files[wf] = text.encode()
 
     readme = files["README.md"].decode()

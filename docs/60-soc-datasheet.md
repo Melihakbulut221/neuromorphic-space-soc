@@ -1204,7 +1204,11 @@ or wrong retained state, nothing flagged), **HANG**.
 **100 % of elaborated flip-flop bits covered by the campaign**. It is
 RTL, single-bit, flip-flop-only. Nothing outside `u_ibex` — not the
 fabric, the memories, the CLINT, the timers, the UART or the watchdog's
-own state — is in this population.
+own state — is in this population. *Added 2026-09-10:* the CLINT and
+the watchdog have populations of their own in `docs/58` and `docs/41`,
+and **section 9.10 states what the whole design's denominator is** —
+5,873 flip-flops, of which 1,003 to 1,051 are in a block no campaign in
+this repository has injected into at all.
 
 **Before hardening [measured, `docs/42-core-fault-injection.md`]:**
 1,300 injections, 13 strata of 100, each run twice — 2,600 simulations,
@@ -1496,12 +1500,283 @@ hang-class faults, where the window caught **0 of 4**.
   defect that only a netlist reveals — section 9.4's collapsed replicas
   — is covered here by cell-counting guards and by mutation testing,
   not by a gate-level campaign.
+  *Corrected 2026-09-10:* it has been, since
+  `docs/74-core-gate-level-campaign.md`, on the sign-off layout's own
+  netlist (`hw/soc/out/s70-rom0-syn/soc_top.netlist.v`,
+  `md5 a8d5ef81446ce6d2aa2eb4c1e0fdff79`, 5,873 flip-flops, six
+  behavioural SRAM macros, Icarus 13). The bullet is left standing
+  because the rest of it still holds where it matters: that campaign
+  replayed `docs/43`'s core records and injected into the watchdog's
+  replica banks, and it is **not** a whole-SoC gate-level campaign —
+  section 9.10 says how much of the design any campaign of any kind has
+  ever pointed at.
 - **Small samples.** One to five injections per bit position; 4 to 32
   per group in the die's campaign, 100 per stratum elsewhere. Every
   interval quoted is a Wilson interval and every zero is a ceiling.
 - **One workload per campaign**, one geometry, one configuration.
 - **Nothing here is a rate**, restated because it is the single
   easiest figure in this document to misuse.
+
+### 9.10 Two SoC-wide denominators, added 2026-09-10
+
+Every campaign above states its own population, and section 9.2 rule 3
+forbids pairing figures across populations that differ. What no
+document in this repository stated until this section is the pair of
+numbers that bound section 9 as a whole when a reader turns it into the
+sentence *"the SoC was fault-injected"*: **how much of the design any
+campaign has ever pointed at**, and **how much of the manufactured die
+a flip-flop-only fault model can reach at all**. Both are properties of
+the placed design of record — the run `hw/soc/pnr/runs/s71boot`, whose
+netlist is `hw/soc/out/s70-rom0-syn/soc_top.netlist.v`,
+`md5 a8d5ef81446ce6d2aa2eb4c1e0fdff79`, the netlist `docs/74`
+simulated and `docs/70` and `docs/71` placed. Neither number is a
+result; both are denominators, and their only job is to stop the
+numerator being read as the whole.
+
+#### 9.10.1 About a fifth of the design's flip-flops are in a block no campaign has ever injected into
+
+The design has **5,873 flip-flops** — `python3 hw/soc/fi/gl_netlist.py
+hw/soc/out/s70-rom0-syn/soc_top.netlist.v` prints `5873 flip-flops`,
+and the flow's own `hw/soc/pnr/runs/s71boot/final/metrics.json` carries
+`design__instance__count__class:sequential_cell = 5873` from the
+placed database. Attributed to the top-level instance each belongs to:
+
+| Block | Flip-flops | Campaign that has injected into it |
+|---|---:|---|
+| `u_ibex` | 2,320 | the core campaign — `docs/42`, `docs/43`, `docs/74` |
+| `u_npu` | 2,090 | the connection — `docs/52`, `docs/55`, `docs/56` — and the die, `docs/16`, `docs/26`, `docs/32` |
+| `u_clint` | 170 | `mtime` and `mtimecmp` — `docs/58` |
+| `u_boot` | 143 | `docs/69` |
+| `u_timer0.u_wdog` | 99 | `docs/41` |
+| **covered** | **4,822** | |
+| `u_qspi` | 186 | **none** |
+| `u_timer0`, the GPTIMER half | 169 | **none** |
+| `u_gpio` | 144 | **none** |
+| `u_busstat` | 144 | **none** |
+| `u_apb` | 97 | **none** |
+| `u_scrub` | 78 | **none** |
+| `u_bus` | 55 | **none** |
+| `u_uart0` | 52 | **none** |
+| `u_ram` | 47 | **none** |
+| `u_pnp` | 28 | **none** |
+| `u_rom` | 3 | **none** |
+| **in no campaign** | **1,003** | **17.08 % of 5,873** |
+| not placed by any instrument used here | 48 | unknown, so the figure above is a range |
+
+**So: 1,003 to 1,051 flip-flops, 17.1 % to 17.9 % of the design, are in
+a block no fault-injection campaign in this repository has ever
+injected into.** The flip-flop counts are **[measured, 2026-09-10]**
+from the netlist named above; the percentages are **[estimate]** in
+this document's section 0.1 sense — arithmetic on those counts over the
+denominator 5,873, and nothing else. `u_ram`, `u_rom` and `u_scrub`
+are in that set on purpose and not by oversight: `docs/67`'s campaign
+injects into the **contents** of the two memories, 1,000 draws by
+region of the link map, and a memory word is not a flip-flop of this
+netlist. Their control, ECC and scrubber flip-flops have never been a
+site.
+
+**Three things this table is not.**
+
+1. **It is a block granularity, so 1,003 is a floor and not the count
+   of un-injected flip-flops.** A block counts as covered here if any
+   campaign has ever injected into it, not if every flip-flop in it is
+   a site. `docs/58` injects into `mtime`'s 72 stored bits and
+   `mtimecmp`'s 64, which is 136 of `u_clint`'s 170; `docs/41` injects
+   into the watchdog's own state; the core campaign's site list is 2,451
+   RTL bits and `docs/74` found 131 of them with no netlist twin. The
+   number of flip-flops in this design that are not a site of any
+   campaign is **larger than 1,003**, and no document here states it.
+2. **It says nothing about protection.** Section 9.1 is the protection
+   table and section 9.8 is the list of what is unprotected. A block
+   can be injected into and unprotected — most of `u_ibex` is — and a
+   block can be unmeasured without being unprotected.
+3. **It is not a rate**, per section 9.2 rule 1, and the blocks are of
+   very unequal size, so the percentage is a share of flip-flops and not
+   a share of anything that arrives from space.
+
+**What is in the uncovered set, and the claim that is too strong.**
+The whole of `soc_busstat` is in it — all 144 flip-flops, which is
+every counter and sticky bit **the SoC's own upset telemetry reports
+through**: `CNT_RFSEC`, `CNT_RFRD`, `CNT_RFDED`, `CNT_TMRERR`, the NPU
+fault lines `docs/55` added and the eight `docs/58` added. Section 9.8
+already says those counters are unprotected; this section adds that
+they have also never been injected into, so *"treat any disagreement
+between a counter reading non-zero and its sticky bit as a detected
+fault of the telemetry itself"* — `docs/21` section 6.4's host-side
+rule, restated in 9.8 — is the only defence the part has for them and
+it has never been tested against a fault in them.
+**It is not true that the uncovered set contains every fault counter in
+the design**, and this section states the narrower claim on purpose:
+`WDOGSTAT.RSTCNT` is in `u_timer0.u_wdog`, the `NPUCFG` cause bank and
+the queue drop counters are in `u_npu`, and the die's `CNT_SEC`,
+`CNT_DED` and `CNT_TMR` are in the die — three blocks a campaign has
+injected into.
+
+**How the attribution was made, and where it is weaker than the
+number looks.** Four instruments, in order, and each flip-flop is
+placed by the first one that reaches it:
+
+- **name**, 5,450 of 5,873: the Q net carries a hierarchical RTL name,
+  so the first path component is the block.
+- **port**, 221: the Q net is a `soc_top` wire — `s_rdata_npu`,
+  `pwdata`, `gpio_o`, `paddr` and eleven others — and the block is the
+  instance whose output drives that wire in `hw/soc/rtl/soc_top.v`.
+- **cone**, 77: the anonymous halves of the three TMR replica banks,
+  reached from the voter's own input nets. This is the correction
+  `docs/74` section 6.6 and `docs/75` forced, and it matters here for
+  the same reason it mattered there.
+- **fan-in / fan-out vote**, 77: an anonymous flip-flop all of whose
+  fan-in cone, or all of whose fan-out, lands in one block is assigned
+  to that block; ambiguous ones are left unplaced.
+
+**48 are left unplaced and they are counted as unknown rather than as
+either answer.** Three independent checks say the attribution is not
+inventing blocks: `u_uart0` reads 52 and `u_pnp` reads 28, which are
+`docs/45` section 6.2's separately synthesised block counts **exactly**;
+and `u_clint`'s 170 plus the one unplaced flip-flop on `irq_soft_o`,
+which is a CLINT output, is `docs/45`'s 163 plus the 8 `docs/58` added.
+
+**Reproducing the census, and the instrument's own limit.** The name
+census is one committed tool and one pipeline:
+
+```bash
+python3 hw/soc/fi/gl_netlist.py \
+    hw/soc/out/s70-rom0-syn/soc_top.netlist.v --list /tmp/flops.tsv
+awk -F'\t' 'NR>1 { q=$4; gsub(/^\\/,"",q); sub(/ ?\[[0-9]+\]$/,"",q)
+    n=split(q,p,"."); if (n<2) b="<no hierarchical name>"
+    else if (p[1]=="u_timer0") b=(p[2]=="u_wdog")?"u_timer0.u_wdog":"u_timer0(gptimer)"
+    else b=p[1]; c[b]++ } END { for (k in c) printf "%6d  %s\n", c[k], k }' \
+    /tmp/flops.tsv | sort -rn
+```
+
+and the three cone counts are
+`python3 hw/soc/fi/gl_netlist.py <netlist> --tmr-census wdog` and the
+same for `boot` and `npu`, which print `cone 29 / by_q_net 29 / 14 / 15`
+and its two analogues.
+
+**That name census alone answers 1,251, and 1,251 is wrong high.**
+It reports 4,622 flip-flops in the five covered blocks and therefore
+**1,251 in no campaign, 21.30 %** — and it is the census by Q-net name
+that `docs/74` section 6.6 caught undercounting a replica bank and
+`docs/75` convicted in general. It undercounts here too: **423 of the
+5,873 carry no hierarchical name at all**, and of those 423, 200 belong
+to blocks a campaign has injected into, 175 to blocks none has, and 48
+no instrument used here places. **A reader who runs only the pipeline
+above will get 21.3 % and should not publish it**; the answer this
+section stands behind is 17.1 % to 17.9 %.
+**The listing that performs the port, cone-beyond-`--tmr-census` and
+vote steps is not committed to this tree**, so 9.10.1's 1,003 is
+reproducible in method and by its cross-checks and is **not**
+reproducible by a command in this repository. That is an owed artefact
+and this sentence is the whole of the disclosure; the 1,251, the 5,873
+and the three cone counts are each reproducible by a committed tool
+today.
+
+> **DISCHARGED 2026-09-11.** The paragraph above stands as it was
+> written and is no longer true. `hw/soc/fi/gl_coverage.py` performs all
+> four steps and is committed:
+>
+> ```bash
+> python3 hw/soc/fi/gl_coverage.py \
+>     hw/soc/out/s70-rom0-syn/soc_top.netlist.v --verify
+> ```
+>
+> It is a **reimplementation from this section's prose**, not the
+> original listing, which is gone. That makes the agreement worth more
+> than a re-run would have been and worth less than a re-execution:
+> **all seven published figures come back — 5,450 name, 221 port, 77
+> cone, 77 vote, 48 unplaced, 1,003 uncovered, 5,873 total** — from a
+> tool written against the description rather than against the numbers.
+> `--verify` exits non-zero on any disagreement and its own failure text
+> forbids closing one by tuning the tool.
+>
+> One thing the reimplementation found that the prose did not state:
+> **the vote step has to be run to a fixed point.** A vote reads the
+> placements that exist when it is taken, so a single sweep in
+> flip-flop-index order places 76 and leaves 49 unplaced, and the same
+> rule iterated places 77 and leaves 48. The flip-flop at issue is
+> `_77779_`, whose fan-in cone and fan-out are both entirely `u_npu`
+> and which is therefore not ambiguous at all — only undecided until
+> its neighbours are decided. An instrument whose answer depends on the
+> order it walked the file is measuring the file.
+>
+> The mutation below reproduces too: renaming `u_busstat.irqen` into
+> `u_ibex` moves the attribution from **1,003 to 995** and `u_busstat`
+> from 144 to 136, under `--mutate u_busstat.irqen:u_ibex.mutant_irqen`.
+> `sw/tests/test_gl_coverage.py` runs both directions.
+
+**Both instruments were mutated to show they can move.** Renaming the
+eight flip-flops of `u_busstat.irqen` to `u_ibex.mutant_irqen` in a
+copy of the netlist moves the name census from 1,251 to 1,243 and the
+full attribution from 1,003 to 995. A check that reported the same
+number on a netlist in which eight uncovered flip-flops had been
+relabelled into a covered block would not be measuring coverage.
+
+#### 9.10.2 The flip-flop-only fault model makes 96.7 % of the manufactured cells non-sites
+
+Section 9.9 already says the fault model is single-bit, flip-flop-only,
+at RTL and with zero delay, and that every codec, voter and multiplexer
+is therefore outside it. This is that sentence as a number, on the
+placed design rather than on the RTL:
+
+| Denominator, from `hw/soc/pnr/runs/s71boot/final/metrics.json` | Instances | Flip-flops | Sites | **Non-sites** |
+|---|---:|---:|---:|---:|
+| every placed instance — `design__instance__count` | 176,663 | 5,873 | 3.32 % | **96.68 %** |
+| standard cells excluding fill — `design__instance__count__stdcell` | 60,868 | 5,873 | 9.65 % | **90.35 %** |
+
+The three instance counts are **[measured, 2026-09-10]**, read out of
+the run's own metrics and confirmed against its DEF; the two
+percentages are **[estimate]**, being 5,873 divided by each
+denominator.
+
+```bash
+python3 -m json.tool hw/soc/pnr/runs/s71boot/final/metrics.json \
+  | grep -E 'design__instance__count(__stdcell|__class:(sequential_cell|fill_cell|macro))?"'
+```
+
+which prints 176,663, 60,868, 5,873, 115,789 and 6; and the same
+figures come out of the run's own DEF, which is the artefact the
+metrics are derived from:
+
+```bash
+awk '/^COMPONENTS/{f=1;next} /^END COMPONENTS/{f=0}
+     f&&/^ *-/{n++; if ($3 ~ /^sg13g2_dfrbp/) ff++}
+     END {printf "instances %d  flip-flops %d  non-sites %.4f %%\n", n, ff, 100.0*(n-ff)/n}' \
+  hw/soc/pnr/runs/s71boot/final/def/soc_top.def
+```
+
+→ `instances 176663  flip-flops 5873  non-sites 96.6756 %`. Retyping
+100 of the `sg13g2_dfrbpq_1` instances to `sg13g2_buf_1` in a copy of
+that DEF moves it to 96.7322 %, which is the mutation that shows the
+count can be wrong.
+
+**Read the first row for what it is.** 115,789 of those 176,663
+instances are fill and decap and 792 are antenna diodes: cells that are
+manufactured, occupy the die and hold no state, so a fault model that
+only flips flip-flops was never going to reach them and their presence
+in the denominator is not a finding. **The 96.7 % must not be read as
+"96.7 % of the logic is unmodelled."** The row that carries the
+engineering is the second: **of the standard cells this design is
+actually built from, 90.35 % are not a site of any campaign in this
+document** — 37,087 multi-input combinational cells, 11,530 timing-repair
+buffers, 2,787 buffers, 1,773 inverters, 745 clock buffers, 280 clock
+inverters, and the six SRAM macros whose contents `docs/67` injects
+into and whose peripheral logic nothing does.
+
+What that bounds is stated narrowly, because the tempting version is
+not supported. It does **not** say 90 % of upsets are missed: a
+combinational cell has no state, a single-event transient in one is
+captured only if it arrives at a flip-flop inside a setup-hold window,
+and this repository has measured no cross-section, no charge-collection
+radius and no LET threshold for this process — the same prohibition
+`docs/79` places on converting micrometres into a coincidence
+probability applies here to converting cell counts into a fault share.
+What it does say is that **every mechanism in section 9.1's table is
+implemented partly in cells this fault model cannot fault**: the (39,32)
+and (72,64) decoders, every majority voter, the parity trees and the
+dual-rail comparators are combinational, and `docs/74` counts the SECDED
+decoder alone at 528 combinational cells, none of them a site. A voter
+that is itself upset is outside every number in section 9.
 
 ---
 
@@ -2118,6 +2393,7 @@ if that stops being true. **This document modifies nothing.**
 
 | Date | Revision | Changes |
 |---|---|---|
+| 2026-09-10 | **0.1d** | Section 9.10 added: the two SoC-wide denominators that bound the whole of section 9 — 1,003 to 1,051 of the placed design's 5,873 flip-flops are in a block no campaign has injected into (`soc_busstat` entire, and with it every counter the SoC's own upset telemetry reports through), and the flip-flop-only fault model leaves 96.68 % of the 176,663 placed instances and 90.35 % of the 60,868 standard cells outside the model. No campaign figure in section 9 changed; what changed is that the numerators now have a stated denominator. Section 9.9's *"`soc_top` has never been simulated as a netlist"* is corrected in place against `docs/74` and left standing. |
 | 2026-09-05 | **0.1a** | Section 14: the seven disagreements are resolved in the documents that own them, each correction left visible in place, and recorded in `docs/64-document-reconciliation.md`. No figure in this datasheet changed; section 9 already followed the committed campaign log. |
 | 2026-09-05 | **0.1c** | Sections 1 and 4.1: the "no QSPI" statements are corrected in place. `docs/66-qspi-flash-controller.md` builds the register-mode QSPI controller; the whole-SoC invariant is unchanged at 217,634 with the block present and the program as it was, and that document explains why the new checks are a second image. |
 | 2026-09-05 | **0.1b** | Sections 1 and 4.1: the "no GPIO" statements are corrected in place. `docs/65-gpio-and-the-interface-ip-assessment.md` builds the GPIO port; the whole-SoC invariant this datasheet quotes at 215,428 cycles is 217,634 with that document's check 28 in the program, and unchanged with the block present and the program as it was. |

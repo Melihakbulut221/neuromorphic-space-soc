@@ -341,8 +341,13 @@ def test_seven_netgen_counters_are_named():
 def test_stage_arithmetic_is_self_consistent():
     """80 stages reported = 76 step directories + the four gated off."""
     text = _section_4_preamble()
-    m = re.search(r"reported \*\*(\d+) stages\*\* and produced "
-                  r"\*\*(\d+) numbered step directories\*\*", text)
+    # \s+ between the words, not a literal space. A document is wrapped
+    # at some width and the wrap moves when a sentence is edited; a guard
+    # that reports "section 4 no longer states its stage count" when the
+    # count is right there, one line lower, is a guard that teaches people
+    # to reflow the prose to suit it.
+    m = re.search(r"reported\s+\*\*(\d+)\s+stages\*\*\s+and\s+produced\s+"
+                  r"\*\*(\d+)\s+numbered\s+step\s+directories\*\*", text)
     assert m, "section 4 no longer states its stage and step-directory counts"
     stages, step_dirs = int(m.group(1)), int(m.group(2))
     skipped = re.search(r"the (\w+) that did not run", text)
@@ -471,7 +476,7 @@ def test_metrics_report_exactly_the_documented_corners(metrics):
 
 def test_numbered_step_directory_count_matches_the_document(run_dir):
     text = _section_4_preamble()
-    m = re.search(r"\*\*(\d+) numbered step directories\*\*", text)
+    m = re.search(r"\*\*(\d+)\s+numbered\s+step\s+directories\*\*", text)
     assert m, "section 4 no longer states a step-directory count"
     claimed = int(m.group(1))
     found = sorted(p.name for p in run_dir.iterdir()
@@ -533,6 +538,15 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
     committed = json.loads(CONFIG.read_text(encoding="utf-8"))
     resolved = json.loads(resolved_path.read_text(encoding="utf-8"))
 
+    def _gates_nothing(value):
+        """Is this the value of a checker bound to no corner at all?
+
+        Three spellings, all meaning the same thing in this flow: the key
+        absent, the key present as None, or the key present as the
+        match-none wildcard [""] that docs/34 section 8.5 measured.
+        """
+        return value is None or value == [""] or value == []
+
     def same(want, got):
         if isinstance(want, str) and want.startswith("dir::"):
             target = (CONFIG.parent / want[len("dir::"):]).resolve()
@@ -545,8 +559,47 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
                     and all(same(w, g) for w, g in zip(want, got)))
         return want == got
 
+    # KEYS THAT ONCE POSTDATED THE EVIDENCE RUN. There are none now.
+    #
+    # On 2026-09-10 three violation-corner keys were added to
+    # hw/openlane/aer_fifo/config.json because the audit found setup
+    # gated at one corner of three and max-cap and max-slew gated at NO
+    # corner -- the match-none [""] that docs/34 section 8.5 records. The
+    # evidence run predated them, so this guard's sentence was false for
+    # exactly those three keys and true for every other, and they were
+    # named here with a date rather than tolerated by a widened rule.
+    #
+    # The honest close was always a re-harden, and it was blocked for a
+    # day by a separate defect: LibreLane stopped the design with "9
+    # Unmapped Yosys instances found", which turned out to be its own
+    # unmapped counter reading `keep_hierarchy` submodules as unmapped
+    # cells. `SYNTH_HIERARCHY_MODE: deferred_flatten` closed that, the
+    # trial re-hardened as `g0gates2` on 2026-09-11 with all four corner
+    # checkers live, and the entry was retired -- by the SECOND assertion
+    # below, which failed the moment the run carried the keys and said
+    # what to do about it. An exception that cannot tell you it has
+    # expired is a hole.
+    POSTDATE_EVIDENCE = set()
     for key, value in committed.items():
         if key.startswith("//"):
+            continue
+        # WHAT "THE RUN PREDATES THIS GATE" ACTUALLY LOOKS LIKE, and it
+        # took two tries to write. The three keys are not absent from
+        # resolved.json: SETUP_VIOLATION_CORNERS is there as None, and
+        # MAX_CAP and MAX_SLEW are there as [""] -- the match-none
+        # wildcard that docs/34 section 8.5 recorded, where the checker
+        # promotes its own corner_override into the default, the list is
+        # then filtered of "" and comes out EMPTY, and every violation
+        # lands in a warning while the flow exits 0.
+        #
+        # So the condition is not "absent" and not "None". It is "the
+        # run's value gates nothing", and each of the three spells that
+        # differently. Testing for absence did not fire; testing for None
+        # caught one of three. The distinction between a key the tool did
+        # not have, a key it had and nobody set, and a key set to a value
+        # that matches no corner is the whole subject of the audit that
+        # produced this exception.
+        if key in POSTDATE_EVIDENCE and _gates_nothing(resolved.get(key)):
             continue
         assert key in resolved, (
             f"committed config key {key} is absent from {run_dir.name}/"
@@ -554,3 +607,13 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
         assert same(value, resolved[key]), (
             f"{key}: committed config has {value!r}, run resolved to "
             f"{resolved[key]!r}")
+    # The declaration must stay honest in the other direction too: a key
+    # named here that IS in the run has stopped postdating it, and the
+    # entry is then a hole rather than a record.
+    stale = {k for k in POSTDATE_EVIDENCE
+             if not _gates_nothing(resolved.get(k))}
+    assert not stale, (
+        f"these keys are declared as postdating {run_dir.name}'s evidence "
+        f"and the run resolved them: {sorted(stale)}. The run has been "
+        "redone; delete them from POSTDATE_EVIDENCE so the guard checks "
+        "them again")

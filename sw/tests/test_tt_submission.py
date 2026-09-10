@@ -472,7 +472,11 @@ _PILOT_FAULT_CLR_BIT_RE = re.compile(
 # assertions below fail. If tt/ is regenerated after the shuttle and the
 # gap closes, they also fail -- deliberately, so the exception is
 # retired by hand rather than outliving the thing it excuses.
-FROZEN_INFO_MD_MISSING = {"CNT_EVQ_OUT_OVF", "CNT_EVQ_PAR"}
+# RETIRED 2026-09-11: the gap this pinned is closed. Kept as the
+# record of what the shipped datasheet omitted between 2026-08-29
+# and the regeneration, which is what docs/21 section 10 item 7
+# recorded and what the assertion below no longer needs.
+FROZEN_INFO_MD_MISSING = {"CNT_EVQ_OUT_OVF", "CNT_EVQ_PAR"}  # historical
 FROZEN_INFO_MD_STALE_CLEAR = "Writing `0x3F` clears everything."
 
 
@@ -599,28 +603,52 @@ def test_pilot_only_registers_and_fault_clr_bits_are_documented():
             f"tt/src/pilot_top.v decodes it at "
             f"{'0x%03X' % die[name] if name in die else 'no address at all'}"
         )
+    # THE GAP CLOSED ON 2026-09-11, and this assertion is what said so.
+    #
+    # It used to pin the two registers the shipped datasheet omitted --
+    # CNT_EVQ_OUT_OVF and CNT_EVQ_PAR -- and its own failure text said
+    # what to do if the set ever emptied: delete the pin rather than
+    # widen it, because a widened pin cannot tell a fix from a
+    # regression. tt/ was regenerated from a generator that computes the
+    # table from the RTL decode, the set emptied, and the pin is gone.
+    #
+    # What replaces it is the stronger statement the pin was standing in
+    # for: EVERY register the die decodes is in the shipped datasheet.
+    # That fails if a register is dropped and it fails if one is added
+    # without documenting it, which the pinned-set form could do neither
+    # of once the set was empty.
     missing = set(die) - set(shipped)
-    assert missing == FROZEN_INFO_MD_MISSING, (
-        "the set of pilot-only registers missing from tt/docs/info.md "
-        f"changed. Pinned: {sorted(FROZEN_INFO_MD_MISSING)}. Now: "
-        f"{sorted(missing)}. If the gap GREW, the submitted datasheet "
-        "describes even less of the die than docs/21 section 10 item 7 "
-        "records. If it CLOSED, tt/ was regenerated: delete this pin and "
-        "item 7 rather than widening it"
-    )
-    assert FROZEN_INFO_MD_STALE_CLEAR in info_md, (
-        "tt/docs/info.md no longer carries the stale clear-everything "
-        f"sentence {FROZEN_INFO_MD_STALE_CLEAR!r}. Either it was corrected "
-        f"to 0x{mask:02X}, in which case retire this pin and docs/21 "
-        "section 10 item 7, or it drifted somewhere new and needs reading"
-    )
-    assert f"Writing `0x{mask:02X}`" not in info_md, (
-        "tt/docs/info.md now publishes the correct clear mask "
-        f"0x{mask:02X}. That is the outcome this pin is waiting for: "
-        "remove FROZEN_INFO_MD_MISSING, FROZEN_INFO_MD_STALE_CLEAR and "
-        "docs/21 section 10 item 7, and let the assertions above check "
-        "info.md the same way they check docs/21"
-    )
+    assert not missing, (
+        "tt/docs/info.md omits {} from the pilot-only register table, and "
+        "tt/src/pilot_top.v decodes {}. The submitted datasheet is what an "
+        "operator reads; a register the die has and the page does not is a "
+        "counter nobody clears. Regenerate tt/ rather than editing "
+        "info.md, which is manifest-covered".format(
+            sorted(missing), sorted(die)))
+    # THE OUTCOME THE PIN WAS WAITING FOR ARRIVED, 2026-09-11.
+    #
+    # These two assertions were a pair: the first held the stale sentence
+    # in place so a silent drift could not hide, and the second fired the
+    # moment the correct mask appeared, saying in its own text to retire
+    # both. tt/ was regenerated from a generator that computes the mask
+    # from the RTL decode, the correct sentence appeared, and they are
+    # retired rather than inverted.
+    #
+    # What stands in their place is the positive form: the shipped
+    # datasheet must publish the mask the die actually implements, and
+    # must not publish the superseded one. Both directions fail, which
+    # neither of the two above could do once the transition was over.
+    assert FROZEN_INFO_MD_STALE_CLEAR not in info_md, (
+        "tt/docs/info.md has gone back to the superseded clear mask "
+        f"{FROZEN_INFO_MD_STALE_CLEAR!r}. The die decodes bits "
+        f"{sorted(pilot_bits.values())} on top of the architecture's, so "
+        f"the clear-everything write is 0x{mask:02X}. An operator "
+        "following 0x3F leaves two counters uncleared and then reads "
+        "them as live. Regenerate tt/; info.md is manifest-covered")
+    assert f"0x{mask:02X}" in info_md, (
+        "tt/docs/info.md does not publish the clear-everything mask "
+        f"0x{mask:02X} that tt/src/pilot_top.v implements. The datasheet "
+        "that ships with the die is what an operator reads")
 
 
 def test_licence_state_is_declared():
@@ -686,3 +714,45 @@ def test_the_signed_memo_is_what_released_the_licence():
     )
     for row in ("CERN-OHL-W-2.0", "Apache-2.0", "CC-BY-4.0"):
         assert row in memo, "docs/14 no longer names {}".format(row)
+
+
+# The commit of the vendored tooling that produced this tree. `tt/tt/` is
+# a gitignored clone of TinyTapeout/tt-support-tools, recorded in
+# docs/23 section 2 and docs/25 section 3 and pinned NOWHERE ELSE: no
+# submodule, no lockfile, no manifest entry. Its branch is `main`, which
+# moves, and the local reproduction of the shuttle's GDS flow -- the one
+# that gives "reproduces bit-for-bit" its meaning -- runs whatever is
+# checked out there on the day.
+TT_SUPPORT_TOOLS = "01d5d2814fa9dd61e9d211e0b235a4a592a9316a"
+
+
+def test_the_vendored_tooling_is_the_commit_the_documents_name():
+    """A clone on a moving branch, pinned only in prose.
+
+    This does not make the checkout reproducible -- it is gitignored and
+    a fresh clone has nothing at all, which is why the test SKIPS rather
+    than fails there. What it does is make a SILENT move loud: `git pull`
+    in tt/tt/ would otherwise change what produced the submission
+    without changing one tracked byte, and every document that says
+    01d5d281 would go on saying it.
+    """
+    import subprocess
+
+    clone = TT / "tt"
+    if not (clone / ".git").exists():
+        pytest.skip(
+            "tt/tt/ is a gitignored clone of TinyTapeout/tt-support-tools "
+            "and is not in this tree. Restore it with\n"
+            "  git clone https://github.com/TinyTapeout/tt-support-tools "
+            "tt/tt\n"
+            "  git -C tt/tt checkout " + TT_SUPPORT_TOOLS)
+    head = subprocess.run(["git", "-C", str(clone), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True
+                          ).stdout.strip()
+    assert head == TT_SUPPORT_TOOLS, (
+        "tt/tt/ is at {}, and docs/23 section 2 and docs/25 section 3 both "
+        "record {}.\n\nThe submission in tt/ was generated by the recorded "
+        "commit. If the clone moved on\npurpose, the tree has to be "
+        "regenerated and BOTH documents updated with a date --\nnot this "
+        "constant on its own, which would leave three places disagreeing "
+        "and one of\nthem silent.".format(head, TT_SUPPORT_TOOLS))

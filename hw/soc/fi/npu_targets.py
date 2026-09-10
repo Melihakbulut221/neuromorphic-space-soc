@@ -318,9 +318,21 @@ def _sites():
     # has waited, and the strobes and address it drives at the transport
     # and the queues.  An upset here sends an event down the wrong path,
     # or launches a frame nobody asked for.
+    #
+    # `ev_resume` is the E_DECIDE detour's own bit, added 2026-09-10 with
+    # the deadlock fix and a SITE FROM THE DAY IT EXISTED rather than
+    # after the next campaign noticed the count had moved. It is what
+    # makes the detour return to the event it left, so an upset in it
+    # loses or repeats exactly the event the fix exists to keep. Its
+    # consequence is stated here because it is not free: `ev_seq` was
+    # 19 bits and is 20, so this stratum's draws are NOT comparable with
+    # docs/52's, docs/55's or docs/56's for it. The other four engine
+    # sub-strata are untouched and stay comparable, which is the
+    # property docs/56 section 3 relies on.
     for name, width in (("ev_state", 4), ("ev_wait", 4),
                         ("ev_start", 1), ("ev_we", 1), ("ev_addr", 7),
-                        ("inj_rd_en", 1), ("cap_wr_en", 1)):
+                        ("inj_rd_en", 1), ("cap_wr_en", 1),
+                        ("ev_resume", 1)):
         s.append(Site("ev_seq", name, name, width))
 
     # ev_data: the event word in flight.  The word fetched out of the

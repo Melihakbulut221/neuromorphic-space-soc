@@ -413,7 +413,9 @@ This section is what an implementer needs to write a driver or a
 bit-exact model. The equation tags are the normative ones from
 `docs/10-npu-mvp-spec.md` section 4, and each is bound to at least one
 test in `sw/tests/` by a traceability check that fails if any tag lacks
-a matching test.
+a matching test, or if the matching test has been gutted of its
+assertions -- a name alone does not count as coverage
+(`docs/11` section 7, corrected 2026-09-11).
 
 ### 4.1 Per-neuron state
 

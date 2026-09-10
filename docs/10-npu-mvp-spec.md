@@ -539,7 +539,11 @@ Every numbered equation maps to at least one pytest in `sw/tests/`; the
 mapping is enforced mechanically by
 `sw/tests/test_traceability.py::test_every_spec_equation_has_a_test`,
 which parses this document for equation tags and fails if any tag lacks a
-matching `test_e<n>_*` test.
+matching `test_e<n>_*` test. *Corrected 2026-09-11: the check is
+stronger than the sentence above. A matching NAME is not enough --
+`test_a_name_without_an_assertion_does_not_count_as_coverage` fails a
+test that carries the name and asserts nothing -- so what is enforced is
+that every tag is covered by a test that asserts something about it.*
 
 | Eq | Contract | Test (sw/tests/) |
 |---|---|---|

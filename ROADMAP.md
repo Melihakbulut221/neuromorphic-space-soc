@@ -67,6 +67,39 @@ counters, XOR 0, antenna 0 nets and 0 pins after detailed routing,
 max-slew and max-cap violations across all three corners. Recorded with
 pinned tool and PDK versions in `docs/12-sg13g2-flow-bringup.md`.
 
+**Re-met on the current design, 2026-09-11, by run `g0gates2`** — the
+same zeros with all four corner checkers live, 17 of 19 in-flow checkers
+gating fully, on RTL that includes the replicated queue pointers.
+`docs/12` section 4 now cites that run and section 4.7a keeps this one
+beside it. What follows is why the move was necessary.
+
+**Scope correction, 2026-09-11. The gate is met and the sentence above
+is true; what it is true OF is narrower than it reads.**
+`trial-03-signoff` ran on **2026-08-25**. On **2026-08-31**, commit
+`b6738e5` replicated the AER queue pointers, and the replication
+defence in `hw/rtl/aer_fifo.v` is `keep_hierarchy` on twelve bank
+instances plus the POL+MIX storage transform. So every number in the
+paragraph above was measured on an `aer_fifo` **without replicated
+pointers**, and no run since has produced a comparable one: under the
+flatten this config was still using, yosys honours the attribute, nine
+`$paramod` submodule types survive, and `librelane/steps/pyosys.py`
+counts every cell type whose name begins with `$` as unmapped -- so a
+parameterised user module is counted the same as a gate that failed to
+map, and the flow stops at `Checker.YosysUnmappedCells` with *"9
+Unmapped Yosys instances found"*. **Nothing was unmapped**: inside those
+nine, every cell is an sg13g2 cell.
+
+`hw/openlane/pilot_ihp`, `hw/openlane/pilot_sky130` and `tt/src` have
+all carried `SYNTH_HIERARCHY_MODE: deferred_flatten` against exactly
+this failure since before the pointers were replicated, and
+`pilot_sky130`'s own comment describes it verbatim. **The block's own
+sign-off configuration was the one that did not**, and for eleven days
+it could not build the block's RTL -- invisible because nothing re-ran
+it. The key is now set, with the reasoning, in
+`hw/openlane/aer_fifo/config.json`, and `g0gates2` is the run it made
+possible. `trial-03-signoff` is not re-run and its numbers stand as
+recorded (`docs/64`), in `docs/12` section 4.7a.
+
 ### P1 — TTIHP26b pilot (to 2026-09-21) — engineering complete, owner actions open
 
 **Status 2026-09-05: unchanged from 2026-08-31 in substance, and the

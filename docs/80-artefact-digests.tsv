@@ -2,11 +2,12 @@
 # docs/80-artefact-digests.md. DO NOT EDIT BY HAND.
 #
 # Every path below is git-ignored on purpose -- .gitignore lines 4, 40,
-# 74, 118 and 136 -- because the artefacts run from 345 bytes to 161 MB
-# and the whole set is 1.9 GB. This file pins their IDENTITY so that the
-# evidence behind docs/71, docs/74, docs/75, docs/77 and docs/79 cannot
-# be silently swapped. It does NOT make the artefacts available and it
-# does NOT establish that any of them is correct.
+# 74, 118 and 136. This file pins their IDENTITY so that the evidence
+# behind docs/71, docs/74, docs/75, docs/77 and docs/79 cannot be
+# silently swapped. It does NOT make the artefacts available and it does
+# NOT establish that any of them is correct.
+#
+# 329 artefacts, 0 bytes to 1.718 GB, 5.163 GB in total.
 #
 # sha256 is over the file's bytes. `metrics` is `k=v;k=v`, read out of the
 # artefact by this script's own extractors, and is a legibility aid, not a
@@ -16,11 +17,30 @@
 #   scripts/artefact_digests.py --write    rebuild on a machine that has the runs
 
 group	cites	role	path	bytes	sha256	metrics
-pilot-signoff	31,32,34,79	netlist	hw/openlane/pilot_ihp/runs/signoff-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v	2565946	52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989	lines=72858;cells=33564;flops=1296
-pilot-signoff	31,32,34,79	def	hw/openlane/pilot_ihp/runs/signoff-6x2/final/def/tt_um_melihakbulut_nssoc.def	13960592	8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4	units_per_um=1000;diearea=(00)(1289280313740);components=33564
-pilot-signoff	31,32,34,79	gds	hw/openlane/pilot_ihp/runs/signoff-6x2/final/gds/tt_um_melihakbulut_nssoc.gds	20760838	f5e2e35e1d2faac04fa731c09645aa0ae80045ca137250415a0af311e38ac98b	
-pilot-signoff	31,32,34,79	metrics	hw/openlane/pilot_ihp/runs/signoff-6x2/final/metrics.json	10124	f3889ee38760ac905e86a3d4b7bc8bac34941cae4a888592a1f05621298f2bbd	keys=196;die_um2=404499;insts=33564;stdcells=12546;flops=1296;stdcell_um2=191588;util=0.487516;setup_ws_slow=1.226180081066267;setup_ws_typ=8.103343114768531;setup_ws_fast=12.137398096789024;setup_tns_slow=0;setup_vio_slow=0;hold_ws_slow=0.6040953464001406;hold_ws_typ=0.2829435654746831;hold_ws_fast=0.102949152117101;setup_bufs=20;hold_bufs=0;wirelength=472381;drc=0;slew_vio_slow=0;cap_vio_slow=0;antenna_nets=0
-pilot-signoff	31,32,34,79	config	hw/openlane/pilot_ihp/runs/signoff-6x2/resolved.json	22814	c280970d1eb1478a0398e7e60aa69af387dac927dc744cd325c58ed76bbe7726	keys=411
+pilot-signoff-gated	31,34,36,79	netlist	hw/openlane/pilot_ihp/runs/signoff-6x2-gated/final/nl/tt_um_melihakbulut_nssoc.nl.v	2565946	52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989	lines=72858;cells=33564;flops=1296
+pilot-signoff-gated	31,34,36,79	netlist	hw/openlane/pilot_ihp/runs/signoff-6x2-gated/final/pnl/tt_um_melihakbulut_nssoc.pnl.v	3513932	39470ad135125f6b80abaf487877ef81d442ee8dd567bde5ea89ec42995ee73e	lines=118972;cells=33564;flops=1296
+pilot-signoff-gated	31,34,36,79	def	hw/openlane/pilot_ihp/runs/signoff-6x2-gated/final/def/tt_um_melihakbulut_nssoc.def	13960592	8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4	units_per_um=1000;diearea=(00)(1289280313740);components=33564
+pilot-signoff-gated	31,34,36,79	gds	hw/openlane/pilot_ihp/runs/signoff-6x2-gated/final/gds/tt_um_melihakbulut_nssoc.gds	20760838	1c9f2dd7f65cc248fe8ce2b5856f8a941d0e4cf3f09a0e1ed7df9147eaf98260	
+pilot-signoff-gated	31,34,36,79	metrics	hw/openlane/pilot_ihp/runs/signoff-6x2-gated/final/metrics.json	10124	f3889ee38760ac905e86a3d4b7bc8bac34941cae4a888592a1f05621298f2bbd	keys=196;die_um2=404499;insts=33564;stdcells=12546;flops=1296;stdcell_um2=191588;util=0.487516;setup_ws_slow=1.226180081066267;setup_ws_typ=8.103343114768531;setup_ws_fast=12.137398096789024;setup_tns_slow=0;setup_vio_slow=0;hold_ws_slow=0.6040953464001406;hold_ws_typ=0.2829435654746831;hold_ws_fast=0.102949152117101;setup_bufs=20;hold_bufs=0;wirelength=472381;drc=0;slew_vio_slow=0;cap_vio_slow=0;antenna_nets=0
+pilot-signoff-gated	31,34,36,79	config	hw/openlane/pilot_ihp/runs/signoff-6x2-gated/resolved.json	22870	274e69513700395332037b27c1964317db278f5cfa75531ea5d8e5346c4dbbcc	keys=411
+pilot-submission-gated	31,34,36	netlist	hw/openlane/pilot_ihp/runs/submission-6x2-gated/final/nl/tt_um_melihakbulut_nssoc.nl.v	2565946	52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989	lines=72858;cells=33564;flops=1296
+pilot-submission-gated	31,34,36	netlist	hw/openlane/pilot_ihp/runs/submission-6x2-gated/final/pnl/tt_um_melihakbulut_nssoc.pnl.v	3513932	39470ad135125f6b80abaf487877ef81d442ee8dd567bde5ea89ec42995ee73e	lines=118972;cells=33564;flops=1296
+pilot-submission-gated	31,34,36	def	hw/openlane/pilot_ihp/runs/submission-6x2-gated/final/def/tt_um_melihakbulut_nssoc.def	13960592	8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4	units_per_um=1000;diearea=(00)(1289280313740);components=33564
+pilot-submission-gated	31,34,36	gds	hw/openlane/pilot_ihp/runs/submission-6x2-gated/final/gds/tt_um_melihakbulut_nssoc.gds	20760838	4091b468bcc43313625ffbd5ab66fb47c2e434b0ffd456562958366e7e68c998	
+pilot-submission-gated	31,34,36	metrics	hw/openlane/pilot_ihp/runs/submission-6x2-gated/final/metrics.json	10048	39a17f64239eebc14a52a86a5a75c23d8f01e85d514525aabc4c58d91b6d998a	keys=194;die_um2=404499;insts=33564;stdcells=12546;flops=1296;stdcell_um2=191588;util=0.487516;setup_ws_slow=1.226180081066267;setup_ws_typ=8.103343114768531;setup_ws_fast=12.137398096789024;setup_tns_slow=0;setup_vio_slow=0;hold_ws_slow=0.6040953464001406;hold_ws_typ=0.2829435654746831;hold_ws_fast=0.102949152117101;setup_bufs=20;hold_bufs=0;wirelength=472381;drc=0;slew_vio_slow=0;cap_vio_slow=0;antenna_nets=0
+pilot-submission-gated	31,34,36	config	hw/openlane/pilot_ihp/runs/submission-6x2-gated/resolved.json	22765	1a8611663478256ba8bb2c1d6ef96eb25dc9e3cb54863cff5a5c10680cd285bf	keys=411
+pilot-signoff-superseded	31,32,34,79	netlist	hw/openlane/pilot_ihp/runs/signoff-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v	2565946	52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989	lines=72858;cells=33564;flops=1296
+pilot-signoff-superseded	31,32,34,79	netlist	hw/openlane/pilot_ihp/runs/signoff-6x2/final/pnl/tt_um_melihakbulut_nssoc.pnl.v	3513932	39470ad135125f6b80abaf487877ef81d442ee8dd567bde5ea89ec42995ee73e	lines=118972;cells=33564;flops=1296
+pilot-signoff-superseded	31,32,34,79	def	hw/openlane/pilot_ihp/runs/signoff-6x2/final/def/tt_um_melihakbulut_nssoc.def	13960592	8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4	units_per_um=1000;diearea=(00)(1289280313740);components=33564
+pilot-signoff-superseded	31,32,34,79	gds	hw/openlane/pilot_ihp/runs/signoff-6x2/final/gds/tt_um_melihakbulut_nssoc.gds	20760838	f5e2e35e1d2faac04fa731c09645aa0ae80045ca137250415a0af311e38ac98b	
+pilot-signoff-superseded	31,32,34,79	metrics	hw/openlane/pilot_ihp/runs/signoff-6x2/final/metrics.json	10124	f3889ee38760ac905e86a3d4b7bc8bac34941cae4a888592a1f05621298f2bbd	keys=196;die_um2=404499;insts=33564;stdcells=12546;flops=1296;stdcell_um2=191588;util=0.487516;setup_ws_slow=1.226180081066267;setup_ws_typ=8.103343114768531;setup_ws_fast=12.137398096789024;setup_tns_slow=0;setup_vio_slow=0;hold_ws_slow=0.6040953464001406;hold_ws_typ=0.2829435654746831;hold_ws_fast=0.102949152117101;setup_bufs=20;hold_bufs=0;wirelength=472381;drc=0;slew_vio_slow=0;cap_vio_slow=0;antenna_nets=0
+pilot-signoff-superseded	31,32,34,79	config	hw/openlane/pilot_ihp/runs/signoff-6x2/resolved.json	22814	c280970d1eb1478a0398e7e60aa69af387dac927dc744cd325c58ed76bbe7726	keys=411
+pilot-submission-superseded	31,34	netlist	hw/openlane/pilot_ihp/runs/submission-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v	2565946	52b2debf3b2097c1544b2a5ea625675add5ec71a3d3ac9b68dfb5b32d6120989	lines=72858;cells=33564;flops=1296
+pilot-submission-superseded	31,34	netlist	hw/openlane/pilot_ihp/runs/submission-6x2/final/pnl/tt_um_melihakbulut_nssoc.pnl.v	3513932	39470ad135125f6b80abaf487877ef81d442ee8dd567bde5ea89ec42995ee73e	lines=118972;cells=33564;flops=1296
+pilot-submission-superseded	31,34	def	hw/openlane/pilot_ihp/runs/submission-6x2/final/def/tt_um_melihakbulut_nssoc.def	13960592	8f99c979c513ab5d9dd2ebb5e72bbf77d28180ac2d7165772664dfe09586fcf4	units_per_um=1000;diearea=(00)(1289280313740);components=33564
+pilot-submission-superseded	31,34	gds	hw/openlane/pilot_ihp/runs/submission-6x2/final/gds/tt_um_melihakbulut_nssoc.gds	20760838	664326bf142635dd14f2b369b9cc8a935123f859f3100886da0f226e220a9372	
+pilot-submission-superseded	31,34	metrics	hw/openlane/pilot_ihp/runs/submission-6x2/final/metrics.json	10048	39a17f64239eebc14a52a86a5a75c23d8f01e85d514525aabc4c58d91b6d998a	keys=194;die_um2=404499;insts=33564;stdcells=12546;flops=1296;stdcell_um2=191588;util=0.487516;setup_ws_slow=1.226180081066267;setup_ws_typ=8.103343114768531;setup_ws_fast=12.137398096789024;setup_tns_slow=0;setup_vio_slow=0;hold_ws_slow=0.6040953464001406;hold_ws_typ=0.2829435654746831;hold_ws_fast=0.102949152117101;setup_bufs=20;hold_bufs=0;wirelength=472381;drc=0;slew_vio_slow=0;cap_vio_slow=0;antenna_nets=0
+pilot-submission-superseded	31,34	config	hw/openlane/pilot_ihp/runs/submission-6x2/resolved.json	22715	0b73090bf441af7a92e17ea03313631b79f9eef567eee5211418e1a3907c1c5e	keys=411
 pilot-shape6x2	26,27	netlist	hw/openlane/pilot_ihp/runs/shape-6x2/final/nl/tt_um_melihakbulut_nssoc.nl.v	2570202	2b2000b113c7d35a8a10c87ad3dc7cc8d6cea8bb4047b1b2f3d902006c83d3f8	lines=72903;cells=33801;flops=1275
 pilot-shape6x2	26,27	def	hw/openlane/pilot_ihp/runs/shape-6x2/final/def/tt_um_melihakbulut_nssoc.def	13993680	868b0547e9d8ae01b211cd7c7de8da7947831098879bd9020fb02f43349800e4	units_per_um=1000;diearea=(00)(1289280313740);components=33801
 pilot-shape6x2	26,27	gds	hw/openlane/pilot_ihp/runs/shape-6x2/final/gds/tt_um_melihakbulut_nssoc.gds	20773992	40cab6aa1ded3d7edcb21b626539ff3a571591ddc8523255d4e9a1eb50555c33	
@@ -111,6 +131,11 @@ equiv-79	79	text	formal/eqy/out/secded_enc.pass	0	e3b0c44298fc1c149afbf4c8996fb9
 equiv-79	79	text	formal/eqy/out/tmr_voter.pass	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	lines=0
 equiv-79	79	text	formal/eqy/out/secded_dec_mutant.failed	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	lines=0
 equiv-79	79	text	formal/eqy/out/voter_mutant.failed	0	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	lines=0
+equiv-79	79	log	formal/eqy/out/secded_dec.log	2076	4dbe19da3d12fa1e8f6545229174415a08084d1c28e347564323df521edadebf	lines=22
+equiv-79	79	log	formal/eqy/out/secded_dec_mutant.log	2364	a80c042bddd676ac495989d64a6d9b1953d3c71cbb07c55403806ec55eb6e950	lines=22
+equiv-79	79	log	formal/eqy/out/secded_enc.log	2081	af845ad1041d2b7c28a7939ebd703c0f2e24186c09d86fca656a5c1f11a5d84b	lines=22
+equiv-79	79	log	formal/eqy/out/tmr_voter.log	2305	7930dd9c7941fab01a920a53f6f4465acc2940308d97e961084e39d85529167f	lines=25
+equiv-79	79	log	formal/eqy/out/voter_mutant.log	2466	9e3b0db1312527cfbdbadcf9aa4d374536eee2d86f2be79ea5fecfaf3aa0140e	lines=25
 equiv-79	79	netlist	formal/eqy/out/gate_secded_dec.v	175501	f238b21697657bbd829f8983695747480c493596298d27f1b0fdf0db3df0c565	lines=3367;cells=373;flops=0
 equiv-79	79	netlist	formal/eqy/out/gate_secded_enc.v	95439	11451eb1100e8f436a0a76946c183c11ba1d1b7ced05c51fe9c93d3f2c23486b	lines=1781;cells=222;flops=0
 equiv-79	79	netlist	formal/eqy/out/gate_tmr_voter.v	151349	70bd8ae1e113645adcb07e6afa8d7eb655915873d90a8f6f9bde67728a222f0c	lines=2952;cells=316;flops=0
@@ -165,3 +190,159 @@ power-77	76,77	report	hw/soc/out/pwr77self-s77gate/power.npuoff.nom_typ_1p20V_25
 power-77	76,77	report	hw/soc/out/pwr77self-s77gate/power.npuon.nom_fast_1p32V_m40C.rpt	1884	97a73a5df2c6bb98147675f03ac24c1c93e5626b250029c2383e3d9960672e32	lines=24;window=npuon;corner=nom_fast_1p32V_m40C;internal_w=2.737380e-02;switching_w=7.269816e-03;leakage_w=2.600620e-04;total_w=3.490368e-02
 power-77	76,77	report	hw/soc/out/pwr77self-s77gate/power.npuon.nom_slow_1p08V_125C.rpt	1885	73976e82153faa6a56b14790e6d32ceb00e0fab2c68560d3d71a675faab4d082	lines=24;window=npuon;corner=nom_slow_1p08V_125C;internal_w=1.766134e-02;switching_w=4.541413e-03;leakage_w=1.162864e-04;total_w=2.231904e-02
 power-77	76,77	report	hw/soc/out/pwr77self-s77gate/power.npuon.nom_typ_1p20V_25C.rpt	1880	03d7c3b8f45888343f03fec87f08bb54c882cc5e47512ab0bb4e9534fb651783	lines=24;window=npuon;corner=nom_typ_1p20V_25C;internal_w=2.212735e-02;switching_w=5.789709e-03;leakage_w=7.731573e-05;total_w=2.799437e-02
+deck-magic-soc	paper8	classification	hw/soc/pnr/runs/s77gate-drc-full/classification.txt	1864	5089b0507a36f5052b5cb00dc6211860c19f65382db9a2104b88a4dfd8dfcf01	boxes=39969214;lef_inside=39969214;lef_straddle=0;lef_outside=0;drawn_inside=39969214;drawn_straddle=0;drawn_outside=0;drawn_outside_die=0;rules=10
+deck-magic-soc	paper8	text	hw/soc/pnr/runs/s77gate-drc-full/COMMANDS	291	29a05fb9ce705fe1bddcfcc190ac181fb28f18c7aa2b73b342d13aa8dcd922a9	lines=1
+deck-magic-soc	paper8	config	hw/soc/pnr/runs/s77gate-drc-full/config.json	14296	b2f550577ba7cd5fa31e250ba67d1e259ebb00900395e1a2fad84b608d7934d6	keys=93
+deck-magic-soc	paper8	config	hw/soc/pnr/runs/s77gate-drc-full/state_in.json	14104	fcbefab1ea7ff90b743d0117825e19a3691ee0fda35e430fba6b3b7dc03b8524	keys=18
+deck-magic-soc	paper8	drclog	hw/soc/pnr/runs/s77gate-drc-full/magic-drc.log	10523	a03fa3cd19dd5f799e83e835555262c5671e83ab7fb57e196e2519ea161ab89f	lines=313;boxes=39969214
+deck-magic-soc	paper8	text	hw/soc/pnr/runs/s77gate-drc-full/runtime.txt	12	a80a37c28c3a9107a211c63d21aaff7fe854629941c4b63b4ea39eb791ec831a	lines=1
+deck-magic-soc	paper8	drcrpt	hw/soc/pnr/runs/s77gate-drc-full/reports/drc.magic.rpt	1717801982	ab371724681fdd8d04ce20e5b6d4943c2d47a6616c69ed109bb8a6935e9a22ba	top_cell=soc_top;boxes=39969214;divisor_note=Should be divided by 3 or 4
+deck-magic-soc	paper8	classification	hw/soc/pnr/runs/s77gate-drc-abstract/classification.txt	6889	672976e91d09ea2c31417c3ad9b92ab696df79a65c825beea2d0c36e5326e9bd	boxes=123;lef_inside=16;lef_straddle=0;lef_outside=107;drawn_inside=16;drawn_straddle=4;drawn_outside=103;drawn_outside_die=0;rules=4
+deck-magic-soc	paper8	text	hw/soc/pnr/runs/s77gate-drc-abstract/COMMANDS	291	29a05fb9ce705fe1bddcfcc190ac181fb28f18c7aa2b73b342d13aa8dcd922a9	lines=1
+deck-magic-soc	paper8	config	hw/soc/pnr/runs/s77gate-drc-abstract/config.json	14610	888a7259ae43e72d4209578278968ea753ebd5e5ffc94b4f2e1987effb92de9e	keys=93
+deck-magic-soc	paper8	config	hw/soc/pnr/runs/s77gate-drc-abstract/state_in.json	14104	fcbefab1ea7ff90b743d0117825e19a3691ee0fda35e430fba6b3b7dc03b8524	keys=18
+deck-magic-soc	paper8	drclog	hw/soc/pnr/runs/s77gate-drc-abstract/magic-drc.log	11854	56e2f9771ea3558d62c3dfccbe3b5cc4923c66ac38974f64b3a546b6abe8f62b	lines=323;boxes=123
+deck-magic-soc	paper8	text	hw/soc/pnr/runs/s77gate-drc-abstract/runtime.txt	12	06160d541a35fe81e241a90c48ab20e42ec22b40546ca7b04fe1022ead4dc83c	lines=1
+deck-magic-soc	paper8	drcrpt	hw/soc/pnr/runs/s77gate-drc-abstract/reports/drc.magic.rpt	6059	6d434d3f6732139ed86c6b069e5378b0a60427fe6263659096f4f4e343055f74	top_cell=soc_top;boxes=123;divisor_note=Should be divided by 3 or 4
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/classify.py	5620	f3d5273d1910680fe82ff2849e884ac791e70b113ec107337d2acfeaa50dffab	lines=135
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/socwide.py	1008	0b926a35d80941b36a1cc1628038a807868a9e6532672805a905b4685e2423f4	lines=22
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/widem3.py	1401	7ed74a66c016fd507cc1dbf50930dbc1ba54cf682413bc144f7708d927c40d33	lines=23
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/mk_maglef.tcl	751	44c10291783efe892441033a9de958c28458ccc4e9cc6fedf2c4e79607adddb5	lines=18
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/run_abstract.sh	767	6f556946c4fa26c8c26ee9b5c02daaa7dedf16582af1056e25f1d9bfe78bec66	lines=17
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/run_full.sh	691	b975584f311d5d2b4627fdb2e0bb98896e28a0abb0cb596356c7a1fa9d695c9f	lines=16
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/run_macroalone.sh	681	2fb704db26fbc7f1b094f064153befa718577eb0b3da45ccd6dc37362e74df6b	lines=14
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/run_rom_alone.sh	679	49674ed3161a4495f5dcb9e04db197b56b56895048da71ba3dc45e74d353ae08	lines=14
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/drc_abstract.step.json	14610	bbf78ece0e962d5a23bb60f1b2df0c64e5b437cc3899424f19f7b0449eaae5c3	keys=93
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/drc_full.step.json	14296	3adf9ea3c3319b2c6497dabe1c5c190dce202a921b1a829272199f2a1fa41727	keys=93
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/drc_macroalone.step.json	8068	b6c144f99b2170b338fb2444357555cca2dc7be0f7d8432954f18e7c65dfad47	keys=93
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/drc_rom_alone.step.json	8068	d8bb4f449c793c641bef04a9cb5e5907a3d174283d47d0a4a5d6776f486da6ac	keys=93
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/macroalone.state.json	14060	fd001e22c04a16442697d76560c6c15c297ee496571fda35b675b45fc4e3daba	keys=17
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/rom_alone.state.json	14060	28647e73d6eb7c6aef339f1e0cf85d28a07cd9e562c9710c4f430f2438510594	keys=17
+deck-inputs	paper8	config	hw/soc/pnr/runs/magic-drc-inputs/s77gate.final.state.json	14104	fcbefab1ea7ff90b743d0117825e19a3691ee0fda35e430fba6b3b7dc03b8524	keys=18
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/maglef/RM_IHPSG13_1P_1024x32_c2_bm_bist.mag	36114	964ca2bce0ff726ab021bb136962a60c0fb26a744431e4f3c99da050d29ed61e	lines=1189
+deck-inputs	paper8	text	hw/soc/pnr/runs/magic-drc-inputs/maglef/RM_IHPSG13_1P_2048x64_c2_bm_bist.mag	69709	e9ac70a470f77b5fb1fbb690521cdfff1b8fde5d51c019e359255ba31976a650	lines=2219
+deck-magic-bare	paper8	text	hw/soc/pnr/runs/rm2048x64-drc-alone/COMMANDS	291	29a05fb9ce705fe1bddcfcc190ac181fb28f18c7aa2b73b342d13aa8dcd922a9	lines=1
+deck-magic-bare	paper8	config	hw/soc/pnr/runs/rm2048x64-drc-alone/config.json	8068	b69cd918275d4d3f9e2001af1a64116b7c05c97b27c33f4fd92b9a90e1fbe80b	keys=93
+deck-magic-bare	paper8	config	hw/soc/pnr/runs/rm2048x64-drc-alone/state_in.json	14060	fd001e22c04a16442697d76560c6c15c297ee496571fda35b675b45fc4e3daba	keys=17
+deck-magic-bare	paper8	drclog	hw/soc/pnr/runs/rm2048x64-drc-alone/magic-drc.log	6735	cf7400c2545e69e42becf507ca52acb80e6aff6d860cabd0d9a504ce55d2edf9	lines=174;boxes=8808860
+deck-magic-bare	paper8	text	hw/soc/pnr/runs/rm2048x64-drc-alone/runtime.txt	12	ad7750fc92a7282048c85ddd0a467debdbd28f4dd177b58981695037d1e566a9	lines=1
+deck-magic-bare	paper8	drcrpt	hw/soc/pnr/runs/rm2048x64-drc-alone/reports/drc.magic.rpt	356876139	ce514f08fa7b08ebc616181a0ae77e6ad6f165cb3c70b7131f0daba660f47104	top_cell=RM_IHPSG13_1P_2048x64_c2_bm_bist;boxes=8808860;divisor_note=Should be divided by 3 or 4
+deck-magic-bare	paper8	text	hw/soc/pnr/runs/rm1024x32-drc-alone/COMMANDS	291	29a05fb9ce705fe1bddcfcc190ac181fb28f18c7aa2b73b342d13aa8dcd922a9	lines=1
+deck-magic-bare	paper8	config	hw/soc/pnr/runs/rm1024x32-drc-alone/config.json	8068	fb3343bd66adedae5d9cad015d97bd6685cb547c8e411241c03176c92c9eb5c8	keys=93
+deck-magic-bare	paper8	config	hw/soc/pnr/runs/rm1024x32-drc-alone/state_in.json	14060	28647e73d6eb7c6aef339f1e0cf85d28a07cd9e562c9710c4f430f2438510594	keys=17
+deck-magic-bare	paper8	drclog	hw/soc/pnr/runs/rm1024x32-drc-alone/magic-drc.log	9354	ca9598014d17e100054d69bcc42ee2bd138eb6502c9ac2df9ef8e45220a2b350	lines=223;boxes=2210913
+deck-magic-bare	paper8	text	hw/soc/pnr/runs/rm1024x32-drc-alone/runtime.txt	12	8f5bd6c7973397c646c17840c9af0634f3df88f2cdf2d36735284fe926b08906	lines=1
+deck-magic-bare	paper8	drcrpt	hw/soc/pnr/runs/rm1024x32-drc-alone/reports/drc.magic.rpt	88501106	79faceed0db094a5d3aca1c43d291072c857f72a3422231026e20d9265737b17	top_cell=RM_IHPSG13_1P_1024x32_c2_bm_bist;boxes=2210913;divisor_note=Should be divided by 3 or 4
+deck-klayout	paper8	lyrdb	hw/soc/pnr/runs/s77gate-klayoutdrc/reports/drc.klayout.lyrdb	3019444	5489ed8298fd39dbc09895bfeea7dbc86278c18f50ec6081f59f1d8383012170	top_cell=soc_top;items=9668;rules_declared=173;rules_fired=3;base_cells=60;outside_macro=0
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/reports/drc.klayout.json	3095	80fd55a68a0c77967a86eb2e06e22f11589329db9adcd7ce8d4609f14622ffcf	lines=176
+deck-klayout	paper8	log	hw/soc/pnr/runs/s77gate-klayoutdrc/klayout-drc.log	47098	9d5589c1f6de972a0373a75c7dab57e01f06c46c0a5175c2c60dceafdef3a01c	lines=591
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/COMMANDS	461	c7eb40b887d45ea18eec43f72bc9da62bca0eb551593b744feccd48edde5255b	lines=1
+deck-klayout	paper8	lyrdb	hw/soc/pnr/runs/s77gate-klayoutdrc/bare/RM_IHPSG13_1P_1024x32_c2_bm_bist.lyrdb	869360	8e8c5c69a8b64a02e6690ca10f19e2449f9a7cbad6a76572a84e3e14a2e945c4	top_cell=RM_IHPSG13_1P_1024x32_c2_bm_bist;items=2672;rules_declared=173;rules_fired=3;base_cells=57;outside_macro=0
+deck-klayout	paper8	lyrdb	hw/soc/pnr/runs/s77gate-klayoutdrc/bare/RM_IHPSG13_1P_2048x64_c2_bm_bist.lyrdb	1133346	e881c66fe6d9463fc58c55741d592311bf9c2ffe45efcdd26f65a9558919925b	top_cell=RM_IHPSG13_1P_2048x64_c2_bm_bist;items=3538;rules_declared=173;rules_fired=3;base_cells=57;outside_macro=0
+deck-klayout	paper8	log	hw/soc/pnr/runs/s77gate-klayoutdrc/bare/RM_IHPSG13_1P_1024x32_c2_bm_bist.log	44446	255b924ac3576c6727a83220207a00f907154b1db5b2264012472be5a65939e4	lines=556
+deck-klayout	paper8	log	hw/soc/pnr/runs/s77gate-klayoutdrc/bare/RM_IHPSG13_1P_2048x64_c2_bm_bist.log	44577	9064ea2cfd6de645a210289ff369d3caa3778025146df16c79b620f1e7a1a298	lines=556
+deck-klayout	paper8	lyrdb	hw/soc/pnr/runs/s77gate-klayoutdrc/control/ctrl.lyrdb	32557	b5277b60b7e70303f5fd565200db076ce289d1b46cbd1be9c62cbb4c5c4c5436	top_cell=ctrl_top;items=2;rules_declared=173;rules_fired=2;base_cells=1;outside_macro=1
+deck-klayout	paper8	log	hw/soc/pnr/runs/s77gate-klayoutdrc/control/ctrl.log	44232	1e482d9492ba86a07476724fc9d2545dc8be846388ca4c55d5feabe4751c74d1	lines=556
+deck-klayout	paper8	gds	hw/soc/pnr/runs/s77gate-klayoutdrc/control/ctrl.gds	302	d8efe720300f24f0795e0d88003d757a0fbe9537f3d9f469409e24d760bb511c	
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/control/mk.py	685	0ef19f7015c0d0292f62010ddab332fd6f332f4c9e47b9ce0b384441d52a3105	lines=12
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/control_split.txt	853	5880dc6ea00bfce7a5a8e7ddc98e91d047661a0f8ed7087393d08ac4d3a5e859	lines=23
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/macro_cells.txt	5079	584ad68aaa398defba5fba48cf9314d097a00a618dc92ad1d115b89860b7ea1c	lines=205
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/outside_cells.txt	867	dc4519a05a63cc0ead45e2fbc228cefafe7ca45feaf3718b50551691369c5e18	lines=61
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/soc_cells.txt	5012	e517f21f46aa41a6eb887c386685d938bdf21bb308338cfda9bb6d1abf0fc8ee	lines=231
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/soc_detail.txt	3319	f4be3670296da90fb2134503cbda441d46b19023fabffefdb532a6ec95b4da15	lines=97
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/soc_split.txt	718	9f435e4661b4b6225a333ce5b377e6f90db77820e76cdbe72b00c8ac2e394cac	lines=23
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/soc_vs_bare.txt	5414	89023a62cf924d487b6856a0ea46ea464368288e74d3bf69cf3992f07d64a03d	lines=68
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/detail.py	1126	b96892f3e719494f17d8c7eb33a8fa25403cf94a60d8de4c7b1a75097e54be7a	lines=24
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/gdscells.py	784	156562c22ba8428bcaa973650c78a86a3e4dda95bb8ac7e9b3156739bf336be5	lines=21
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/gdslayers.py	627	8840b59b8f19a8188c1d1c6300f84d0465ed7749683ea12c98598ebfdc2ce7da	lines=16
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/orient.py	1420	37a8da13c754b29f3954fede9642d4fa3f93e29463e6413342701234df968e1f	lines=31
+deck-klayout	paper8	text	hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/parse_lyrdb.py	2575	b55cea00f22e6bf5b5f5fdcd667299a0f9822473a0984c87556e81124b15c2bf	lines=74
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-a-asconfigured/01-netgen-lvs/COMMANDS	138	01b6b46de8c9946a6ad4cca2708b050ee977b66428808598bdba7579146e157c	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-a-asconfigured/01-netgen-lvs/lvs_script.lvs	2266	9207ff420c69d2660b09a057ab4c22717058a4295f0066efe4904161f377dc5b	lines=13
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-a-asconfigured/01-netgen-lvs/config.json	12144	b96c8e41e624308573f699c9cfb201c68e1efc409b7d217e1344fa0274f10435	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-a-asconfigured/01-netgen-lvs/netgen-lvs.log	299410	a3dd3dbb15d46ed400ba3966e8b1746b51492271d473a2a20dbed6b0f4bc84bf	lines=3248
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-a-asconfigured/01-netgen-lvs/reports/lvs.netgen.rpt	50627335	c1cbb00dea5598d0c272197639985c8a9c171dab125623a09ee950e517b7fc7f	devices=62256;nets=61912;nets_circuit2=63658;result=Netlists do not match;mismatch_lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-b-blackbox/01-netgen-lvs/COMMANDS	134	03dd3ad838f186ef5d38e1b4c0c67ef172dcb483af9c2562525d95c12935c869	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-b-blackbox/01-netgen-lvs/lvs_script.lvs	1488	ca96fca35e2c87854bedd60c541956451f8e44b308652102fc63ca6fdff33f9d	lines=9
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-b-blackbox/01-netgen-lvs/config.json	11796	a9ae44cbe8819d9af0d26b3b8e70d705b8f5607fa5914933b81210534d911092	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-b-blackbox/01-netgen-lvs/netgen-lvs.log	67302	53505c833bceb44c2578c6ff2bfbb415e7c37b89630a07d06860a99241bec06a	lines=1353
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-b-blackbox/01-netgen-lvs/reports/lvs.netgen.rpt	167894	8d17ecf7de68605816e80f1a0c2a6e761faf4f2a2c25e76181468ef108f17290	devices=62256;nets=61912;result=Circuits match uniquely;mismatch_lines=0
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-b2-blackbox-checked/01-netgen-lvs/COMMANDS	143	aa894b939d9567a82d4ac07f4e84504f747f957056c75523299c351d8fa0136a	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-b2-blackbox-checked/01-netgen-lvs/lvs_script.lvs	1497	8bd12c29705a979daa5a99f0550dfc243722411676ec14be6218f3898b8ec565	lines=9
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-b2-blackbox-checked/01-netgen-lvs/config.json	11796	a9ae44cbe8819d9af0d26b3b8e70d705b8f5607fa5914933b81210534d911092	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-b2-blackbox-checked/01-netgen-lvs/netgen-lvs.log	67329	ce04a915c0a6a5314230b608657fcdf1d1c42b81a1f6946c5dca7d9e9e621c73	lines=1353
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-b2-blackbox-checked/01-netgen-lvs/reports/lvs.netgen.rpt	167894	8d17ecf7de68605816e80f1a0c2a6e761faf4f2a2c25e76181468ef108f17290	devices=62256;nets=61912;result=Circuits match uniquely;mismatch_lines=0
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-b2-blackbox-checked/02-checker-lvs/config.json	11534	146b60aa992d315456e0a14def73060164000602c4c20c0183fe93be550a0899	keys=80
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-c-ignorecells/01-netgen-lvs/COMMANDS	137	9ae0de8691e23795198e5ab71c339311f3233555ddd8100d653a82b254fb9517	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-c-ignorecells/01-netgen-lvs/lvs_script.lvs	2265	3637c2c01fd06627b3c9b69c009186cb9b642b53f703e8d52e8e2e640a9e849f	lines=13
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-c-ignorecells/01-netgen-lvs/config.json	12234	5c85e318e15a6e648fc442ea866aa56e657297c2c59d2f2854c238b4600e5778	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-c-ignorecells/01-netgen-lvs/netgen-lvs.log	297791	095723176c770fd78b17e6b7948d1fb0523af84289bf12c61e179248889e7e85	lines=3217
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-c-ignorecells/01-netgen-lvs/reports/lvs.netgen.rpt	78943	79fd49bd9bb85a81264e23c5b5928957d62e05b5a7a7a3fd5e1fff1a7622ead2	devices=62250;nets=61912;result=Circuits match uniquely;mismatch_lines=0
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-d-delimiters/01-netgen-lvs/COMMANDS	136	720c2b6ab65bec12d786a59c5085e7ced02abb9c969e72ac5011a2d14e7527e7	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-d-delimiters/01-netgen-lvs/lvs_script.lvs	2060	2d1df964f2a1c84208b81d9a9cb03f85218f11b99ad7dcc10866b3856c3c156d	lines=13
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-d-delimiters/01-netgen-lvs/config.json	12042	f33882732ad19a7d806b6aa79fc07451cc20032f90d052d6f860eba4ca9bfe6e	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-d-delimiters/01-netgen-lvs/netgen-lvs.log	76250	7e04bf01416f2289ded75ffa7fb691e56291e72baddf200b9be48db483c6351f	lines=1478
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-d-delimiters/01-netgen-lvs/reports/lvs.netgen.rpt	50730503	1bf20e91431ca4d12fd43a883dcf0dadc23dc3d6f920e5888e8fd6e1b30debf9	devices=62256;nets=61912;nets_circuit2=61930;result=Netlists do not match;mismatch_lines=24
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-e-normalised/01-netgen-lvs/COMMANDS	136	6c1e4385e7c3c8d732e5a171c78b56299761461b3a2362da817cfbdf19721c76	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-e-normalised/01-netgen-lvs/lvs_script.lvs	2068	ad430819d2373665064a27613cdfc71da1a33ec7e0d2b06ad1433cb6c951d272	lines=13
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-e-normalised/01-netgen-lvs/config.json	12046	1724aeb7b3f11e096cc1adbd4acd713632c67e1cbd19d5a539ed71f5ef36c7af	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-e-normalised/01-netgen-lvs/netgen-lvs.log	76236	5c39e7f8528647843bcbad253ac5f5583af29462acfecd3cbda6cee7c31ea53f	lines=1478
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-e-normalised/01-netgen-lvs/reports/lvs.netgen.rpt	50730503	c04e72d1dac2e17e6d65b149c362d83c0c66d4a8247bfee0ca302d4a5d3200ee	devices=62256;nets=61912;nets_circuit2=61930;result=Netlists do not match;mismatch_lines=24
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-f-equateclasses/01-netgen-lvs/COMMANDS	139	6cce8fb79364c517b06b198de70c962cef7860e1938a76089d73db6d381a88f5	lines=1
+lvs-77	paper8	text	hw/soc/pnr/runs/s77lvs-f-equateclasses/01-netgen-lvs/lvs_script.lvs	2267	60364e6a2085283e4f3f487d4f522a9c9733162506c6b88158662c579ce338e8	lines=13
+lvs-77	paper8	config	hw/soc/pnr/runs/s77lvs-f-equateclasses/01-netgen-lvs/config.json	12099	55286d19481a99d4388b297ad85405eafbc717b48a34ac04767332a594df37ca	keys=84
+lvs-77	paper8	log	hw/soc/pnr/runs/s77lvs-f-equateclasses/01-netgen-lvs/netgen-lvs.log	299757	d5cbc602fb17d1de2b98e9d4b9228c317265fa08ba471d8f4f39c2534f964065	lines=3252
+lvs-77	paper8	lvs	hw/soc/pnr/runs/s77lvs-f-equateclasses/01-netgen-lvs/reports/lvs.netgen.rpt	50627335	c1cbb00dea5598d0c272197639985c8a9c171dab125623a09ee950e517b7fc7f	devices=62256;nets=61912;nets_circuit2=63658;result=Netlists do not match;mismatch_lines=1
+soc-timing-factorial	paper8	netlist	hw/soc/pnr/runs/s81ptd/final/nl/soc_top.nl.v	11191590	f84d91d254eba7c4beccfe614315a72464c51ca309929643e6cb5125240d304c	lines=380415;cells=179365;flops=5872;macros=6
+soc-timing-factorial	paper8	def	hw/soc/pnr/runs/s81ptd/final/def/soc_top.def	73088553	aff107d1f3e9b7f932661c66cbc23075f01b42f4c059cca7287b834b395bbeb6	units_per_um=1000;diearea=(00)(23064002075220);components=179365
+soc-timing-factorial	paper8	gds	hw/soc/pnr/runs/s81ptd/final/gds/soc_top.gds	108928282	88cc0f45a1075d14c616d91723bdb034edb76015d10e1116a67166d0d798a06a	
+soc-timing-factorial	paper8	metrics	hw/soc/pnr/runs/s81ptd/final/metrics.json	10169	14d274a28b959ff8311966c3b23d3dd21c34326756046e1e8f19b7f3437a6f2c	keys=193;die_um2=4786290;insts=179365;stdcells=66813;flops=5872;clkgates=3;stdcell_um2=946986;util=0.736103;setup_ws_slow=-3.355394279620113;setup_ws_typ=5.546507410350321;setup_ws_fast=10.46781357889395;setup_tns_slow=-1767.7226014435787;setup_vio_slow=2102;hold_ws_slow=0.5025497937816185;hold_ws_typ=0.18868507290668277;hold_ws_fast=0.013381629516567803;setup_bufs=274;hold_bufs=54;wirelength=3963364;drc=0;slew_vio_slow=30;cap_vio_slow=19;antenna_nets=0
+soc-timing-factorial	paper8	config	hw/soc/pnr/runs/s81ptd/resolved.json	34044	93f680db649f2a5fc4ee2be194aba46e6872240f2b9a74e88a6d5a180c361e88	keys=411
+soc-timing-factorial	paper8	netlist	hw/soc/pnr/runs/s81drv/final/nl/soc_top.nl.v	10988931	e8126d3bff078feee53d7b7af829baf99ed79988c9eefaccf86d343be7ca84e9	lines=373945;cells=175135;flops=5872;macros=6
+soc-timing-factorial	paper8	def	hw/soc/pnr/runs/s81drv/final/def/soc_top.def	75279894	8943c354a14415ace505ec9508cb3b8f71404f867c8841ab5d95112c8fcdb4a6	units_per_um=1000;diearea=(00)(23064002075220);components=175135
+soc-timing-factorial	paper8	gds	hw/soc/pnr/runs/s81drv/final/gds/soc_top.gds	112181372	cd088e4522312b7b1e4013a3e7a77c34e36eef3fa6b3ef07b4449c719365475f	
+soc-timing-factorial	paper8	metrics	hw/soc/pnr/runs/s81drv/final/metrics.json	10327	d655e94cb3974ccc7b4d05ec3f36f7a07d6a3d41229192f3085ed1836eef4f18	keys=197;die_um2=4786290;insts=175135;stdcells=65432;flops=5872;clkgates=3;stdcell_um2=963147;util=0.739828;setup_ws_slow=-5.214497425892334;setup_ws_typ=4.026844749405448;setup_ws_fast=9.400988698040312;setup_tns_slow=-8748.568026974868;setup_vio_slow=3132;hold_ws_slow=0.4579352582306664;hold_ws_typ=0.19208601919420232;hold_ws_fast=0.041713522705560294;setup_bufs=311;hold_bufs=42;wirelength=4514672;drc=0;slew_vio_slow=653;cap_vio_slow=1140;antenna_nets=0
+soc-timing-factorial	paper8	config	hw/soc/pnr/runs/s81drv/resolved.json	34044	35260c8ed61129bf91bc72e556172b26b7d6e1a4ca4f723a1e973757bcd7b79c	keys=411
+soc-timing-factorial	paper8	netlist	hw/soc/pnr/runs/s81timing/final/nl/soc_top.nl.v	11226864	29e0354a778945d9656a7a82546f2f5a9c3cf40590dc13a324101bd08dab8ba1	lines=384215;cells=178111;flops=5872;macros=6
+soc-timing-factorial	paper8	def	hw/soc/pnr/runs/s81timing/final/def/soc_top.def	74430455	f7827f3d1d9fab78e727c043c4c131141cc8bd7c13fac9ee0c66bf804eb8bee3	units_per_um=1000;diearea=(00)(23064002075220);components=178111
+soc-timing-factorial	paper8	gds	hw/soc/pnr/runs/s81timing/final/gds/soc_top.gds	110942522	149a488b9f21d640383a075eb0698b87d426dd23f0c4ac2871175c9657e4e9ae	
+soc-timing-factorial	paper8	metrics	hw/soc/pnr/runs/s81timing/final/metrics.json	10720	0d39c1862cf2e4f44ef0c777ab0427ccf887e279d459a1409997fab913fcd158	keys=207;die_um2=4786290;insts=178111;stdcells=69015;flops=5872;clkgates=3;stdcell_um2=993335;util=0.746785;setup_ws_slow=-3.030638936699411;setup_ws_typ=5.542370275154352;setup_ws_fast=10.0783020337399;setup_tns_slow=-2954.4740681315025;setup_vio_slow=2746;hold_ws_slow=0.47082405973266495;hold_ws_typ=0.20864000007105427;hold_ws_fast=0.04520284274833941;setup_bufs=97;hold_bufs=12;wirelength=4064218;drc=0;slew_vio_slow=99;cap_vio_slow=538;antenna_nets=0
+soc-timing-factorial	paper8	config	hw/soc/pnr/runs/s81timing/resolved.json	34043	145eb32847875ecbdac1a1b366ca6f5a140944e874c448ea5152511c2502358b	keys=411
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/summary.rpt	2774	9eb871feb5afc015960dfe6ddad34891e7369ab33499ccb809bbcf7fa6bc0eb6	lines=10
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/clock.rpt	1306	cb063f06679bc6fc65d9cc85a7725a335d897c0c4bf2eb8c986e7420b0e26c58	period_min=24.68;fmax=40.52;lines=42
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/wns.max.rpt	223	ed2cfb63618b9b0ff68e6a41aece391af7fc8a70fbf6f3b8060de09a954cb30c	nom_slow_1p08V_125C=-4.679915254453688;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/tns.max.rpt	223	b3e8e231e335e0bad49e32452db02be2ea6f4674f5c0bcbb018ba1fbf098b564	nom_slow_1p08V_125C=-8267.180653164209;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/ws.max.rpt	214	ebec53dba7673ba4e71db873b5f1cb0bb84947c5b38118ab7208f077bb4928b5	nom_slow_1p08V_125C=-4.679915254453688;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/violator_list.rpt	201328	bf1d31929e916aebc082a4e085518b4c9029299faa33ee5a59f4ecdc86641568	lines=3092;violators=3088
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt	35904041	b5437074d6af79a49c7e97831f3dde79ab250d119f0d303108de24e48e367786	startpoint=_82805_;endpoint=u_ram.g_ram_2048x64_ecc.u_b0;lines=441826
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/summary.rpt	2774	95855a1eac7d1730d6749dfd5c4b51e75710ab6412a15ebb939058f863f4a6a0	lines=10
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/nom_slow_1p08V_125C/clock.rpt	1283	2454d4ca054c3ad02568455e6057f663a1e949075744a39bfddaf1eaa3d6f6cc	period_min=23.36;fmax=42.82;lines=42
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/nom_slow_1p08V_125C/wns.max.rpt	223	5319a4fe6902d3bdf73a106f3d0a9901833076834990e0d37ef3b156cf36f48e	nom_slow_1p08V_125C=-3.355394279620113;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/nom_slow_1p08V_125C/tns.max.rpt	224	3bc1591e87e51c96775026abc6f8035cfe33f22a3d0204c911c32be11b6c8787	nom_slow_1p08V_125C=-1767.7226014435787;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/nom_slow_1p08V_125C/ws.max.rpt	214	fe441b655d545533559c02ecafe556f165dfc0da923218da3643c6b9c304fae3	nom_slow_1p08V_125C=-3.355394279620113;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/nom_slow_1p08V_125C/violator_list.rpt	147041	36512509f180f1365aeedf48ed79d5ad92797ffe17dd906893326a29735d6fca	lines=2106;violators=2102
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81ptd/49-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt	37697650	5d55c51710602bf78543d1ec4dd9869483bbb109bfd20ff9802cd5b5449d6415	startpoint=u_ram.g_ram_2048x64_ecc.u_b0;endpoint=_79693_;lines=462574
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/summary.rpt	2774	ddd24a6240d2cf1c024ed1fbb07a8ac3a5902231e8dba354a1311b75cd42a97a	lines=10
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/nom_slow_1p08V_125C/clock.rpt	1306	8129b542cef7e33275c226ae08a569a0e05dfef1d1fab642aef71c4c7debdc8d	period_min=25.21;fmax=39.66;lines=42
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/nom_slow_1p08V_125C/wns.max.rpt	223	56390cd065bb376fb2846c8217238437fb98c0017c5ff83cb205873d84b0bc2f	nom_slow_1p08V_125C=-5.214497425892334;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/nom_slow_1p08V_125C/tns.max.rpt	223	c7b77dbd7407cccda9094ce9a8d54de9045c1aae9030e6559de3d98a24c1cebd	nom_slow_1p08V_125C=-8748.568026974868;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/nom_slow_1p08V_125C/ws.max.rpt	214	04e411fdeeb312aad6b04599ac00524a00b7184fa826cf47d0486526da3f6943	nom_slow_1p08V_125C=-5.214497425892334;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/nom_slow_1p08V_125C/violator_list.rpt	201031	7fafb890b68ba61a4499710586f2728730aafa061c3285e4aa340e325d188cc7	lines=3136;violators=3132
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81drv/49-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt	40120300	15f6b8658a09c59dfc4bc4007658fbab5610c1a02849ba336f403f60612ed6e8	startpoint=_82809_;endpoint=_79066_;lines=495590
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/summary.rpt	2774	fa7cc9553763ce0bada428039b57503d9d14d3d183c95fa2963f0e3c27a8f6ec	lines=10
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/nom_slow_1p08V_125C/clock.rpt	1260	2653e9e67673e8f53a1b6e5624f61a8ed489c036a0e1ebd3debd996e2ab1ecbb	period_min=23.03;fmax=43.42;lines=42
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/nom_slow_1p08V_125C/wns.max.rpt	223	44d97a2dfa1764d831ae7eab5909474da3249b96fd7860e0177f263c004529dc	nom_slow_1p08V_125C=-3.030638936699411;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/nom_slow_1p08V_125C/tns.max.rpt	224	423387b4317ce9c9fe15c256eeb75f9bb81f0eb67e191b26d2f64df12e2b9b19	nom_slow_1p08V_125C=-2954.4740681315025;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/nom_slow_1p08V_125C/ws.max.rpt	214	097843afababd28b907716001b8554feb6587160ae404f1b3293c5396631c38f	nom_slow_1p08V_125C=-3.030638936699411;lines=5
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/nom_slow_1p08V_125C/violator_list.rpt	176096	f076425f8f629efbc007fc527c6e28acbc598929f59196470418c41d6ce61ae4	lines=2750;violators=2746
+sta-slow-corner	paper8	sta	hw/soc/pnr/runs/s81timing/49-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt	43563848	e0cf02739a19547974ebcf77087ef61ba28ab57e6229570ac97723e4853936bb	startpoint=u_ram.g_ram_2048x64_ecc.u_b0;endpoint=_83069_;lines=535088
+sta-compare-81	paper8	text	hw/soc/pnr/runs/s81-sta-compare/sweep.tcl	1436	519d994b575d64441af6b68ccf333c978a2112bf6e98c5c9b59aea7e59eff51d	lines=29
+sta-compare-81	paper8	sweep	hw/soc/pnr/runs/s81-sta-compare/sweep.s77gate.txt	931	3caf566c809bafa7e5fa0bb05e3cf5c33d06a89a39a20c3e2e2220d772f219c3	wns_20ns=-4.6799;tns_20ns=-8267.18;endpoints_20ns=3088;periods=9;closes_at=25.00
+sta-compare-81	paper8	sweep	hw/soc/pnr/runs/s81-sta-compare/sweep.s81drv.txt	931	4cc6fe9482a5a6ab4201d9b734ba721cab5b73c8d423ca067f5746f159314116	wns_20ns=-5.2145;tns_20ns=-8748.57;endpoints_20ns=3132;periods=9
+sta-compare-81	paper8	sweep	hw/soc/pnr/runs/s81-sta-compare/sweep.s81ptd.txt	931	e248614e0cf075886bd3e24690c59f309a208614d661c3e3c8f424bb111c5c3d	wns_20ns=-3.3554;tns_20ns=-1767.72;endpoints_20ns=2102;periods=9;closes_at=24.00
+sta-compare-81	paper8	sweep	hw/soc/pnr/runs/s81-sta-compare/sweep.s81timing.txt	931	f9efe1ffd28e95c954da84c6b1cb5e909123a9607dc29f8403e5dfd91623a699	wns_20ns=-3.0306;tns_20ns=-2954.47;endpoints_20ns=2746;periods=9;closes_at=24.00
+sta-compare-81	paper8	text	hw/soc/pnr/runs/s81-sta-compare/drvscan.tcl	1405	2a4d484bbfe9fa7f9a1f96fa4434e86ee468f54d8efb26305cc5808a57ebd9d6	lines=31
+sta-compare-81	paper8	log	hw/soc/pnr/runs/s81-sta-compare/drvscan.s77gate.txt	3344342	55fc5c4c73ed9c50b76236839a9b08090546e93cc9c5456aa6932cbaefcb0296	lines=50838
+sta-compare-81	paper8	log	hw/soc/pnr/runs/s81-sta-compare/drvscan.s81drv.txt	1289326	1aaf2305ba89bd9f9a47d4962371d52f18072a12f32ea3830e03372ae283e758	lines=23258
+sta-compare-81	paper8	log	hw/soc/pnr/runs/s81-sta-compare/drvscan.s81ptd.txt	1621670	b7e79535927ea378b827bf803a8891b580be6a8f94d7c84aa07cee3999fd3d86	lines=25908
+sta-compare-81	paper8	log	hw/soc/pnr/runs/s81-sta-compare/drvscan.s81timing.txt	688402	d59cee706cced8d5fa1220beb00acb966f6fca9070586a28808ef324e6411934	lines=13485

@@ -18,7 +18,20 @@ Run trees under `hw/openlane/*/runs/` are **gitignored**. Every hash
 below is quoted with the run tag and the path it came from.
 
 **The headline, before the detail.** Both keys are now `["*"]` in all
-three configurations that build. Both checkers gate at all three corners
+three configurations that build.
+
+> **CORRECTED 2026-09-11: there were FOUR.** `hw/openlane/aer_fifo` also
+> builds, and it carried both keys at LibreLane's `[""]` default until
+> `docs/80`'s audit reached it. `checker_audit.py` calls both NO-GATE on
+> `trial-03-signoff` -- the run ROADMAP gate G0 cites -- and
+> `Checker.SetupViolations` PARTIAL there, matching one corner of three.
+> All three metrics read 0 at all three corners on that run, so what was
+> missing was the gate and not the result. The keys are in
+> `hw/openlane/aer_fifo/config.json` as of 2026-09-10, with the same
+> reasoning this document gives. The sentence below is left as it was
+> written: it was the count this document actually made, and the fourth
+> is exactly the kind of instance a headline of "all three" is how you
+> stop looking for. Both checkers gate at all three corners
 and both measure **0**, so the gate is a criterion the design already
 meets rather than a threshold fitted to a measurement. The re-harden
 reproduces the frozen runs on **every metric they both carry — 196 of

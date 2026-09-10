@@ -268,6 +268,13 @@ def main():
 
     tally = {"PASS": 0, "FAIL": 0, "SKIP": 0, "UNCHECKED": 0}
     bad = []
+    # Claims measured on a layout that predates the 2026-09-11 repair of
+    # hw/soc/rtl. Each is still TRUE of the run it names, so every check
+    # below passes -- which is exactly why the count is printed. A
+    # registry that reports green over evidence which has stopped
+    # describing its subject is the failure this paper is about,
+    # arriving through the door marked success.
+    stale = [c["id"] for c in claims if c.get("predates-rtl-fix")]
     for c in claims:
         state, detail = check(c)
         tally[state] += 1
@@ -283,6 +290,11 @@ def main():
     if tally["UNCHECKED"]:
         print("The hand-read claims are the paper's weakest evidence and the "
               "count is printed\nso the ratio is visible rather than implied.")
+    if stale:
+        print(f"\n{len(stale)} of these are measured on a soc_top layout that "
+              f"PREDATES the 2026-09-11\nrepair of hw/soc/rtl. Each is true of "
+              f"the run it names and none describes the\ndesign in the tree. "
+              f"They pass, and that is the point of counting them.")
     if bad:
         print("\nwrong: " + ", ".join(bad))
         return 1

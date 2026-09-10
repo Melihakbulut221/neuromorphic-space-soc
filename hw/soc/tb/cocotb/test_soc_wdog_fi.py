@@ -255,6 +255,25 @@ UNPROTECTED = [
     # nothing at the ports -- which is a weaker statement than the one
     # docs/43 section 10 would like and it says so.
     ("kick_left", "kick_left", tuple(range(KICK_W))),
+
+    # W1's strap synchroniser and its hold-off, added 2026-09-10 with the
+    # fix for the asynchronous strap and made sites the same day. Four
+    # flip-flops: two of synchroniser on `dis_i` and a two-bit saturating
+    # `dis_arm`.
+    #
+    # THE ARGUMENT FOR LEAVING THEM ALONE IS GOOD AND IS NOT A REASON NOT
+    # TO INJECT INTO THEM. All four are read only under `!dis_seen &&
+    # dis_ready`, and `dis_seen` is set for good on the third clock after
+    # power-on reset releases, so from then on the four are dead storage
+    # and an upset in them should change nothing at the ports. That is
+    # the same shape of argument soc_boot's ten equivalents rest on --
+    # and it was MEASURED for those ten and only reasoned for these. This
+    # campaign starts after reset release, so what these injections show
+    # is exactly the dead-storage claim: if one of them ever moves a
+    # port, the argument is wrong and the run says so.
+    ("strap_sync", "dis_sync0", (0,)),
+    ("strap_sync", "dis_sync1", (0,)),
+    ("strap_arm", "dis_arm", tuple(range(2))),
 ]
 
 # The W6 report fields inside the protected word: the sticky mismatch

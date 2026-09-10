@@ -602,11 +602,15 @@ def test_the_engine_split_is_a_partition_of_the_stratum_it_replaced():
                     s.name))
             now[s.name] = s.width
 
-    # `oh_guard` is H4's own new state and is the ONE site the split did
-    # not inherit. It is named here rather than allowed through by a
-    # loose comparison, because "the partition grew" is exactly what a
-    # silent mistake in this file would look like.
-    added = {"oh_guard": 3}
+    # `oh_guard` is H4's own new state and `ev_resume` is the E_DECIDE
+    # detour's, added 2026-09-10 with the deadlock fix. They are the two
+    # sites the split did not inherit. Both are named here rather than
+    # allowed through by a loose comparison, because "the partition grew"
+    # is exactly what a silent mistake in this file would look like --
+    # and because a flip-flop added to the sequencer and NOT added to
+    # npu_targets.py is a flip-flop no campaign can reach, which is how
+    # `ev_resume` spent a day.
+    added = {"oh_guard": 3, "ev_resume": 1}
     assert now == dict(was, **added), (
         "the engine's five sub-strata are not a partition of the 140-bit "
         "stratum docs/52 and docs/55 measured, plus H4's guard:\n"
@@ -614,7 +618,7 @@ def test_the_engine_split_is_a_partition_of_the_stratum_it_replaced():
             sorted(set(now) - set(was) - set(added)),
             sorted(set(was) - set(now))))
     assert sum(npu_targets.stratum_bits(n)
-               for n in npu_targets.ENGINE_STRATA) == 143
+               for n in npu_targets.ENGINE_STRATA) == 144
 
 
 def test_the_show_ahead_read_is_bounded_and_the_bound_is_derived():

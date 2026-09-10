@@ -304,14 +304,16 @@ the same way, with
 | `sw/tests/test_multipass.py` | E9 tiling equivalence: tiled passes are bit-identical to one wide core |
 | `sw/tests/test_events.py` | E8 event ordering and determinism |
 | `sw/tests/test_regmap.py` | register-map sync (section 5) |
-| `sw/tests/test_traceability.py` | every equation tag `En` in docs/10 has a `test_e<n>_*`, and no test cites an equation the spec does not define |
+| `sw/tests/test_traceability.py` | every equation tag `En` in docs/10 is covered by a test that ASSERTS something about it, and no test cites an equation the spec does not define. *Corrected 2026-09-11: this row, `docs/10` section 13 and `docs/21` section 4 all described it as matching a test NAME `test_e<n>_*`. It is stronger than that -- `test_a_name_without_an_assertion_does_not_count_as_coverage` fails a test that carries the name and asserts nothing -- so the three documents understated their own guard rather than overstating it.* |
 | `sw/tests/test_e2e.py` | a 3-layer toy SNN classifying two rate-coded patterns above chance |
 | `sw/tests/test_tt_submission.py` | the `tt/` submission tree: `MANIFEST.sha256` against the files, `tt/src` against `hw/rtl`, and the whole tree against a fresh in-memory regeneration |
 | `sw/tests/test_flow_evidence.py` | added by the physical-flow workstream; holds **`docs/12` section 4 only** — the sign-off and provenance claims — against the LibreLane run tree they were read from. It parses no other document, and `docs/12`'s descriptive tables (4.2, 4.3, 4.6) are out of its scope by its own statement. The `docs/15` figure that is machine-held is the 4x2 tile decision, and its guard is `test_tt_submission.py::test_tile_shape_is_the_documented_decision` |
 
 `test_traceability.py` is the piece that keeps the model files honest: it
-fails if the specification grows an equation nobody tested, or if a test
-cites an equation that was removed. Run a single file the usual way, for
+fails if the specification grows an equation nobody tested, if a test
+cites an equation that was removed, or if a test carrying an equation's
+name has been gutted of its assertions -- a name is not coverage, and
+that is the one of the three a rename cannot fake. Run a single file the usual way, for
 example `.venv/bin/python -m pytest sw/tests/test_secded.py -q`.
 
 `test_tt_submission.py` is the piece that keeps the *submission* honest,
@@ -1060,7 +1062,7 @@ The measured composition, from `--collect-only`, is the durable part:
 | `sw/tests/test_regmap.py` | 12 |
 | `sw/tests/test_multipass.py` | 9 |
 | `sw/tests/test_events.py` | 7 |
-| `sw/tests/test_traceability.py` | 4 |
+| `sw/tests/test_traceability.py` | 6 |
 | `sw/tests/test_e2e.py` | 3 |
 
 An earlier revision of this document recorded 101 tests in seven files.

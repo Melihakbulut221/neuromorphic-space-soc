@@ -31,6 +31,14 @@
 //     switch it off is not a backstop against software that has stopped
 //     behaving, which is the only case it exists for.
 //
+//     2026-09-10: "when power-on reset releases" is now THE THIRD CLOCK
+//     after it releases, and the value sampled is the pin through two
+//     synchroniser flops rather than the pin. dis_i is asynchronous and
+//     was going combinationally into three replica banks with three
+//     different storage transforms; the block above `prot_n` carries
+//     the whole argument. Nothing else about W1 changes: still once,
+//     still never again, still not reachable by software.
+//
 // W2. ITS TIME BASE IS NOT SOFTWARE-PROGRAMMABLE. GRLIB's GPTIMER
 //     watchdog shares the block's prescaler, and that prescaler is a
 //     writable register -- so on a real GPTIMER, software that cannot
@@ -630,6 +638,92 @@ module soc_wdog #(
   wire [PFULL_W-1:0] prot;
   assign prot = prot_store;          // zero-extended when WINDOW = 0
 
+  // -------------------------------------------------------------------
+  // THE BOOTSTRAP PIN IS ASYNCHRONOUS AND WAS SAMPLED AS IF IT WERE NOT
+  // -------------------------------------------------------------------
+  //
+  // `dis_i` is a board strap. Nothing in this SoC drives it, no clock
+  // relates to it, and soc_top.v hands it to soc_gptimer.v, which passes
+  // it through as a wire -- so before this block it has not met a
+  // flip-flop. It went straight into `prot_n[P_DISQ]`, which is the DATA
+  // INPUT OF THREE REPLICA BANKS, and the three are not one load: W6's
+  // whole design is that A, B and C store the word under three
+  // DIFFERENT transforms, so `dis_i` fanned into three different
+  // combinational cones with three different delays. A transition
+  // arriving near the clock edge can therefore be captured differently
+  // by the three replicas, and the voter's majority of a three-way
+  // disagreement is arbitrary.
+  //
+  // What that costs is not one wrong cycle. W1 is that the pin is
+  // sampled ONCE, when power-on reset releases, and held for the rest of
+  // the power cycle, so the value the replicas settle on is the value
+  // for the whole mission: a watchdog silently disabled on a part whose
+  // board asked for it armed, or armed on a part that asked for it off,
+  // with WDOGSTAT.DISABLED reporting the same wrong answer it was built
+  // to make honest. And the sample is taken on the FIRST clock after the
+  // release, which is the single edge most likely to find a strap net
+  // still settling.
+  //
+  // THE PATTERN IS soc_boot.v's AND IT IS THE SAME PIN. soc_boot.v
+  // already takes `wdog_dis_i` through `wsync0`/`wsync1` and samples it
+  // three clocks after the release, and BOOTREG.WDIS reports that
+  // synchronised value; until this block did the same, the two registers
+  // could disagree about one pin on one part. Two flops, rewritten from
+  // the pin on every clock so an upset in either is shed in one or two
+  // clocks -- docs/41 section 3.1's first question answered in the
+  // direction that says leave them alone, which is the same answer
+  // soc_boot.v's B1 section gives for its ten.
+  //
+  // `dis_arm` IS THE HOLD-OFF AND IT IS NOT DECORATION. `dis_seen`
+  // resets to 0, so the sample fires on the first clock after release,
+  // and on that clock `dis_sync1` still holds its reset value -- the
+  // synchroniser would have latched a constant 0 and the pin would have
+  // been ignored entirely, which is a worse defect than the one being
+  // fixed. Two bits of hold-off make the first sample the third clock,
+  // by which time `dis_sync1` carries the pin as it stood at the first
+  // clock, through two flops. It is soc_boot.v's `dly` under another
+  // name; the difference is that soc_boot.v bundles its two bits into
+  // the protected word and these are left plain, because they are live
+  // for two clocks of a mission and dead for the rest of it, and a
+  // corruption of a dead counter changes nothing (`dis_seen` is set by
+  // then, so no later value of `dis_arm` reaches the sample).
+  //
+  // WHAT IT COSTS: four flip-flops, all unprotected, and the count is
+  // asserted from the other side by
+  // sw/tests/test_soc_synthesis_guards.py::_geometry, which derives the
+  // block's flip-flop budget from the field list in this file and
+  // therefore has to learn about these four.
+  //
+  // WHAT IT DOES NOT FIX: `rst_por_ni` itself. soc_top.v builds
+  // `rst_sys_n` with an asynchronous-assert, synchronous-deassert
+  // two-stage synchroniser and hands THIS block the raw power-on reset
+  // instead, which W4 requires -- the watchdog cannot run on the reset
+  // it pulls. So the release edge of `rst_por_ni` is asynchronous to
+  // `clk_i` at every flip-flop in this file, including the three
+  // replicas, and the hold-off below makes the strap sample less
+  // sensitive to it without making it a synchronous release. That is a
+  // soc_top.v change and it is not made here.
+  reg        dis_sync0, dis_sync1;
+  reg  [1:0] dis_arm;
+
+  always @(posedge clk_i or negedge rst_por_ni) begin
+    if (!rst_por_ni) begin
+      dis_sync0 <= 1'b0;
+      dis_sync1 <= 1'b0;
+      dis_arm   <= 2'd0;
+    end else begin
+      dis_sync0 <= dis_i;
+      dis_sync1 <= dis_sync0;
+      // Saturating, and `>=` for the reason soc_npu.v gives for its
+      // guards: a counter that wrapped would take the hold-off away
+      // again three clocks later, on a block whose sample is supposed to
+      // happen once.
+      if (dis_arm < 2'd2) dis_arm <= dis_arm + 2'd1;
+    end
+  end
+
+  wire dis_ready = (dis_arm >= 2'd2);
+
   // Named views. Everything below this line reads these and never the
   // storage, so this file's register reads and the invariants in
   // hw/soc/formal/soc_wdog_props.v are written against the same names
@@ -690,7 +784,34 @@ module soc_wdog #(
   end
   endgenerate
 
-  wire armed = !dis_q;
+  // ARMED REQUIRES THE SAMPLE TO HAVE BEEN TAKEN, and this term is the
+  // other half of the synchroniser above rather than an extra condition.
+  //
+  // `dis_q` resets to 0, so between the release of power-on reset and
+  // the third clock -- the two clocks the synchroniser needs -- a part
+  // whose strap says NO WATCHDOG would read as armed. The counter cannot
+  // reach zero in two clocks, so `expire` is not the problem; W7's
+  // `early_kick` and W8's `budget_out` are, because both are gated by
+  // `armed` alone and both fire on a KICK rather than on elapsed time.
+  // A keyed CTRL write in those two clocks would raise stage 1 on a part
+  // that is supposed to be silent, which is exactly what W1c forbids.
+  //
+  // FOUND BY THE PROOF AND NOT BY REASONING. The first version of this
+  // fix left `armed` as `!dis_q`, and `sby -f soc_wdog.sby bmc` returned
+  // a counterexample at step 5 on soc_wdog_props.v's W1c assertion
+  // `assert (!nmi_o)` under `if (!f_armed)`. On soc_top.v it is
+  // unreachable -- two clocks after power-on reset Ibex has not fetched
+  // its first instruction, let alone stored to the timer slot -- and
+  // "unreachable because of the master we happen to have" is not a
+  // property of a block, which is soc_npu.v's phrasing of docs/39
+  // section 8 defect 4 and is the reason it is closed here rather than
+  // argued away.
+  //
+  // The other direction costs two clocks of watching on a part that IS
+  // armed, out of a timeout of 2^WIDTH * PRESCALE clocks, and it is the
+  // safe direction: a block that has not yet read its own strap does
+  // not escalate.
+  wire armed = dis_seen && !dis_q;
 
   // -------------------------------------------------------------------
   // Register writes
@@ -877,9 +998,12 @@ module soc_wdog #(
   always @(*) begin
     prot_n = prot;
 
-    // The bootstrap pin, sampled once, then held for ever (W1).
-    if (!dis_seen) begin
-      prot_n[P_DISQ]    = dis_i;
+    // The bootstrap pin, sampled once, then held for ever (W1). The
+    // value is the SYNCHRONISED one and the sample waits for the
+    // synchroniser to be carrying it: the block above is why, and this
+    // is the only place either signal is read.
+    if (!dis_seen && dis_ready) begin
+      prot_n[P_DISQ]    = dis_sync1;
       prot_n[P_DISSEEN] = 1'b1;
     end
 
