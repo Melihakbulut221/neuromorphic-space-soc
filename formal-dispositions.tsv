@@ -1,0 +1,77 @@
+# Dispositioned formal task directories: the ones whose non-PASS verdict
+# is a decision this project has already made and recorded, rather than a
+# result nobody has looked at.
+#
+# WHY THIS FILE EXISTS. scripts/verify.sh counts every directory holding a
+# config.sby and a logfile.txt and classifies it PASS / FAIL / ERROR /
+# STOPPED / STALE / UNCHECKED. Its own header refuses to whitelist
+# anything inside that counter -- "an allowlist maintained inside a
+# counter is how a counter starts lying, and this file exists because of
+# one that did" -- and says what it wants instead:
+#
+#   "If the project wants a green gate it has to first decide, in a
+#    tracked artefact, which of the thirty-five are expected -- and that
+#    is a decision about the formal work, not about this script."
+#
+# This is that artefact. It changes NO count. `formal_other` in
+# verification-log.tsv stays the true number of non-PASS directories, and
+# always will. What it adds is a second number, `formal_undispositioned`,
+# which is the one the exit code gates on -- so a NEW non-PASS directory
+# turns the gate red while these stay amber and counted.
+#
+# WHAT A ROW MEANS. A row says: this directory's verdict is expected, a
+# named document section says why, and someone decided to leave it. It
+# does NOT say the check passes, that the underlying question is settled,
+# or that the work behind it is done. docs/63 section 11 lists the routes
+# out of the two largest groups and none of them is free.
+#
+# WHAT MAKES A ROW GO STALE, and both directions are checked:
+#   * the directory now PASSES -- the disposition is a hole, delete it;
+#   * the directory's verdict CHANGED to a different non-PASS word --
+#     STOPPED becoming FAIL is a new fact and this file must not absorb
+#     it silently.
+# scripts/verify.sh fails on either.
+#
+# EVERY ROW HERE IS UNDER hw/soc/out/rvf*, the vendored Ibex
+# riscv-formal runs. Not one is in this project's own property sets
+# (formal/ and hw/soc/formal/), which are 54 and 64 PASS with nothing
+# else, and that is the property worth keeping true: the day a row in
+# this file names a directory under formal/ or hw/soc/formal/, something
+# has gone wrong with what this project itself proves.
+#
+# path	verdict	why	recorded
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_div_ch0	FAIL	riscv-formal's OWN model computes an unsigned division; Ibex is right and the specification is wrong. Two counterexamples, the arithmetic, the LRM citation and an independent tool's confirmation: docs/63 section 7.5. docs/63 section 8.5 is the same check with the model corrected.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_rem_ch0	FAIL	as insn_div_ch0: riscv-formal's model computes an unsigned remainder. docs/63 sections 7.5 and 8.5.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_div_ch0	FAIL	the same specification defect on the upstream core, which is what makes it a defect in the model rather than in the substitution. docs/63 section 7.5.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_rem_ch0	FAIL	as above, upstream core. docs/63 section 7.5.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/liveness_ch0	FAIL	A BOUND, NOT A DEFECT, and the distinction is measured: the counterexample's trigger retires at cycle 12 and the next instruction is a divide that ibex_multdiv_fast takes ~37 cycles to finish, which does not fit in the check's depth of 50. The depth that would close it is around 65 and was not run. docs/63 section 8.3, which also states what this leaves open -- the stronger liveness claim, at any depth -- and what it does not: `hang` PASSES at cycle 30.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/liveness_ch0	FAIL	the same bound on the upstream core. docs/63 section 8.3.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_mul_ch0	STOPPED	killed after 2,265 s occupying a job slot. NOT a pass and NOT a failure -- the absence of a result. Proving a sequential 32x32 multiplier equals a*b is the classic hard case for a bit-blasting SMT solver, and the evidence that it is the solver rather than the model is that every one of these six PASSES its cover job in 9-73 s. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_mulh_ch0	STOPPED	as insn_mul_ch0, 2,260 s. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_mulhsu_ch0	STOPPED	as insn_mul_ch0, 2,251 s. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_mulhu_ch0	STOPPED	as insn_mul_ch0, 2,241 s. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_divu_ch0	STOPPED	as insn_mul_ch0, 2,419 s at depth 55. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/insn_remu_ch0	STOPPED	as insn_mul_ch0, 2,117 s at depth 55. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_mul_ch0	STOPPED	the same six on the upstream core, stopped for the same reason. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_mulh_ch0	STOPPED	as above, upstream core. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_mulhsu_ch0	STOPPED	as above, upstream core. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_mulhu_ch0	STOPPED	as above, upstream core. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_divu_ch0	STOPPED	as above, upstream core. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-upstream/cores/ibex/checks/insn_remu_ch0	STOPPED	as above, upstream core. docs/63 section 8.4.	2026-09-11
+hw/soc/out/rvformal-insnfix/cores/ibex/checks/insn_div_ch0	STOPPED	docs/63 section 8.5's re-run with the specification corrected; stopped rather than completed. The corrected result it was meant to produce is in section 8.5 from the run that did finish.	2026-09-11
+hw/soc/out/rvformal-insnfix/cores/ibex/checks/insn_rem_ch0	STOPPED	as insnfix insn_div_ch0. docs/63 section 8.5.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/checks/reg_ch0	ERROR	killed from OUTSIDE sby -- the logfile ends `engine_0: <SIGTERM>`. docs/63 section 17, and the dated correction at section 20 which records that an earlier revision of this document read it as a pass. ERROR here means the tool was stopped, not that the check failed.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/regdepth/reg_d21	STOPPED	the register-file check at depth 21. It proves to cycle 18 on the substituted core and times out at 21, 23 and 25 under six engines at four hours each. docs/63 sections 16.3, 17.2 and 18 -- the substituted core is harder to prove by half again on average and by a cliff on exactly this check, 31 s to 353 s at cycle 18 and one minute to over four hours at 21.	2026-09-11
+hw/soc/out/rvformal-secded/cores/ibex/regdepth/reg_d23	STOPPED	as reg_d21, depth 23. docs/63 sections 16.3 and 18.	2026-09-11
+hw/soc/out/rvf-eng-secded-bmc3/cores/ibex/checks/reg_ch0	ERROR	the six-engine sweep of reg_ch0 on the substituted core, four hours each. docs/63 section 17.2: this is the measurement that establishes the timeout is the solver's and not one engine's, so a non-verdict here IS the result the sweep was run to get.	2026-09-11
+hw/soc/out/rvf-eng-secded-bitwuzla/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-secded-bmc3. docs/63 section 17.2.	2026-09-11
+hw/soc/out/rvf-eng-secded-boolector/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-secded-bmc3. docs/63 section 17.2.	2026-09-11
+hw/soc/out/rvf-eng-secded-btormc/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-secded-bmc3. docs/63 section 17.2.	2026-09-11
+hw/soc/out/rvf-eng-secded-cvc5/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-secded-bmc3. docs/63 section 17.2.	2026-09-11
+hw/soc/out/rvf-eng-secded-yices/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-secded-bmc3. docs/63 section 17.2.	2026-09-11
+hw/soc/out/rvf-eng-secded-z3/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-secded-bmc3. docs/63 section 17.2.	2026-09-11
+hw/soc/out/rvf-eng-upstream-bmc3/cores/ibex/checks/reg_ch0	ERROR	the same engine sweep on the upstream core, which is the control: it is what makes "the substituted core is harder" a comparison rather than an assertion. docs/63 section 18.	2026-09-11
+hw/soc/out/rvf-eng-upstream-bitwuzla/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-upstream-bmc3. docs/63 section 18.	2026-09-11
+hw/soc/out/rvf-eng-upstream-cvc5/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-upstream-bmc3. docs/63 section 18.	2026-09-11
+hw/soc/out/rvf-eng-upstream-yices/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-upstream-bmc3. docs/63 section 18.	2026-09-11
+hw/soc/out/rvf-eng-upstream-z3/cores/ibex/checks/reg_ch0	STOPPED	as rvf-eng-upstream-bmc3. docs/63 section 18.	2026-09-11

@@ -267,6 +267,72 @@ and so are "nothing came" and "I arrived late".
 
 ---
 
+## 4a. A gate that could never be green
+
+`scripts/verify.sh` writes the row in `verification-log.tsv` and exits
+non-zero when anything is wrong. On 2026-09-11 it exited non-zero on a
+tree where nothing was wrong, and had done since 2026-09-09 **[fact]**:
+
+```
+509 passed, 0 failed   462 cocotb, 0 failed   425 formal pass, 35 other
+rc=1
+```
+
+The 35 are every non-PASS formal task directory, and all 35 are under
+`hw/soc/out/rvf*` — the vendored Ibex `riscv-formal` runs. Not one is in
+this project's own property sets, which are **54 PASS in `formal/` and
+64 PASS in `hw/soc/formal/` with nothing else**. Each of the 35 already
+had a written decision behind it in `docs/63`: four are riscv-formal's
+own model computing an unsigned division and remainder where Ibex is
+right (section 7.5); two are a depth bound, not a defect (section 8.3);
+sixteen are multiply and divide checks stopped after 35 to 40 minutes
+each because bit-blasting a 32x32 multiplier is the classic hard case
+(section 8.4); thirteen are the register check and its six-engine
+timeout sweep, where the non-verdict **is** the measurement (sections
+17.2 and 18).
+
+`verify.sh`'s own header refused to fix this the easy way, and was
+right to:
+
+> Nothing here whitelists the known-and-explained failures of `docs/63`,
+> because an allowlist maintained inside a counter is how a counter
+> starts lying, and this file exists because of one that did. If the
+> project wants a green gate it has to first decide, in a tracked
+> artefact, which of the thirty-five are expected — and that is a
+> decision about the formal work, not about this script.
+
+`formal-dispositions.tsv` is that artefact: 35 rows, each naming the
+directory, its expected verdict word, the `docs/63` section that decided
+it and the date. **It changes no count.** `formal_other` in the log is
+still 35 and always will be. What it adds is `formal_undispositioned`,
+and that is what the exit code now reads — so a new red turns the gate
+red on the run it appears, while the 35 stay counted, stay printed on
+stderr and stay amber.
+
+Three ways it fails, all exercised:
+
+| Mutation | Result |
+|---|---|
+| a row deleted | that directory is undispositioned, `rc=1` |
+| a row's verdict word changed (`FAIL` → `STOPPED`) | drift reported, `rc=1` |
+| a row naming a directory that now PASSES | hole reported, `rc=1` |
+| unmutated | `rc=0` |
+
+And the case that would have made it useless: on a machine with no run
+trees — which is every clone, because these paths are all git-ignored —
+it reports zero of everything and exits **0**. A disposition whose
+directory is absent is MISSING, not a hole, which is `docs/80` section
+3's distinction reused.
+
+The last piece is that any of this runs at all. `verify.sh --dispositions`
+does the formal scan alone in about a second, because the full run
+re-runs pytest and cocotb first and takes twenty minutes — nobody edits
+a 35-row table three times under that, so in practice the drift and hole
+checks would never have been exercised, and an unexercised guard is the
+subject of this whole document. `scripts/ci_local.sh checkers` runs it.
+
+---
+
 ## 5. What ties them together
 
 Each of the four is the same sentence with different nouns: **a green
@@ -278,6 +344,10 @@ result read wider than what it looked at.**
 - A manifest that says "verified" over the digest of emptiness.
 - A `STATUS` register that says a write was accepted when the byte is
   gone.
+- And one that fails the other way: a gate that exited non-zero on a
+  clean tree, every day, so its exit code carried no information at all.
+  A check that can never be green is as empty as one that can never be
+  red.
 
 None of them was a lie and none was a bug in the usual sense. In each
 case an instrument reported truly about a smaller thing than the

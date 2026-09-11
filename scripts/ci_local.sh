@@ -292,9 +292,21 @@ job_checkers() {
                 exit 1
             fi
             echo "$RUN_DIR: $summary gate; not gating: ${got:-<none>}"'
-    done <<CHECKER_TABLE
+    done <<CHECKER_TABLE_END
 $CHECKER_RUNS
-CHECKER_TABLE
+CHECKER_TABLE_END
+
+    # THE FORMAL DISPOSITIONS, in about a second.
+    #
+    # scripts/verify.sh --dispositions runs the formal scan alone and
+    # gates on formal_undispositioned: a task directory that is not a
+    # fresh PASS and that formal-dispositions.tsv does not name, a
+    # dispositioned verdict that has CHANGED, or a disposition whose
+    # directory is present and now passes. On a machine with no run
+    # trees it reports zero of everything and exits 0, which is what a
+    # clone looks like and is not a failure.
+    run "every non-PASS formal directory is dispositioned" \
+        bash scripts/verify.sh --dispositions
 }
 
 # ----------------------------------------------------------------- mirror

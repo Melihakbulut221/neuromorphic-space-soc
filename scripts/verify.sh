@@ -159,6 +159,25 @@ cd "$(dirname "$0")/.."
 REC=verification-log.tsv
 MODE="${1:-record}"
 
+# --dispositions RUNS THE FORMAL SCAN AND NOTHING ELSE, in about a
+# second, and it exists so that formal-dispositions.tsv is a file someone
+# can actually iterate on.
+#
+# The full run re-runs pytest and cocotb first and takes about twenty
+# minutes. Nobody edits a 35-row disposition table three times under that,
+# which means in practice nobody would have exercised the drift and hole
+# checks at all -- and an unexercised guard is the thing this repository
+# keeps finding. This mode writes no row and gates on the same
+# fm_undisp the record mode does.
+SKIP_SUITES=0
+case "$MODE" in
+    --dispositions) SKIP_SUITES=1 ;;
+esac
+
+if [ "$SKIP_SUITES" = 1 ]; then
+    py_n=0; py_f=0; cc_n=0; cc_f=0; cc_dirty=0
+fi
+
 # THE EXIT STATUS IS NOT OPTIONAL. This used to be a bare pipeline into
 # `tail -1`, so pytest's status was discarded and only its last line was
 # parsed. A collection error, an import failure or the 1800 s timeout
@@ -167,6 +186,7 @@ MODE="${1:-record}"
 # of this file, because zero failures is what it looks for. A recorder
 # that logs a zero for "the suite did not run" is the shape this file
 # exists to stop, and it had it. Found in audit 2026-09-10.
+if [ "$SKIP_SUITES" = 0 ]; then
 py_out=$(timeout 1800 .venv/bin/pytest -q 2>&1); py_rc=$?
 py=$(printf '%s' "$py_out" | tail -1)
 if ! printf '%s' "$py" | grep -qE '[0-9]+ (passed|failed|error)'; then
@@ -197,6 +217,7 @@ if [ "$cc_rc" = "2" ]; then
 fi
 cc_n=$(printf '%s' "$cc" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo 0)
 cc_f=$(printf '%s' "$cc" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo 0)
+fi   # SKIP_SUITES
 
 # Formal is not re-run here: a full sby sweep is hours and the logs are
 # already on disk from whoever ran it. This reads the verdicts that exist,
@@ -273,9 +294,74 @@ while IFS= read -r cfg; do
 done < <(find . -name config.sby -not -path './.git/*' -not -path './.venv/*' | sort)
 fm_other=$((fm_fail+fm_err+fm_stop+fm_misc+fm_stale+fm_unchk))
 
+# THE DISPOSITIONS, READ AFTER THE COUNT AND NEVER BEFORE IT.
+#
+# formal-dispositions.tsv names the directories whose non-PASS verdict is
+# a decision this project has recorded, with the document section that
+# records it. It changes NO count above: fm_other stays the true number
+# of directories that are not a fresh PASS, and always will, because the
+# header of this file is right that an allowlist inside a counter is how
+# a counter starts lying.
+#
+# What it adds is fm_undisp -- the non-PASS directories NOT dispositioned
+# -- and that is what the gate at the end reads. So a new red turns the
+# gate red on the run it appears, while the thirty-five that were
+# decided in docs/63 stay counted, stay printed and stay amber.
+#
+# Two ways a disposition is checked, not one:
+#   * VERDICT DRIFT. A row says STOPPED and the directory now says FAIL:
+#     that is a new fact and this file must not absorb it silently.
+#   * A HOLE. A row names a directory that now PASSES, or that no longer
+#     exists as a task at all: the row is stale and hides a check.
+DISP=formal-dispositions.tsv
+fm_undisp=0
+disp_drift=""
+disp_stale=""
+if [ -f "$DISP" ]; then
+    while IFS= read -r bad_line; do
+        [ -n "$bad_line" ] || continue
+        bv=${bad_line%% *}
+        bd=${bad_line#* }
+        bd=${bd#./}
+        want=$(awk -F'\t' -v p="$bd" '$1==p {print $2; exit}' "$DISP")
+        if [ -z "$want" ]; then
+            fm_undisp=$((fm_undisp+1))
+        elif [ "$want" != "$bv" ]; then
+            disp_drift="$disp_drift  $bd: dispositioned $want, now $bv"$'\n'
+            fm_undisp=$((fm_undisp+1))
+        fi
+    done < <(printf '%s' "$fm_bad")
+
+    # The other direction, with MISSING held apart from CHANGED --
+    # docs/80 section 3's distinction, and it matters here for the same
+    # reason. Every path in this file is a git-ignored run tree, so on a
+    # clone none of them exists and every row would read as a hole: the
+    # gate would be red on a fresh checkout, which is a gate nobody runs.
+    # A row is a hole only when the directory IS on this machine and is
+    # no longer classified as not-a-fresh-PASS.
+    while IFS=$'\t' read -r dp dv _rest; do
+        case "$dp" in ''|'#'*) continue ;; esac
+        [ -d "$dp" ] || continue
+        printf '%s' "$fm_bad" | grep -qF " ./$dp" || \
+            disp_stale="$disp_stale  $dp (dispositioned $dv)"$'\n'
+    done < "$DISP"
+fi
+
 if [ -n "$fm_bad" ]; then
-    printf 'verify.sh: %d formal task directories are not a fresh PASS:\n' "$fm_other" >&2
+    printf 'verify.sh: %d formal task directories are not a fresh PASS, %d of them undispositioned:\n' \
+        "$fm_other" "$fm_undisp" >&2
     printf '%s' "$fm_bad" | sort >&2
+fi
+if [ -n "$disp_drift" ]; then
+    printf 'verify.sh: a dispositioned directory CHANGED its verdict:\n%s' "$disp_drift" >&2
+    printf 'A disposition records a decision about one outcome. A different outcome\n' >&2
+    printf 'is a new fact and needs a new decision, in %s, with a date.\n' "$DISP" >&2
+fi
+if [ -n "$disp_stale" ]; then
+    printf 'verify.sh: these dispositions no longer match anything:\n%s' "$disp_stale" >&2
+    printf 'Either the directory now PASSES -- delete the row, it is hiding a check --\n' >&2
+    printf 'or the task is gone and the row is a fossil. Both are edits to %s.\n' "$DISP" >&2
+    fm_undisp=$((fm_undisp+1))
 fi
 
 head=$(git rev-parse --short HEAD)
@@ -284,12 +370,16 @@ frozen=$(git status --short hw/rtl/ hw/tb/ tt/ formal/ hw/openlane/ | grep -vc '
 fmnote="formal-dirs=$fm_dirs,formal-fail=$fm_fail,formal-error=$fm_err"
 fmnote="$fmnote,formal-stopped=$fm_stop,formal-stale=$fm_stale"
 fmnote="$fmnote,formal-unchecked=$fm_unchk,formal-src-comment-drift=$fm_cmt"
+fmnote="$fmnote,formal-undispositioned=$fm_undisp"
 line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' \
     "$(date -u +%Y-%m-%dT%H:%MZ)" "$head" "$py_n" "$py_f" "$cc_n" "$cc_f" \
     "$fm_pass" "$fm_other" \
     "formal-logs-oldest=$fm_oldest,$fmnote,cocotb-suites-not-clean=$cc_dirty,tree-dirty=$dirty,frozen-dirty=$frozen${NOTE:+,$NOTE}")
 
-if [ "$MODE" = "--check" ]; then
+if [ "$SKIP_SUITES" = 1 ]; then
+    printf '%d formal task directories, %d not a fresh PASS, %d undispositioned\n' \
+        "$fm_dirs" "$fm_other" "$fm_undisp"
+elif [ "$MODE" = "--check" ]; then
     printf 'now:  %s\n' "$line"
     [ -f "$REC" ] && printf 'last: %s\n' "$(tail -1 "$REC")"
 else
@@ -298,4 +388,10 @@ else
     printf 'recorded: %s\n' "$line"
 fi
 
-[ "$py_f" = "0" ] && [ "$cc_f" = "0" ] && [ "$fm_other" = "0" ] && [ "$frozen" = "0" ]
+# THE GATE READS fm_undisp, NOT fm_other, and the difference is the whole
+# point of formal-dispositions.tsv. fm_other is the true count and is
+# recorded in the row either way; what the exit code answers is "did
+# anything become not-a-PASS that nobody has decided about". A gate that
+# can never be green carries as little information as one that can never
+# be red, and this one could never be green.
+[ "$py_f" = "0" ] && [ "$cc_f" = "0" ] && [ "$fm_undisp" = "0" ] && [ "$frozen" = "0" ]
