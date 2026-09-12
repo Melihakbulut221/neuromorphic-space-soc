@@ -67,6 +67,7 @@ import importlib.util
 import json
 import math
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -3085,3 +3086,125 @@ def test_nothing_in_the_design_instantiates_the_boot_block_unhardened():
         text = (SOC_FLOW / name).read_text()
         assert "soc_boot.HARDEN" not in text, (
             "{} overrides soc_boot's HARDEN".format(name))
+
+
+# ---------------------------------------------------------------------
+# Every P&R configuration must declare every vendor macro the RTL builds
+# ---------------------------------------------------------------------
+
+def _macros_the_rtl_instantiates():
+    """Vendor macro module names instantiated anywhere in the RTL.
+
+    A vendor macro is instantiated by bare module name at the start of a
+    line, which is what this matches. It is deliberately not a full
+    Verilog parse: the names are distinctive (RM_/RSC_IHPSG13) and a
+    parser here would be a second thing to keep right.
+    """
+    names = set()
+    for d in (SOC_RTL, ROOT / "hw" / "rtl"):
+        for v in sorted(d.glob("*.v")):
+            for m in re.finditer(r"^\s+((?:RM|RSC)_IHPSG13[A-Za-z0-9_]*)\s",
+                                 v.read_text(), re.M):
+                names.add(m.group(1))
+    return names
+
+
+def test_every_pnr_config_declares_every_macro_the_rtl_instantiates():
+    """The defect that stopped the default place-and-route flow for
+    seven days without anybody finding out.
+
+    `hw/soc/rtl/soc_mem_sram.v` gained two
+    RM_IHPSG13_1P_512x16_c2_bm_bist as the ROM's (39,32) check macros on
+    2026-09-05, commit ed51de0. `hw/soc/pnr/config.json` -- the config
+    `flow/pnr_soc_top.sh` uses when PNR_CONFIG is unset -- went on
+    declaring two macros, so Verilator.Lint failed with two MODMISSING
+    errors and the Classic flow quit at stage 3.
+
+    IT WENT UNNOTICED FOR 56 RUNS, and the reason is the interesting
+    part: every documented invocation passes `-F Yosys.JsonHeader`,
+    which starts the flow at step 5 and skips the lint step and its
+    three checkers. Of the 56 soc_top run trees, three have a
+    `01-verilator-lint` directory, and the one that predates this test
+    linted cleanly on 2026-09-01 -- four days before the macros existed.
+    A stage that is skipped by every caller is a stage that can rot
+    silently, and this is what it rotted into.
+
+    WHAT THIS CHECKS AND WHAT IT DOES NOT. It checks DECLARATION, not
+    correctness: that every macro the RTL instantiates has an entry, not
+    that the entry points at the right GDS or the right Liberty views. A
+    config may also declare macros the RTL does not instantiate, which
+    costs nothing -- an unused blackbox is an unused blackbox -- so that
+    direction is not an error here.
+    """
+    wanted = _macros_the_rtl_instantiates()
+    assert wanted, (
+        "no vendor macro instantiation found in the RTL at all. Either "
+        "the memories stopped using\nthem or this test's pattern has "
+        "stopped matching; either way it is guarding nothing.")
+
+    # EXPERIMENT RECORDS, not live configurations. Each of these was
+    # written for one measurement, ran once against the netlist of its
+    # day, and is kept so that measurement can be re-read -- docs/64's
+    # rule. Bringing them forward would change what they record and
+    # settle nothing, because none of them will be run again.
+    #
+    # Every one is a `rom0` configuration: it hardens a netlist that does
+    # not instantiate the ROM's check macros, so two macros is the RIGHT
+    # number for it and adding a third would be the actual error.
+    #
+    # A config is listed here with the document it belongs to. Anything
+    # NOT listed is live and must be complete.
+    RECORDS = {
+        "config-npu.json": "docs/55's accelerator arm, 2026-09-04",
+        "config-synpre.json": "docs/49 and docs/62's SYNPRE arm, 2026-09-04",
+        "config-lvs-a-asconfigured.json": "docs/79's LVS arm A, 2026-09-09",
+        "config-lvs-b-blackbox.json": "docs/79's LVS arm B, 2026-09-09",
+        "config-lvs-c-ignorecells.json": "docs/79's LVS arm C, 2026-09-09",
+        "config-lvs-d-delimiters.json": "docs/79's LVS arm D, 2026-09-09",
+        "config-lvs-e-normalised.json": "docs/79's LVS arm E, 2026-09-10",
+        "config-lvs-f-equateclasses.json": "docs/79's LVS arm F, 2026-09-10",
+    }
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "hw/soc/pnr/config*.json"], cwd=ROOT,
+        check=True, capture_output=True, text=True).stdout.split()
+    tracked = {pathlib.PurePosixPath(p).name for p in tracked}
+
+    missing = {}
+    for cfg in sorted((ROOT / "hw" / "soc" / "pnr").glob("config*.json")):
+        if cfg.name == "config.resolved.json":
+            continue          # a resolved snapshot, not a hand-edited config
+        if cfg.name not in tracked:
+            continue          # local scratch; it is nobody's contract
+        if cfg.name in RECORDS:
+            continue
+        try:
+            declared = set((json.loads(cfg.read_text()).get("MACROS")
+                            or {}).keys())
+        except ValueError:
+            continue
+        if not declared:
+            continue          # a config that hardens no macro at all
+        gap = wanted - declared
+        if gap:
+            missing[cfg.name] = sorted(gap)
+
+    # The other direction: a name in RECORDS that no longer exists is a
+    # hole, and one that has SINCE been completed is a record somebody
+    # brought forward -- both need a person, not a silent pass.
+    stale = sorted(n for n in RECORDS
+                   if not (ROOT / "hw" / "soc" / "pnr" / n).is_file())
+    assert not stale, (
+        "these configurations are listed as experiment records and no "
+        "longer exist: {}.\nDelete the entry with the file, or restore "
+        "the file.".format(", ".join(stale)))
+
+    assert not missing, (
+        "these place-and-route configurations do not declare every vendor "
+        "macro the RTL\ninstantiates, so Verilator.Lint fails with "
+        "MODMISSING and the flow quits at stage 3:\n\n  {}\n\nThe RTL "
+        "instantiates: {}\n\nThis is only invisible while every caller "
+        "passes -F to start past the lint step.".format(
+            "\n  ".join(f"{k}: missing {', '.join(v)}"
+                        for k, v in sorted(missing.items())),
+            ", ".join(sorted(wanted))))

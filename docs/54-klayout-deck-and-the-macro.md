@@ -888,6 +888,32 @@ from the PDK, which is the point of having made that run.
    interesting than it was: if the two DRC decks disagree about SRAM
    scope, the LVS decks may too, and the LVS failure is the one that
    actually blocks.
+
+   > **WHY IT HAS STAYED OPEN THROUGH THREE RESTATEMENTS, established
+   > 2026-09-12.** It is not a deck waiting to be run. It is a deck this
+   > repository cannot feed.
+   >
+   > `libs.tech/klayout/tech/lvs/sg13g2.lvs` takes its schematic side
+   > through `RBA::NetlistSpiceReader` and through nothing else: the
+   > word `verilog` does not appear in the deck or in its `run_lvs.py`.
+   > Netgen reads gate-level Verilog natively, which is why every LVS
+   > result in this project is Netgen's and why nobody met this wall.
+   >
+   > And there is no SPICE to give it. **Every `.spice` file in every
+   > run tree under `hw/soc/pnr/runs/` begins `* NGSPICE file created
+   > from soc_top.ext`** — they are all Magic's extraction of the
+   > LAYOUT. Handing one to the deck as the schematic would compare the
+   > layout with itself, which passes and means nothing. The schematic
+   > side would have to be built: the 10.9 MB gate-level netlist
+   > converted to SPICE against the standard cells' subcircuits, plus a
+   > decision about how the six vendor macros enter, which is the very
+   > question sections 5 and 6 say the decks disagree about.
+   >
+   > So the item is **"build a Verilog-to-SPICE path"**, not "run a
+   > deck", and it should have been written that way the first time.
+   > `docopt`, which `run_lvs.py` imports and which was absent, is
+   > installed as of this date -- that part was a five-second obstacle
+   > standing in front of a real one.
 5. **Whether `sg13g2_maximal.drc` returning 0 means anything** depends on
    a judgement about that deck's status that this document declines to
    make and section 6 explains. If IHP confirms the residual set's SRAM

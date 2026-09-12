@@ -38,7 +38,7 @@ none; `hw/tb/Makefile.fi` was not invoked. Section 13 lists every file.
 | Question | Answer |
 |---|---|
 | **Where do the check bits live?** | **In the row, and the row holds one word instead of two.** A `RM_IHPSG13_1P_2048x64` row is 64 bits; a 32-bit word as **four (16,8) byte codewords** — each the shortening of the repository's one SECDED code with 56 data bits tied to zero — is exactly 64. No seventh macro, no die growth, no read-modify-write: a byte write lands through the macro's own `A_BM` with its check bits beside it. **The RAM is 32 KiB, not 64.** Section 3 costs the alternatives from the LEF: a seventh `2048x64` for (39,32) check bits is **+491,633.62 um2, +21.88 % of the six-macro area**, with a read-modify-write on every `sb` and `sh`; a `4096x16` for a (72,64) row code is **+257,608.51 um2, +11.46 %**, with one on every store. Section 3.4 measures what the 32 KiB that went were holding: **192 bytes of static data and a stack** |
-| **And the boot ROM?** | A **(39,32) word code** — `docs/43`'s shortening, already proved — in a `RM_IHPSG13_1P_512x16` check macro per bank, **+90,618.62 um2, +4.03 %** from the LEF, **and not placed**: `docs/61`'s floorplan has 60.48 um beside each ROM macro and the part is 236.80 wide. Section 8 is the ROM's whole story, including that on this PDK nothing in the design can write its contents, and its check bits are in exactly the same position |
+| **And the boot ROM?** | A **(39,32) word code** — `docs/43`'s shortening, already proved — in a `RM_IHPSG13_1P_512x16` check macro per bank, **+90,618.62 um2, +4.03 %** from the LEF, ~~**and not placed**: `docs/61`'s floorplan has 60.48 um beside each ROM macro and the part is 236.80 wide.~~ **PLACED 2026-09-12** — and the sentence struck here is a measurement of the wrong axis. There is 60.48 um *beside* the ROM and 290.24 um *above* it, because a macro row is as tall as the RAM and the ROM is not; the part is 191.34 tall. Section 11's list carries the placement and why the pin edges made it slightly more than a coordinate change. Section 8 is the ROM's whole story, including that on this PDK nothing in the design can write its contents, and its check bits are in exactly the same position |
 | **Does the decoder fit on the read path?** | **Pre-layout yes, with 2.04 ns of margin; post-layout no, and the margin is what layout spent.** Pre-layout at the slow corner with the reset net cut, the `A_DOUT`-launched path keeps **+2.0352 ns** against **+4.0728** on HEAD **[fact]**; routed, the same group's worst goes from **−2.7112 to −4.0021** and its population from **68 endpoints to 1,080**, because the read return grows from **12.7286 ns to 14.0728 ns** after `A_DOUT` **[fact]**. It is shallow as codecs go — eight column matches, not sixty-four, section 4.2 — and it is still not the binding path. Sections 5.2 and 5.3 |
 | **What does it cost?** | **+2,068 cells, +234 flip-flops, +31,391.3124 um2, +4.783 %** on the whole SoC at the SRAM boundary, against a baseline that reproduces `docs/66`'s exactly **[fact]**; **+3.01 % of placed standard-cell area** after layout, on a die that does not grow. Of the flip-flops, **150 are the SCRUB block's counters, stickies and addresses** and 84 are the two codec wrappers' scrubber pointers, intervals and response registers. Section 5.1 |
 | **Is there a scrubber?** | **Yes, and it is a back-door on the row port, not a fabric master.** `docs/51` section 12 priced a third master as a re-proof of the fabric; this one reads a row in an idle cycle, examines it in the next, writes back only the byte lanes the decoder corrected — never an uncorrectable one — and drops the result if the bus takes the port in between. The bus always wins. It repaired **36 of 360** upsets at the shipped interval and **135 of 360** at interval 0, and the campaign found the second setting missing what the first caught: **a scrubber's coverage of a row is the interval between two visits to it**, which is section 6.2's bound and section 7.3's measurement |
@@ -1232,9 +1232,49 @@ counted.
   deck can check.
 - **The ROM has no contents in the macro build**, and its check bits
   have none either. Section 8.
-- **The ROM's check macros are not placed.** Section 5.3's layout is
+- ~~**The ROM's check macros are not placed.** Section 5.3's layout is
   the RAM protected and the ROM as `docs/47` built it; the design that
-  ships has never been placed.
+  ships has never been placed.~~
+  **PLACED 2026-09-12**, `floorplan.py --memory ecc-rom` and
+  `hw/soc/pnr/config-ecc-rom.json`:
+
+  ```
+  u_rom.g_rom_1024x32_ecc.u_b0   1769.28    347.76  FS
+  u_rom.g_rom_1024x32_ecc.u_b1   1769.28   1387.26  N
+  u_rom.g_rom_1024x32_ecc.u_c0   1769.28     60.48  FS
+  u_rom.g_rom_1024x32_ecc.u_c1   1769.28   1821.96  N
+  clearance: bottom 95.94 um, top 98.24 um, halo 10 um
+  ```
+
+  **The die, the core and the four RAM macros do not move**, which is
+  what keeps every measurement taken on `docs/61`'s floorplan
+  comparable with one taken on this one. The mode does not pass
+  `ROM_HARDEN=0`, so the instances it names are the ones the RTL builds
+  at its own default.
+
+  **Why it sat open is worth more than the fix.** The row above and
+  section 0's table say *"`docs/61`'s floorplan has 60.48 um beside each
+  ROM macro and the part is 236.80 wide"* — which is true, and is a
+  measurement of the wrong direction. **The space is vertical.** A macro
+  row is as tall as the RAM, 626.70 um; the ROM is 336.46; so column 2
+  carries **290.24 um of unused height in each row**, and the check
+  macro is 191.34 tall. It fits with 98 um to spare and always did. The
+  search stopped at the first axis it tried.
+
+  The one real obstacle was pins, not area. Both rows put their pin edge
+  against the channel -- the bottom row is `FS`, which mirrors the macro
+  and lifts its pins to its top -- so the bottom row's pocket lies
+  directly over the ROM's pins and a macro parked there would sit across
+  every wire leaving them. The bottom ROM is therefore raised to the top
+  of its own band, which puts its pins at the channel instead of 290 um
+  below it, and the check macro takes the blind space underneath. The
+  top row needs none of this: its pins are already at the channel and
+  the pocket is above, on the blind edge.
+
+  Nothing is written down as a coordinate. The placement is computed
+  from the ROM's LEF size, the row pitch and the insets, and
+  `place_rom_check()` asserts site and row alignment, the halo on the
+  side each macro was put, and that neither leaves its macro row.
 - **The campaign is RTL, single-bit, storage only.** No transient in the
   codec's gates, no multi-bit strike, no gate-level netlist. The
   uncorrectable class is reached only by directed tests; a rate for it

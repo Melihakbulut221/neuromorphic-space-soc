@@ -58,28 +58,28 @@
                 ]
             },
             "instances": {
-                "u_ram.g_ram_2048x64.u_b0": {
+                "u_ram.g_ram_2048x64_ecc.u_b0": {
                     "location": [
                         120.0,
                         60.48
                     ],
                     "orientation": "FS"
                 },
-                "u_ram.g_ram_2048x64.u_b1": {
+                "u_ram.g_ram_2048x64_ecc.u_b1": {
                     "location": [
                         944.64,
                         60.48
                     ],
                     "orientation": "FS"
                 },
-                "u_ram.g_ram_2048x64.u_b2": {
+                "u_ram.g_ram_2048x64_ecc.u_b2": {
                     "location": [
                         120.0,
                         1387.26
                     ],
                     "orientation": "N"
                 },
-                "u_ram.g_ram_2048x64.u_b3": {
+                "u_ram.g_ram_2048x64_ecc.u_b3": {
                     "location": [
                         944.64,
                         1387.26
@@ -110,14 +110,14 @@
                 ]
             },
             "instances": {
-                "u_rom.g_rom_1024x32.u_b0": {
+                "u_rom.g_rom_1024x32_ecc.u_b0": {
                     "location": [
                         1769.28,
-                        60.48
+                        347.76
                     ],
                     "orientation": "FS"
                 },
-                "u_rom.g_rom_1024x32.u_b1": {
+                "u_rom.g_rom_1024x32_ecc.u_b1": {
                     "location": [
                         1769.28,
                         1387.26
@@ -147,7 +147,22 @@
                     "pdk_dir::libs.ref/sg13g2_sram/lib/RM_IHPSG13_1P_512x16_c2_bm_bist_fast_1p32V_m55C.lib"
                 ]
             },
-            "instances": {}
+            "instances": {
+                "u_rom.g_rom_1024x32_ecc.u_c0": {
+                    "location": [
+                        1769.28,
+                        60.48
+                    ],
+                    "orientation": "FS"
+                },
+                "u_rom.g_rom_1024x32_ecc.u_c1": {
+                    "location": [
+                        1769.28,
+                        1821.96
+                    ],
+                    "orientation": "N"
+                }
+            }
         }
     },
     "//vh": "The vh entry is not optional and the reason is measured: Verilator.Lint runs BEFORE synthesis and aborts with 'Cannot find file containing module: RM_IHPSG13_...' without it, and the PDK's own behavioural .v cannot be used because it instantiates SRAM_1P_behavioral_bm_bist from a second file. docs/12 section 7. The two _bb.v files here are transcribed from the PDK models by machine, not by hand.",
@@ -155,17 +170,17 @@
     "FP_MACRO_HORIZONTAL_HALO": 10,
     "FP_MACRO_VERTICAL_HALO": 10,
     "//halo": "LibreLane's defaults, set explicitly because they are load-bearing here. The RM_IHPSG13 GDS extends 0.225 um BELOW the LEF SIZE origin on layer 31/0 (NWell), and the governing NWell space rule is 0.62 um, so a macro placed flush against another object is a DRC error the LEF cannot predict. A 10 um halo covers it; a hand-tuned tight one would not. docs/12 section 6.4d.",
-    "PL_TARGET_DENSITY_PCT": 40,
+    "PL_TARGET_DENSITY_PCT": 38,
     "//density": "Set explicitly rather than left to the default. hw/openlane/sram_pilot's global placement DIVERGED (GPL-0323, reverting to the min-HPWL snapshot) with 589 standard cells at 5.3 % utilization around one large fixed block, and docs/12 section 7.6 recommends setting this for a macro floorplan. THE CHANNEL WAS SIZED FROM A MEASUREMENT AND NOT FROM THE OTHER SYNTHESIS. hw/soc/flow/syn_soc_top.sh reports 27,565 cells and 396,177.6420 um2 for this identical source list; LibreLane's own Yosys recipe, on the same 50 files, reports 37,895 instances and 523,809.6444 um2 -- 32.3 % more area, measured in the `probe` run. The two recipes are not the same recipe and neither is wrong; docs/47 section 6.2 states the difference rather than reconciling it. The channel is sized for LibreLane's number: 523,810 um2 of cells in 1,772,507 um2 of channel plus the two pockets the shorter ROM macros leave is 29.6 % before repair and CTS buffers, and 40 % is set as the placer target so it neither clusters nor spreads across the whole channel.",
     "//====== POWER ======": "",
     "VDD_PIN": "VPWR",
     "GND_PIN": "VGND",
     "PDN_CFG": "dir::pdn_macro.tcl",
     "PDN_MACRO_CONNECTIONS": [
-        "u_ram\\.g_ram_2048x64\\.u_b[0-3] VPWR VGND VDD! VSS!",
-        "u_ram\\.g_ram_2048x64\\.u_b[0-3] VPWR VGND VDDARRAY! VSS!",
-        "u_rom\\.g_rom_1024x32\\.u_b[01] VPWR VGND VDD! VSS!",
-        "u_rom\\.g_rom_1024x32\\.u_b[01] VPWR VGND VDDARRAY! VSS!"
+        "u_ram\\.g_ram_2048x64_ecc\\.u_b[0-3] VPWR VGND VDD! VSS!",
+        "u_ram\\.g_ram_2048x64_ecc\\.u_b[0-3] VPWR VGND VDDARRAY! VSS!",
+        "u_rom\\.g_rom_1024x32_ecc\\.u_b[01] VPWR VGND VDD! VSS!",
+        "u_rom\\.g_rom_1024x32_ecc\\.u_b[01] VPWR VGND VDDARRAY! VSS!"
     ],
     "//pdn": "THREE SUPPLIES PER MACRO, TWO ENTRIES EACH. The macro LEF pins carry the trailing '!' global-net marker (VDD!, VSS!, VDDARRAY!) while its Liberty pg_pins do not; PDN hookup matches on the LEF names. VPWR/VGND are this PDK's top-level design power and ground net names; the standard-cell LEF pins are VDD/VSS. VDDARRAY! is a SEPARATE ARRAY SUPPLY with no standard-cell counterpart, so it does not fall out of the default hookup and needs its own entry. Tying it to the core VPWR domain is the single-domain choice; a product design would decide separately whether to split it. docs/12 section 6.4b.",
     "//pdn_cfg": "pdn_macro.tcl is NOT a tuning. Without it the six macros have no power and the flow does not notice until IR drop, 35 steps later; see that file's header for the mechanism and for what a silent unpowered macro looks like on the way through placement, CTS and detailed routing.",
@@ -221,5 +236,6 @@
     "PL_RESIZER_HOLD_SLACK_MARGIN": 0.1,
     "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.05,
     "//holdmargin": "The pilot's values, which closed hold at all three corners there. They are quoted from hw/openlane/pilot_ihp/config.json rather than tuned, so that a hold result here is comparable with docs/31's. The macros make this harder than it was on the pilot: RM_IHPSG13 A_ADDR carries a hold requirement of 1.3801 ns at the slow corner, which is larger than any standard-cell flip-flop's in the library.",
-    "//macros_512x16": "THE DEFAULT CONFIGURATION COULD NOT LINT ITS OWN RTL FOR SEVEN DAYS, and this key is the fix and the record of it. hw/soc/rtl/soc_mem_sram.v's `WORDS == 2048 && HARDEN != 0` branch instantiates two RM_IHPSG13_1P_512x16_c2_bm_bist as the ROM's (39,32) check macros; they landed 2026-09-05 in commit ed51de0 and this file went on declaring two macros. Verilator.Lint therefore failed with 2 MODMISSING errors and the Classic flow quit at stage 3 -- on the DEFAULT config, which is what pnr_soc_top.sh picks when PNR_CONFIG is unset. NOBODY FOUND OUT FOR 56 RUNS, because every documented invocation passes -F Yosys.JsonHeader and starts at step 5, skipping the lint step and its three checkers entirely: of the 56 soc_top run trees under hw/soc/pnr/runs/, exactly three have a 01-verilator-lint directory, and the only one that predates this fix linted cleanly on 2026-09-01, four days before the macros existed. Declaring a macro the netlist does not instantiate costs nothing -- it is a blackbox, a LEF and a set of Liberty views that go unused. Declaring one it DOES instantiate is the difference between a flow that runs and a flow nobody runs from the start. Added 2026-09-12; sw/tests/test_soc_synthesis_guards.py holds every P&R config to the macros the RTL actually instantiates so the next one is caught here rather than seven days later."
+    "//macros_512x16": "THE DEFAULT CONFIGURATION COULD NOT LINT ITS OWN RTL FOR SEVEN DAYS, and this key is the fix and the record of it. hw/soc/rtl/soc_mem_sram.v's `WORDS == 2048 && HARDEN != 0` branch instantiates two RM_IHPSG13_1P_512x16_c2_bm_bist as the ROM's (39,32) check macros; they landed 2026-09-05 in commit ed51de0 and this file went on declaring two macros. Verilator.Lint therefore failed with 2 MODMISSING errors and the Classic flow quit at stage 3 -- on the DEFAULT config, which is what pnr_soc_top.sh picks when PNR_CONFIG is unset. NOBODY FOUND OUT FOR 56 RUNS, because every documented invocation passes -F Yosys.JsonHeader and starts at step 5, skipping the lint step and its three checkers entirely: of the 56 soc_top run trees under hw/soc/pnr/runs/, exactly three have a 01-verilator-lint directory, and the only one that predates this fix linted cleanly on 2026-09-01, four days before the macros existed. Declaring a macro the netlist does not instantiate costs nothing -- it is a blackbox, a LEF and a set of Liberty views that go unused. Declaring one it DOES instantiate is the difference between a flow that runs and a flow nobody runs from the start. Added 2026-09-12; sw/tests/test_soc_synthesis_guards.py holds every P&R config to the macros the RTL actually instantiates so the next one is caught here rather than seven days later.",
+    "//floorplan48": "GENERATED BY hw/soc/pnr/floorplan.py --arrangement rows3 --channel 700.08 --density 38 --cell-area 396177.642 --memory ecc-rom. This file differs from config.json in FOUR keys and the generator asserts it: DIE_AREA, CORE_AREA, MACROS (the six instance LOCATIONS only -- same macros, same orientations, same x origins) and PL_TARGET_DENSITY_PCT. Everything else, including every checker binding of config.json's section on the checkers, is carried across byte for byte, so a difference in a result between this run and docs/47's is a difference of floorplan and of nothing else. docs/48, and docs/61 for the variant sized against the netlist that contains the accelerator."
 }
