@@ -388,6 +388,12 @@ module soc_npu #(
     parameter integer CAP_DEPTH = 8,
     // Bounded wait on an injection-queue fetch, in clk cycles.
     parameter integer FETCH_MAX = 8,
+
+    // The bound on E_DECIDE, in clk_i cycles. Overridable so that a
+    // board with a slow or deliberately throttled die can raise it;
+    // there is no value that disables it, because a parameter that can
+    // silently turn a liveness guard off is worse than no parameter.
+    parameter integer DECIDE_MAX = 4095,
     // H3, the triple-redundant control and cause bank. 0 builds the
     // block as docs/51 shipped it and exists ONLY so that the cost of
     // the hardening can be measured against the same file list with the
@@ -603,14 +609,18 @@ module soc_npu #(
   // one was. Header section 9.
   localparam integer C_AER_MM   = 13; // sticky: the AER strobe flag and
                                       //         ev_state disagreed
-  localparam integer NCAUSE     = 14;
+  localparam integer C_EVT_TO   = 14; // sticky: an event in flight was
+                                      //         DISCARDED because the die
+                                      //         would not take it and there
+                                      //         was nothing to drain
+  localparam integer NCAUSE     = 15;
 
   // The sticky bits are contiguous so that the protected word can carry
   // them as one field and the write-1-to-clear can be one part-select.
   // A future bit inserted in the middle of the levels would move
   // C_STICKY0 and everything below follows it.
   localparam integer C_STICKY0  = C_INJ_OVF;
-  localparam integer NSTICKY    = NCAUSE - C_STICKY0;   // 9
+  localparam integer NSTICKY    = NCAUSE - C_STICKY0;   // 10
 
   // -------------------------------------------------------------------
   // H3: the protected word.
@@ -625,7 +635,7 @@ module soc_npu #(
   localparam integer P_OUT_EN = 1;
   localparam integer P_STICKY = 2;                      // NSTICKY bits
   localparam integer P_MASK   = P_STICKY + NSTICKY;     // NCAUSE bits
-  localparam integer PROT_W   = P_MASK + NCAUSE;        // 2 + 9 + 14 = 25
+  localparam integer PROT_W   = P_MASK + NCAUSE;        // 2 + 10 + 15 = 27
 
   // Per-replica storage transform, and the masks are soc_wdog.v's for
   // its reasons: A is the true image, B and C are MIXED so every stored
@@ -646,6 +656,12 @@ module soc_npu #(
     // 64-bit parameters.
     if (PROT_W > 64) begin : g_prot_too_wide
       ERROR_soc_npu_protected_word_exceeds_64_bits g ();
+    end
+    // E_DECIDE's bound against the longest legitimate transient. WIN_MAX
+    // is derived from SER_HALF, so this fails HERE, with the reason, if
+    // someone slows the transport down and does not raise the bound.
+    if (DECIDE_MAX < 8 * WIN_MAX) begin : g_decide_too_tight
+      ERROR_soc_npu_DECIDE_MAX_must_be_at_least_8x_WIN_MAX g ();
     end
   endgenerate
 
@@ -720,6 +736,29 @@ module soc_npu #(
   // clean run is a second, longer one.
   localparam integer WIN_MAX   = 2 * (SER_GUARD_MAX + 2) + 2 + 16;
   localparam integer WIN_GRD_W = $clog2(WIN_MAX + 1);
+
+  // E_DECIDE's bound. See the state itself for why it exists; this is
+  // the number.
+  //
+  // IT IS NOT A PROTOCOL BOUND AND MUST NOT BE READ AS ONE. Every other
+  // wait in this file is bounded by something the transport guarantees
+  // -- a frame is this many cycles, a synchroniser is two stages -- and
+  // expiring means the part is broken. This one bounds a wait on
+  // SOFTWARE AND THE BOARD: the die refusing with nothing to drain, a
+  // drain switched off at CTRL.OUT_EN, a capture queue nobody is
+  // reading. None of those is a transient, so the bound only has to be
+  // comfortably longer than the longest legitimate one, and expiring
+  // means the part has been configured or driven into a corner rather
+  // than that it has failed.
+  //
+  // The longest legitimate transient here is a node-window frame at
+  // WIN_MAX. The default is the next power of two above 8 * WIN_MAX,
+  // and the relationship is CHECKED at elaboration rather than written
+  // down: SER_HALF changes SER_GUARD_MAX, which changes WIN_MAX, and a
+  // bound that quietly became tight when someone slowed the transport
+  // down is how a liveness guard turns into an event shredder.
+  localparam integer DEC_GRD_W = $clog2(DECIDE_MAX + 1);
+  localparam [DEC_GRD_W-1:0] DECMAX_W = DECIDE_MAX[DEC_GRD_W-1:0];
 
   reg [WIN_GRD_W-1:0] win_guard;
 
@@ -1433,6 +1472,21 @@ module soc_npu #(
   reg [3:0]  ev_state;
   reg [15:0] ev_word;
   reg [3:0]  ev_wait;
+
+  // E_DECIDE's guard counter. Unprotected on purpose and the argument is
+  // the same one `reload` and `counter` rest on in soc_wdog.v: the block
+  // REWRITES it every cycle it is in E_DECIDE and zeroes it on every
+  // exit, so an upset in it is gone by the next event. What an upset can
+  // do is end one wait early or late, and both land on the same arm --
+  // an event discarded with C_EVT_TO raised, which is a reported
+  // discard and not a silent one.
+  reg [DEC_GRD_W-1:0] dec_guard;
+
+  // The top bit of an event word says it goes over the serial link:
+  // 2'b10 and 2'b11 both have it set, which is what E_DECIDE's first arm
+  // tested inline until the bound below needed the same test in a second
+  // place. Named once, read twice.
+  wire ev_is_ser = ev_word[15];
   reg [15:0] cnt_in, cnt_out;
 
   // -------------------------------------------------------------------
@@ -1477,9 +1531,18 @@ module soc_npu #(
   //     event -- it is dropped. One event, once, and the deadlock is
   //     still gone.
   //
-  // It is NOT in `hw/soc/fi/npu_targets.py`, so no campaign draws into
-  // it yet and the two paragraphs above are reasoning and not
-  // measurement. That is stated rather than netted off.
+  // *Corrected 2026-09-11. This read "It is NOT in
+  // `hw/soc/fi/npu_targets.py`, so no campaign draws into it yet and the
+  // two paragraphs above are reasoning and not measurement." It went in
+  // on 2026-09-10 and the SAME COMMIT that wrote it added the site --
+  // `npu_targets.py`'s `ev_seq` stratum carries `ev_resume` and has
+  // since 26f4494, which is also where this sentence landed. Two edits
+  // in one change, one of them describing the other's absence.*
+  //
+  // It IS a site. `ev_seq` went from 19 bits to 20 when it was added, so
+  // that stratum's draws are not comparable with `docs/52`'s, `docs/55`'s
+  // or `docs/56`'s; the other four engine sub-strata are untouched and
+  // stay comparable, which is the property `docs/56` section 3 rests on.
   reg        ev_resume;
 
   wire drain_want = ctrl_out_en && node_aer_out_vld && !cap_full;
@@ -1496,6 +1559,7 @@ module soc_npu #(
       ev_state    <= E_IDLE;
       ev_word     <= 16'd0;
       ev_wait     <= 4'd0;
+      dec_guard   <= {DEC_GRD_W{1'b0}};
       ev_resume   <= 1'b0;
       ev_start    <= 1'b0;
       ev_we       <= 1'b0;
@@ -1525,6 +1589,10 @@ module soc_npu #(
       case (ev_state)
         E_IDLE: begin
           aer_in_stb <= 1'b0;
+          // Cleared here as well as on every exit from E_DECIDE, so an
+          // upset that sets it while the engine is idle cannot shorten
+          // the NEXT event's wait.
+          dec_guard  <= {DEC_GRD_W{1'b0}};
           if (drain_want) begin
             ev_state <= E_DRN_RQ;
           end else if (inject_want) begin
@@ -1559,11 +1627,13 @@ module soc_npu #(
         end
 
         E_DECIDE: begin
-          if (ev_word[15:14] == 2'b10 || ev_word[15:14] == 2'b11) begin
+          if (ev_is_ser) begin
+            dec_guard <= {DEC_GRD_W{1'b0}};
             ev_state <= E_SER_RQ;
           end else if (node_aer_in_rdy) begin
             aer_in_tick <= ev_word[14];
             aer_in_addr <= ev_word[3:0];
+            dec_guard   <= {DEC_GRD_W{1'b0}};
             ev_state    <= E_PIN_A;
           end else if (drain_want) begin
             // THE ESCAPE. The die has no room and it has an event to
@@ -1584,9 +1654,43 @@ module soc_npu #(
             // busy would put a 172-cycle frame in front of an event that
             // was about to go over the pins in five cycles.
             ev_resume <= 1'b1;
+            dec_guard <= {DEC_GRD_W{1'b0}};
             ev_state  <= E_DRN_RQ;
+          end else if (dec_guard >= DECMAX_W) begin
+            // THE BOUND. The three arms above did not fire for
+            // DECIDE_MAX consecutive cycles, so the die is refusing and
+            // there is nothing to drain: CTRL.OUT_EN is off, or the
+            // capture queue is full because software stopped reading
+            // it, or the die is simply not taking events. None of those
+            // ends on its own and the engine used to wait here for ever,
+            // which meant one misconfigured register stopped every
+            // later event as well as this one.
+            //
+            // The event IS LOST and that is the whole cost of the bound.
+            // It is lost LOUDLY: C_EVT_TO is sticky and write-1-to-clear
+            // like every other fault bit, so a discard cannot happen
+            // without a record, and IRQCAUSE tells the two apart -- a
+            // part that discarded an event reads C_EVT_TO, a part that
+            // is merely busy reads nothing. Silent loss is the thing
+            // this engine must never do; bounded, reported loss is
+            // better than an engine that stops.
+            //
+            // Back to E_IDLE and not to E_FETCH, so that DRAIN OUTRANKS
+            // INJECT gets its turn before the next event is popped: if
+            // the die does have something to give, the very next cycle
+            // takes it, and the interlock this bound exists beside is
+            // cleared without a second discard.
+            ev_word   <= 16'd0;
+            ev_resume <= 1'b0;
+            dec_guard <= {DEC_GRD_W{1'b0}};
+            ev_state  <= E_IDLE;
+          end else begin
+            // `>=` rather than `==` for E_FETCH's reason: an upset in
+            // the high bits of the counter must not send it round again.
+            dec_guard <= dec_guard + {{(DEC_GRD_W-1){1'b0}}, 1'b1};
           end
-          // else: hold here until the die's input queue has room.
+          // The hold above is now BOUNDED, and what follows is the
+          // record of what it used to be.
           // AER_IN_RDY is !full on the die; a strobe into a full queue
           // would be counted as a software-port drop, which is the one
           // thing this engine must never make the die report.
@@ -1762,6 +1866,22 @@ module soc_npu #(
   wire fetch_expire = (ev_state == E_FETCH) && !inj_rd_valid
                    && (ev_wait >= FETCHMAX_4);
 
+  // E_DECIDE's three exits and its bound, as wires, so that the state
+  // machine above and the cause bit below read the SAME condition.
+  //
+  // fetch_expire beside it restates E_FETCH's arm in a second place and
+  // the file accepts that; this one does not, because it has three arms
+  // rather than one and the failure mode of a drifted copy here is an
+  // event discarded with no cause bit raised -- `docs/16` section 5.1's
+  // defect, which is the thing that comment is about.
+  wire dec_hold   = (ev_state == E_DECIDE)
+                 && !ev_is_ser && !node_aer_in_rdy && !drain_want;
+  // Gated on blk_rst_n, which fetch_expire is not. CTRL.FLUSH exists to
+  // discard what is in flight, so a discard IT caused is not a fault of
+  // the part, and H3's whole subject is false fault reports. One cycle
+  // wide: dec_hold goes low on the same edge, because the state leaves.
+  wire dec_expire = dec_hold && blk_rst_n && (dec_guard >= DECMAX_W);
+
   // ---- the seven sticky events, in cause-bit order -------------------
   //
   // Each is one cycle wide and each sets its bit for good until software
@@ -1793,6 +1913,9 @@ module soc_npu #(
   // 10 carries the exposure it leaves: this bit is write-1-to-clear, so
   // software that acknowledges it keeps no record of it anywhere.
   assign sticky_ev[C_OH_TO    - C_STICKY0] = oh_expire;
+  // E_DECIDE's bound expired and the event in flight was discarded. One
+  // cycle wide: the state leaves for E_IDLE on the same edge.
+  assign sticky_ev[C_EVT_TO   - C_STICKY0] = dec_expire;
   // H5. The strobe flag and the state that implies it disagreed. It
   // is a DETECTION and not a correction -- the pin was held quiet,
   // which is right when the flag was the corrupted one and is a lost

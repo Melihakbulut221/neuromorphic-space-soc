@@ -324,8 +324,29 @@ rather than the design.
 - **THE GATE SIDE IS NOT IN GIT.** `runs/` is gitignored build output.
   A reader who clones cannot obtain the DEF or the netlist, so section 1
   and section 2 both **skip** rather than fail without them —
-  `test_replica_placement.py` says so in its skip reason. Publishing the
-  digests would be the cheap fix and has not been done.
+  `test_replica_placement.py` says so in its skip reason. ~~Publishing the
+  digests would be the cheap fix and has not been done.~~ *Corrected
+  2026-09-11: it has been done, and this bullet is the sentence that
+  asked for it. `docs/80-artefact-digests.md` quotes this clause as the
+  complaint it is answering and pins the artefacts by SHA-256 in the
+  tracked manifest `docs/80-artefact-digests.tsv`, which carries **37
+  rows tagged to this document**. Twelve are the pilot `signoff-6x2`
+  DEF, both netlists, the GDS, `metrics.json` and `resolved.json`,
+  under both the `pilot-signoff-gated` and `pilot-signoff-superseded`
+  labels, which is `docs/34`'s distinction and not this document's. Ten
+  are the same five files for `s71boot` and `s75w9`, the two
+  independent `soc_top` hardens section 1.6 reproduces the result on.
+  Fifteen are every file in `formal/eqy/out/`: three `.pass` results,
+  five logs, three gate netlists, two mutant netlists, and the **two
+  negative controls** `secded_dec_mutant.failed` and
+  `voter_mutant.failed`, which are the part a reader has most reason to
+  want proof of, since they are what shows the check can fail. The rest of the
+  bullet stands unchanged and is the more important half: a digest fixes
+  identity, not availability. A reader who clones still cannot obtain
+  the DEF, sections 1 and 2 still skip, and what the manifest adds is
+  only that the author cannot substitute a different DEF afterwards
+  without the substitution showing. `docs/80` section 4 argues that
+  limit against itself at length.*
 - **THE DEF IS ASSUMED TO BE THE PLACEMENT THAT REACHED GDS.** Both
   artefacts are written from the same final ODB, which is a construction
   argument rather than a check. Netgen LVS on this run reports *circuits

@@ -39,9 +39,14 @@ move. `docs/05` keeps its file and loses section 3 the same way.
 WHAT THIS SCRIPT DOES NOT DO
 
 It does not push. It does not create a GitHub repository. It writes a
-directory and a commit; publishing is an act that belongs to the owner,
-which is the same rule `.github/workflows/docs.yml` states for the
-documentation site.
+directory and a commit; publishing is an act that belongs to the owner.
+
+*Corrected 2026-09-12: this ended "which is the same rule
+`.github/workflows/docs.yml` states for the documentation site".
+That workflow was deleted in 74fdddf and folded into
+`.github/workflows/checks.yml`, which builds the site and gates on its
+manifest and deploys nothing. The rule is unchanged; the file that
+stated it is gone.*
 """
 
 import argparse

@@ -610,7 +610,7 @@ def test_the_engine_split_is_a_partition_of_the_stratum_it_replaced():
     # and because a flip-flop added to the sequencer and NOT added to
     # npu_targets.py is a flip-flop no campaign can reach, which is how
     # `ev_resume` spent a day.
-    added = {"oh_guard": 3, "ev_resume": 1}
+    added = {"oh_guard": 3, "ev_resume": 1, "dec_guard": 12}
     assert now == dict(was, **added), (
         "the engine's five sub-strata are not a partition of the 140-bit "
         "stratum docs/52 and docs/55 measured, plus H4's guard:\n"
@@ -618,7 +618,7 @@ def test_the_engine_split_is_a_partition_of_the_stratum_it_replaced():
             sorted(set(now) - set(was) - set(added)),
             sorted(set(was) - set(now))))
     assert sum(npu_targets.stratum_bits(n)
-               for n in npu_targets.ENGINE_STRATA) == 144
+               for n in npu_targets.ENGINE_STRATA) == 156
 
 
 def test_the_show_ahead_read_is_bounded_and_the_bound_is_derived():

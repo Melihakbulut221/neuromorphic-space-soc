@@ -2,10 +2,18 @@
 % SPDX-License-Identifier: CC-BY-4.0
 %
 % The numbers this paper's argument turns on are registered in
-% paper/claims.yaml and checked by paper/check_claims.py, which is
-% configured to run in CI and has not been able to since 2026-09-03 --
-% see the limitations section, which is where the observed answer is
-% stated rather than the configured one.
+% paper/claims.yaml and checked by paper/check_claims.py, which runs in
+% CI through .github/workflows/checks.yml -> scripts/ci_local.sh paper.
+%
+% Corrected 2026-09-12. This read "configured to run in CI and has not
+% been able to since 2026-09-03". Both halves were wrong. 53 of the 61
+% workflow runs in that window executed; what failed was one job, on a
+% missing PyYAML, and one day of billing refusals was read backwards
+% across a week. The claim checker has since run green on a runner, and
+% the paper itself built there -- commit cf2ece6 records "build the
+% paper: ok". The limitations section is still where the OBSERVED answer
+% is stated, and it still says what this file cannot check locally:
+% there is no TeX on the development machine, so the local build skips.
 %
 % The registry is NOT a census of every number printed here. It holds
 % the figures the argument turns on and nothing else, so it is always
@@ -223,14 +231,23 @@ most of what this design does.
 \paragraph{Every layout-derived number in this paper predates a
 register-transfer change made after it was written, and that is stated
 here rather than discovered.}
-On 11 September 2026, four defects were repaired in the system-on-chip's
-accelerator and watchdog sources: an unbounded state in the event
-engine's decision state from which it could not drain the die's queue, an
-asynchronous board strap sampled into three triplicated replicas with no
-synchroniser, a slave that advertised itself free while it still owed the
-fabric a response, and three counter comparisons written as equality
-where the file's own rule is inequality. All four are real, all four are
-repaired, and each carries a test that fails on the unrepaired source.
+On 11 September 2026, five defects were repaired across three
+system-on-chip sources---the accelerator, the watchdog and the console
+transmitter: a deadlock in the event engine's decision state from which
+it could not drain the die's queue, an asynchronous board strap sampled
+into three triplicated replicas with no synchroniser, a slave that
+advertised itself free while it still owed the fabric a response, three
+counter comparisons written as equality where the file's own rule is
+inequality, and a holding-register race that silently swallowed one
+transmitted byte in eight. All five are real, all five are repaired, and
+each carries a test that fails on the unrepaired source.
+
+\emph{Corrected 12 September 2026: this paragraph said four defects in
+two files. The fifth is the console transmitter's, and it was the one
+most easily missed because it is reachable only by a driver that writes
+without polling---which no program in the repository does, so no
+simulation had ever produced it. Omitting it from a marker about
+completeness is the failure the marker exists to prevent.}
 
 \textbf{None of the layouts this paper measures contains them.} Every
 \file{soc\_top} run cited here---the inventory of

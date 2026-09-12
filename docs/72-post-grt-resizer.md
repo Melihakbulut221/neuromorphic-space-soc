@@ -921,7 +921,15 @@ grep SIZE $PDK_ROOT/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x32_c2
    directory's `config.json` round-trips `TIME_DERATING_CONSTRAINT` as
    a float, or a note in `pnr_soc_top.sh`, so that the next reader who
    re-runs a step from its own directory does not get 1.7 ns for free.
-   `docs/31` section 3.2's note is the record; the guard is owed.
+   `docs/31` section 3.2's note is the record; ~~the guard is owed.~~
+   **DONE 2026-09-12: `sw/tests/test_derate_is_a_float.py`.** It takes
+   the first form -- every tracked `config*.json` must write the key as
+   a float, seventeen files, checkable on a clone with no run tree --
+   and adds the half this repository does not own as a measurement
+   rather than an assertion: **1,529 step `config.json` files demote it
+   to an int and 0 keep it a float**, printed on every run so the trap
+   is a number rather than a memory. The test is mutation-checked in
+   both directions.
 5. **The one-cycle bus read is the structure under all of this.**
    `soc_bus.v` presents the master's address combinationally and
    `soc_clint.v` decodes and registers the response in the same cycle,

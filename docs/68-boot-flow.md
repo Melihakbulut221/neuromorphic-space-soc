@@ -1345,10 +1345,17 @@ section 11 and `docs/67` section 11 set.
   word, on one boot. There is no rate and no fault model behind it.
 - **Nothing checks that the loader's console output is what an operator
   would want.** The lines are diagnostics chosen while debugging.
-- **Section 10.4's lesson has not been applied exhaustively.** Two checks
-  were found that assumed nothing had run before the program; the other
-  twenty-six were not re-examined against that assumption, and a third
-  one may exist.
+- ~~**Section 10.4's lesson has not been applied exhaustively.** Two
+  checks were found that assumed nothing had run before the program; the
+  other twenty-six were not re-examined against that assumption, and a
+  third one may exist.~~ **Superseded 2026-09-12 by section 16 item 5**,
+  which re-examines all thirty `check(n, ok)` call sites in
+  `test_ibex.c`, corrects the counting in the struck sentence, and finds
+  **two more** — checks 20 and 21, both on `WDOGSTAT`. The bullet stands
+  because it is what this document knew on the day. What replaces it is
+  narrower and is in that item: the re-examination was run in one
+  configuration, and a boot from the secondary device, a slower `SCK` or
+  a second RAM seed was not put under it.
 - **The whole-SoC area is synthesis at a 20 ns target with the SRAM
   boundary**, and section 9.2 measures its own noise floor rather than
   assuming there is none.
@@ -1543,7 +1550,168 @@ difference of netlist too.
    interrupt line and the map already gives it a vector; a loader that
    used it, or a FIFO in the controller, would take most of it back, and
    the measurement to compare against is in this document.
-5. **Re-examine the remaining twenty-six checks against section 10.4's
+5. ~~**Re-examine the remaining twenty-six checks against section 10.4's
    lesson.** Two of the twenty-eight assumed that nothing had run before
-   the program. Nothing has looked at the others.
+   the program. Nothing has looked at the others.~~ **Closed 2026-09-12,
+   and it is not a formality: two of the twenty-eight ARE affected, they
+   are checks 20 and 21, and the run that shows it was already on this
+   disk when the sentence above was written.** The struck sentence stands
+   by `docs/64`'s rule; everything below corrects it.
+
+   **WHERE THE LIST IS, AND WHY THE ARITHMETIC ABOVE IS WRONG TWICE.**
+   `docs/66` does not enumerate the checks, it counts them. The list is
+   the `check(n, ok)` call sites in `hw/soc/tb/sw/test_ibex.c`, and there
+   are **thirty distinct numbers, 1 to 30, with no gaps** **[fact,
+   `grep -o 'check([0-9]*,' | sort -nu`; check 10 appears at two call
+   sites, on mutually exclusive arms of its alignment guard]**.
+   Twenty-eight of them compile into the default image — every run in
+   this document ends `checks run: 0x0000001c` — and checks 29 and 30
+   exist only under `-DQSPI_DEMO`, which is `docs/66` section 7.1's
+   second image. So **neither of the two already found was one of the
+   twenty-eight.** Section 4.5's is the `SCRUB` telemetry counters, and
+   **no check in this program reads them at all**: `SCR_` does not appear
+   in `test_ibex.c`, which is why that one was found by reading a console
+   line rather than by a failing check. `docs/66`'s test 29 is in the
+   demonstration image. The set that had not been looked at was therefore
+   **twenty-nine — the twenty-eight, plus check 30** — and not
+   twenty-six.
+
+   **WHAT THE BOOT FLOW LEAVES BEHIND**, which is what the re-examination
+   is against. `boot.c` has twenty-six store sites and every store in
+   `boot_crt0.S` is to the RAM **[fact, grep]**:
+
+   | state | what the loader does to it | undone by |
+   |---|---|---|
+   | the RAM, all 8,192 words | `sw zero` over `[RAM_BASE, RAM_TOP)` in `boot_crt0.S`, then the 1,869-word image copied over the bottom of it | rewritten on every boot |
+   | `mtvec`, `sp`, `gp` | set to the loader's own | the application's `crt0.S`, before `main` |
+   | UART0 `SCALER` and `CTRL` | `UART_SCALER_VAL` and `TE` — the same two constants `uart_init()` writes, from the same `-D` on the same command line | system reset; and the application writes them again anyway |
+   | WDOG `CTRL` | a keyed `GPT_LD` about ten times per boot. `RLD` is written only on the give-up path, which by construction never reaches an application | system reset, which also restores `RLD` to the maximum (`docs/40`) |
+   | QSPICTL `CONF`, `CTRL`, `STAT`, `ADDR`, `CMD`, `TX` | the whole register-mode driver; left idle with `STAT` clear, `IEN` off and `CS` on the strap's device | system reset |
+   | the W25Q128JV's `SR2.QE` | set, with the volatile 50h/31h pair | **a power cycle and nothing else.** `hw/soc/tb/flash_w25q128jv.v` has three ports — `cs_n`, `sck`, `io` — and no reset input, so QE survives every reset this SoC can generate. Section 10.4 |
+   | `SCRUB` `CNT_RAMSEC`, `CNT_RAMRD`, `CNT_RAMDED` | cleared once, and only on the power-on boot (`BSTAT.CNT == 0`). Section 4.5 | — |
+   | BOOTREG `BRPT` and `EPOCH` | written on every boot | power-on reset |
+   | `WDOGSTAT` | **not written — no software can write it.** The give-up path makes the *hardware* write it, by declining to kick | power-on reset |
+
+   `pmpcfg`, `pmpaddr`, `mie`, `mstatus`, `mscratch`, `mtimecmp`, `msip`
+   and every address in the GPIO slot (`0xFF902000`) and the NPU slot
+   (`0x10000000`) appear in neither file **[fact, grep]**. That negative
+   half is why most of the verdict table is short.
+
+   **THE VERDICTS**, one row per check. "Power-on state" means state the
+   check did not set itself:
+
+   | check | what it assumes about state it did not set | verdict |
+   |---:|---|---|
+   | 1 | nothing; `alive` is a local `volatile` | UNAFFECTED — no memory-mapped state at all, and the RAM it uses was written by the sweep |
+   | 2 | nothing | UNAFFECTED — core registers only |
+   | 3 | nothing | UNAFFECTED — its operands are `static volatile` in `.data`, carried by the image itself |
+   | 4 | nothing | UNAFFECTED — it writes all eight bytes of `buf` before it reads any |
+   | 5 | nothing | UNAFFECTED — core only |
+   | 6 | nothing | UNAFFECTED — the stack, which `link_app.ld` puts in RAM the sweep wrote |
+   | 7 | its own instruction stream | UNAFFECTED — it asserts a property of the image's own bytes; the loader is what put those bytes in RAM and cannot alter them |
+   | 8 | `mscratch`, and that `mcycle` advances | UNAFFECTED — the loader writes no CSR but `mtvec`, `sp` and `gp`, and `mcycle` is compared as a difference, so the boot's 195,068 cycles are invisible |
+   | 9 | nothing | UNAFFECTED — `trap_count` is read as a baseline first, and `crt0.S` zeroes `.bss` |
+   | 10 | that no PMP region is locked | UNAFFECTED — `pmpcfg` and `pmpaddr` appear nowhere in `boot.c` or `boot_crt0.S`, so nothing is locked at hand-over; `__pmp_buf` is seeded by the check itself |
+   | 11 | `trap_saw_rvc == 0` | UNAFFECTED — `.bss`, zeroed by the application's own `crt0.S` after the loader's sweep |
+   | 12 | that the PLIC region is undecoded | UNAFFECTED — a property of the fabric's decode, which no software writes |
+   | 13 | the PnP table's IDENT and ENDIAN words | UNAFFECTED — `0x4E530001` and `0x00000001` are generated into both `soc_pnp.v`'s ROM and `soc_memmap.h`, and neither word encodes per-slot state, so BOOTREG going reserved → implemented cannot move them |
+   | 14 | that the boot ROM refuses a store | UNAFFECTED — the ROM is read-only to the fabric whoever is running. **Its stated reason is now stale**: the program no longer executes out of that region, so what a wild store would destroy is the loader for the next boot rather than the running code. Prose, not a defect |
+   | 15 | that `mtime` advances, and that an unimplemented CLINT offset faults | UNAFFECTED — the loader reads `CLINT_MTIMEL` five times and writes no CLINT register; `mtime` is compared as a difference, so starting near 195,068 rather than near zero is invisible |
+   | 16 | that `mie` and `mstatus.MIE` are clear on entry | UNAFFECTED — and this is the one worth stating out loud. `boot_crt0.S`'s table is thirty-one spins and one recorder, the loader enables nothing maskable, and it drives its one assigned line — the QSPI controller's — by polling. Both CSRs are still at their reset values when the application starts |
+   | 17 | that `mtimecmp` is the check's own | UNAFFECTED — the check sets it, and `MTIMECMP` appears nowhere in the loader |
+   | 18 | that `msip` is clear | UNAFFECTED — `CLINT_MSIP` appears nowhere in the loader |
+   | 19 | `GPT_CONFIG`, and the general timers' prescaler | UNAFFECTED — the loader's only write into the timer slot is the watchdog's keyed `CTRL`, and the watchdog has its own fixed `PRESCALE` that no register reaches (`soc_wdog.v`); `GPT_SCRELOAD`, which the check writes itself, is untouched |
+   | **20** | **`WDOGSTAT.WDOGRST` clear and `WDOGSTAT.RSTCNT` zero — "this run was not started by the watchdog"** | **AFFECTED** |
+   | **21** | **`WDOGSTAT.WDOGRST` clear after the NMI — "stage 2 has not fired"** | **AFFECTED** |
+   | 22 | nothing about `mtvec`'s prior value | UNAFFECTED — it compares against `trap_vectors`, a symbol of the *running image*, and restores that; the loader's `mtvec` is a ROM address the application's `crt0.S` overwrote before `main` |
+   | 23 | NPUCFG's identity, version and geometry at reset | UNAFFECTED — the NPU slot is not in the loader's store set |
+   | 24 | the node window's `NPU_RST_*` values | UNAFFECTED — same; nothing has reached the die, so its reset values are still its reset values |
+   | 25 | that the reserved parts of the window fault | UNAFFECTED — same |
+   | 26 | a node in its reset state, and no prior ECC event | UNAFFECTED — same, and `docs/66` already made `NPUCFG_CNT` a delta rather than an absolute |
+   | 27 | that `IRQCAUSE.EVT` is clear on entry | UNAFFECTED — that precondition is check 26 having drained the capture queue, not a power-on value, and the loader never reaches the NPU |
+   | 28 | `GPIO.DIR` and `GPIO.DATA` read zero "out of reset" | UNAFFECTED — **and this is the closest thing in the twenty-eight to test 29's shape.** It survives for a specific reason and not a general one: the GPIO slot is in neither the loader's store set nor anything else's, and nothing in the SoC drives those pads before the check does |
+   | 29 | `SR2` reads zero | AFFECTED — section 10.4, found and closed before this item |
+   | 30 | that quad I/O is available | UNAFFECTED, and now over-determined: its EBh frames need QE set, which check 29 used to provide and which the loader now provides first |
+
+   **TWO ARE AFFECTED, AND THE MEASUREMENT WAS ALREADY ON DISK.**
+   `hw/soc/out/s68-giveup/sim.log` is section 6.4's ladder demonstration
+   carrying **the twenty-eight-check image** instead of the demonstration
+   image. It reaches the application on the third boot, after two
+   watchdog resets:
+
+   ```
+     wdog ctrl=0x0000000b stat=0x00000206 rld=0x0000ffff
+     FAIL test 0x00000014
+     nmi cause=0x8000001f vec=0x0000001f stat=0x00000206 spun=0x00000164
+     FAIL test 0x00000015
+   checks run: 0x0000001c  fail mask: 0x00300000
+   RESULT FAIL
+   ```
+
+   **[fact]**. `0x00300000` is bits 20 and 21. `WDOGSTAT` reads `0x206` —
+   `WDOGRST` set, `ESCALATED` set, `RSTCNT` = 2 — and **every other term
+   of both checks passed**: the unkeyed write was ignored, the keyed
+   disable was ignored, `DISABLED` was clear, the NMI arrived at vector
+   `0x1F` with cause `0x8000001F` in 356 spins and was acknowledged, and
+   `RLD` read `0xFFFF`, which incidentally measures `docs/40`'s rule that
+   a stage-2 reset restores the reload after the loader shortened it to
+   2,000 on the two boots before. **Both checks failed on the single
+   proposition that no watchdog reset had happened in this power cycle.**
+
+   So this item is not an argument with a run behind it; it is a run.
+   **The twenty-eight-check program has been entered after the loader ran
+   three times and the watchdog reset the part twice, and exactly two of
+   the twenty-eight failed.**
+
+   **THE MECHANISM IS NOT TEST 29's, AND THAT IS WHY IT WAS MISSED.**
+   Test 29 asserted the power-on value of a register **the loader
+   writes**. Checks 20 and 21 assert the power-on value of a register
+   **no software can write at all** — and they are affected anyway,
+   because the loader's escalation makes the *hardware* write it before
+   the program starts. Before this document, `RSTCNT != 0` at the
+   application's first instruction meant exactly one thing: the
+   application had hung and stage 2 had reset it, which is a defect and
+   which these two checks are right to report. Since this document it can
+   also mean the loader gave up on an earlier boot and a later attempt
+   succeeded — **the recovery working, reported as a watchdog defect.**
+   That is section 10.4's lesson in its general form: the test is not
+   "what does the loader write", it is "what has already happened".
+
+   And the run was not lost, only unaccounted for. `s68-giveup` is
+   `s68-giveup2` without `-DQSPI_DEMO`; section 15's recipe for the
+   demonstration carries the define and section 6.4 quotes only the run
+   that has it, while `hw/soc/out/s68-matrix.txt` records
+   `s68-giveup done rc=1`. **Why the define was added is nowhere in this
+   document; what it steps around is on disk**, and this item is where
+   that is accounted for.
+
+   **WHAT NEEDS DOING.** It is the same shape of fix as section 10.4's
+   and as `docs/66`'s event-counter refactor — compare against what was
+   true on entry, not against the power-on value — and neither part of it
+   is a hardware change or touches `soc_wdog.v`:
+
+   - **Check 20** must stop requiring `RSTCNT == 0`. BOOTREG is
+     implemented now and `boot.c` already compares
+     `WDOG_ST_RSTCNT(wstat)` with `BSTAT.CNT`; the application can make
+     the same comparison and require the two to **agree**, whatever they
+     are, which is the property section 7.2 says must be visible. What
+     must be zero is any *increment* across the program's own run.
+   - **Check 21** must read `WDOGSTAT` before it shortens the timeout and
+     require `RSTCNT` unchanged afterwards, instead of requiring
+     `WDOGRST` clear. "Stage 2 has not fired" is a statement about this
+     test, and it should be written as one.
+   - Until one of those is made, **the ladder demonstration must keep
+     `-DQSPI_DEMO`**, and section 6.4 should say so rather than leaving
+     the define unexplained.
+
+   **WHAT THIS DOES NOT SETTLE.** Twenty-six of the twenty-eight are now
+   confirmed twice — by the table above and by a run that put them on the
+   third boot — but that run is one configuration: strap 0, chip select
+   0, `DIV` 0, one RAM power-up seed, the primary image. Every other run
+   in this document enters the application on the power-on boot
+   (`cnt 0x00000000` in `s68-ship`, `s68-boot2`, `s68-magic0`,
+   `s68-geom0`, `s68-csum1`, `s68-ded2` and `s68-ded3`) **[fact]**, so
+   nothing here re-examines the checks against a boot from the secondary
+   device, a slower `SCK`, or a second seed. Section 12's bullets on
+   those three stand unchanged.
 6. **A v0.2 of `docs/60`**, now owed by `docs/58`, `docs/67` and this.

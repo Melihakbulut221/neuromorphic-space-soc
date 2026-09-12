@@ -92,11 +92,55 @@ eligibility page states in the same words. Note one framing point the
 Restack FAQ makes explicit: a "European dimension" is a **knock-out
 criterion**, not a tiebreak. **[fact]**
 
-Caveat, and it is why action item 6 and `docs/13` [D-13] stay open: the
+~~Caveat, and it is why action item 6 and `docs/13` [D-13] stay open: the
 Restack landing page still describes the fund as "currently being set
 up" and its guide for applicants as **preliminary**, so these pages may
 change at the 2026-09-03 call opening. Re-read them on or just after
-that date.
+that date.~~
+
+> **RE-READ 2026-09-12, nine days late** — the date above was 2026-09-03
+> and nothing in this repository noticed it pass. What the three pages
+> say now **[fact, read 2026-09-12 from `nlnet.nl/restack/`,
+> `/restack/eligibility` and `/restack/guideforapplicants`]**:
+>
+> - **The fund is open and the preliminary labels are gone.** The
+>   landing page no longer says "currently being set up"; it says the
+>   first call opened **2026-09-03** with a deadline of **2026-11-03,
+>   12:00 CET (noon)**. Neither the eligibility page nor the guide for
+>   applicants is labelled preliminary any more.
+> - **The application link is live.** "Submit a proposal" now points at
+>   `/propose`; it read "Coming soon" on 2026-08-31.
+> - **The ceiling is higher than this document recorded.** The landing
+>   page says proposals run **EUR 5,000 to EUR 50,000**, and the guide
+>   adds that a FIRST proposal may request up to **50 kEUR**, a single
+>   proposal may reach **150 kEUR**, and one third party may receive
+>   **500 kEUR** over its lifetime.
+> - **Eligibility is broader than assumed.** *"There are no categorical
+>   exclusions of persons who may not receive support from Restack."*
+>   EU and Horizon-Europe-associated applicants get priority only when
+>   proposals are otherwise equal; a non-EU applicant is eligible on
+>   exceptional quality, unique technical expertise and a clear European
+>   dimension. **Open hardware development is explicitly in scope**, as
+>   are security audits, formal proofs, documentation and standards
+>   work — which is most of what this repository consists of.
+> - **One requirement lands directly on this project and is already
+>   met:** *"any software and hardware MUST be published under a
+>   recognised open source license in its entirety."* `docs/14` signed
+>   that on 2026-09-09 — CERN-OHL-W-2.0 for the hardware, Apache-2.0
+>   for the tooling, CC-BY-4.0 for the documents — and both public
+>   repositories carry the texts. **"In its entirety" is worth reading
+>   twice against `docs/78`**, which publishes a CURATED mirror and
+>   holds three documents back; none of the three is software or
+>   hardware, so the clause is met as written, but a reader of that
+>   sentence who expected the whole development repository would not
+>   find it.
+> - **Neither page states an hourly or daily rate**, so `docs/13`'s open
+>   decision about the rate is not answered by re-reading — it is a
+>   choice, not a lookup. No page-limit or proposal-length rule either.
+>
+> The exact deadline time is new and narrower than this document's
+> "submit at least a week before 2026-11-03": **noon CET on the 3rd**,
+> not the end of that day.
 
 The rules, read off the Restack pages on 2026-08-31:
 
@@ -954,7 +998,7 @@ window makes that more certain, not less, since 2027-03 is now the
    the wrong reciprocity strength for this block. The decision itself
    is still open — docs/14 section 10 is a recommendation awaiting
    sign-off, and that sign-off is what this action item is for.
-6. **Write the Restack application when the call opens 2026-09-03**
+6. ~~**Write the Restack application when the call opens 2026-09-03**
    (skeleton in A.8, live drafts in `docs/13`); attach the architecture
    outline and budget; submit at least a week before 2026-11-03 —
    developer, with engineering supplying the comparison matrix and
@@ -962,7 +1006,11 @@ window makes that more certain, not less, since 2027-03 is now the
    Restack eligibility page, guide for applicants and FAQ** — they are
    published but self-labelled preliminary (A.3), and the application
    link still reads "Coming soon" as of 2026-08-31. This is the same
-   re-verification `docs/13` tracks as [D-13] and it remains open.
+   re-verification `docs/13` tracks as [D-13] and it remains open.~~
+   **THE RE-READ IS DONE, 2026-09-12, nine days late.** Section A.3
+   carries what the three pages say now. The writing and the submission
+   are still open and the deadline is **2026-11-03 12:00 CET**, which is
+   earlier in the day than this item assumed.
 7. **Scope the radiation pre-screening**: identify a Co-60 TID facility
    and obtain quotes to firm up WP5; locate and cite the primary
    IHP rad-hard 130 nm library paper (B.5 gap) — developer.

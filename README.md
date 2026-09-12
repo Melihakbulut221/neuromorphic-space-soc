@@ -343,9 +343,13 @@ scripts/ci_local.sh all --record
 
 That script is the definition; `.github/workflows/checks.yml` is a
 wrapper that calls it, so the two cannot drift, and the checks do not
-depend on a runner. Two checks skip locally, with the reason printed,
-because this machine has no pandoc and no TeX; a skip is not a pass and
-the summary says how many there were.
+depend on a runner. **Three** checks skip locally, with the reason
+printed, because this machine has no pandoc and no TeX; a skip is not a
+pass and the summary says how many there were. *(Corrected 2026-09-11:
+this said two. The paper job skips both the build and the bibliography
+check that needs the build, and `ci-local-log.tsv` recorded skipped=3
+while this sentence said two -- the log and the prose disagreed and the
+prose was the one a reader sees.)*
 
 *Corrected 2026-09-10: this said the checks "had never executed" in CI
 because every run since 2026-09-03 was refused before starting. 53 of

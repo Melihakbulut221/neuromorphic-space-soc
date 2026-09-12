@@ -8,8 +8,16 @@
 WHAT THIS IS NOT. It is not a compile, and nothing it says is evidence
 that the document builds. There is no TeX installation on the machine
 this paper is written on -- pdflatex, xelatex, lualatex, latexmk and
-tectonic are all absent, apt needs a password, and the continuous
-integration that would have built it has not started since 2026-09-03.
+tectonic are all absent and apt needs a password.
+
+*Corrected 2026-09-11: this sentence used to end "and the continuous
+integration that would have built it has not started since 2026-09-03".
+That was wrong twice over. 53 of the 61 workflow runs in that window
+executed; what failed was one job, on a missing PyYAML. And the paper
+HAS since been built on a runner -- `cf2ece6` records `build the paper:
+ok` -- so what this file substitutes for is a LOCAL compile, not any
+compile at all. The distinction matters because it is the difference
+between "nothing has checked this" and "this machine cannot check it".*
 
 So this checks the class of defect that a compile would catch and that a
 reader cannot see: a reference with no label, a citation with no entry,

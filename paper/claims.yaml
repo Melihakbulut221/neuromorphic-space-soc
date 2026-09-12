@@ -198,11 +198,13 @@ claims:
     artefact: "docs/77 section 9.2, run s77gate"
     read: "-4.6799 ns WNS on 3,088 violating endpoints"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   # WAS a glob for `**/*.gds.fabricated`, an extension no tool in this
   # flow emits, so the check could never have failed. A claim about the
@@ -227,12 +229,22 @@ claims:
     file: hw/soc/pnr/runs/s77gate/resolved.json
     key: SETUP_VIOLATION_CORNERS
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
-    predates-rtl-fix: true
+    # A CONFIGURATION LOOKUP, NOT A MEASUREMENT, so the
+    # 2026-09-11 RTL repair does not touch it. This key reads
+    # the same value out of the same resolved.json today as it
+    # did before, and would read it out of a re-hardened run
+    # too, because it is a fact about what the flow was ASKED
+    # to do and not about what the design turned out to be.
+    #
+    # It carried predates-rtl-fix: true from 2026-09-11 to
+    # 2026-09-12. Marking it was over-caution applied by file
+    # rather than by kind -- twenty rows were marked because
+    # they were in sections the repair touched, and five of
+    # the twenty were these. A marker on a claim that has not
+    # gone stale is not harmless: it teaches a reader to
+    # discount a number that is still exactly true, and it
+    # makes the fifteen that HAVE gone stale look like more of
+    # the same caution.
   - id: scope.repair_typ_only
     value: "['*typ*']"
     text: "TIMING_VIOLATION_CORNERS -- the repair is bound to the typical corner alone, while the checker above is bound to all three"
@@ -240,12 +252,22 @@ claims:
     file: hw/soc/pnr/runs/s77gate/resolved.json
     key: TIMING_VIOLATION_CORNERS
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
-    predates-rtl-fix: true
+    # A CONFIGURATION LOOKUP, NOT A MEASUREMENT, so the
+    # 2026-09-11 RTL repair does not touch it. This key reads
+    # the same value out of the same resolved.json today as it
+    # did before, and would read it out of a re-hardened run
+    # too, because it is a fact about what the flow was ASKED
+    # to do and not about what the design turned out to be.
+    #
+    # It carried predates-rtl-fix: true from 2026-09-11 to
+    # 2026-09-12. Marking it was over-caution applied by file
+    # rather than by kind -- twenty rows were marked because
+    # they were in sections the repair touched, and five of
+    # the twenty were these. A marker on a claim that has not
+    # gone stale is not harmless: it teaches a reader to
+    # discount a number that is still exactly true, and it
+    # makes the fifteen that HAVE gone stale look like more of
+    # the same caution.
   - id: scope.placement_not_timing_driven
     value: "False"
     text: "PL_TIMING_DRIVEN -- global placement did not consider timing at all"
@@ -253,12 +275,22 @@ claims:
     file: hw/soc/pnr/runs/s77gate/resolved.json
     key: PL_TIMING_DRIVEN
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
-    predates-rtl-fix: true
+    # A CONFIGURATION LOOKUP, NOT A MEASUREMENT, so the
+    # 2026-09-11 RTL repair does not touch it. This key reads
+    # the same value out of the same resolved.json today as it
+    # did before, and would read it out of a re-hardened run
+    # too, because it is a fact about what the flow was ASKED
+    # to do and not about what the design turned out to be.
+    #
+    # It carried predates-rtl-fix: true from 2026-09-11 to
+    # 2026-09-12. Marking it was over-caution applied by file
+    # rather than by kind -- twenty rows were marked because
+    # they were in sections the repair touched, and five of
+    # the twenty were these. A marker on a claim that has not
+    # gone stale is not harmless: it teaches a reader to
+    # discount a number that is still exactly true, and it
+    # makes the fifteen that HAVE gone stale look like more of
+    # the same caution.
   - id: decks.magic_off
     value: "False"
     text: "RUN_MAGIC_DRC on the system-on-chip: the deck was switched off, not run and failed"
@@ -266,12 +298,22 @@ claims:
     file: hw/soc/pnr/runs/s77gate/resolved.json
     key: RUN_MAGIC_DRC
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
-    predates-rtl-fix: true
+    # A CONFIGURATION LOOKUP, NOT A MEASUREMENT, so the
+    # 2026-09-11 RTL repair does not touch it. This key reads
+    # the same value out of the same resolved.json today as it
+    # did before, and would read it out of a re-hardened run
+    # too, because it is a fact about what the flow was ASKED
+    # to do and not about what the design turned out to be.
+    #
+    # It carried predates-rtl-fix: true from 2026-09-11 to
+    # 2026-09-12. Marking it was over-caution applied by file
+    # rather than by kind -- twenty rows were marked because
+    # they were in sections the repair touched, and five of
+    # the twenty were these. A marker on a claim that has not
+    # gone stale is not harmless: it teaches a reader to
+    # discount a number that is still exactly true, and it
+    # makes the fifteen that HAVE gone stale look like more of
+    # the same caution.
   - id: decks.lvs_off
     value: "False"
     text: "RUN_LVS on the system-on-chip"
@@ -279,12 +321,22 @@ claims:
     file: hw/soc/pnr/runs/s77gate/resolved.json
     key: RUN_LVS
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
-    predates-rtl-fix: true
+    # A CONFIGURATION LOOKUP, NOT A MEASUREMENT, so the
+    # 2026-09-11 RTL repair does not touch it. This key reads
+    # the same value out of the same resolved.json today as it
+    # did before, and would read it out of a re-hardened run
+    # too, because it is a fact about what the flow was ASKED
+    # to do and not about what the design turned out to be.
+    #
+    # It carried predates-rtl-fix: true from 2026-09-11 to
+    # 2026-09-12. Marking it was over-caution applied by file
+    # rather than by kind -- twenty rows were marked because
+    # they were in sections the repair touched, and five of
+    # the twenty were these. A marker on a claim that has not
+    # gone stale is not harmless: it teaches a reader to
+    # discount a number that is still exactly true, and it
+    # makes the fifteen that HAVE gone stale look like more of
+    # the same caution.
   - id: soc.meets_at_typ
     value: "4.3153"
     text: "setup worst slack at the typical corner, nanoseconds -- the design meets there and fails only at slow"
@@ -292,11 +344,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/summary.rpt"
     read: "the Overall row gives -4.6799 with 3,088 violating endpoints; nom_typ gives +4.3153 with 0 and nom_fast +9.5579 with 0"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: soc.worst_path_slew
     value: "1.611246"
@@ -305,11 +359,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate/50-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt"
     read: "cell _42330_ (sg13g2_nand3_1), slew 1.611246, delay 1.396062, driving 0.118899 pF"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   # The paper says a wording sweep was made. An earlier draft said it had
   # been made when it had not, which is this paper's own subject committed
@@ -318,12 +374,32 @@ claims:
   # historical run records keep their wording by docs/64's rule, and the
   # frozen shuttle text is a decision recorded in docs/21 section 6.6
   # rather than an edit.
+  # NARROWED 2026-09-12, and the claim text is what changed rather than
+  # the check. This read "live documents still calling the configuration
+  # state protected by TMR without the netlist qualifier" -- a statement
+  # about a PROPERTY of the corpus -- while the check is three literal
+  # phrases grepped over five path globs. Those are not the same thing
+  # and the gap is the whole subject of docs/81: a green result read
+  # wider than what it looked at.
+  #
+  # The check is kept as it is, deliberately. Strengthening it means
+  # deciding mechanically what "calling the state protected" looks like
+  # in English, which is a judgement no grep makes and a wrong one would
+  # either fire constantly or never. What is fixed is the claim: it now
+  # says what the three phrases are and that the property itself is not
+  # checked, so a reader cannot take the zero for more than it is.
   - id: tmr.no_unqualified_die_claim
     value: 0
-    text: "live documents still calling the configuration state protected by TMR without the netlist qualifier"
+    text: "occurrences of the three phrases that carried the unqualified TMR claim -- NOT a check that no document makes it some other way"
     check: grep
     pattern: "state is now protected || is now protected**, which || The backstop is protected"
     paths: "README.md, ROADMAP.md, docs/5*.md, docs/6*.md, docs/7*.md"
+    # WHAT THIS DOES NOT COVER, stated because the number is a zero and a
+    # zero invites the wider reading: a document that makes the same
+    # claim in different words, one outside these five globs, and the
+    # sixteen documents below docs/50. The three phrases are the ones
+    # the 2026-09-08 sweep actually found and removed; this guards the
+    # regression, not the class.
 
   # Section 8's measurements. The two deck splits are the strongest
   # numbers in this paper that a reader can check without re-running a
@@ -338,11 +414,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate-drc-full/classification.txt"
     read: "39,969,214 boxes, 39,969,214 inside, 0 straddling, 0 outside, 0 outside the die; the classifier reproduces the earlier single-macro report's 1,106,478 before being pointed here"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: decks.klayout_outside
     value: 0
@@ -351,11 +429,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate-klayoutdrc/reports/drc.klayout.lyrdb"
     read: "9,668 items in 3 of 173 rules; all 60 base cell names are RM_IHPSG13_1P_* or RSC_IHPSG13_*; not one names soc_top or any sg13g2_* standard cell"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: decks.lvs_matches
     value: 1
@@ -365,11 +445,13 @@ claims:
     paths: "hw/soc/pnr/runs/s77lvs-b-blackbox/*/*.log"
     needs_run_tree: true
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   # THE FIVE ROWS BELOW WERE ADDED WITH A CORRECTION, not with a result.
   # Section 8 printed each of these numbers wrong or unqualified, and a
@@ -386,11 +468,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate-klayoutdrc/analysis/soc_detail.txt"
     read: "Sdiod.d 3,918 and Sdiod.e 3,918 as (cell, geometry) pairs, intersection 3,918, d-only 0, e-only 0; plus Cnt.c.digibnd 1,832; 9,668 total and 0 items outside the RM_IHPSG13 hierarchy"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: decks.abstract_boxes_the_wide_metal_argument_covers
     value: 122
@@ -399,11 +483,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate-drc-abstract/classification.txt"
     read: "the by-rule table gives M3.f 99, M4.f 16 and M2.f 7, all three worded 'Metal_ > 10.0um', and M4.e 1, worded 'Metal4 > 0.39um'; 99+16+7 = 122 of 123"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: decks.abstract_box_with_no_mechanism
     value: 1
@@ -412,11 +498,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate-drc-abstract/reports/drc.magic.rpt"
     read: "the single M4.e box is 904.700 1386.255 904.720 1391.735 um, 0.02 by 5.48 um; classification.txt puts it fully outside every macro's drawn extent, and the full run's report has no box at that coordinate"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: decks.macro_pin_connections
     value: 1806
@@ -425,11 +513,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77lvs-b-blackbox/01-netgen-lvs/netgen-lvs.log"
     read: "RM_IHPSG13_1P_2048x64_c2_bm_bist reports 355 disconnected pins and RM_IHPSG13_1P_1024x32_c2_bm_bist reports 193; the floorplan places four of the first and two of the second"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: decks.positive_control_is_klayout_only
     value: 1
@@ -438,11 +528,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s77gate-klayoutdrc/control/"
     read: "mk.py draws a 0.10 um Metal1 wire against a 0.16 um minimum width and two wires 0.10 um apart against a 0.18 um minimum space; ctrl.lyrdb returns exactly M1.a 1 and M1.b 1 and nothing else. No equivalent directory exists under s77gate-drc-full, s77gate-drc-abstract or any s77lvs-* run"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: timing.closes_at
     value: "25.00"
@@ -451,11 +543,13 @@ claims:
     artefact: "hw/soc/pnr/runs/s81-sta-compare/"
     read: "an OpenSTA sweep on the final netlist and SPEF reproduces sign-off at 20.00 ns (-4.6799, 3088) and gives +0.3201 with TNS 0 and 0 endpoints at 25.00 ns; the run's own clock.rpt says period_min = 24.68"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: timing.repair_did_not_close
     value: "-3.030638936699411"
@@ -464,11 +558,13 @@ claims:
     file: hw/soc/pnr/runs/s81timing/final/metrics.json
     key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: timing.drv_alone_made_it_worse
     value: "-5.214497425892334"
@@ -477,11 +573,13 @@ claims:
     file: hw/soc/pnr/runs/s81drv/final/metrics.json
     key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   - id: timing.ptd_alone
     value: "-3.355394279620113"
@@ -490,11 +588,13 @@ claims:
     file: hw/soc/pnr/runs/s81ptd/final/metrics.json
     key: "timing__setup__ws__corner:nom_slow_1p08V_125C"
 
-    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v and
-    # soc_wdog.v: this figure is measured on a soc_top layout
-    # hardened before it, and the repair adds five flip-flops.
-    # True of that run, and no longer a description of the
-    # design in the tree. paper/main.tex section 2 states it.
+    # PREDATES THE 2026-09-11 RTL REPAIR of soc_npu.v,
+    # soc_uart.v and soc_wdog.v -- five defects across three
+    # files, not four across two, corrected here 2026-09-12.
+    # This figure is measured on a soc_top layout hardened
+    # before the repair, which adds five flip-flops. True of
+    # that run, and no longer a description of the design in
+    # the tree. paper/main.tex section 2 states it.
     predates-rtl-fix: true
   # A claim about this repository's own continuous integration, which is
   # the thing the paper was asserting without looking. Whether a workflow

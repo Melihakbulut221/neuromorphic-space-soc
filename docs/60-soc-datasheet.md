@@ -1107,10 +1107,31 @@ and does nothing.
 | 11 | `CFG_TMR` | sticky, W1C | the connection's own configuration voter disagreed |
 | 12 | `OH_TO` | sticky, W1C | the show-ahead adapter's bounded wait expired |
 | 13 | `AER_MM` | sticky, W1C | the AER strobe and its qualifier disagreed |
+| 14 | `EVT_TO` | sticky, W1C | the event engine's `E_DECIDE` wait expired and the event in flight was discarded |
 
 Bits 7 through 13 were added by the hardening waves of `docs/55` and
 `docs/56` and each is traceable to a measured failure in section 9.4
-and 9.5. **Every bit except `EVT` is a fault bit**, and the software
+and 9.5. **Bit 14 was added 2026-09-11** and is a different kind of
+thing from all of them: it does not report a fault the part detected,
+it reports a DECISION the part made. `E_DECIDE` used to wait
+indefinitely for a die that would not take an event when there was also
+nothing to drain -- `CTRL.OUT_EN` off, a capture queue software had
+stopped reading, or a die not taking events at all -- and because the
+engine is one state machine, that stopped every LATER event too. It now
+waits `DECIDE_MAX` cycles (4,095 by default, enforced at elaboration to
+be at least eight times the block's longest legitimate transient) and
+then discards the event and raises this bit.
+
+**The event is lost, and that is the whole price.** It is the only loss
+this engine is permitted, because it is the only one that reports
+itself: a part that discarded reads `EVT_TO`, a part that is merely busy
+reads nothing, and the two were previously indistinguishable from
+outside because the second one never ended. The bit is sticky and
+write-1-to-clear like every other fault bit, so a discard cannot happen
+without a record. Cost, measured on `flow/syn_soc_top.sh` against the
+same recipe with the change reverted: the protected word goes from 25 to
+27 bits, so **+6 flip-flops in the three replica banks and +12 in the
+unprotected guard counter, +18 in total** and +1,368.85 um2. **Every bit except `EVT` is a fault bit**, and the software
 header defines that set once rather than letting a program spell it out
 and then go on reporting a clean part after a bit is added.
 
@@ -1129,6 +1150,37 @@ other offset in the window faults.
 ---
 
 ## 9. Fault tolerance
+
+> **EVERY LAYOUT-DERIVED AND CAMPAIGN-DERIVED NUMBER IN THIS SECTION
+> PREDATES THE 2026-09-11 RTL REPAIR. Added 2026-09-12, and the reason
+> it is added late is itself the finding.**
+>
+> On 2026-09-11 five defects were repaired across three sources --
+> `soc_npu.v`, `soc_wdog.v` and `soc_uart.v` -- and on 2026-09-12 the
+> power-on reset was release-synchronised in `soc_top.v` and the event
+> engine's `E_DECIDE` wait was bounded. Between them the design gains
+> **25 flip-flops** at `soc_top`: five from the repair, two from the
+> reset synchroniser, eighteen from the bound and its cause bit
+> **[fact, `flow/syn_soc_top.sh` run against the same recipe with each
+> change reverted]**.
+>
+> **No layout in this repository contains any of them.** `s71boot`,
+> `s75w9`, `s77gate` and every other `soc_top` run this section rests on
+> were hardened before, so section 9.10's 5,873 flip-flops, every
+> per-block census, and every campaign figure below describes a netlist
+> the tree no longer produces. *Those numbers remain true of the runs
+> they name*, which is what `docs/80`'s digest manifest pins and what
+> `docs/64`'s rule keeps. What is no longer true is the implicit reading
+> that they describe the design as it now stands.
+>
+> **`paper/main.tex` section 2 carried this marker from 2026-09-11 and
+> this document did not**, for a day, while publishing the same
+> superseded netlist under the same numbers. The paper is read by
+> strangers and the datasheet is read by whoever would build against
+> this part, so if either had to have it first it was this one. It went
+> to the paper because the paper was what someone was editing that day
+> -- which is not a reason, it is an account of how the gap happened.
+
 
 **This is the section of this datasheet with the most measurement
 behind it, and it is the only section where this design has something
@@ -1928,11 +1980,39 @@ first run]**. Every figure in section 11.1 carries the 5 % derate.
 
 ### 11.3 Power
 
-> **[in flux] — read section 13 before quoting anything in this
+> ~~**[in flux] — read section 13 before quoting anything in this
 > subsection.** An activity-annotated power measurement against this
 > netlist is being produced as this datasheet is written, and it will
 > supersede the figures below. That work is not on disk yet and is
-> therefore not cited by number here.
+> therefore not cited by number here.~~
+>
+> **IT IS ON DISK, AND IT LANDED THREE DOCUMENTS AGO. Corrected
+> 2026-09-12.** `docs/57-power-under-a-duty-cycle.md` measured this
+> netlist against the whole-SoC run's own toggle rates, and `docs/76`
+> and `docs/77` then measured layouts that contain the accelerator. The
+> table below is `report_power` **with no switching activity annotated
+> at all** and must not be quoted as the part's power.
+>
+> How wrong it is, measured rather than estimated: the unannotated
+> figure is right to **2.8 %** on the busy case and wrong by a factor of
+> **6.29** on the idle one, because the design has a clock gate six
+> documents had said it did not. What to quote instead, at the typical
+> corner and 20 ns:
+>
+> | | layout without the accelerator (`full3`, `docs/57`) | layouts with it (`docs/76` s.8, `docs/77` s.9.5) |
+> |---|---:|---:|
+> | busy | 33.890 mW | 22.142 mW computing (`docs/77`) |
+> | idle, core gated in WFI | **5.539 mW** | **8.287 / 8.315 mW** |
+> | orbit-average at 0.0044 % duty | 5.540 mW | 8.289 mW |
+>
+> `docs/77` publishes no busy figure as a property of the design,
+> because it measures the busy totals as a placement's rather than the
+> part's. The table below is left standing per `docs/64` -- it is what
+> `report_power` said on its date -- and it is now labelled rather than
+> merely warned about. **A "[in flux]" marker is a promise with a
+> deadline, and this one outlived the work it was waiting for by two
+> days without anything noticing; nothing in the suite reads a
+> subsection's own status flag.**
 
 | Corner | internal | switching | leakage | **total** |
 |---|---:|---:|---:|---:|

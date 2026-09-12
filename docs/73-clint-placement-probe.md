@@ -1203,7 +1203,10 @@ table is a measurement of the flow.
 4. **`docs/50`'s read register and `docs/69`'s strap window**,
    `docs/72` section 15 items 2 and 3, unchanged and still unblocked.
 5. **Guard the step-rerun form**, `docs/72` section 15 item 4: two more
-   re-runs here needed the same by-hand `5 → 5.0` correction. The
-   guard is still owed.
+   re-runs here needed the same by-hand `5 → 5.0` correction. ~~The
+   guard is still owed.~~ **DONE 2026-09-12**,
+   `sw/tests/test_derate_is_a_float.py`. This document's two re-runs are
+   the second and third evidence for it; `docs/72` section 15 item 4
+   carries what the guard does and what it deliberately does not.
 6. **The remaining items of `docs/68` section 16 and `docs/71` section
    15 are unchanged.**

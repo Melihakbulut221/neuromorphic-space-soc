@@ -12,12 +12,26 @@
 #
 # WHY THIS EXISTS, AND IT IS NOT CONVENIENCE
 #
-# Three documents said these checks "run in CI". They do not. Every
-# workflow run on this repository since 2026-09-03 was refused before
-# starting -- "the job was not started because recent account payments
-# have failed or your spending limit needs to be increased" -- so the
-# SPDX policy check has never executed there once, and neither has the
-# paper's claim checker. Nine non-starts, not nine failures.
+# Three documents said these checks "run in CI". They did not, and the
+# reason recorded here was WRONG IN THE DIRECTION THAT MATTERS.
+#
+# *Corrected 2026-09-11.* This read: "Every workflow run on this
+# repository since 2026-09-03 was refused before starting -- 'the job
+# was not started because recent account payments have failed or your
+# spending limit needs to be increased' -- so the SPDX policy check has
+# never executed there once, and neither has the paper's claim checker.
+# Nine non-starts, not nine failures."
+#
+# 53 of 61 runs in that window EXECUTED. The licence job among them
+# failed, and it failed on `ModuleNotFoundError: No module named 'yaml'`
+# -- an uninstalled dependency, not a billing wall. One day's refusals
+# were read backwards across a week, which turned a fixable workflow
+# defect into an account problem nobody could act on.
+#
+# And the billing wall that does exist is in front of PRIVATE minutes
+# only. The public mirror's first push started a run six seconds later.
+# So "CI cannot run" was never true of a public repository, which is
+# what a Tiny Tapeout submission is.
 #
 # THE WORKFLOWS NOW CALL THIS SCRIPT. That is the point of it. One
 # definition of what a check is, so "CI runs the checks" and "I ran the
@@ -254,6 +268,20 @@ hw/openlane/aer_fifo/runs/g0gates2|Checker.LintWarnings, Checker.WireLength|ROAD
 
 job_checkers() {
     echo "== checkers"
+
+    # THE FORMAL DISPOSITIONS RUN FIRST, and they run whether or not
+    # librelane is installed.
+    #
+    # They were added below the early return on 2026-09-11 and that put
+    # them behind a `return` that fires on every machine without a
+    # librelane interpreter -- which is every CI runner and every clone.
+    # The one gate written that day to be runnable anywhere was the one
+    # place it could never run. It needs no librelane and no PDK: it
+    # reads formal-dispositions.tsv and the sby work directories, and on
+    # a machine with neither it reports zero of everything and exits 0.
+    run "every non-PASS formal directory is dispositioned" \
+        bash scripts/verify.sh --dispositions
+
     if [ ! -x "$FLOW_PY" ]; then
         skipped "the flow's own gates still gate" \
                 "no librelane interpreter at $FLOW_PY; set FLOW_PY"
@@ -296,17 +324,6 @@ job_checkers() {
 $CHECKER_RUNS
 CHECKER_TABLE_END
 
-    # THE FORMAL DISPOSITIONS, in about a second.
-    #
-    # scripts/verify.sh --dispositions runs the formal scan alone and
-    # gates on formal_undispositioned: a task directory that is not a
-    # fresh PASS and that formal-dispositions.tsv does not name, a
-    # dispositioned verdict that has CHANGED, or a disposition whose
-    # directory is present and now passes. On a machine with no run
-    # trees it reports zero of everything and exits 0, which is what a
-    # clone looks like and is not a failure.
-    run "every non-PASS formal directory is dispositioned" \
-        bash scripts/verify.sh --dispositions
 }
 
 # ----------------------------------------------------------------- mirror

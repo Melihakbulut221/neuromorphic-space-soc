@@ -19,9 +19,18 @@ announcement both need a URL, and recording what the choice costs.
 `scripts/gen_public_mirror.py` writes the published subset into a
 directory and, with `--commit`, makes one commit on `main` that names
 the source revision it was taken from. It does not push and it does not
-create a repository. Publication stays an act of the owner, which is the
-same rule `.github/workflows/docs.yml` states for the documentation
-site and for the same reason.
+create a repository. Publication stays an act of the owner.
+
+*Corrected 2026-09-12: this sentence continued "which is the same rule
+`.github/workflows/docs.yml` states for the documentation site and for
+the same reason". That workflow was deleted in `74fdddf`, when three
+workflows were folded into `.github/workflows/checks.yml`. The rule did
+not change -- `checks.yml` builds the site, gates on its manifest and
+deploys nothing -- but the file that stated it is gone, and section 3.2
+below is about that very file, so this document now points at it twice
+in the past tense. Nothing in the suite could catch either:
+`test_doc_links.py` follows references to documents, not to workflow
+files.*
 
 ### 1.1 Why not simply make this repository public
 
@@ -125,7 +134,13 @@ new rule as if it had always been the rule.
 
 ### 3.2 The mirror would have carried a workflow whose stated reason was false
 
-`.github/workflows/docs.yml` explains at length why it does not deploy
+*Read in the past tense from 2026-09-12: `.github/workflows/docs.yml` no
+longer exists -- `74fdddf` replaced it and two siblings with
+`.github/workflows/checks.yml`. What follows is the record of a
+decision made while it did, and the exclusion it produced still stands
+in `gen_public_mirror.py`.*
+
+`.github/workflows/docs.yml` explained at length why it did not deploy
 to GitHub Pages, and the first reason it gives is **"this repository is
 private"**. In the mirror that sentence is false, and the behaviour it
 justifies — not deploying — is still correct for a *different* reason.

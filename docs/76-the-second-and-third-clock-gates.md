@@ -1569,8 +1569,15 @@ three is optional and all three were run to completion **[fact]**.
    whether or not it was addressed, so its enable is either a 32-bit
    comparator or a `req_i` qualification on that register.
 6. **`.A_REN(req_i && !do_write)`**, still. `docs/57` section 8.3's six
-   AND gates and 0.147 mW, `docs/61` section 18 item 9, unbuilt in both.
-   It is not a project and it should not keep waiting for one.
+   AND gates and 0.147 mW, `docs/61` section 18 item 9, unbuilt in
+   both. ~~It
+   is not a project and it should not keep waiting for one.~~ **BUILT
+   2026-09-12.** `soc_mem_sram.v` now reads `.A_REN(req_i &&
+   !do_write)` on the six data macros and `.A_REN(row_en && !row_we)`
+   on the eight row-port macros, which is the same mechanism on a group
+   `docs/57` did not price. The file's own header carries why it changes
+   no behaviour: `A_REN` only acts while `A_MEN` is high, and the new
+   term is exactly what `A_MEN` was already qualified on.
 7. **The whole-SoC program's activity, against these netlists.** Section
    8 measures busy and idle on `docs/46`'s supervisor, which never
    touches the accelerator. The energy of an inference **with the

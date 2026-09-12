@@ -345,8 +345,8 @@ threads.
 > `docs/64`'s rule keeps them. What changed is what they are numbers
 > **of**, and it changed twice:
 >
-> 1. **The design moved out from under them.** On 2026-08-31, commit
->    `b6738e5` replicated the AER queue pointers. `trial-03-signoff`
+> 1. **The design moved out from under them.** On 2026-08-29, commit
+>    `c5a5a6e` replicated the AER queue pointers. `trial-03-signoff`
 >    hardened an `aer_fifo` with **1,071 flip-flops**; the block has
 >    **1,164** now, and the 93 of difference are the replica banks the
 >    whole hardening argument rests on. A sign-off run of a design
@@ -370,7 +370,7 @@ threads.
 > instances found"* and nothing was unmapped. `SYNTH_HIERARCHY_MODE:
 > deferred_flatten` is the answer, and `hw/openlane/pilot_ihp`,
 > `hw/openlane/pilot_sky130` and `tt/src` had all carried it since
-> before the pointers were replicated. For eleven days the block's own
+> before the pointers were replicated. For thirteen days the block's own
 > sign-off configuration could not build the block's own RTL, and
 > nothing noticed because nothing re-ran it.
 >
@@ -510,9 +510,17 @@ as expected (`timing__unannotated_net_filtered__count = 0`).
 Read as frequency: at the slow corner the whole launch-to-capture path
 consumes 30 - 11.0738 = **18.926 ns**, i.e. about **52.8 MHz**. That
 still clears the 50 MHz Tiny Tapeout envelope of docs/06 B.2, and the
-margin is now **5.6 %** rather than the 40 % the unreplicated block had.
-That is the honest cost of the pointer TMR at this clock, and it is
-thin enough to be worth stating as a number rather than as "clears". **[estimate — this is a single-point extrapolation from a run
+margin is **5.37 % on the 20 ns period** or **5.67 % on the 50 MHz
+frequency** — both, because the two bases differ and the sentence this
+replaces quoted one of them beside `trial-03-signoff`'s other. On the
+same two bases the unreplicated block had **40.28 %** and **67.44 %**.
+That is the honest cost of the pointer TMR at this clock, and it is thin
+enough to be worth stating as a number rather than as "clears".
+
+*Corrected 2026-09-12: this read "the margin is now 5.6 % rather than
+the 40 % the unreplicated block had", which is 5.67 % (frequency) set
+against 40.28 % (period). `docs/81` section 2.2 carries the same
+correction and the table behind it.* **[estimate — this is a single-point extrapolation from a run
 closed at 30 ns; re-closing at 12 ns would buffer differently and the
 achieved number would move.]**
 
@@ -521,21 +529,38 @@ Note that `TIMING_VIOLATION_CORNERS` defaults to `*typ*` in this PDK
 by themselves gate the flow. They are reported here because for silicon
 they should.
 
-#### 4.4a Max-fanout: 90 violations, disclosed
+#### 4.4a Max-fanout: 101 violations, disclosed
 
-`design__max_fanout_violation__count = 90`, and **90 at each of the
-three corners individually** **[fact — `final/metrics.json`, and the
-`report_check_types -max_fanout -violators` block of
-`55-openroad-stapostpnr/<corner>/checks.rpt`]**. The count is identical
-at all three corners because fanout is a netlist-topology property; PVT
-does not move it.
+`design__max_fanout_violation__count = 101`, and **101 at each of the
+three corners individually** **[fact, 2026-09-11 — `g0gates2`'s
+`final/metrics.json`, and the `report_check_types -max_fanout
+-violators` block of `55-openroad-stapostpnr/<corner>/checks.rpt`]**.
+The count is identical at all three corners because fanout is a
+netlist-topology property; PVT does not move it.
 
-What the 90 are, read off the violator list at the typical corner
-**[fact]**: **89 clock-tree buffers** — `clkbuf_0_clk` at 16 loads and
-88 `clkbuf_leaf_*` at 10 to 14 — and **one resizer-inserted fanout
-buffer**, `fanout278/X`, at 9. **Not one of them is an RTL net.** Every
-violator is a buffer this flow inserted itself, in CTS and in design
-repair.
+What the 101 are, read off the violator list at the typical corner
+**[fact]**: **98 clock-tree buffers** — `clkbuf_0_clk` and 97
+`clkbuf_leaf_*` — and **three resizer-inserted fanout buffers**. **Not
+one of them is an RTL net.** Every violator is a buffer this flow
+inserted itself, in CTS and in design repair.
+
+> *Corrected 2026-09-12.* This section read **90 violations, 89
+> clock-tree buffers (`clkbuf_0_clk` at 16 loads and 88 `clkbuf_leaf_*`
+> at 10 to 14) and one fanout buffer, `fanout278/X`, at 9** — and those
+> are `trial-03-signoff`'s numbers, sitting inside a section whose own
+> preamble says every number in it comes from `g0gates2`. When section 4
+> moved run on 2026-09-11 the machine-checked tables moved with it and
+> this one did not, because nothing checks it: `test_flow_evidence.py`
+> holds the outcome table and the corner slacks against the run tree and
+> has never parsed 4.4a. The old figures were right on their date and are
+> `trial-03-signoff`'s record, kept here rather than deleted per
+> `docs/64`.
+>
+> The shape of the finding is unchanged and that is the point of
+> re-measuring rather than adjusting: it is still every violator a buffer
+> the flow inserted, still not one RTL net, and still 11 more of them
+> only because the design got bigger when the queue pointers were
+> replicated.
 
 That is also why raising `MAX_FANOUT_CONSTRAINT` would not change the
 list. Every violating pin is reported against a limit of **8**, while
@@ -551,10 +576,10 @@ judgement **[fact]**: the Classic flow instantiates checker steps for
 setup (`72-checker-setupviolations`), hold
 (`73-checker-holdviolations`), max slew (`74-checker-maxslewviolations`)
 and max cap (`75-checker-maxcapviolations`), and **there is no
-max-fanout checker step in the flow at all** — the step list of
-`trial-03-signoff` has none. `design__violations`, the flow's own
+max-fanout checker step in the flow at all** — the step lists of
+`trial-03-signoff` and of `g0gates2` both have none. `design__violations`, the flow's own
 aggregate, is therefore `0` while `design__max_fanout_violation__count`
-is 90, and the run completes. Nothing here is waived or suppressed by
+is 101, and the run completes. Nothing here is waived or suppressed by
 this configuration.
 
 What it would mean for silicon **[estimate]**: an overloaded clock-tree
@@ -708,10 +733,19 @@ the flow measured, on the day, on the design as it then was.
 
 Two things separate the columns and only one of them is the design.
 
-**The design.** Commit `b6738e5`, 2026-08-31, replicated the AER queue
+**The design.** Commit `c5a5a6e`, 2026-08-29, replicated the AER queue
 pointers. The 93 flip-flops of difference are the three banks, and the
 hardening argument in `hw/rtl/aer_fifo.v` is about them. A sign-off of a
 block without its redundancy is a sign-off of a different block.
+
+*Corrected 2026-09-12: both places in this document named `b6738e5` and
+dated it 2026-08-31, six days after the sign-off run. That is the pilot
+FREEZE commit, which `docs/34` pins and which changed no logic. The
+replication is `c5a5a6e`, 2026-08-29 -- four days after
+`trial-03-signoff`, not six. Nothing else in this section moves: the
+1,071, the 1,164 and the 93 were read off the two run trees and are
+unaffected by which commit is named. The error was reading the commit
+that FROZE the pilot as the commit that changed it.*
 
 **The gates.** `hw/openlane/checker_audit.py` on `trial-03-signoff`'s run
 tree calls `Checker.SetupViolations` PARTIAL — *"matches 1 of 3 measured
@@ -725,7 +759,8 @@ was missing was any mechanism that would have stopped the run had
 something been there. ROADMAP G0's sentence was quoting the gates.
 
 The gap between them is the third finding, and it is the one worth
-carrying forward: **for eleven days no re-harden was possible at all.**
+carrying forward: **for thirteen days no re-harden was possible at
+all.** *(Thirteen, not eleven, corrected 2026-09-12: the window is `c5a5a6e` 2026-08-29 to `g0gates2` 2026-09-11. The old figure was computed from `b6738e5`, the pilot freeze commit these documents named by mistake.)*
 Under the flatten this config used, yosys honours the twelve
 `keep_hierarchy` attributes the replication defence depends on, nine
 `$paramod` submodule types survive into `stat.json`, and

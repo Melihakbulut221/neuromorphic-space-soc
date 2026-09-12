@@ -107,7 +107,22 @@
  *            which is the highest per-bit rate this block has measured.
  *            It DETECTS and does not correct: held quiet is right when
  *            the flag was corrupted and loses an event when the state
- *            was, and the block cannot tell which. */
+ *            was, and the block cannot tell which.
+ *   EVT_TO   the event engine's E_DECIDE wait expired and the event in
+ *            flight was DISCARDED. The die would not take it and there
+ *            was nothing to drain, for DECIDE_MAX consecutive cycles --
+ *            4,095 by default, which is more than eight times the
+ *            longest legitimate transient in this block. That is not a
+ *            transient: it is CTRL.OUT_EN off, or a capture queue
+ *            software has stopped reading, or a die that is not taking
+ *            events at all. Before the bound existed the engine waited
+ *            there FOR EVER, so one misconfigured register stopped every
+ *            later event as well as the one in flight.
+ *            THIS BIT IS THE WHOLE PRICE OF THE BOUND. The event is
+ *            lost, and it is the only kind of loss this engine is
+ *            allowed: a loss that reports itself. A part that discarded
+ *            an event reads EVT_TO; a part that is merely busy reads
+ *            nothing. */
 #define NPUCFG_C_EVT      (1u << 0)
 #define NPUCFG_C_ERR      (1u << 1)
 #define NPUCFG_C_SEC      (1u << 2)
@@ -122,6 +137,7 @@
 #define NPUCFG_C_CFG_TMR  (1u << 11)
 #define NPUCFG_C_OH_TO    (1u << 12)
 #define NPUCFG_C_AER_MM   (1u << 13)
+#define NPUCFG_C_EVT_TO   (1u << 14)
 /* Every FAULT bit, which is every cause bit except the EVT level. It is
  * defined once, here, because a program that spelled the set out for
  * itself would go on reporting a clean part after a bit was added to the
@@ -131,7 +147,8 @@
                            | NPUCFG_C_FETCH_ER | NPUCFG_C_SER_TO \
                            | NPUCFG_C_WIN_TO | NPUCFG_C_Q_COR \
                            | NPUCFG_C_Q_DET | NPUCFG_C_CFG_TMR \
-                           | NPUCFG_C_OH_TO | NPUCFG_C_AER_MM)
+                           | NPUCFG_C_OH_TO | NPUCFG_C_AER_MM \
+                           | NPUCFG_C_EVT_TO)
 
 /* EVQ_OUT */
 #define NPUCFG_EVQ_VALID  (1u << 31)

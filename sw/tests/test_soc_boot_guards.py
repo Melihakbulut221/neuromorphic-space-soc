@@ -102,9 +102,61 @@ def test_soc_top_gives_the_boot_block_both_resets_the_right_way_round():
     assert re.search(r"\.rst_ni\s*\(\s*rst_sys_n\s*\)", inst), (
         "u_boot's rst_ni is not rst_sys_n: the boot counter would not "
         "count boots")
-    assert re.search(r"\.rst_por_ni\s*\(\s*rst_ni\s*\)", inst), (
-        "u_boot's rst_por_ni is not the power-on reset: the boot report "
-        "would not survive the reset it describes")
+    # THE PROPERTY, NOT THE NAME, corrected 2026-09-12. This used to
+    # require the literal `rst_ni` on the port, and on 2026-09-12
+    # soc_top.v release-synchronised the power-on reset: the port now
+    # carries `rst_por_sync_n`, a two-flop synchroniser clocked from
+    # `rst_ni` alone. The old guard went red on a change that PRESERVES
+    # what it protects, which is what a guard written against a name
+    # does the first time the name is right to change.
+    #
+    # What actually matters is that the signal is in the power-on domain
+    # -- that nothing the watchdog drives can reach it -- because a
+    # boot report reset by the reset it describes is the defect. So:
+    # the port must not be the system reset, and whatever it is must
+    # trace back to `rst_ni` without passing through `wdog_rst_req`.
+    m_por = re.search(r"\.rst_por_ni\s*\(\s*(\w+)\s*\)", inst)
+    assert m_por, "u_boot has no rst_por_ni connection at all"
+    por = m_por.group(1)
+    assert por != "rst_sys_n", (
+        "u_boot's rst_por_ni is rst_sys_n, which the watchdog pulls: the "
+        "boot report would be\nerased by the very reset it exists to "
+        "describe")
+
+    if por != "rst_ni":
+        # A derived signal. Find what drives it and check its cone.
+        drv = re.search(r"wire\s+" + re.escape(por) + r"\s*=\s*([^;]+);", top)
+        assert drv, (
+            f"u_boot's rst_por_ni is {por!r}, which is neither rst_ni nor a "
+            f"wire soc_top.v\nassigns. This guard cannot tell which domain "
+            f"it is in, so it fails rather than passing blind.")
+        expr = drv.group(1)
+        # Trace the register the expression names -- `por_sync[1]` means
+        # `por_sync` -- and find ITS always block, not the first one in
+        # the file. The first attempt at this matched soc_top's OTHER
+        # synchroniser, `rst_sync`, whose reset is `rst_raw_n` and does
+        # mention the watchdog; a guard that traces the wrong register
+        # can fail a correct design and pass a broken one.
+        cone = expr
+        base = re.match(r"\s*(\w+)", expr)
+        if base:
+            blk = re.search(
+                r"always\s*@\(\s*posedge\s+clk_i\s+or\s+negedge\s+(\w+)\s*\)"
+                r"(?:(?!always\s*@).)*?\b" + re.escape(base.group(1)) + r"\s*<=",
+                top, re.S)
+            assert blk, (
+                f"u_boot's rst_por_ni is {por!r} = {expr.strip()!r}, and no "
+                f"clocked block in soc_top.v\nassigns {base.group(1)!r}. "
+                f"This guard cannot establish its reset domain.")
+            cone = expr + " " + blk.group(1)
+        assert "wdog" not in cone, (
+            f"u_boot's rst_por_ni is {por!r}, whose cone mentions the "
+            f"watchdog:\n  {cone.strip()}\nAnything the watchdog can pull "
+            f"is the system domain by definition, and the boot report has "
+            f"to\noutlive a watchdog reset.")
+        assert "rst_ni" in cone, (
+            f"u_boot's rst_por_ni is {por!r} and its cone does not mention "
+            f"rst_ni:\n  {cone.strip()}\nIt is not the power-on reset.")
 
 
 def test_the_boot_block_drives_nothing_but_its_own_read_data():

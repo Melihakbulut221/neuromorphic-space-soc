@@ -10,6 +10,28 @@ are [estimate]. **[fact]** = measured in this environment or read out of
 a file in the working tree; **[planned]** = an intention with a date
 attached and no artifact behind it yet.
 
+> **AMENDED 2026-09-12, and the amendment is the same defect this
+> revision was written to fix.**
+>
+> The 2026-09-05 revision below opens by observing that its predecessor
+> "cited nothing above `docs/34`" while thirty-four documents had
+> landed. Between 2026-09-05 and 2026-09-12 **thirteen more landed --
+> `docs/69` through `docs/81`** -- and this file cited none of them until
+> an audit on 2026-09-11 forced citations to `docs/74`, `docs/75`,
+> `docs/77`, `docs/79` and `docs/81` into the sections they bear on.
+> **Eight are still uncited here**: `docs/69` (the boot block's
+> campaign), `docs/70` through `docs/73` (the post-GRT resizer and the
+> CLINT placement probe), `docs/76` (the second and third clock gates),
+> `docs/78` (the public mirror) and `docs/80` (the artefact digests).
+>
+> They are uncited rather than contradicted -- nothing in the sections
+> below is false because of them -- but a roadmap that cites no document
+> from the last week is a roadmap written from memory, which is exactly
+> the sentence the paragraph below wrote about its own predecessor. It
+> recurred within seven days of being named. `docs/00-index.md` section
+> 5 is the complete list and is the thing to read instead of this file
+> for what exists.
+>
 > **Revised 2026-09-05. What this revision does, and why it was needed.**
 >
 > The previous revision was issued 2026-08-31 and cited nothing above
@@ -39,7 +61,7 @@ attached and no artifact behind it yet.
 |---|---|---|
 | 2026-09-03 | NLnet calls reopened (Restack fund) | open-licensing decision must be made; application drafting is in its final pass (docs/13) |
 | ~~2026-09-07~~ | ~~Internal go/no-go: RM_IHPSG13 SRAM macro closes DRC/LVS in the local rootless flow~~ | **Superseded 2026-08-25 by `docs/12` section 8, thirteen days early: NO-GO.** The experiment was run under conditions strictly easier than the gate asked for and returned 1,106,478 Magic error boxes, 2,316 KLayout errors and 359 LVS errors, all inside the vendor macro **[fact, docs/12 section 7.5]**. `docs/54` sharpens it: the KLayout count is 100 % a property of the vendor cell as shipped, with this project's flow contributing zero, and the deck swap that would exit it trades a verified deck for an unverified one. **The macros still cannot be signed off on this PDK version, and every physical result for the SoC inherits that.** |
-| **2026-09-21, 20:00 UTC (23:00 Istanbul)** | **TTIHP26b closes (fab IHP-2609)** | **Sixteen days out.** Pilot design frozen and submitted. The engineering is complete; the remaining steps are owner actions and one of them is blocked on `docs/14` (P1 below) |
+| **2026-09-21, 20:00 UTC (23:00 Istanbul)** | **TTIHP26b closes (fab IHP-2609)** | ~~**Sixteen days out.**~~ **Ten days out, counted 2026-09-11.** Pilot design frozen and submitted. The engineering is complete; the remaining steps are owner actions and ~~one of them is blocked on `docs/14` (P1 below)~~ **none of them is blocked on `docs/14`**. *Corrected 2026-09-11. The day count was written on 2026-09-05, when sixteen was right, and was never moved. The licence clause stopped being true on 2026-09-09: `docs/14-licensing-decision.md` carries `SIGNED 2026-09-09`, the root `LICENSE` exists, `tt/LICENSE` is the full CERN-OHL-W-2.0 text at 310 lines, and `tt/LICENSE.PENDING.md` was deleted by commit `13402ad` **[fact, all four read off the tree]**. P1 below had recorded all four two days before this row was last touched, so the file was directing work from a state its own next section said no longer existed. What is open is the slot purchase and the push — section 4* |
 | 2026-11-03, 12:00 CEST | NLnet Restack submission deadline | application submitted. Internal submission target 2026-10-29 (docs/13 section 8) |
 | spring 2027 (date TBC, **unannounced**) | TTIHP27a would close | full-SoC slot IF a pre-silicon gate passed. `docs/37` records that **no IHP run after 26b is announced** **[fact]**, so this row is an extrapolation and is tagged as one |
 | 2027-06-25 | TTIHP26b silicon arrives (boards ~2027-08) | pilot bring-up and characterization |
@@ -75,8 +97,8 @@ beside it. What follows is why the move was necessary.
 
 **Scope correction, 2026-09-11. The gate is met and the sentence above
 is true; what it is true OF is narrower than it reads.**
-`trial-03-signoff` ran on **2026-08-25**. On **2026-08-31**, commit
-`b6738e5` replicated the AER queue pointers, and the replication
+`trial-03-signoff` ran on **2026-08-25**. On **2026-08-29**, commit
+`c5a5a6e` replicated the AER queue pointers, and the replication
 defence in `hw/rtl/aer_fifo.v` is `keep_hierarchy` on twelve bank
 instances plus the POL+MIX storage transform. So every number in the
 paragraph above was measured on an `aer_fifo` **without replicated
@@ -93,9 +115,12 @@ nine, every cell is an sg13g2 cell.
 all carried `SYNTH_HIERARCHY_MODE: deferred_flatten` against exactly
 this failure since before the pointers were replicated, and
 `pilot_sky130`'s own comment describes it verbatim. **The block's own
-sign-off configuration was the one that did not**, and for eleven days
+sign-off configuration was the one that did not**, and for thirteen days
 it could not build the block's RTL -- invisible because nothing re-ran
-it. The key is now set, with the reasoning, in
+it. *(Thirteen, not eleven, corrected 2026-09-12: the window runs from
+`c5a5a6e` on 2026-08-29 to `g0gates2` on 2026-09-11. "Eleven" was
+computed from `b6738e5`, the freeze commit this paragraph used to name
+by mistake.)* The key is now set, with the reasoning, in
 `hw/openlane/aer_fifo/config.json`, and `g0gates2` is the run it made
 possible. `trial-03-signoff` is not re-run and its numbers stand as
 recorded (`docs/64`), in `docs/12` section 4.7a.
@@ -103,7 +128,12 @@ recorded (`docs/64`), in `docs/12` section 4.7a.
 ### P1 — TTIHP26b pilot (to 2026-09-21) — engineering complete, owner actions open
 
 **Status 2026-09-05: unchanged from 2026-08-31 in substance, and the
-deadline is now eleven days as of 2026-09-10 out.** The pilot is signed off at
+deadline is sixteen days out.** *(Corrected 2026-09-12: the same
+find-and-replace left this reading "now eleven days as of 2026-09-10
+out" inside a sentence dated 2026-09-05, so the line carried two dates
+and agreed with neither. Sixteen is right for 2026-09-05. As of
+2026-09-12 it is **nine days**, and section 4 is where the live count
+belongs.)* The pilot is signed off at
 6x2 = 12 tiles and the RTL is frozen. Every geometric and timing counter
 reads zero on the run built from the file the Tiny Tapeout tooling
 actually hardens, the derate is proven applied in the flow-written
@@ -130,8 +160,13 @@ in the generated tree says so in its own words and refuses to carry a
 `LICENSE` file until `docs/14` is signed. `docs/14` is unsigned, its own
 signature deadline of 2026-08-31 has passed, and there is no `LICENSE`
 file at the repository root **[fact, `ls` at HEAD `ed51de0`]**. This is
-the single item on this roadmap where eleven days as of 2026-09-10 of engineering
-capacity cannot substitute for one signature.~~
+the single item on this roadmap where sixteen days of engineering
+capacity cannot substitute for one signature.~~ *(The "sixteen days" in
+that struck sentence is restored 2026-09-12: a blind find-and-replace
+had rewritten it to "eleven days as of 2026-09-10", inside a paragraph
+`docs/64` says to leave exactly as it was written. A struck paragraph is
+a record of what was believed on its date; editing its numbers makes it
+a record of nothing.)*
 
 **UNBLOCKED 2026-09-09, and this file was the last place still saying
 otherwise.** All four of that paragraph's facts are now false:
@@ -181,11 +216,41 @@ formal and CI targets are green. *Re-established 2026-09-10 on the
 frozen submission GDS `4091b468…` from a rootless virtualenv in 70
 seconds, with the resulting `drc_sg13g2.xml` byte-identical to the
 2026-08-31 run, and then made to go red eleven times including on an
-injected 0.05 × 2.00 um Metal1 width violation.* The hosted half — the
+injected 0.05 × 2.00 um Metal1 width violation.* ~~The hosted half — the
 Tiny Tapeout GDS action — has never run, because running it requires the
 repository to be pushed, and that is now waiting on the account rather
-than on a signature. The local precheck needs KLayout 0.30.9; the system
-0.28.16 aborts the PDK deck and reports a failure that is not real.
+than on a signature.~~ The local precheck needs KLayout 0.30.9; the
+system 0.28.16 aborts the PDK deck and reports a failure that is not
+real.
+
+> **G1's HOSTED HALF IS MET, 2026-09-11.** The submission was pushed to
+> <https://github.com/Melihakbulut221/tt-um-melihakbulut-nssoc> -- a
+> repository whose ROOT is the contents of `tt/`, which is the shape the
+> Tiny Tapeout tooling reads and the shape that fails silently when it
+> is wrong. All 32 tracked files, `MANIFEST.sha256` verifying 31 of 31
+> at the new root, and every source file `info.yaml` declares present.
+>
+> Three of the four hosted jobs passed on the first push **[fact, run
+> `34557306023`]**:
+>
+> | job | result |
+> |---|---|
+> | `gds` | **success** -- the hosted harden, 675,878 um of global route, 479,173 um detailed |
+> | `precheck` | **success** -- the Tiny Tapeout hosted precheck |
+> | `gl_test` | **success** -- the gate-level test on the built netlist |
+> | `viewer` | failed, then **success** once GitHub Pages was enabled |
+>
+> The `viewer` failure was `Creating Pages deployment failed / HttpError:
+> Not Found` on a repository where Pages had never been switched on. It
+> is a repository setting and says nothing about the design; it was
+> enabled 2026-09-12 and the job re-run.
+>
+> **And the account was not the blocker either.** GitHub Actions bills
+> PRIVATE minutes; a Tiny Tapeout submission repository is public by
+> definition, and these four jobs started six seconds after the push
+> with no payment of any kind. The paragraph struck above named the
+> account because the only runs anyone had watched were on the private
+> development repository.
 
 ### P2 — NLnet Restack application (to 2026-11-03)
 
@@ -227,7 +292,7 @@ SoC needed first was everything the plan had assumed around it.
 | 3 | Interfaces, base set first (2x UART, SPI, I2C, GPIO, QSPI), then SpaceWire codec and CAN 2.0B | base 280-475 h (docs/03 corrected roll-up) | **Three of the base set built**: console UART since `docs/39`; GPIO end to end with a k-induction proof and pins driven through a modelled board (`docs/65`); QSPI from scratch on APB with two chip selects, verified against a behavioural W25Q128JV written from Winbond datasheet Revision M (`docs/66`). Four candidates fetched by commit, elaborated and priced without being built (`docs/65` sections 8-9) | **Second UART, SPI, I2C, SpaceWire and CAN unbuilt.** They are priced rather than guessed: SpaceWire `spacewire_reloaded` at **17.5 kGE** with 64-entry FIFOs, Mohor CAN **18.1 kGE**, `verilog-i2c` **12.5 kGE**, OpenTitan `spi_host` **65.05 kGE — 171 % of the Ibex core [fact, docs/65]**. `docs/65` section 9.4's structural finding stands: **one APB-to-Wishbone bridge serves two of the four cores**, so that bridge and its proof are the item to do once. **Two of the four are LGPL and `docs/14` section 5.2 argues they are a bad fit for silicon** — that is a licensing decision, not an engineering one |
 | 4 | Formal program: targets 1-10 per docs/09 part C, in CI from week 1 | 155-310 h (docs/09) | **Running at three scales.** Pilot: **54 tasks across 8 property sets** (`formal/`, counted 2026-09-05 by `make -C formal -n everything \| grep -c "sby -f"`). SoC: **56 tasks across 14 property sets** (`hw/soc/formal`, counted from the `[tasks]` sections). **`docs/00-index.md` section 6 is behind on both** — it says 45 over 7 and 52 over 14, which were right on their dates; `tmr_voter_cfg.sby` and `soc_boot.sby` are the difference. ISA: riscv-formal brought up against Ibex — **70 of 79 bounded checks PASS and 79 of 79 cover obligations PASS**, five defects found and **not one in Ibex's execution**, including a defect in riscv-formal itself where `insn_div.v` and `insn_rem.v` compute an unsigned result (`docs/63`) | `reg_ch0` on the SECDED register file is **proved to check cycle 18 and does not close at 21, 23 or 25** — four hours under all six engines the pinned suite offers, and four of the six cannot close even the stock core's version (`docs/63`). Three routes are ranked there. The M-extension gap carries forward and the phase-1-to-phase-2 delta over it is **undefined, not clean**. `soc_npu.v` still has no property set (`docs/56`) |
 | 5 | Software track: bare-metal supervisor with Frama-C/CBMC absence-of-runtime-error evidence (docs/09 S2) | ~80-160 h [estimate] | **Partly, and not the part that was estimated.** A bring-up program, a partitioned supervisor (`docs/46`) and a boot flow with a loader, a RAM sweep that writes whole codewords, image checksums and a three-boot escalation demonstrated end to end (`docs/68`) | **No Frama-C or CBMC evidence exists.** Nothing in this workstream has been run through either tool. This is the one P3 workstream whose plan estimate is still entirely ahead of the project |
-| 6 | Physical: hierarchical tile hardening, MBIST/scan, multi-corner STA | ~150-300 h [estimate] | **`soc_top` synthesised as one design** — 27,694 cells, 3,077 flip-flops, 392,932.8900 um2, 54.141 kGE, **1.11 % smaller than the sum of the nine blocks** (`docs/45`). **Placed and routed whole with six real RM_IHPSG13 macros**: 0 detailed-routing DRC errors, 0 disconnected pins, 0 power-grid violations, 1 antenna violating net, 37,156 nets, 3,095,532 um of wire (`docs/47`). With the accelerator in it, the same die, the same channel, the same six macro origins, 0 DRC (`docs/61`). Floorplan mapped from the DEF with eighteen self- and cross-checks (`docs/59`). Multi-corner STA throughout. **Power measured with the run's own switching activity** (`docs/57`) | **The layout does not meet its timing constraint** and the miss is measured, not estimated. **No Magic DRC, no LVS, no XOR, no gate-level simulation** for the SoC, and that is upstream (section 1). **MBIST and scan do not exist.** Four remedies were measured and closed: floorplan (`docs/48`), `SYNPRE` (`docs/49`, `docs/62`), the RAM read register (`docs/50`), and the capacitance constraint (`docs/48`) |
+| 6 | Physical: hierarchical tile hardening, MBIST/scan, multi-corner STA | ~150-300 h [estimate] | **`soc_top` synthesised as one design** — 27,694 cells, 3,077 flip-flops, 392,932.8900 um2, 54.141 kGE, **1.11 % smaller than the sum of the nine blocks** (`docs/45`). **Placed and routed whole with six real RM_IHPSG13 macros**: 0 detailed-routing DRC errors, 0 disconnected pins, 0 power-grid violations, 1 antenna violating net, 37,156 nets, 3,095,532 um of wire (`docs/47`). With the accelerator in it, the same die, the same channel, the same six macro origins, 0 DRC (`docs/61`). Floorplan mapped from the DEF with eighteen self- and cross-checks (`docs/59`). Multi-corner STA throughout. **Power measured with the run's own switching activity** (`docs/57`) | **The layout does not meet its timing constraint** and the miss is measured, not estimated. ~~**No Magic DRC, no LVS, no XOR, no gate-level simulation** for the SoC, and that is upstream (section 1).~~ **All four have since been run, 2026-09-11 correction.** `docs/77` puts Magic DRC and the KLayout deck on `soc_top`'s own geometry -- **39,969,214 boxes examined, 0 outside**, and KLayout **9,668 / 0 outside**; `docs/79`'s LVS arm reports *"circuits match uniquely"*; XOR is 0 in the same run tree; and `docs/74` is a gate-level fault-injection campaign on the core with `docs/75`'s two-by-two on two placed layouts. What is still true is narrower and is what this cell should have said: **none of those four has been re-run since the 2026-09-11 RTL repair**, so each describes a netlist the tree no longer contains -- `paper/main.tex` section 2 carries the same marker for the same reason. **MBIST and scan do not exist.** Four remedies were measured and closed: floorplan (`docs/48`), `SYNPRE` (`docs/49`, `docs/62`), the RAM read register (`docs/50`), and the capacitance constraint (`docs/48`) |
 
 **Roll-up: retired rather than restated.** The previous revision rolled
 these six lines up to ~1015-1895 h and converted that to 12-24 months of
@@ -349,21 +414,61 @@ binding practice:
    upset on the same machine with no backstop says whether the machine
    was in fact dead.
 
-## 4. Near-term work queue (next eleven days as of 2026-09-10, to the shuttle close)
+## 4. Near-term work queue (next nine days as of 2026-09-12, to the shuttle close)
 
 Ordered by what blocks what, not by size.
 
-1. **Sign or reject `docs/14`.** It blocks the shuttle push (16 days)
-   and the application (59 days), and no engineering substitutes for it.
-   `docs/14` was rewritten 2026-09-05 to be decidable in one sitting.
-2. **If signed: land the licence mechanics** — `LICENSE`, SPDX headers,
-   the path map, third-party notices — and regenerate `tt/` so
-   `LICENSE.PENDING.md` is replaced rather than shipped.
-3. **Buy the TTIHP26b 6x2 slot and claim a subsidised devkit** while any
-   of the 88 remain. **EUR 955.** Deadline 2026-09-21 20:00 UTC.
-4. **Push, and let the GDS action and the hosted precheck run.** This
-   closes the open half of G1 and it is the only part of P1 this
-   repository cannot do for itself.
+> **Rewritten 2026-09-12, and the reason is worth more than the list.**
+> Items 1, 2 and 4 below were struck on the same day an audit found them
+> still standing. Every one had been DONE for days -- 1 and 2 on
+> 2026-09-09, 4 on 2026-09-11 -- and each was recorded as done in the
+> section of this very file above this one. So the queue was directing
+> the owner to do work the file itself knew was finished, and it led
+> with it. A work queue that outranks its own record is worse than no
+> queue: it costs the reader the one thing a queue is for, which is
+> knowing what to do next. `docs/81` is about a green result read wider
+> than what it looked at; this is the same error in a plainer form -- a
+> stale instruction read as a live one.
+>
+> **There is exactly one thing on this list that a person must still
+> do, and it is item 1.**
+
+1. **Buy the TTIHP26b 6x2 slot and claim a subsidised devkit** while any
+   of the 88 remain. **EUR 955** — twelve tiles at EUR 70 is EUR 840,
+   plus the EUR 300 devkit subsidised to EUR 100, plus EUR 15 shipping
+   **[fact, `docs/37` section 3]**. **Deadline 2026-09-21 20:00 UTC —
+   nine days.** Nothing in this repository substitutes for it and
+   nothing else on this list is waiting on anything else.
+2. **Close the `docs/13` open decisions that are not blocked on
+   `docs/14`** — the requested amount, the rate, the project name, the
+   generative-AI disclosure — against the 2026-10-29 internal
+   submission target. The public-URL field is no longer among them:
+   `docs/13` section 3.3 now carries both published repositories.
+3. Not before the above: `soc_npu.v`'s formal property set (`docs/56`),
+   and `reg_ch0` by one of `docs/63`'s three ranked routes.
+
+*The three items this queue used to lead with, struck rather than
+deleted:*
+
+- ~~**Sign or reject `docs/14`.** It blocks the shuttle push (16 days)
+  and the application (59 days), and no engineering substitutes for it.~~
+  **Signed 2026-09-09.** P1 above and `docs/14` section 11 both record
+  it; this line went on asking for three more days.
+- ~~**If signed: land the licence mechanics** — `LICENSE`, SPDX headers,
+  the path map, third-party notices — and regenerate `tt/` so
+  `LICENSE.PENDING.md` is replaced rather than shipped.~~ **Landed
+  2026-09-09.** All four exist, `scripts/ci_local.sh` asserts the
+  negation of the old state on every run, and `tt/LICENSE.PENDING.md`
+  was deleted by `13402ad`.
+- ~~**Push, and let the GDS action and the hosted precheck run.** This
+  closes the open half of G1 and it is the only part of P1 this
+  repository cannot do for itself.~~ **Done 2026-09-11**, and it closed
+  exactly what it promised: the submission is at
+  <https://github.com/Melihakbulut221/tt-um-melihakbulut-nssoc>, and
+  run `34557306023` is **green on all four jobs — `gds`, `precheck`,
+  `gl_test` and `viewer`**. G1's hosted half is met; see P1 above for
+  what the one failure along the way was and why it was not about the
+  design.
 5. **Close the `docs/13` open decisions that are not blocked on
    `docs/14`** — the requested amount, the rate, the project name, the
    generative-AI disclosure — against the 2026-10-29 internal

@@ -76,8 +76,17 @@ ROADMAP gate G0 read, from 2026-08-25:
 Every number in it is correct **[fact]**. Two things were nevertheless
 wrong with the sentence, and neither is visible from the numbers.
 
-**The design moved on 2026-08-31.** Commit `b6738e5` replicated the AER
-queue pointers. `trial-03-signoff` hardened a block with **1,071**
+**The design moved on 2026-08-29.** Commit `c5a5a6e` replicated the AER
+queue pointers.
+
+> *Corrected 2026-09-12: this named `b6738e5` and dated it six days after
+> `trial-03-signoff`. `b6738e5` is the pilot FREEZE commit of 2026-08-31,
+> which `docs/34` pins and which changed no logic; the replication is
+> `c5a5a6e`, "Replicate the AER queue pointers, and record what is not yet
+> proved", 2026-08-29. Four days after the sign-off run, not six. The
+> error came from reading the freeze commit as the change it froze, and it
+> reached four documents before an audit caught it in the fifth.*
+ `trial-03-signoff` hardened a block with **1,071**
 flip-flops; the block has **1,164**, and the 93 of difference are the
 three replica banks the entire hardening argument is about. A sign-off
 of a block without its redundancy is a sign-off of a different block.
@@ -91,7 +100,7 @@ three metrics read 0 at all three corners on that run, so **nothing was
 hidden**. What was missing is any mechanism that would have stopped the
 run had something been there. G0's sentence was quoting the gates.
 
-### 2.1 And for eleven days no re-harden was possible
+### 2.1 And for thirteen days no re-harden was possible
 
 The obvious close — re-run the trial — failed, and how it failed is the
 part worth keeping.
@@ -145,10 +154,27 @@ corner checkers live **[fact]**:
 | Setup worst slack, slow corner | 18.0553 ns | 11.0738 ns |
 
 The 7 ns of setup slack is what triplicating a pointer and voting it
-costs at a 30 ns clock. Read as frequency it takes the slow-corner
-headroom against the 50 MHz Tiny Tapeout envelope from about 40 % to
-**5.6 %** — still clear, and thin enough to be worth a number rather
-than the word "clears". `docs/12` section 4 is the full record and
+costs at a 30 ns clock. Against the 50 MHz Tiny Tapeout envelope the
+slow-corner headroom goes, **on either basis and stated on both because
+the first version of this sentence mixed them**:
+
+| | `trial-03-signoff` | `g0gates2` |
+|---|---:|---:|
+| slow-corner setup WNS at 30 ns | 18.0553 ns | 11.0738 ns |
+| launch-to-capture path | 11.9447 ns | 18.9262 ns |
+| as a frequency | 83.72 MHz | 52.84 MHz |
+| margin on the 20 ns PERIOD | 40.28 % | **5.37 %** |
+| headroom on the 50 MHz FREQUENCY | 67.44 % | **5.67 %** |
+
+*Corrected 2026-09-12. This read "from about 40 % to **5.6 %**", which
+took the old end off the period basis and the new end off the frequency
+basis. The two happen to be close for `g0gates2` -- 5.37 against 5.67 --
+and far apart for `trial-03-signoff`, 40.28 against 67.44, so the pair
+as written overstated the fall. Like for like it is 40.28 % to 5.37 %,
+or 67.44 % to 5.67 %. The conclusion does not move and that is why the
+error survived a reading: the part still clears 50 MHz, and the margin
+is still thin enough to be worth a number rather than the word
+"clears".* `docs/12` section 4 is the full record and
 section 4.7a keeps `trial-03-signoff` beside it, per `docs/64`.
 
 The two checkers that do not gate are `Checker.LintWarnings` (1 warning;

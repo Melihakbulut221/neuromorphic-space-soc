@@ -394,4 +394,14 @@ fi
 # anything become not-a-PASS that nobody has decided about". A gate that
 # can never be green carries as little information as one that can never
 # be red, and this one could never be green.
-[ "$py_f" = "0" ] && [ "$cc_f" = "0" ] && [ "$fm_undisp" = "0" ] && [ "$frozen" = "0" ]
+#
+# cc_dirty IS IN THE GATE, and until 2026-09-11 it was parsed, recorded
+# and read by nothing. Its own comment forty lines up says why it exists
+# -- "a total build failure prints 0 passed, 0 failed and gated GREEN" --
+# and then the gate did not look at it, so the condition it was added to
+# catch still passed. The cocotb completeness check added the same day
+# reports through exactly this field: a test module that no makefile
+# runs makes run_cocotb.sh count a not-clean suite, and without this
+# term that check could not turn any gate red either.
+[ "$py_f" = "0" ] && [ "$cc_f" = "0" ] && [ "$cc_dirty" = "0" ] \
+    && [ "$fm_undisp" = "0" ] && [ "$frozen" = "0" ]

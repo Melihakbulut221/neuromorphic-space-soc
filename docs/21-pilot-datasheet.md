@@ -1779,7 +1779,28 @@ Recorded, not corrected — these files are owned elsewhere.
 6. **`docs/15` section 5.1** says 22 cocotb tests in the pilot suite;
    the suite run for this document reports 23.
 7. **`tt/docs/info.md` under-describes the die it ships with.** Added
-   2026-09-09. Its pilot-only register table lists three registers
+   2026-09-09. **CLOSED 2026-09-11.** *The gap described below is gone
+   and the paragraph is left standing as the record of what the
+   submitted datasheet omitted between 2026-08-29, when
+   `CNT_EVQ_OUT_OVF` entered the decode, and the regeneration. Read it
+   in the past tense. What closed it: `tt/` was regenerated from a
+   `scripts/gen_tt_submission.py` that no longer writes the pilot-only
+   addresses down at all — `_pilot_decode()` reads them out of
+   `hw/rtl/pilot_top.v` and `_pilot_only_table()` exits the generator
+   if the two sets disagree, and `_fault_clr_bits()` does the same for
+   the mask. `tt/docs/info.md` now lists `CNT_EVQ_OUT_OVF` at 0x0AC and
+   `CNT_EVQ_PAR` at 0x0B0, allocates `FAULT_CLR` bits 6 and 7 to them,
+   says "Writing `0xFF` clears everything", and carries its own dated
+   note leaving the superseded `0x3F` standing rather than deleting it.
+   `sw/tests/test_tt_submission.py`'s
+   `test_pilot_only_registers_and_fault_clr_bits_are_documented` no
+   longer pins the two names: the pinned set emptied, so the pin was
+   retired rather than widened — a widened pin cannot tell a fix from a
+   regression — and what stands in its place is the two-directional
+   form, that every register the die decodes appears in the shipped
+   table and that the superseded mask does not. The comments at
+   `sw/tests/test_tt_submission.py` lines 475 and 606 are that
+   retirement written out.* Its pilot-only register table lists three registers
    (0x0A0, 0x0A4, 0x0A8) and its `FAULT_CLR` table lists bits 0 to 5,
    ending "Writing `0x3F` clears everything". The die those files
    accompany — `tt/src/pilot_top.v`, byte-identical to

@@ -1356,9 +1356,16 @@ against a design that did not exist.**
    from a netlist nobody could rebuild.
 9. **`.A_REN(req_i && !do_write)`.** `docs/57` section 8.3: six AND
    gates, **0.147 mW**, *"the cheapest measured saving in this document
-   by two orders of magnitude in cost"*, and still not done. It is one
+   by two orders of magnitude in cost"*, ~~and still not done. It is one
    line in `hw/soc/rtl/soc_mem_sram.v` and it would invalidate nothing
-   above except by changing the netlist.
+   above except by changing the netlist.~~ **DONE 2026-09-12**, and it
+   was fourteen lines rather than one: the six data macros plus the
+   eight row-port macros, which carry the same `!A_MEN & A_REN`
+   idle state for the same reason and which `docs/57` did not price. The
+   sentence about invalidating nothing holds and now applies -- every
+   layout in this repository predates it, alongside the five RTL defects
+   of 2026-09-11 and the two changes of 2026-09-12. `docs/60` section 9
+   carries the marker for all of them.
 
 **And what is still blocked, unchanged by this document.** DRC, LVS and
 XOR, on `docs/12`'s NO-GO and `docs/54`'s closed exit. A gate-level

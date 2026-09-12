@@ -64,9 +64,12 @@ WHAT IS NOT COVERED HERE
     content of docs/52 for the other. Test 1 injects nothing at all:
     that deadlock is reachable on a healthy part with the documented
     event stream, which is why it is the serious one.
-  - Nothing here says the E_DECIDE hold is now BOUNDED. It is not.
-    soc_npu.v names the three cases the escape does not cover and this
-    file does not pretend to close them.
+  - *Corrected 2026-09-11.* This read "Nothing here says the E_DECIDE
+    hold is now BOUNDED. It is not. soc_npu.v names the three cases the
+    escape does not cover and this file does not pretend to close them."
+    It was true for a day. Tests 5 and 6 below are the bound and its
+    price, and soc_npu.v's three cases are all of them the second one
+    -- `drain_want` low -- which is what `stall_the_die` already builds.
 """
 
 import sys
@@ -501,3 +504,118 @@ async def test_a_wait_counter_pushed_past_its_bound_expires_now(dut):
     # And the part still works afterwards, so that neither number above
     # is a measurement of a machine that had simply died.
     assert await env.nrd(ADDR["ID"]) != 0
+
+
+# =====================================================================
+# 5. E_DECIDE's hold was unbounded, and the bound reports what it costs
+# =====================================================================
+#
+# ADDED 2026-09-11, and the docstring at the top of this file is
+# corrected below by it: "Nothing here says the E_DECIDE hold is now
+# BOUNDED. It is not." was true when it was written and is not now.
+#
+# The escape added in test 1 covers the INTERLOCK -- the die is full
+# because its own output has nowhere to go -- and soc_npu.v named the
+# three cases it does not cover: a die refusing with nothing to drain, a
+# drain switched off at CTRL.OUT_EN, and a capture queue software has
+# stopped reading. In all three `drain_want` is low, the escape does not
+# fire, and the engine used to wait in E_DECIDE for ever. Because the
+# engine is ONE state machine, that stopped every later event too: one
+# register left at its reset value took the whole event path down and
+# only CTRL.FLUSH brought it back.
+#
+# `stall_the_die` above already builds exactly the second of those three
+# -- it turns the drain OFF and leaves it off -- so this test needs no
+# new stimulus and no upset. It is the same healthy part as test 1 with
+# the rescue never arriving.
+
+DECIDE_MAX = 4095           # soc_npu.v's default, and the bound under test
+CAUSE_EVT_TO = 1 << 14
+
+
+@cocotb.test()
+async def test_a_die_that_never_takes_the_event_does_not_stop_the_engine(dut):
+    """THE DEFECT. The die is full, the drain is off, nobody rescues it.
+
+    On the RTL as it was the engine sat in E_DECIDE until the simulation
+    ended. It now waits DECIDE_MAX cycles and discards the event, and
+    this test is about BOTH halves of that: that it leaves, and that it
+    says so.
+
+    Run this against a copy of soc_npu.v from before the bound and it
+    fails on the first assertion -- the state never changes.
+    """
+    env = Env(dut)
+    await env.reset()
+    await stall_the_die(env, dut)
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_EVT_TO == 0, (
+        "EVT_TO is set before the bound could have expired, so this test "
+        "would pass\nwithout the thing it is about ever happening.")
+
+    # The stall above already burned 600 cycles inside E_DECIDE, so the
+    # margin here is deliberate rather than tight: what is being checked
+    # is that the wait ENDS, not the exact cycle it ends on.
+    left_at = None
+    for n in range(DECIDE_MAX + 400):
+        await RisingEdge(dut.clk_i)
+        if int(dut.ev_state.value) != E_DECIDE:
+            left_at = n
+            break
+
+    assert left_at is not None, (
+        "the engine is still in E_DECIDE after {} further cycles with the "
+        "die full,\nthe drain off and nothing to rescue it. That is the "
+        "unbounded hold: one register\nleft at its reset value stops every "
+        "event, not just this one, until CTRL.FLUSH.".format(
+            DECIDE_MAX + 400))
+
+    assert int(dut.ev_state.value) == E_IDLE, (
+        "the engine left E_DECIDE for state {} and not E_IDLE ({}). The "
+        "bound returns to\nE_IDLE on purpose, so that DRAIN OUTRANKS "
+        "INJECT gets its turn before the next\nevent is popped -- if the "
+        "die does have something to give, the next cycle takes it.".format(
+            int(dut.ev_state.value), E_IDLE))
+
+
+@cocotb.test()
+async def test_the_discarded_event_is_reported_and_is_not_a_silent_loss(dut):
+    """THE PRICE, and the only thing that makes it payable.
+
+    The bound LOSES the event. That is acceptable here and nowhere else
+    in this block, and only because the loss reports itself: a part that
+    discarded reads IRQCAUSE.EVT_TO, a part that is merely busy reads
+    nothing. Before the bound the two were indistinguishable from
+    outside, because the second one never ended.
+
+    Checked in three directions, because a sticky bit that is always set
+    would satisfy the first alone:
+      * it is CLEAR while the engine is still waiting;
+      * it is SET after the discard;
+      * it is write-1-to-clear like every other fault bit, so software
+        can tell a second discard from the first.
+    """
+    env = Env(dut)
+    await env.reset()
+    await stall_the_die(env, dut)
+
+    assert await env.crd(C_IRQCAUSE) & CAUSE_EVT_TO == 0
+
+    for _ in range(DECIDE_MAX + 400):
+        await RisingEdge(dut.clk_i)
+        if int(dut.ev_state.value) != E_DECIDE:
+            break
+
+    cause = await env.crd(C_IRQCAUSE)
+    assert cause & CAUSE_EVT_TO, (
+        "the engine left E_DECIDE and IRQCAUSE reads 0x{:05x}: EVT_TO is "
+        "clear.\nAn event was discarded and nothing records it, which is "
+        "the silent loss this\nblock must never produce -- worse than the "
+        "unbounded wait it replaced, because\nthe wait at least stopped "
+        "loudly.".format(cause))
+
+    await env.cwr(C_IRQCAUSE, CAUSE_EVT_TO)
+    assert await env.crd(C_IRQCAUSE) & CAUSE_EVT_TO == 0, (
+        "EVT_TO did not clear on a write-1-to-clear. Software that "
+        "acknowledged one\ndiscard could not then see a second.")

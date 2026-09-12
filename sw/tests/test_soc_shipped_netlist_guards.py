@@ -104,6 +104,28 @@ REGENERATE = ("hw/soc/flow/syn_soc_top.sh, then hw/soc/flow/pnr_soc_top.sh "
               "for a layout; docs/75 section 11 gives both command lines "
               "with the environment they need")
 
+# WIDTHS THESE WORDS USED TO CARRY, so that "this netlist predates a
+# widening" and "something removed bits from a shipped netlist" stop
+# looking identical to this file.
+#
+# Every path under hw/soc/pnr/runs/ and hw/soc/out/ is a git-ignored
+# build product, so the retained netlists are whatever the machine last
+# hardened -- and when the RTL gains a protected bit, every one of them
+# is instantly narrower than the RTL. Without this table the guard goes
+# red on a correct widening and stays red until someone spends
+# seventeen hours re-hardening, which is how a guard gets deleted.
+#
+# A width is added here ONLY with the change that retired it, its date
+# and its reason. A netlist at a width that is neither current nor
+# listed is still an error, and always will be.
+RETIRED_WIDTHS = {
+    "npu": {
+        25: ("25 until 2026-09-12, when E_DECIDE's bound added the "
+             "C_EVT_TO cause bit: NCAUSE 14 -> 15 widens both the sticky "
+             "field and the mask, so PROT_W went 25 -> 27"),
+    },
+}
+
 
 def _netlists():
     """Every whole-SoC netlist the working tree has kept, newest first.
@@ -182,6 +204,8 @@ def test_every_replica_in_every_retained_netlist_is_a_disjoint_cone(
         netlists, which):
     what, width, doc = STRUCTURES[which]
     seen = 0
+    current = 0
+    predating = []
     for path in netlists:
         rows = _census(path, which)
         if not any(r["width"] for r in rows):
@@ -193,13 +217,41 @@ def test_every_replica_in_every_retained_netlist_is_a_disjoint_cone(
         seen += 1
         w = _check(rows, what, width, path.name + " (" + path.parent.name
                    + ")")
-        assert w == width, (
-            "{} is {} bits in {} and the RTL says {}. If the protected "
-            "word was widened, this netlist predates the change and "
-            "should be regenerated; if it was not, something removed "
-            "bits from it.".format(what, w, path, width))
+        if w == width:
+            current += 1
+            continue
+        # NOT THE CURRENT WIDTH. Two very different things look like
+        # this and the guard has to tell them apart, which is why
+        # RETIRED_WIDTHS exists rather than a tolerance.
+        assert w in RETIRED_WIDTHS.get(which, {}), (
+            "{} is {} bits in {} and the RTL says {}, and {} is not a "
+            "width this word has\never carried. If the protected word "
+            "was widened, declare the old width in\nRETIRED_WIDTHS with "
+            "its date and the commit. If it was not, something REMOVED "
+            "bits\nfrom a shipped netlist, which is the defect this file "
+            "exists for.".format(what, w, path, width, w))
+        predating.append((path, w))
     if not seen:
         pytest.skip("no retained netlist contains {} ({})".format(what, doc))
+
+    # Amber, not green, and printed rather than swallowed: a run where
+    # EVERY retained netlist predates the RTL is a run where this guard
+    # checked the disjointness of three cones in a design the tree no
+    # longer produces. That is exactly the state docs/60 section 9 and
+    # paper/main.tex section 2 carry markers for, and it should be
+    # visible here too rather than inferred from those.
+    if predating:
+        why = RETIRED_WIDTHS[which]
+        print("\n{}: {} of {} retained netlists predate a widening of {}."
+              .format(which, len(predating), seen, what))
+        for path, w in predating:
+            print("  {} bits in {} -- {}".format(
+                w, path.parent.name, why.get(w, "no reason recorded")))
+        if not current:
+            print("  NONE is at the RTL's current {} bits. The "
+                  "disjointness below is proved on a design\n  the tree "
+                  "no longer produces. Regenerate with: {}".format(
+                      width, REGENERATE))
 
 
 def test_the_name_census_undercounts_and_the_cone_does_not(netlists):

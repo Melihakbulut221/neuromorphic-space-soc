@@ -127,6 +127,55 @@ they disagree by a factor of up to four.** **[fact]**
 | challenges | 5000 | 12500 |
 | ecosystem | 2500 | 10000 |
 
+> **THE LIMITS MOVED WHEN THE CALL OPENED, AND FOUR OF THE SIX DRAFTS
+> ARE NOW OVER. [D-13] closed 2026-09-12, nine days late.**
+>
+> The table above was read off the form on 2026-08-31, while the call
+> was still "coming soon". Re-read from the live form at
+> `nlnet.nl/propose/` on 2026-09-12, the fields are fewer and tighter
+> **[fact]**:
+>
+> | Field, as the live form names it | Stated limit now | Was |
+> |---|---:|---|
+> | Project summary | **1000** | abstract, 1200 advisory / 1500 hard |
+> | Applicant experience | **2000** | experience, 2500 / 10000 |
+> | Budget breakdown | **4000** | budget, 2500 / 10000 |
+> | Comparison with other efforts | **4000** | comparison, 4000 / 10000 |
+> | Technical challenges | **4000** | challenges, 5000 / 12500 |
+> | Ecosystem and engagement | **2000** | ecosystem, 2500 / 10000 |
+> | Other funding sources | **1000** | *(was part of budget)* |
+> | AI model and prompts | **8000** | *(new field, see 3.12)* |
+>
+> **Measured against the drafts in section 3, which are delimited by
+> `<!-- field:NAME:begin -->` markers so this is a count and not an
+> estimate [fact, 2026-09-12]:**
+>
+> | Draft | chars | new limit | |
+> |---|---:|---:|---|
+> | abstract | 1,197 | 1,000 | **197 over** |
+> | experience | 2,481 | 2,000 | **481 over** |
+> | challenges | 4,999 | 4,000 | **999 over** |
+> | ecosystem | 2,498 | 2,000 | **498 over** |
+> | comparison | 3,995 | 4,000 | fits, by five characters |
+> | use | 2,484 | 4,000 | fits |
+>
+> **Every one of the four was written to sit just under the OLD
+> advisory** — 1,197 against 1,200, 2,481 against 2,500, 4,999 against
+> 5,000, 2,498 against 2,500 — which is exactly why each is now just
+> over the new one. Writing to the edge of a limit makes a draft
+> maximally sensitive to that limit moving, and section 1.2's own
+> argument for treating the advisory as binding is what put them there.
+> The four need cutting by 197, 481, 999 and 498 characters before
+> submission; none needs rewriting.
+>
+> **What this re-read could not do.** The 2026-08-31 reading separated
+> the placeholder's advisory number from the `maxlength` attribute. This
+> one reads what the page states per field and cannot tell the two
+> apart, so the "Stated limit now" column may be either. Treat it as the
+> binding one until someone opens the form and reads the attribute —
+> which is the safe direction, and is the same direction section 1.2
+> already argues for.
+
 **Why this is treated as binding rather than as guidance.** Three of the
 placeholders say "be concise" in as many words; the printed guidance
 says "be short and to the point"; the FAQ says a proposal should take
@@ -429,14 +478,36 @@ sentences, and the SoC's is stated as a limitation rather than omitted
 
 ### 3.3 Website (limit 100)
 
-**[D-6]** — blocked on `docs/14-licensing-decision.md`. That memo was
+**[D-6]** — ~~blocked on `docs/14-licensing-decision.md`. That memo was
 rewritten 2026-09-05 to be decidable in one sitting, and its section 0
 records that it now blocks the **TTIHP26b shuttle push on 2026-09-21**
 before it blocks this application. If it is signed for the shuttle, this
-field has a real URL by the end of September. Options in order of
-preference: (a) public repository URL; (b) a static project page listing
-the public artefacts; (c) the existing public Tiny Tapeout project page
-for `tt-um-lif-crossbar`; (d) blank.
+field has a real URL by the end of September.~~ *Corrected 2026-09-11:
+the memo was signed 2026-09-09 and the conditional above is spent. The
+licence question is answered.*
+>
+> *And so is the field, 2026-09-12. The correction above was written on
+> 2026-09-11 and ended "nothing in the tree has published yet", which
+> was already false when it was written: `docs/78` section 1 does say
+> the generator neither pushes nor creates a repository, and `docs/78`
+> **section 7** records that a person did both on 2026-09-10. Reading
+> section 1 and stopping is how the sentence went wrong -- the same
+> shape of error `docs/81` is about, made inside a correction of it.*
+>
+> **There are two real URLs now**, and option (a) is answered twice:
+>
+> - `https://github.com/Melihakbulut221/nssoc` -- the curated public
+>   mirror, 530 files, regenerated from this repository and checked
+>   against its generator on every push. `docs/78` is the whole record
+>   of what it does and does not carry.
+> - `https://github.com/Melihakbulut221/tt-um-melihakbulut-nssoc` --
+>   the TTIHP26b submission itself, whose root IS the contents of `tt/`,
+>   pushed 2026-09-11. Its hosted GDS build, Tiny Tapeout precheck and
+>   gate-level test all pass.
+>
+> Options in order of preference: (a) public repository URL; (b) a
+> static project page listing the public artefacts; (c) the existing
+> public Tiny Tapeout project page for `tt-um-lif-crossbar`; (d) blank.
 
 ### 3.4 Abstract (advisory 1200, hard 1500) — required field
 
@@ -496,7 +567,7 @@ Where this project stands, all of it checkable. A RISC-V SoC: an Ibex core with 
 
 Fault tolerance is measured, not asserted: seven injection campaigns, each mechanism replayed against the same upsets with it removed. Design-weighted silent corruption in the core fell from 2.8% +/- 1.6 to 1.3% +/- 0.4; 128 of 128 upsets in the time base are corrected where the unprotected design displaced the clock 95 times and announced none.
 
-Physical: the 6x2 pilot tile signs off on IHP SG13G2 with every geometric counter at zero and three corners met with a 5% derate the flow itself omits. The full SoC is placed and routed whole with six SRAM macros and zero detailed-route DRC errors - but it misses its timing constraint, and the vendor macros cannot be signed off on this PDK version, which is a defect I have characterised twice and reported upstream.
+Physical: the 6x2 pilot tile signs off on IHP SG13G2 with every geometric counter at zero and three corners met with a 5% derate the flow itself omits. The full SoC is placed and routed whole with six SRAM macros and zero detailed-route DRC errors - but it misses its timing constraint, and the vendor macros cannot be signed off on this PDK version, which is a defect I have characterised twice and written up as two reproducible upstream reports, not yet filed.
 
 I also publish what did not work: a windowed watchdog my own measurement asked for caught 0 of 30 dead machines and was removed, written up beside the mechanisms that worked, with the same denominators.
 
@@ -504,10 +575,46 @@ Method: spec-first. Golden models before RTL. An assumption ledger shipped with 
 ```
 <!-- field:experience:end -->
 
+**Corrected 2026-09-11, and this is the one correction in this document
+that would have been a false claim in front of a reviewer.** The last
+sentence of the field read ~~"a defect I have characterised twice and
+reported upstream"~~. Nothing in this repository has reported anything
+upstream. It now reads "characterised twice and written up as two
+reproducible upstream reports, not yet filed", which is what
+`docs/54` section 8.2 actually produced.
+
+The claim was false on the day it was written, not overtaken later.
+It entered at `fc252b9` on 2026-09-05, and `docs/54` — in the tree
+since `6ff7cd9` on 2026-09-03 — already closed with *"The two reports
+of 8.2 have not been filed. They are written up here; nobody has sent
+them"* at section 12 item 2. The same commit wrote section 4.1's T4
+row, which says *"Two upstream reports are drafted and not filed"*, so
+this document contradicted itself inside one revision and the half a
+reviewer reads is the field, not the budget table. A search of the
+tree for an issue number, a URL or a mail record returns nothing: the
+one upstream ticket cited anywhere here, IHP-Open-PDK issue #239
+(`docs/04` section 1.2), was opened by somebody else and is quoted as a
+pre-existing defect rather than as this project's filing.
+`docs/63` section 7.5 is in the same state and says so in its own
+words — *"It has not been reported upstream from inside this
+repository"*.
+
+What survives the correction is the part that was always true and is
+the stronger claim anyway: the blocker is characterised twice
+(`docs/12` section 8, `docs/54`), reproduced three ways including from
+the bare vendor macro alone, and narrowed to one question this project
+refuses to answer for itself. **Section 5's milestone M2 is the money
+for filing it**, which is why this overstatement mattered more than a
+stale date would: an application must not describe as done the work it
+is asking to be paid to do, and stage 2 verifies. Re-count the field
+after any further edit — section 9.1 was refilled for this one.
+
 **[D-7]** — before pasting: (a) the `tt-um-lif-crossbar` accuracy figure
 stays **removed** (section 10 item 6); (b) add public URLs for the Tiny
-Tapeout design and, if `docs/14` lands, for this repository; (c) decide
-whether to name the adjacent programmes explicitly.
+Tapeout design and, ~~if `docs/14` lands~~ *(it was signed 2026-09-09;
+what is missing is now a published tree, not a decision — see D-6)*,
+for this repository; (c) decide whether to name the adjacent programmes
+explicitly.
 
 **[D-22, updated]** — the timing sentence now cites the frozen `6x2`
 sign-off rather than any superseded run, and the derate clause is backed
@@ -781,7 +888,7 @@ Recommendation: keep it generic.
 | R-5 | Shuttle slip pushes M4-M7 beyond the MoU window | Medium, and **higher than in August**: no IHP run after 26b is announced **[fact, docs/37]** | Milestones unpaid or renegotiated | Six-month post-end claim window **[fact]**; propose end dates with margin; do not name a shuttle ([D-16]) |
 | R-6 | The SRAM sign-off blocker does not close upstream | **Medium-high, and now measured rather than feared** | T4 and M2 slip | Both blocking causes are upstream and identified; `docs/54` has narrowed one to a single answerable question and drafted the reports. M2 is written so that a **documented negative with a stated foundry question and a measured fallback** is a completed milestone, which is how this project already treats a negative result |
 | R-7 | Tax treatment of the donation in Türkiye | Certain to need handling | Effective grant value reduced | The grantee "is responsible for paying any and all taxes" **[fact]**; obtain local advice before signing |
-| R-8 | Publication obligation collides with the private-repo posture | **Certain, and now blocking a nearer deadline than this one** | Blocks the TTIHP26b push on 2026-09-21, then MoU signature | `docs/14`, rewritten 2026-09-05 to be decidable in one sitting. Its section 0 records that it blocks the shuttle before it blocks the grant. **Must be closed for the shuttle, which settles it for the application** |
+| R-8 | Publication obligation collides with the private-repo posture | ~~**Certain, and now blocking a nearer deadline than this one**~~ **Retired 2026-09-11 as a licence risk** | ~~Blocks the TTIHP26b push on 2026-09-21, then MoU signature~~ | `docs/14`, rewritten 2026-09-05 to be decidable in one sitting. Its section 0 records that it blocks the shuttle before it blocks the grant. ~~**Must be closed for the shuttle, which settles it for the application**~~ *Corrected 2026-09-11: it was closed for the shuttle. `docs/14` section 11 was signed 2026-09-09 and `tt/` carries CERN-OHL-W-2.0, so the push is unblocked and the MoU's licence term is answered in advance. What the collision leaves behind is not a licence question: `docs/78` records that the published tree is a **curated mirror without the git history**, and that shape is the thing an MoU-stage conversation may ask about. See D-6* |
 | R-9 | A claim fails stage-2 verification | Low if disciplined | Score damage or rejection | Every figure here is tagged and traceable; counts re-run 2026-09-05 (section 9.2); section 10 lists the documents whose numbers must not be quoted |
 | R-10 | Positioning language drifts above the export-safe threshold | Low | Serious and irreversible once submitted | `docs/05` section 4 applied sentence by sentence; re-check at final review ([D-17]). Specifically: do not import `docs/04`'s "no SEL to 65 MeV·cm²/mg" sentence or `docs/06`'s uncited ~200 krad figure, **do not publish any clock frequency** (`docs/53` section 9.2, `docs/60`), and **do not write a sentence that implies the SoC is manufacturable today** (`docs/12` section 8, `docs/54`) |
 | R-11 | The proposal is read as productisation rather than R&D and fails the stage-1 knock-out | Low under the section 2.1 framing **[estimate]** | Not reviewed at all | "Research and development as the primary objective" is a hard criterion **[fact]**; T1-T4 are all open questions with stated methods and no assured answer |
@@ -795,22 +902,30 @@ Recommendation: keep it generic.
 **The one that blocks everything else** is at the top. The rest are
 ordered by date.
 
+*Corrected 2026-09-11: nothing is at the top for that reason any more.
+D-0 was signed 2026-09-09 and the sentence above described the table
+as it stood before that. D-0 keeps its position as the record of what
+this application spent a fortnight waiting on, and the row itself now
+says what happened; the decision that is genuinely unresolved and
+gating public text is D-14, which `docs/14` section 11.2 re-states as
+row 11 and which was left open by the same signature.*
+
 | ID | Decision | Owner | Needed by | State |
 |---|---|---|---|---|
-| **D-0** | **Sign or reject `docs/14-licensing-decision.md`.** Rewritten 2026-09-05 so it can be signed in one sitting: eleven rows, defaults marked. Its recommendation is CERN-OHL-W-2.0 for hardware sources, Apache-2.0 for software, CC-BY-4.0 for documents and data. **The binding deadline is no longer this application's — it is the TTIHP26b shuttle close, 2026-09-21 20:00 UTC**, because a Tiny Tapeout submission is a public repository and the tree refuses to ship without a licence. NLnet makes the licence a term of the MoU and publication the payment trigger for every milestone. Note `docs/06` names CERN-OHL-**S**; `docs/14` recommends **-W** and gives the reason | developer | **2026-09-21, effectively now** | **unsigned, overdue** |
+| **D-0** | **Sign or reject `docs/14-licensing-decision.md`.** Rewritten 2026-09-05 so it can be signed in one sitting: eleven rows, defaults marked. Its recommendation is CERN-OHL-W-2.0 for hardware sources, Apache-2.0 for software, CC-BY-4.0 for documents and data. **The binding deadline is no longer this application's — it is the TTIHP26b shuttle close, 2026-09-21 20:00 UTC**, because a Tiny Tapeout submission is a public repository and the tree refuses to ship without a licence. NLnet makes the licence a term of the MoU and publication the payment trigger for every milestone. Note `docs/06` names CERN-OHL-**S**; `docs/14` recommends **-W** and gives the reason. **Corrected 2026-09-11: it was signed on 2026-09-09 and this row had said "unsigned, overdue" for two days after the fact.** `docs/14` section 11 carries the signature — rows 1 to 9 accepted as defaulted, which is exactly the recommendation this row describes: CERN-OHL-W-2.0 for hardware sources, Apache-2.0 for software, CC-BY-4.0 for documents and datasets. Section 11.3 lists the stage-1 mechanics executed the same day, and they are on disk: `LICENSES/` holds the four texts; `scripts/spdx_check.py` reports **338 tagged, 192 covered by path, 0 missing, 0 wrong** run for this correction on 2026-09-11 (`docs/14` section 11.3's own figure, 309 tagged on the day of signature, is its measurement and stands); `tt/LICENSE` is CERN-OHL-W-2.0 with `tt/LICENSES/` beside it and `tt/LICENSE.PENDING.md` is gone. **The TTIHP26b submission is no longer blocked by this memo.** Still not released by that signature, and not to be read out of this row: the EUR 955 shuttle purchase itself, rows 10 and 11 of the memo, and anything under `docs/05` section 3, `docs/06` or `docs/13` | developer | ~~**2026-09-21, effectively now**~~ *met 2026-09-09* | ~~**unsigned, overdue**~~ **signed 2026-09-09** |
 | D-1 | Applicant name: legal name or alias | developer | 2026-10-27 | open |
 | D-2 | Contact email address | developer | 2026-10-27 | open |
 | D-3 | Phone number | developer | 2026-10-27 | open |
 | D-4 | Apply as individual or via an entity | developer | 2026-10-27 | open |
 | D-5 | Project name (recommendation: option A) | developer | 2026-09-30 | open |
-| D-6 | Website field value — depends on D-0 | developer | 2026-10-15 | blocked on D-0 |
+| D-6 | Website field value — ~~depends on D-0~~. *Corrected 2026-09-11: D-0 was signed 2026-09-09, so this is no longer blocked on a decision. `docs/14` section 11.3 says D-6 and D-7 "can be closed with real URLs once the public tree exists"; `docs/78` section 1 then decided the shape — a generated curated mirror carrying the tree and not the history, written by `scripts/gen_public_mirror.py`, which "does not push and it does not create a repository". So the blocker is now publication, an act the memo deliberately left to the owner, and until it happens option (a) has no URL behind it* | developer | 2026-10-15 | ~~blocked on D-0~~ **open — waiting on publication, not on a decision** |
 | D-7 | Experience field: public URLs, and how explicitly to name adjacent programmes | developer | 2026-10-15 | open |
 | D-8 | Confirm or replace the EUR 40/hour rate | developer | 2026-09-30 | open |
 | D-9 | Produce the two attachments | engineering | 2026-10-27 | open |
 | D-10 | Generative-AI disclosure answer and, if applicable, the provenance log **and the explanation of why it was necessary** | developer | at submission | open |
 | D-11 | Supply an OpenPGP key or not | developer | at submission | open |
 | D-12 | Ask an office hour whether irradiation-facility time and instrumentation are eligible out-of-pocket costs (last Wednesday of each month, 16:00 CET, NLnet's Matrix room) | developer | 2026-09-30 | open |
-| D-13 | Re-verify the form fields, `maxlength` values **and placeholders** now that the call has opened | developer | **overdue — the call opened 2026-09-03** | open |
+| D-13 | Re-verify the form fields, `maxlength` values **and placeholders** now that the call has opened | developer | **done 2026-09-12, nine days late; section 1.2 carries the result — the limits moved and four drafts are over** | closed |
 | D-14 | Resolve `docs/02` open question 2 (Solderpad RTL reuse vs independent implementation) — determines whether "clean-room" may be used at all. `docs/14` section 5.1 records that its 2026-09-02 date has passed | developer | **overdue** | open |
 | D-15 | Obtain a real Co-60 facility quote to replace the H5 estimate | developer | 2026-10-15 | open |
 | D-16 | Keep the shuttle generic in the milestone plan (recommendation: generic, and `docs/37`'s "no IHP run after 26b is announced" strengthens it) | developer | 2026-10-27 | open |
@@ -828,8 +943,8 @@ ordered by date.
 
 | Date | Action | Owner |
 |---|---|---|
-| **now** | **D-0: sign or reject `docs/14`.** The shuttle needs it in sixteen days; everything downstream waits on it | developer |
-| **now** | D-13: the call opened 2026-09-03; re-fetch the form and re-verify fields, limits and placeholders | developer |
+| ~~**now**~~ **done 2026-09-09** | ~~**D-0: sign or reject `docs/14`.** The shuttle needs it in sixteen days; everything downstream waits on it~~ *Corrected 2026-09-11: signed 2026-09-09, `docs/14` section 11, and the stage-1 mechanics executed the same day. This row is left in place because it is the record of what the schedule was built around; section 7's D-0 row carries the detail* | developer |
+| ~~**now**~~ **done 2026-09-12** | ~~D-13: the call opened 2026-09-03; re-fetch the form and re-verify fields, limits and placeholders~~ Section 1.2. What is now owed instead: cut the abstract, experience, challenges and ecosystem drafts by 197, 481, 999 and 498 characters | developer |
 | 2026-09-21 20:00 UTC | TTIHP26b closes. Slot bought, tree licensed, pushed, GDS action and hosted precheck run | developer |
 | 2026-09-30 | D-5, D-8, D-12, D-14, D-19, D-20 closed | developer |
 | 2026-10-15 | D-6, D-7, D-15 closed | developer |
@@ -864,12 +979,17 @@ for f in abstract experience use comparison challenges ecosystem; do
   printf '%-12s %s\n' "$f" "$(count $f)"; done
 ```
 
-Measured on 2026-09-05 with that command. **[fact]**
+Measured on 2026-09-05 with that command. **[fact]** *Re-run
+2026-09-11 with that same command, because section 3.5's upstream
+sentence was corrected and this table says in its own words that any
+edit needs a re-count. Five of the six came back unchanged to the
+character; only `experience` moved, and its 2026-09-05 value is kept
+beside the new one rather than overwritten.* **[fact]**
 
 | Field | Characters | Advisory | Hard | Under advisory by | Hard headroom |
 |---|---:|---:|---:|---:|---:|
 | abstract | **1197** | 1200 | 1500 | 3 | 303 |
-| experience | **2436** | 2500 | 10000 | 64 | 7564 |
+| experience | **2481** (~~2436~~, 2026-09-05) | 2500 | 10000 | 19 | 7519 |
 | use | **2484** | 2500 | 10000 | 16 | 7516 |
 | comparison | **3995** | 4000 | 10000 | 5 | 6005 |
 | challenges | **4999** | 5000 | 12500 | 1 | 7501 |
@@ -906,6 +1026,7 @@ Run on 2026-09-05 at git HEAD `ed51de0`. **[fact]**
 | "21.04 % slower in wall time" | `docs/50` section 7 | Cycles times period, both measured |
 | pilot sign-off: "every geometric counter at zero", "three corners with a 5 % derate the flow itself omits" | `docs/31` and `docs/34`; the derate defect is `docs/28` section 4.4(b) | Magic DRC, KLayout DRC, XOR, all four Netgen LVS counters, antenna, power grid and illegal overlap all zero; precheck 10 of 10 |
 | SoC layout: "zero detailed-route DRC errors", "misses its timing constraint", "cannot be signed off on this PDK version" | `docs/47` sections 3 and 5; `docs/61`; `docs/12` section 8; `docs/54` | 0 detailed-routing DRC, 0 disconnected pins, 0 power-grid violations; setup missed at the slow corner; **no Magic DRC, no LVS, no XOR has ever been run on the SoC** |
+| "characterised twice and written up as two reproducible upstream reports, not yet filed" | `docs/12` section 8 and `docs/54` for the two characterisations; `docs/54` section 8.2 for the two reports and section 12 item 2 for their state | Two reports drafted: `Sdiod.d`/`Sdiod.e` firing on designs with no Schottky diode, and `ihp-sg13g2.drc` reading layer 25/0 and using it in no rule. **Neither is filed.** *Added 2026-09-11 with the correction under section 3.5; the sentence this row provenances said "reported upstream" until that date, and nothing anywhere in the tree — issue number, URL or mail record — supports that it ever was* |
 | "nineteen confirmed findings" | `docs/07` section 1 | "Nineteen findings survived verification: 5 high, 8 medium, 6 low." |
 | "one of them in my own funding material" | `docs/07` F-4 | F-4 is in `docs/06`, the funding document |
 

@@ -44,7 +44,13 @@ string. See its docstring for the trade-off that carries.
 
 Regenerating the evidence, from the repository root::
 
-    hw/openlane/run_trial.sh --run-tag trial-03-signoff
+    hw/openlane/run_trial.sh --design aer_fifo --run-tag g0gates2
+
+*Corrected 2026-09-12: this said `--run-tag trial-03-signoff` for a day
+after section 4 moved to `g0gates2`, which would have regenerated the
+superseded run and then failed every test in this file against it. The
+run tag the tests actually use is read out of the document by
+`_run_tag()`; this line is the one place it was written twice.*
 
 Scope: section 4 sign-off and provenance only - the DRC/LVS/antenna/
 timing claims of 4.1 and 4.4, the run tag and stage count of the section
@@ -127,6 +133,11 @@ def _slice(text, start, end):
 
 def _section_4_preamble():
     return _slice(_doc(), "## 4. Trial harden results", "### 4.1")
+
+
+def _section_4_text():
+    """Section 4.4a, where the one non-zero violation counter lives."""
+    return _slice(_doc(), "#### 4.4a Max-fanout", "### 4.5")
 
 
 def _run_tag():
@@ -617,3 +628,46 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
         f"and the run resolved them: {sorted(stale)}. The run has been "
         "redone; delete them from POSTDATE_EVIDENCE so the guard checks "
         "them again")
+
+
+def test_max_fanout_section_is_about_the_documented_run(metrics):
+    """Section 4.4a's counts, which drifted for a day because nothing
+    read them.
+
+    4.4a discloses the one violation counter in `metrics.json` that is
+    NOT zero, and it is the only numeric section of the document that no
+    test parsed. When section 4 moved from `trial-03-signoff` to
+    `g0gates2` on 2026-09-11 every machine-checked table moved with it
+    and this one did not: it went on publishing 90 violations, 89
+    clock-tree buffers and `fanout278/X` inside a section whose preamble
+    says every number in it comes from the other run.
+
+    The count is checked in BOTH directions -- the document's number is
+    the run's, and the document does not still carry the superseded one
+    -- because a section that had drifted once could drift back.
+    """
+    text = _section_4_text()
+    m = re.search(r"`design__max_fanout_violation__count = (\d+)`", text)
+    assert m, (
+        "section 4.4a no longer states the max-fanout count. It is the "
+        "one violation counter\nin metrics.json that is not zero, and "
+        "disclosing it is the whole point of 4.4a.")
+    claimed = int(m.group(1))
+    measured = _metric(metrics, "design__max_fanout_violation__count")
+    assert claimed == measured, (
+        f"section 4.4a says {claimed} max-fanout violations and "
+        f"{_run_tag()} has {measured}.")
+
+    for corner in (row["corner"] for row in _corner_rows()):
+        key = f"design__max_fanout_violation__count__corner:{corner}"
+        assert _metric(metrics, key) == measured, (
+            f"4.4a says the count is identical at all three corners; "
+            f"{corner} reads {_metric(metrics, key)} against {measured}")
+
+    # Against the whole document: _slice returns what follows its start
+    # marker, so the heading itself is not in `text`.
+    heading = re.search(r"#### 4\.4a Max-fanout: (\d+) violations", _doc())
+    assert heading and int(heading.group(1)) == measured, (
+        "4.4a's heading and its body disagree, or the heading no longer "
+        "carries the count.\nThe heading is what a reader skimming the "
+        "section sees.")

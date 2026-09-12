@@ -332,7 +332,16 @@ def _sites():
     for name, width in (("ev_state", 4), ("ev_wait", 4),
                         ("ev_start", 1), ("ev_we", 1), ("ev_addr", 7),
                         ("inj_rd_en", 1), ("cap_wr_en", 1),
-                        ("ev_resume", 1)):
+                        ("ev_resume", 1),
+                        # E_DECIDE's guard counter, added 2026-09-11 with
+                        # the bound it drives. Unprotected and rewritten
+                        # every cycle the engine is in E_DECIDE, so an
+                        # upset in it cannot persist -- what it CAN do is
+                        # end one wait early or late, and both ends land
+                        # on the same arm: an event discarded with
+                        # C_EVT_TO raised. A campaign that never injects
+                        # here cannot show that.
+                        ("dec_guard", 12)):
         s.append(Site("ev_seq", name, name, width))
 
     # ev_data: the event word in flight.  The word fetched out of the

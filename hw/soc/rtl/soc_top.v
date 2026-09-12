@@ -268,15 +268,58 @@ module soc_top #(
   // Reset
   // -------------------------------------------------------------------
   //
-  // Two domains. rst_ni is the power-on reset and reaches only the
-  // watchdog. Everything else runs on rst_sys_n, which the watchdog can
-  // pull -- that is its stage 2, and it is the reason its own state has
-  // to be outside this domain (soc_wdog.v W4).
+  // Two domains. The power-on reset reaches the four blocks whose state
+  // has to survive a watchdog reset -- soc_gptimer (the watchdog inside
+  // it), soc_busstat, soc_scrub and soc_boot. Everything else runs on
+  // rst_sys_n, which the watchdog can pull -- that is its stage 2, and
+  // it is the reason its own state has to be outside this domain
+  // (soc_wdog.v W4).
   //
-  // The synchroniser is not decoration. rst_req is a registered signal
-  // in this clock domain, so rst_sys_n would otherwise DEASSERT on a
-  // clock edge, which is a recovery-time violation at every flop in the
-  // SoC. Asynchronous assert, synchronous deassert, two stages.
+  // *Corrected 2026-09-11: this comment read "rst_ni is the power-on
+  // reset and reaches only the watchdog". It reaches four instances and
+  // has since soc_boot was added; the sentence was true when it was
+  // written and nothing moved it. Two of the three TMR structures in
+  // this design -- the watchdog's protected word and soc_boot's -- are
+  // inside blocks it reaches, which is why the paragraph below matters
+  // more than a naming fix.*
+  //
+  // BOTH RESETS ARE RELEASE-SYNCHRONISED, and until 2026-09-11 only one
+  // of them was.
+  //
+  // rst_sys_n has been since it was written, for the reason its own
+  // clause gives: rst_req is a registered signal in this clock domain,
+  // so rst_sys_n would otherwise DEASSERT on a clock edge, which is a
+  // recovery-time violation at every flop in the SoC.
+  //
+  // rst_ni had no such treatment and needs it for a different and worse
+  // reason. It is an input PORT. Nothing in this design drives it, no
+  // clock relates to it, and its release edge is asynchronous to clk_i
+  // at every flip-flop it reaches -- including the 29 of the watchdog's
+  // three replica banks and the 23 of soc_boot's. A release edge near a
+  // clock edge can be captured by some flip-flops of a bank and not
+  // others, so THREE REPLICAS CAN LEAVE RESET IN DIFFERENT CYCLES and
+  // the voter's first reads are over a word no single replica holds.
+  // The vote is a majority, so it survives one bank being late; it is
+  // not designed to survive two, and nothing here bounds how many are.
+  // soc_wdog.v's own header says this about `dis_i` -- "one
+  // asynchronous pin fanned into three different combinational cones" --
+  // and then says the release edge of rst_por_ni is the same problem,
+  // that the hold-off makes the strap sample less sensitive to it
+  // "without making it a synchronous release", and that "that is a
+  // soc_top.v change and it is not made here". This is that change.
+  //
+  // Same shape as rst_sys_n's, one stage-pair, and clocked from rst_ni
+  // ALONE so that nothing about the watchdog's own output can reach its
+  // reset: W4 is a property of what this wire depends on, and it
+  // depends on clk_i and rst_ni and nothing else.
+  //
+  // What it costs, stated because it is not nothing: the power-on domain
+  // now needs TWO CLOCK EDGES before it leaves reset, where it used to
+  // leave the moment the pin rose. On a part whose clock has not started
+  // the watchdog therefore stays in reset -- which is the behaviour a
+  // watchdog that counts clk_i edges already had, since it could not
+  // count either way, but it is a change and a reader should see it
+  // here rather than infer it.
   wire wdog_rst_req;
   wire rst_raw_n = rst_ni && !wdog_rst_req;
 
@@ -286,6 +329,13 @@ module soc_top #(
     else            rst_sync <= {rst_sync[0], 1'b1};
 
   wire rst_sys_n = rst_sync[1];
+
+  reg [1:0] por_sync;
+  always @(posedge clk_i or negedge rst_ni)
+    if (!rst_ni) por_sync <= 2'b00;
+    else         por_sync <= {por_sync[0], 1'b1};
+
+  wire rst_por_sync_n = por_sync[1];
 
   assign wdog_rst_o = wdog_rst_req;
 
@@ -788,7 +838,7 @@ module soc_top #(
       .WDOG_RST_CYCLES (16),
       .WDOG_ESCALATE   (2)
   ) u_timer0 (
-      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_por_sync_n),
       .psel_i (sel_timer0), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
       .prdata_o (prdata_timer0), .pready_o (pready_timer0),
@@ -810,7 +860,7 @@ module soc_top #(
   // interrupted by a sticky bit it has not read yet (docs/40 section
   // 7.2's brick, in a new place).
   soc_busstat u_busstat (
-      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_por_sync_n),
       .psel_i (sel_busstat), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
       .prdata_o (prdata_busstat), .pready_o (pready_busstat),
@@ -830,7 +880,7 @@ module soc_top #(
   // register in the system domain so a watchdog reset restores the
   // scrubbers' defaults.
   soc_scrub #(.IVL_RST(SCRUB_IVL_RST)) u_scrub (
-      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_por_sync_n),
       .psel_i (sel_scrub), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
       .prdata_o (prdata_scrub), .pready_o (pready_scrub),
@@ -857,7 +907,7 @@ module soc_top #(
   // section 7.2's brick is that no output of this block reaches the
   // watchdog, the memories or the fabric.
   soc_boot #(.NSTRAP(BOOT_NSTRAP), .LIMIT(BOOT_LIMIT)) u_boot (
-      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_ni),
+      .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_por_sync_n),
       .psel_i (sel_bootreg), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
       .prdata_o (prdata_bootreg), .pready_o (pready_bootreg),

@@ -101,6 +101,39 @@
 //     functional port set the one that is timed. The macros carry a
 //     BIST interface and this design does not drive it.
 //
+//   * A_REN IS QUALIFIED ON THE MACRO'S OWN ENABLE, 2026-09-12, and
+//     it buys the one actionable milliwatt this design had left in it.
+//     A_REN used to be tied to !do_write alone, so a DESELECTED macro
+//     sat with A_MEN low and A_REN high on every idle cycle. That is a
+//     Liberty state with a price: `!A_MEN & !A_WEN & A_REN` costs
+//     0.5559 pJ per rising edge on the 2048x64 part against 0 for
+//     `!A_MEN & !A_WEN & !A_REN`, and across the six data macros that
+//     is 0.147 mW of the idle total -- 20.7x those six macros' whole
+//     leakage. docs/57 section 8.2 measured it, docs/61 section 18 item
+//     9 and docs/76 section 15 item 6 both priced it and both recorded
+//     it as unbuilt.
+//
+//     It changes no behaviour, and that is checkable rather than
+//     asserted: A_REN only has an effect while A_MEN is high, and the
+//     new term is exactly the condition A_MEN is already qualified on
+//     (req_i for the data macros, row_en for the row port). When the
+//     macro is selected the strobe is what it always was; when it is
+//     deselected the macro was already doing nothing and now sits in
+//     the zero-energy state while doing it.
+//
+//     The eight row-port macros get the same treatment for the same
+//     reason. docs/57 priced the six data macros only, so 0.147 mW is
+//     what is claimed; the row port's share is the same mechanism and
+//     is not measured here.
+//
+//     Verified 2026-09-12: all fourteen A_REN terms now carry exactly
+//     the expression their own A_MEN was already qualified on -- six on
+//     req_i, eight on row_en -- so there is no macro where the strobe
+//     and the enable disagree about when the macro is selected. The
+//     file elaborates and synthesises under SOC_MEM=sram with the real
+//     RM_IHPSG13 macros, 46,508 cells, zero errors. No power number is
+//     re-measured here: 0.147 mW is docs/57's and stands as its.
+//
 //   * READ-DURING-WRITE returns the macro's behaviour and not the
 //     behavioural model's. soc_mem.v returns the OLD word on a write
 //     cycle; here A_REN is low during a write, so A_DOUT holds. No
@@ -340,7 +373,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b0 (
         .A_CLK(clk_i), .A_MEN(req_i && (bank == 2'd0)),
-        .A_WEN(do_write), .A_REN(!do_write),
+        .A_WEN(do_write), .A_REN(req_i && !do_write),
         .A_ADDR(row), .A_DIN(din), .A_BM(bm), .A_DLY(dly), .A_DOUT(dout0),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
         .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
@@ -348,7 +381,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b1 (
         .A_CLK(clk_i), .A_MEN(req_i && (bank == 2'd1)),
-        .A_WEN(do_write), .A_REN(!do_write),
+        .A_WEN(do_write), .A_REN(req_i && !do_write),
         .A_ADDR(row), .A_DIN(din), .A_BM(bm), .A_DLY(dly), .A_DOUT(dout1),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
         .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
@@ -356,7 +389,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b2 (
         .A_CLK(clk_i), .A_MEN(req_i && (bank == 2'd2)),
-        .A_WEN(do_write), .A_REN(!do_write),
+        .A_WEN(do_write), .A_REN(req_i && !do_write),
         .A_ADDR(row), .A_DIN(din), .A_BM(bm), .A_DLY(dly), .A_DOUT(dout2),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
         .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
@@ -364,7 +397,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b3 (
         .A_CLK(clk_i), .A_MEN(req_i && (bank == 2'd3)),
-        .A_WEN(do_write), .A_REN(!do_write),
+        .A_WEN(do_write), .A_REN(req_i && !do_write),
         .A_ADDR(row), .A_DIN(din), .A_BM(bm), .A_DLY(dly), .A_DOUT(dout3),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
         .A_BIST_WEN(1'b0), .A_BIST_REN(1'b0), .A_BIST_ADDR(11'h0),
@@ -398,7 +431,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_1024x32_c2_bm_bist u_b0 (
         .A_CLK(clk_i), .A_MEN(req_i && !bank),
-        .A_WEN(do_write), .A_REN(!do_write),
+        .A_WEN(do_write), .A_REN(req_i && !do_write),
         .A_ADDR(row), .A_DIN(wdata_i), .A_BM(bm32), .A_DLY(dly),
         .A_DOUT(dout0),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -407,7 +440,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_1024x32_c2_bm_bist u_b1 (
         .A_CLK(clk_i), .A_MEN(req_i && bank),
-        .A_WEN(do_write), .A_REN(!do_write),
+        .A_WEN(do_write), .A_REN(req_i && !do_write),
         .A_ADDR(row), .A_DIN(wdata_i), .A_BM(bm32), .A_DLY(dly),
         .A_DOUT(dout1),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -474,7 +507,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b0 (
         .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd0)),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
         .A_DOUT(dout0),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -483,7 +516,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b1 (
         .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd1)),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
         .A_DOUT(dout1),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -492,7 +525,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b2 (
         .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd2)),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
         .A_DOUT(dout2),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -501,7 +534,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_2048x64_c2_bm_bist u_b3 (
         .A_CLK(clk_i), .A_MEN(row_en && (bank == 2'd3)),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow), .A_DIN(row_din), .A_BM(row_bm), .A_DLY(dly),
         .A_DOUT(dout3),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -573,7 +606,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_1024x32_c2_bm_bist u_b0 (
         .A_CLK(clk_i), .A_MEN(row_en && !bank),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow), .A_DIN(row_din[31:0]), .A_BM(row_bm[31:0]),
         .A_DLY(dly), .A_DOUT(dout0),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -582,7 +615,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_1024x32_c2_bm_bist u_b1 (
         .A_CLK(clk_i), .A_MEN(row_en && bank),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow), .A_DIN(row_din[31:0]), .A_BM(row_bm[31:0]),
         .A_DLY(dly), .A_DOUT(dout1),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -591,7 +624,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_512x16_c2_bm_bist u_c0 (
         .A_CLK(clk_i), .A_MEN(row_en && !bank),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow[8:0]), .A_DIN(cdin), .A_BM(cbm),
         .A_DLY(dly), .A_DOUT(cout0),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
@@ -600,7 +633,7 @@ module soc_mem #(
 
     RM_IHPSG13_1P_512x16_c2_bm_bist u_c1 (
         .A_CLK(clk_i), .A_MEN(row_en && bank),
-        .A_WEN(row_we), .A_REN(!row_we),
+        .A_WEN(row_we), .A_REN(row_en && !row_we),
         .A_ADDR(mrow[8:0]), .A_DIN(cdin), .A_BM(cbm),
         .A_DLY(dly), .A_DOUT(cout1),
         .A_BIST_CLK(1'b0), .A_BIST_EN(1'b0), .A_BIST_MEN(1'b0),
