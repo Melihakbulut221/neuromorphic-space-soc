@@ -3208,3 +3208,79 @@ def test_every_pnr_config_declares_every_macro_the_rtl_instantiates():
             "\n  ".join(f"{k}: missing {', '.join(v)}"
                         for k, v in sorted(missing.items())),
             ", ".join(sorted(wanted))))
+
+
+def _sg13g2_tech_lef():
+    pattern = (".ciel/ciel/ihp-sg13g2/versions/*/ihp-sg13g2/libs.ref/"
+               "sg13g2_stdcell/lef/sg13g2_tech.lef")
+    lefs = sorted(Path.home().glob(pattern))
+    return lefs[-1] if lefs else None
+
+
+# The seven cut layers the detailed router announces it is NOT checking.
+# Read off hw/soc/pnr/runs/s83romecc5/38-openroad-detailedrouting, and
+# identically in every soc_top run since docs/47.
+DRT_0349_LAYERS = {"Cont", "Via1", "Via2", "Via3", "Via4",
+                   "TopVia1", "TopVia2"}
+
+
+def test_the_router_skips_every_enclosure_rule_this_pdk_declares():
+    """`[DRT-0349] LEF58_ENCLOSURE with no CUTCLASS is not supported.
+    Skipping for layer X` -- seven times, in every detailed-routing log
+    this repository has ever produced. docs/67 records it as the PDK's
+    rather than the design's, and it is: sg13g2_tech.lef states plain LEF
+    `ENCLOSURE` on all seven cut layers and qualifies none of them with
+    `CUTCLASS`, so OpenROAD's router declines all seven.
+
+    The point of a guard here is NOT to make the router check them --
+    nothing in this repository can. It is that the caveat stops being
+    true the moment the PDK adds a CUTCLASS, and a caveat that has
+    silently stopped being true is worse than no caveat: every layout
+    result in the corpus is stated with this exclusion attached. So this
+    reads the PDK and fails when the premise moves, which is the stage
+    that can actually satisfy it.
+
+    A note on the parse: PREFERENCLOSURE contains ENCLOSURE as a
+    substring and is a different rule. Matching the substring would have
+    made this pass for the wrong reason."""
+    lef = _sg13g2_tech_lef()
+    if lef is None:
+        pytest.skip("sg13g2_tech.lef not installed")
+
+    # Only TOP-LEVEL layer definitions count. A VIA definition also
+    # contains `LAYER Metal1 ;` followed by its own ENCLOSURE, indented;
+    # matching those attributed enclosure rules to seven metal layers
+    # that have no cut rules at all and made this guard fail for a reason
+    # that had nothing to do with its subject.
+    layer, is_cut, declared, qualified = None, False, {}, set()
+    for line in lef.read_text(errors="ignore").split("\n"):
+        m = re.match(r"^LAYER\s+(\S+)", line)           # column 0, not indented
+        if m:
+            layer, is_cut = m.group(1), False
+            continue
+        if re.match(r"^\s*TYPE\s+CUT\b", line):
+            is_cut = True
+            continue
+        if is_cut and re.match(r"^\s*ENCLOSURE\b", line):   # not PREFERENCLOSURE
+            declared.setdefault(layer, 0)
+            declared[layer] += 1
+            if "CUTCLASS" in line:
+                qualified.add(layer)
+
+    unchecked = set(declared) - qualified
+    assert unchecked == DRT_0349_LAYERS, (
+        "the set of cut layers whose ENCLOSURE the router will skip has "
+        "moved: expected {}, found {}. Every layout result in this corpus "
+        "is stated with that exclusion attached -- re-read docs/67 before "
+        "changing this set.".format(
+            sorted(DRT_0349_LAYERS), sorted(unchecked)))
+    assert not qualified, (
+        "{} now carries CUTCLASS, so the router no longer skips it and "
+        "the corpus-wide caveat is narrower than it was".format(
+            sorted(qualified)))
+    # And the rules really are declared -- a PDK that dropped ENCLOSURE
+    # altogether would also make `unchecked` empty, which is a different
+    # world and must not read as this one.
+    assert sum(declared.values()) >= len(DRT_0349_LAYERS), (
+        "the PDK declares fewer ENCLOSURE statements than it has cut "
+        "layers; this guard's premise no longer holds")

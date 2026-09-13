@@ -948,6 +948,53 @@ from the PDK, which is the point of having made that run.
    > `docopt`, which `run_lvs.py` imports and which was absent, is
    > installed as of this date -- that part was a five-second obstacle
    > standing in front of a real one.
+
+   > **THE MACRO-ENTRY QUESTION NOW HAS A MEASURED ANSWER, 2026-09-13,
+   > from the Netgen side.** The block above says the hard part is "a
+   > decision about how the vendor macros enter, which is the very
+   > question sections 5 and 6 say the decks disagree about". Whoever
+   > builds the SPICE path will meet that fork, and Netgen has now been
+   > run down both branches of it on the same layout -- `s83romecc5`,
+   > the first in this repository to place all **eight** macros rather
+   > than six, the ROM's two `512x16` check macros included.
+   >
+   > *Give netgen the vendor CDL* and it fails: **64,901 netlist nets
+   > against 63,155 layout nets**, `Top level cell failed pin matching`
+   > (`s83lvsbb2`'s predecessor `s83lvs`). The cause is not connectivity.
+   > It is **naming** -- the CDL spells buses `A_DIN<32>` and globals
+   > `VSS!`, `VDD!`, `VDDARRAY!` where the layout has `A_DIN[32]`,
+   > `VSS`, `VDD` -- and the +1,746 nets follow from the delimiters
+   > alone. This is `docs/12` section 7.5's third number recurring:
+   > *"Netgen LVS 359 because the GDS cell names and the CDL subcircuit
+   > names disagree and the bus delimiters differ, so none of the 188
+   > bus pins match."* One macro then, eight now, same wall.
+   >
+   > *Black-box both sides* and it matches: **63,155 = 63,155**,
+   > `Circuits match uniquely` with 263 symmetries (`s83lvsbb2`), and
+   > 268 on the antenna-repaired layout (`s83antlvs`), all seven
+   > `design__lvs_*` counters zero in both.
+   >
+   > **The trap is reading that as the better branch.** Dropping the CDL
+   > does not repair the comparison; it REMOVES the only part of it that
+   > looked inside the macro. Circuit 2 is then built from
+   > `sg13g2_stdcell.spice`, `sg13g2_io.spi` and the P&R netlist with no
+   > SRAM model at all, the extracted side carries a *"Black-box entry
+   > subcircuit"* with an empty `.subckt` per macro, and 974 macro pins
+   > are noted as disconnected nodes on both sides alike. What passes is
+   > **top-level connectivity into all eight macros' pins**, and nothing
+   > about the macro internals -- which is the correct scope given
+   > `docs/12` section 7.5's NO-GO, but is a weaker statement than
+   > "LVS passes", and the CDL list covers only two of the three macro
+   > types anyway, so the `512x16` pair was a black box in the failing
+   > run as well.
+   >
+   > For this item that is worth two things. The KLayout LVS deck, if it
+   > is ever fed, should be fed the black-box branch, because the other
+   > one is answering a question about the vendor's transistors that no
+   > deck in this PDK version can answer. And the Verilog-to-SPICE path
+   > will have to make the delimiter and `!`-suffix decision explicitly,
+   > because that -- not the macro scope, and not the reader -- is what
+   > actually broke the comparison when it was tried.
 5. **Whether `sg13g2_maximal.drc` returning 0 means anything** depends on
    a judgement about that deck's status that this document declines to
    make and section 6 explains. If IHP confirms the residual set's SRAM
