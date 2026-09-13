@@ -122,6 +122,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run_dir")
     ap.add_argument("--lef-dir", default=None)
+    ap.add_argument("--def", dest="def_path", default=None,
+                    help="the placement to classify against, when the run "
+                         "does not carry its own. A bare `magic` invocation "
+                         "like hw/soc/pnr/runs/s77gate-drc-abstract has a "
+                         "report and no DEF, and a Magic.DRC-only LibreLane "
+                         "run has none until the flow finishes. IT MUST BE "
+                         "THE PLACEMENT THE REPORT WAS PRODUCED FROM -- this "
+                         "script cannot check that for you, and pointing it "
+                         "at a different floorplan yields a classification "
+                         "that is wrong in the direction of looking right")
     a = ap.parse_args()
     run = pathlib.Path(a.run_dir)
 
@@ -129,10 +139,19 @@ def main():
     if not rpts:
         sys.exit("no drc.magic.rpt under {}".format(run))
     rpt = rpts[0]
-    defs = sorted(run.rglob("final/def/*.def")) or sorted(run.rglob("*.def"))
+    if a.def_path:
+        defs = [pathlib.Path(a.def_path)]
+        if not defs[0].is_file():
+            sys.exit("no such DEF: {}".format(a.def_path))
+    else:
+        defs = (sorted(run.rglob("final/def/*.def"))
+                or sorted(run.rglob("*.def")))
     if not defs:
-        sys.exit("no DEF under {} -- classification needs the placement "
-                 "the run actually had".format(run))
+        sys.exit("no DEF under {} -- classification needs the placement the "
+                 "run actually had. A Magic.DRC-only run has none until the "
+                 "flow finishes, and a bare `magic` invocation never has "
+                 "one; pass --def with the layout the report came from."
+                 .format(run))
     lef_dir = a.lef_dir or (pathlib.Path.home() / ".ciel/ciel/ihp-sg13g2")
 
     errors = parse_report(rpt)
