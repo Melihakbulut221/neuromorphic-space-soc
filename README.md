@@ -195,9 +195,11 @@ it is **2.7445** (`docs/61` section 13 item 4). The die share is not
 corrected and does not move: the same six macros, 2,246,899.85 um2, sit
 on the same 4,786,287.408 um2 die in both runs.* No
 frequency is published for this design, per `docs/05` section 4 rule 5:
-a number read off a layout that also fails max slew and max cap and has
-never been through Magic DRC or LVS is not a result to put in a front
-door.
+a number read off a layout that also fails max slew and max cap and had
+not then been through Magic DRC or LVS is not a result to put in a front
+door. *(The deck half of that sentence stopped being true on 2026-09-11
+-- `docs/77` and `docs/79` -- and the slew and cap half has not. No
+frequency is published, for the reason that still holds.)*
 
 Four remedies were tried and `docs/48` through `docs/50` measured all
 four. A second floorplan is worse, and the existing one is already
@@ -241,9 +243,12 @@ contain the accelerator.** On layouts that do,
 and `docs/77` publishes no busy figure as a property of the design,
 because it measures the busy totals as a placement's and not a
 design's. Every one of these is a pre-silicon flow estimate on a layout
-that fails setup at the slow corner, fails max slew and max cap, and has
-never been through Magic DRC, LVS or XOR; `docs/05` section 4 rule 5
-says all of that travels with the number or none of it does.*
+that fails setup at the slow corner, fails max slew and max cap, and had
+not then been through Magic DRC, LVS or XOR; `docs/05` section 4 rule 5
+says all of that travels with the number or none of it does. Corrected
+2026-09-11: all four decks have been run (`docs/77`, `docs/79`). The
+setup, slew and cap failures are unchanged and they are the half that
+still governs these numbers.*
 Energy per inference is invariant under the clock to 0.045 %, because
 it is cycles times
 energy-per-cycle and the period appears in neither. Four documents had
@@ -268,11 +273,19 @@ register-mode QSPI flash controller with two chip selects that feeds
 the NPU its weight image from a modelled flash
 (`docs/66-qspi-flash-controller.md`). SpaceWire, CAN, SPI and I2C are
 fetched, pinned and priced in `docs/65` and still not built. No radiation
-test data. No gate-level result for anything under `hw/soc/`. No DRC,
-LVS or XOR on the laid-out SoC, and that one is a PDK property rather
-than a schedule: `docs/12` measured 1,106,478 Magic errors inside a
-single RM_IHPSG13 macro's own footprint and recorded it a no-go for this
-PDK version. No licence. No funding.
+test data. No gate-level result for anything under `hw/soc/`. ~~No DRC,
+LVS or XOR on the laid-out SoC~~ **-- corrected. All four decks have run
+on `soc_top`'s own geometry since 2026-09-11 (`docs/77`, `docs/79`), and
+on 2026-09-13 LVS and the KLayout deck ran on a layout built from the
+current RTL that also carries the ROM's two check macros: `Circuits
+match uniquely`, and 11,048 KLayout markers of which 0 are outside the
+vendor macro hierarchy (`docs/67` section 11). Magic DRC on that layout
+has not been run.** What the original sentence got right is the reason,
+and the reason is a PDK property rather than a schedule: `docs/12`
+measured 1,106,478 Magic errors inside a single RM_IHPSG13 macro's own
+footprint and recorded it a no-go for this PDK version, which is why
+every deck result here is stated as *inside the macro* or *outside* it
+rather than as a total. No licence. No funding.
 
 **The NPU is connected, and `docs/51` is the record.** Until it, this
 repository held a RISC-V SoC and a separate neuromorphic accelerator

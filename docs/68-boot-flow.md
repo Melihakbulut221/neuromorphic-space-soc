@@ -165,9 +165,12 @@ ROM, and three things follow that are now decided rather than open:
    made placing them the second-highest next task. **On decision A those
    macros are not needed**: a mask ROM has no stored-upset mechanism for
    a code to catch, and only its read path is exposed, which is a
-   transient and not a stored fault. They remain in the RTL and remain
-   unplaced, and what they protect is now stated exactly: **the
-   stand-in**, and any flight part that takes candidate B instead. That
+   transient and not a stored fault. ~~They remain in the RTL and remain
+   unplaced~~ -- **placed and routed 2026-09-13, run `s83romecc5`**,
+   which does not disturb this section's argument: what they protect is
+   still stated exactly as **the stand-in**, and any flight part that
+   takes candidate B instead. Decision A is unchanged by the geometry
+   turning out to be free. That
    is a reprioritisation of another document's recommendation and
    section 13 records it as one.
 

@@ -342,15 +342,24 @@ with those macros abstracted to their pin lists. \S\ref{sec:decks} \\
 Not covered by that & metal density and antenna are separate runsets and
 were not invoked; LVS excludes the macro internals by construction. The
 vendor macro itself fails at a rate linear in its bit count and cannot be
-fixed here. \textbf{And the layout carries six macros where the design's
-default builds eight}: the read-only memory's error-correcting code adds
-two \num{512}$\times$\num{16} check macros, and every layout in this
-repository is built with that code switched off, because the floorplan
-can place six and not eight. So the decks above cover the random-access
-memory's protection and not the read-only memory's, which has never been
-placed, never seen a deck and never been through LVS. It is recorded in
-the source as \emph{known and unplaced}; this is that sentence where a
-reader of the deck results will meet it \\
+fixed here. \textbf{And the layout these decks ran on carries six macros where the
+design's default builds eight}: the read-only memory's error-correcting
+code adds two \num{512}$\times$\num{16} check macros, and the layout
+above is built with that code switched off. So the deck results in this
+row cover the random-access memory's protection and not the read-only
+memory's. \textbf{Corrected \mbox{2026-09-13}:} the reason given here
+was wrong. It said the floorplan \emph{can place six and not eight};
+it can place eight, and the obstacle was an estimate taken along the
+wrong axis --- the space for a check macro is not beside the read-only
+memory but in the \SI{290.24}{\micro\meter} of unused height its
+shorter macro leaves in its own row. A layout with all eight was built
+and routed that day, with zero detailed-routing violations, and two
+decks were run on it: Netgen LVS reports \emph{circuits match
+uniquely}, and the KLayout deck puts \num{0} of its \num{11048}
+markers outside the vendor macro hierarchy. That layout is
+\textbf{not} the layout these deck numbers describe, and no timing,
+power or fault-injection result in this paper has been re-measured on
+it; Magic DRC has not been run on it either \\
 \midrule
 \multicolumn{2}{l}{\textbf{What does not exist}}\\
 \midrule

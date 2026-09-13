@@ -56,7 +56,9 @@ Run with the repository-root suite::
 """
 
 import json
+import pathlib
 import re
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -303,10 +305,50 @@ def test_the_memory_protection_defaults_on_and_nothing_turns_it_off():
             offenders.append(str(path.relative_to(ROOT)))
     assert not offenders, (
         "these files turn the memory protection off: {}".format(offenders))
-    # hw/soc/pnr/config-ecc.json is the one configuration that names
-    # ROM_HARDEN=0, and it says why in the generator that wrote it.
-    cfg = json.loads((ROOT / "hw" / "soc" / "pnr" / "config-ecc.json").read_text())
-    assert cfg.get("SYNTH_PARAMETERS") == ["ROM_HARDEN=0"]
+    # This used to read "config-ecc.json is the ONE configuration that
+    # names ROM_HARDEN=0" and open only that file. Six configurations
+    # name it -- config-ecc, config-ecc-clint, config-ecc-clint2,
+    # config-timing, config-timing-drv, config-timing-ptd -- so the
+    # assertion below passed while saying nothing about five of them.
+    # That is this corpus's signature failure, a green check read wider
+    # than what it opened, sitting inside the guard written to stop it.
+    # Corrected 2026-09-13. The guard now finds them BY THE PROPERTY
+    # instead of by name, and holds every one of them to two rules.
+    rom0 = []
+    for path in sorted((ROOT / "hw" / "soc" / "pnr").glob("config*.json")):
+        if path.name == "config.resolved.json":
+            continue
+        cfg = json.loads(path.read_text())
+        params = cfg.get("SYNTH_PARAMETERS") or []
+        if "ROM_HARDEN=0" not in params:
+            continue
+        rom0.append(path.name)
+        # 1. It is DECLARED, never smuggled in beside other parameters.
+        assert params == ["ROM_HARDEN=0"], (
+            "{} hides ROM_HARDEN=0 among {}".format(path.name, params))
+        # 2. With the ROM unhardened the RTL does not instantiate the
+        #    512x16 check macros, so a config that turns the protection
+        #    off must not also place them. Before 2026-09-13 no config
+        #    could place them at all and this could not be violated;
+        #    config-ecc-rom.json now can, which is exactly why the rule
+        #    has to be written down.
+        for kind, macro in (cfg.get("MACROS") or {}).items():
+            if "512x16" in kind:
+                assert not (macro.get("instances") or {}), (
+                    "{} sets ROM_HARDEN=0 and still places {}".format(
+                        path.name, kind))
+    assert len(rom0) >= 6, (
+        "expected the six known ROM_HARDEN=0 configs, found {}".format(rom0))
+    # And the converse: the configuration that DOES place the check
+    # macros must not be unhardening the ROM.
+    eccrom = ROOT / "hw" / "soc" / "pnr" / "config-ecc-rom.json"
+    if eccrom.exists():
+        cfg = json.loads(eccrom.read_text())
+        assert "ROM_HARDEN=0" not in (cfg.get("SYNTH_PARAMETERS") or [])
+        placed = sum(len(m.get("instances") or {})
+                     for k, m in cfg["MACROS"].items() if "512x16" in k)
+        assert placed == 2, (
+            "config-ecc-rom.json places {} check macros, not 2".format(placed))
 
 
 def test_the_codec_corrects_on_every_path_that_reads_a_row():
@@ -421,25 +463,52 @@ def test_the_software_header_matches_the_block():
 
 
 def test_the_pnr_floorplans_name_the_arms_the_rtl_has():
-    """Two floorplans, two sets of instance paths, one wrapper. docs/47's
-    config.json names the two-words-per-row arm; docs/67's
+    """Several floorplans, several sets of instance paths, one wrapper.
+    docs/47's config.json names the two-words-per-row arm; docs/67's
     config-ecc.json names the codec arm for the RAM and docs/47's for the
-    ROM, plus the ROM's check macro known and unplaced. Every path must
-    be an arm soc_mem_sram.v still has, because a floorplan that names a
-    label the RTL lost dies 35 steps into a run."""
+    ROM; config-ecc-rom.json names the codec arm throughout and PLACES
+    the ROM's two check macros. Every path must be an arm
+    soc_mem_sram.v still has, because a floorplan that names a label the
+    RTL lost dies 35 steps into a run.
+
+    Widened 2026-09-13. This used to iterate a hard-coded tuple of three
+    config names, so the two configurations that actually place the
+    check macros -- the whole point of the guard -- were outside it. It
+    now walks every tracked config, which is the only version of this
+    check that a new floorplan cannot be added behind."""
     sram = (SOC_RTL / "soc_mem_sram.v").read_text()
     labels = set(re.findall(r"begin\s*:\s*(g_r[ao]m_\w+)", sram))
-    for cfg in ("config.json", "config-npu.json", "config-ecc.json"):
-        c = json.loads((ROOT / "hw" / "soc" / "pnr" / cfg).read_text())
+    tracked = subprocess.run(
+        ["git", "ls-files", "hw/soc/pnr/config*.json"], cwd=ROOT,
+        check=True, capture_output=True, text=True).stdout.split()
+    tracked = {pathlib.PurePosixPath(t).name for t in tracked}
+    # docs/79's LVS arms are 2026-09-10 experiment snapshots and docs/64
+    # keeps them as they were run; they predate the check macros.
+    FROZEN = {"config.resolved.json"} | {
+        n for n in tracked if n.startswith("config-lvs-") and "ecc" not in n}
+    seen = 0
+    for cfg in sorted((ROOT / "hw" / "soc" / "pnr").glob("config*.json")):
+        if cfg.name not in tracked or cfg.name in FROZEN:
+            continue
+        seen += 1
+        c = json.loads(cfg.read_text())
         for macro, spec in c["MACROS"].items():
             for inst in spec["instances"]:
                 outer, block, leaf = inst.split(".")
                 assert block in labels, (
                     "{} places {} but soc_mem_sram.v has no arm {}".format(
-                        cfg, inst, block))
+                        cfg.name, inst, block))
                 body = sram.split("begin : " + block, 1)[1].split("\n  end", 1)[0]
-                assert re.search(re.escape(macro) + r"\s+" + re.escape(leaf) + r"\b", body)
+                assert re.search(re.escape(macro) + r"\s+" + re.escape(leaf) + r"\b", body), (
+                    "{} places {} as {} but that arm does not "
+                    "instantiate it".format(cfg.name, inst, macro))
+    assert seen >= 4, "the sweep found only {} configs".format(seen)
+    # config-ecc.json builds through ROM_HARDEN=0, so its check macro
+    # entry must stay empty; config-ecc-rom.json is the one that fills
+    # it. The paired rule lives in the ROM_HARDEN guard above.
     ecc = json.loads((ROOT / "hw" / "soc" / "pnr" / "config-ecc.json").read_text())
     chk = ecc["MACROS"]["RM_IHPSG13_1P_512x16_c2_bm_bist"]
-    assert chk["instances"] == {}, "the ROM check macro is placed nowhere yet, by design"
+    assert chk["instances"] == {}, (
+        "config-ecc.json builds through ROM_HARDEN=0, so the RTL does not "
+        "instantiate the check macros and this floorplan must not place them")
     assert (ROOT / "hw" / "soc" / "pnr" / "RM_IHPSG13_1P_512x16_c2_bm_bist_bb.v").is_file()

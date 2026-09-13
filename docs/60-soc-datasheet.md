@@ -2123,6 +2123,15 @@ protected words, and the protected ROM adds two
 `RM_IHPSG13_1P_512x16_c2_bm_bist` for its check bits, which
 `docs/67-memory-protection.md` section 5 costs from the LEF and has
 not placed.
+
+*Corrected again 2026-09-13:* it has now placed them. Run `s83romecc5`
+builds and routes a layout carrying all **eight** macros, so the
+heading above --- *"the memories, and why there are six of them"* ---
+is wrong for the default build and right only for the `rom0` layouts
+every other number on this page is taken from. The datasheet the two
+notes above already owe (`docs/67` section 12) now has a third reason
+to exist. Nothing else on this page has been re-measured: the areas,
+the timing and the power are all still the six-macro layout's.
 | Macro area against standard cells | **2,246,899.85 um2 against 523,809.64 um2 — the memory is 4.29 times the logic** |
 
 **[measured, LEF `SIZE`, `docs/47` section 4]**

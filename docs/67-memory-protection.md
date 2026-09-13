@@ -61,6 +61,8 @@ none; `hw/tb/Makefile.fi` was not invoked. Section 13 lists every file.
 | `hw/soc/rtl/soc_top.v` | `MEM_HARDEN`, `ROM_HARDEN` and `SCRUB_IVL_RST`; the memories' new ports; `u_scrub` in its slot on its line |
 | `regmap/memmap.yaml` and its seven generated files | RAM **64 KiB → 32 KiB**; SCRUB **reserved → implemented** |
 | `hw/soc/pnr/config-ecc.json`, `floorplan.py --memory ecc`, `RM_IHPSG13_1P_512x16_c2_bm_bist_bb.v` | The floorplan for the codec arm's instance paths — the same six macros in the same places — with the ROM's check macro known and unplaced |
+| `hw/soc/pnr/config-ecc-rom.json`, `floorplan.py --memory ecc-rom` | The same die and the same four RAM origins, with the ROM's two check macros PLACED — eight macros, added 2026-09-13. Section 11 carries the run |
+| `hw/soc/pnr/config-lvs-ecc-rom.json`, `floorplan.py --memory ecc-rom --lvs-blackbox` | The same floorplan with `RUN_LVS = 1` and no `EXTRA_SPICE_MODELS`, which is the only recipe that matches: the vendor macro is a black box on both sides. Section 11 says what that does and does not prove |
 | `hw/soc/flow/sta_mem_paths.sh` | **New.** The three memory path groups, by name, on a timed netlist. Section 5.2 |
 | `hw/soc/fi/mem_campaign.py`, `hw/soc/tb/tb_soc_fi.v` | **New** and extended: a memory deposit by region of the link map. Section 7 |
 | `hw/soc/formal/{byte_secded,soc_mem_ecc,soc_scrub}.sby` and their properties | Three proofs. Section 10.3 |
@@ -1005,18 +1007,38 @@ fields in one 16-bit row and costs **79,673.73 um2** **[fact, LEF]**,
 but it is 236.80 um wide and `docs/61`'s floorplan leaves 60.48 um
 beside each ROM macro **[fact, `config-npu.json`'s `CORE_AREA` and the
 ROM's origin]** — placing it means growing the die by about 200 um in x,
-roughly **+0.4 mm2, +8.7 %** **[estimate, arithmetic on the die's
-2,075.22 um height]**, for a 0.08 mm2 macro. Two
+roughly ~~**+0.4 mm2, +8.7 %**~~ **[estimate, arithmetic on the die's
+2,075.22 um height -- SUPERSEDED 2026-09-13: this measured the wrong
+axis. The space beside the ROM is not where the macros go; the space is
+VERTICAL, in the pocket the shorter ROM macro leaves in its own row, and
+the die did not grow at all. Section 11 carries the replacement and the
+run. The number is left standing because it is what this document
+believed when it planned the work]**, for a 0.08 mm2 macro. Two
 `RM_IHPSG13_1P_512x16`, one per bank, cost **90,618.62 um2** together
 and each is 236.80 x 191.34, which fits the 416.64 x 290.24 um pocket
 the shorter ROM macro leaves above or below it in its row **[fact,
 LEF; estimate that it routes]** — with its pin edge facing the channel
 in one orientation and the ROM's own pin edge facing it in the other,
 so the pocket placement is a routing question this document did not
-run. **The RTL instantiates the two `512x16`; the floorplan knows them
-and places neither**, and section 5.3's layout is taken with the ROM as
-`docs/47` built it, through `ROM_HARDEN = 0`, a measurement knob the
-guards forbid the design to set.
+run. ~~**The RTL instantiates the two `512x16`; the floorplan knows them
+and places neither**~~ **[PLACED AND ROUTED 2026-09-13.** The pocket
+estimate held. `floorplan.py --memory ecc-rom` places the pair at
+x = 1,769.28, `u_c0` at y = 60.48 FS and `u_c1` at y = 1,821.96 N, with
+95.94 um of clearance below and 98.24 um above and a 10 um halo, and the
+die does not grow. Run `s83romecc5` routed it: a 113 MB GDS carrying
+eight macros with `route__drc_errors = 0`. It took five attempts and the
+two failures worth naming are `s83romecc4`, where placing the macros
+against the ROM fixed the power grid and choked the router with
+`GRT-0116` congestion, and `s83romecc3`, where bonding them onto the
+global macro grid raised `PDN-0179` and silently covered the four
+784.48 um RAMs as well. What routes is band-edge placement with a
+**scoped** `rom_chk` PDN grid. Section 11 carries the numbers.**]** Note
+what this does and does not move: section 5.3's layout is still taken
+with the ROM as `docs/47` built it, through `ROM_HARDEN = 0`, a
+measurement knob the guards forbid the design to set, and so is every
+gate-level campaign, STA and power number in this corpus. One layout has
+been built and routed with the ROM hardened. Nothing has been
+re-measured on it.
 
 ---
 
@@ -1235,8 +1257,13 @@ counted.
 - ~~**The ROM's check macros are not placed.** Section 5.3's layout is
   the RAM protected and the ROM as `docs/47` built it; the design that
   ships has never been placed.~~
-  **PLACED 2026-09-12**, `floorplan.py --memory ecc-rom` and
-  `hw/soc/pnr/config-ecc-rom.json`:
+  **FLOORPLANNED 2026-09-12**, `floorplan.py --memory ecc-rom` and
+  `hw/soc/pnr/config-ecc-rom.json`; **BUILT AND ROUTED 2026-09-13**, run
+  `s83romecc5`. The distinction is the point and it was not made when
+  this marker was first written: on 2026-09-12 a generator emitted
+  coordinates and no eight-macro layout existed anywhere in the tree.
+  The layout finished at 08:18 the next morning. A placement that has
+  not been routed is a proposal:
 
   ```
   u_rom.g_rom_1024x32_ecc.u_b0   1769.28    347.76  FS
@@ -1275,6 +1302,47 @@ counted.
   from the ROM's LEF size, the row pitch and the insets, and
   `place_rom_check()` asserts site and row alignment, the halo on the
   side each macro was put, and that neither leaves its macro row.
+
+  **What the run then measured, 2026-09-13.** `s83romecc5` completed
+  every step its configuration enables and wrote a 113 MB GDS carrying
+  eight macros, `route__drc_errors = 0`, `design__disconnected_pin__count
+  = 0`. Two decks were run on it separately, because that configuration
+  gates all four off:
+
+  * **Netgen LVS** matches. `Circuits match uniquely`, 263 symmetries,
+    all seven `design__lvs_*` counters zero (`s83lvsbb2`). Read it for
+    exactly what it is: the vendor macro is a **black box** on both
+    sides, so this signs off the connectivity INTO all eight macros'
+    pins and says nothing about the macro internals. Supplying the
+    vendor CDL instead makes the run fail -- 64,901 netlist nets against
+    63,155 layout nets, `Top level cell failed pin matching`
+    (`s83lvs`) -- and the cause is the bus delimiters and the `!` on the
+    CDL's globals, the same disagreement `docs/12` section 7.5 already
+    measured as 359 LVS errors on one macro. Dropping the CDL does not
+    repair that comparison; it removes it.
+  * **KLayout DRC** reports **11,048** markers and every one of them is
+    inside the vendor macro: `Sdiod.e` 4,464, `Sdiod.d` 4,464,
+    `Cnt.c.digibnd` 2,120, attributed to 204 distinct cells of which 204
+    are `RM_IHPSG13_1P_ROWDEC*`, `COLDEC*` or `RSC_IHPSG13_*`. Outside
+    the macro hierarchy: **0**. The scope is what makes that worth
+    stating -- the deck declared **173 rule categories in 47 groups**,
+    M1 through M5, V1 through V4, TM1, TM2, MIM, NW, Act, Gat, Seal and
+    the Fil family, and three fired. This is the first deck result in
+    this repository that does **not** exclude the check macros.
+    `docs/12` section 8's prediction held: 2,316 markers over 57 cells
+    for one macro, 9,668 for six, 11,048 for eight.
+
+  **And what it did not measure.** No Magic DRC on this layout. No XOR.
+  Antenna repair took 538 net and 729 pin violations to 2 and 2, and the
+  two left are real -- `net166` into
+  `u_ram.g_ram_2048x64_ecc.u_b0/A_ADDR[4]` on Metal3 at 2.26x and an
+  Ibex regfile net into `hold13394/A` on Metal2 at 1.22x -- neither in
+  the check macros, and both `s81timing` and `s81drv` reached 0/0, so
+  the tighter floorplan is what left them. Setup is broken at the slow
+  corner, 3,529 violations and a WNS of -7.576 ns against a 20 ns
+  period. **No campaign, STA or power number in this corpus has been
+  re-measured on this layout.** Every one of them still runs on a
+  `rom0` build.
 - **The campaign is RTL, single-bit, storage only.** No transient in the
   codec's gates, no multi-bit strike, no gate-level netlist. The
   uncorrectable class is reached only by directed tests; a rate for it
@@ -1509,8 +1577,17 @@ uninterrupted invocation, and are quoted as such.
    array, whose bit is a via and which therefore has no stored-upset
    mechanism for a code to catch. **On that decision the check macros
    protect the SRAM STAND-IN and not the design**, and this item becomes
-   conditional on which candidate a part takes rather than owed. The
-   macros stay in the RTL and stay unplaced.
+   conditional on which candidate a part takes rather than owed. ~~The
+   macros stay in the RTL and stay unplaced.~~
+   **Done 2026-09-13**, run `s83romecc5`, and the estimate above was
+   right about the cost and wrong about the axis: it took one run in the
+   sense that one run routes, and five in the sense that four had to
+   fail first. Sections 8 and 11 carry the placement, the two failures
+   worth naming and the deck results. The conditional stands -- on
+   `docs/68`'s mask-ROM decision these macros still protect the SRAM
+   stand-in rather than the flight part -- so what closed is the
+   geometry question, not the question of whether the design wants
+   them.
 3. **`docs/50`'s response register, re-asked on this design.** Section
    5.3 measured the read return at **14.0728 ns from `A_DOUT` to a
    flip-flop**, with a macro arc, a memory decoder, the fabric and the
