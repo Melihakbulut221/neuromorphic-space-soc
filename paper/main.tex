@@ -356,7 +356,9 @@ shorter macro leaves in its own row. A layout with all eight was built
 and routed that day, with zero detailed-routing violations, and two
 decks were run on it: Netgen LVS reports \emph{circuits match
 uniquely}, and the KLayout deck puts \num{0} of its \num{11048}
-markers outside the vendor macro hierarchy. That layout is
+markers --- \num{6584} distinct shapes, the two Schottky rules
+reporting one population twice --- outside the vendor macro
+hierarchy. That layout is
 \textbf{not} the layout these deck numbers describe, and no timing,
 power or fault-injection result in this paper has been re-measured on
 it; Magic DRC has not been run on it either \\

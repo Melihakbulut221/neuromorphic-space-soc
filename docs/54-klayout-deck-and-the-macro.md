@@ -194,6 +194,40 @@ Every single flagged shape is reported twice. `docs/12`'s suspicion that
 population of 1,022 shapes, not two of 1,022. The Schottky contribution
 to the headline is **1,022 shapes, not 2,044**.
 
+**Reproduced on a different layout, 2026-09-13.** Run `s83kdrc` puts
+this deck over `soc_top` with **eight** macros -- the first layout in
+this repository to carry the ROM's two `512x16` check macros -- and the
+same structure appears at a different scale **[fact, parsed from
+`hw/soc/pnr/runs/s83kdrc/01-klayout-drc/reports/drc.klayout.lyrdb`]**:
+
+| Quantity | Value |
+|---|---|
+| `Sdiod.d` items | 4,464 |
+| `Sdiod.e` items | 4,464 |
+| Shared (cell, geometry) pairs | **4,464** |
+| In one only | **0** |
+| `Cnt.c.digibnd` items | 2,120 |
+| **Markers reported** | **11,048** |
+| **Distinct shapes** | **6,584** |
+
+The set equality is exact, not approximate. Two things follow. The
+first is that this document's correction survives a change of layout:
+anyone quoting 11,048 for the eight-macro run is quoting 6,584 shapes
+twice-counted in part, exactly as 2,316 was 1,294. The second is a
+scaling check nothing here had: 2,316 markers for one macro, 9,668 for
+six, 11,048 for eight, and in all three **every marker is inside the
+vendor macro hierarchy and none outside** -- 57 cells for the single
+macro, 204 for the eight-macro layout, all 204 of them
+`RM_IHPSG13_1P_ROWDEC*`, `COLDEC*` or `RSC_IHPSG13_*`.
+
+The scope matters as much as the count, because a deck that fired three
+rules could be a deck that only looked at three. It was not: the run
+declared **173 rule categories across 47 groups** -- `M1` through `M5`,
+`V1` through `V4`, `TM1`, `TM2`, `MIM`, `NW`, `Act`, `Gat`, `Seal`,
+`Pad`, and the `Fil` family -- and three fired. The full IHP rule set
+was evaluated against the whole 113 MB layout and found nothing in any
+geometry this project drew.
+
 ### 3.2 The deep-mode number is a marker count, not a shape count
 
 LibreLane runs this deck with `run_mode=deep` because the PDK's

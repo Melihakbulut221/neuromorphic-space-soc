@@ -1320,7 +1320,11 @@ counted.
     CDL's globals, the same disagreement `docs/12` section 7.5 already
     measured as 359 LVS errors on one macro. Dropping the CDL does not
     repair that comparison; it removes it.
-  * **KLayout DRC** reports **11,048** markers and every one of them is
+  * **KLayout DRC** reports **11,048** markers -- **6,584 distinct
+    shapes**, because `Sdiod.d` and `Sdiod.e` are evaluated over the
+    same derived layer and report an identical (cell, geometry) set,
+    which `docs/54` section 3.1 measured on a different layout and this
+    run reproduces exactly -- and every one of them is
     inside the vendor macro: `Sdiod.e` 4,464, `Sdiod.d` 4,464,
     `Cnt.c.digibnd` 2,120, attributed to 204 distinct cells of which 204
     are `RM_IHPSG13_1P_ROWDEC*`, `COLDEC*` or `RSC_IHPSG13_*`. Outside
