@@ -358,10 +358,17 @@ decks were run on it: Netgen LVS reports \emph{circuits match
 uniquely}, and the KLayout deck puts \num{0} of its \num{11048}
 markers --- \num{6584} distinct shapes, the two Schottky rules
 reporting one population twice --- outside the vendor macro
-hierarchy. That layout is
-\textbf{not} the layout these deck numbers describe, and no timing,
-power or fault-injection result in this paper has been re-measured on
-it; Magic DRC has not been run on it either \\
+hierarchy. All four decks
+have since been run on it: Netgen LVS reports \emph{circuits match
+uniquely}; the KLayout deck puts \num{0} of its \num{11048} markers
+--- \num{6584} distinct shapes, the two Schottky rules reporting one
+population twice --- outside the vendor macro hierarchy; and Magic
+reports \num{182} boxes of which \num{20} fall inside a macro
+footprint and every one of the remaining \num{162} lies within
+\SI{0.5}{\micro\meter} of a macro edge, none in open routing area.
+That layout is \textbf{not} the layout these deck numbers describe,
+and no timing, power or fault-injection result in this paper has been
+re-measured on it \\
 \midrule
 \multicolumn{2}{l}{\textbf{What does not exist}}\\
 \midrule

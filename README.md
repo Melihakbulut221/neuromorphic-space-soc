@@ -276,13 +276,15 @@ fetched, pinned and priced in `docs/65` and still not built. No radiation
 test data. No gate-level result for anything under `hw/soc/`. ~~No DRC,
 LVS or XOR on the laid-out SoC~~ **-- corrected. All four decks have run
 on `soc_top`'s own geometry since 2026-09-11 (`docs/77`, `docs/79`), and
-on 2026-09-13 LVS and the KLayout deck ran on a layout built from the
+on 2026-09-13 all three deck families ran on a layout built from the
 current RTL that also carries the ROM's two check macros: `Circuits
-match uniquely`, and 11,048 KLayout markers -- **6,584 distinct
-shapes**, because `Sdiod.d` and `Sdiod.e` report the same set and
-`docs/54` section 3.1 says to count it that way -- of which 0 are
-outside the vendor macro hierarchy (`docs/67` section 11). Magic DRC on that layout
-has not been run.** What the original sentence got right is the reason,
+match uniquely`; 11,048 KLayout markers -- **6,584 distinct shapes**,
+because `Sdiod.d` and `Sdiod.e` report the same set and `docs/54`
+section 3.1 says to count it that way -- of which 0 are outside the
+vendor macro hierarchy; and 182 Magic boxes of which 20 are inside a
+macro footprint and **all 162 others lie within 0.5 um of a macro
+edge**, none in open routing area (`docs/67` section 11). XOR has not
+been re-run.** What the original sentence got right is the reason,
 and the reason is a PDK property rather than a schedule: `docs/12`
 measured 1,106,478 Magic errors inside a single RM_IHPSG13 macro's own
 footprint and recorded it a no-go for this PDK version, which is why

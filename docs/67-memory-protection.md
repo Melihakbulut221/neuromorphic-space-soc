@@ -1346,12 +1346,16 @@ counted.
     LEF-footprint split exactly, 16 inside and 107 outside of 123.
 
     On the eight-macro layout: **20 inside a macro footprint, 150
-    outside**. The 150 is the abstraction, not the design. `M3.f` alone
-    is 102 of it, and `M3.f`, `M2.f` and `M4.f` are all *wide-metal*
-    spacing rules --- a LEF `OBS` blanket is one shape more than 10 um
-    wide, so ordinary routing beside it violates a rule it would not
-    violate against the macro's real geometry. This is the mechanism
-    `docs/54` section 4 characterises for the KLayout deck, in Magic's
+    outside**. The 150 is the abstraction, not the design, and that is
+    measurable rather than arguable. Every one of those 150 boxes lies
+    **within 0.500 um of a macro edge** --- not one is further, and not
+    one is in open routing area. `M3.f` alone is 102 of them, and
+    `M3.f`, `M2.f` and `M4.f` are all *wide-metal* spacing rules: a LEF
+    `OBS` blanket is one shape more than 10 um wide, so ordinary routing
+    beside it violates a rule it would not violate against the macro's
+    real geometry. The half-micron sliver against the macro edge is
+    exactly where that halo falls. This is the mechanism `docs/54`
+    section 4 characterises for the KLayout deck, in Magic's
     vocabulary.
 
     **Four of the twenty are new, and they are worth naming.** `M2.d`,
@@ -1377,10 +1381,58 @@ counted.
     The drawn-extent number is decided by a 5 nm modelling choice and
     the LEF-footprint number is the one to quote.
 
-  **And what it did not measure.** Magic DRC ran abstracted, not over
+  **The antenna violations were then repaired, and the whole measurement
+  repeated, 2026-09-13.** Nothing above is withdrawn --- `s83romecc5` is
+  the layout those four numbers were taken on and it stays. But its two
+  residual antenna violations were a real defect, and raising the repair
+  from OpenROAD's default 3 iterations and 10 % margin to **8 and 25**
+  clears them. Run **`s83ant`** resumes `s83romecc5` at the antenna
+  repair step and re-routes from there:
+
+  | | `s83romecc5` | `s83ant` |
+  |---|---|---|
+  | macros | 8 | 8 |
+  | `route__drc_errors` | 0 | 0 |
+  | antenna nets / pins | 2 / 2 | **0 / 0, `Antenna Passed`** |
+  | Netgen LVS | match uniquely, 263 sym. | **match uniquely, 268 sym.** |
+  | KLayout markers | 11,048 / 6,584 distinct | **11,048 / 6,584 distinct** |
+  | KLayout outside the vendor hierarchy | 0 | **0** |
+  | Magic boxes | 170 | **182** |
+  | Magic inside a footprint | 20 | **20** |
+  | setup WS, slow corner | -8.06 ns | **-7.33 ns** |
+  | VPWR drop / VGND | 0.86 % / 3.68 % | **0.84 % / 3.37 %** |
+
+  Three of those deserve a sentence rather than a row.
+
+  The **KLayout figures are identical in every respect** --- 11,048
+  markers, 6,584 distinct shapes, 204 cells of which 204 are vendor,
+  zero non-vendor, and `Sdiod.d`'s shape set equal to `Sdiod.e`'s. The
+  repair inserted 60 antenna diodes and they changed nothing that deck
+  looks at. That is the measured answer to a question that would
+  otherwise have been assumed.
+
+  **Magic went up by 12, and the 12 are not design DRC.** The split is
+  20 inside and 162 outside against 20 and 150, so the increase is
+  entirely outside the macros --- `M3.f` +15, `M2.f` -4, `M2.e` -1,
+  `M4.e` +2 --- and the in-macro population is unchanged down to the
+  per-instance counts, 4 / 4 / 4 / 4 / 0 / 0 / 2 / 2. Applying the same
+  distance test: in `s83ant` as in `s83romecc5`, **every box outside a
+  footprint is within 0.500 um of a macro edge**, all 162 of them. The
+  diodes moved routing in the halo where the `OBS` blanket already makes
+  the wide-metal rules fire; they did not create a violation anywhere a
+  reader would call the design's.
+
+  And LVS **agrees on the device count for the right reason**: 64,421
+  devices on both sides against 64,361 in `s83lvsbb2`, which is +60 ---
+  the diodes --- with nets unchanged at 63,155, because a diode attaches
+  to a net that already existed.
+
+  **And what none of it measured.** Magic DRC ran abstracted, not over
   the vendor GDS; `docs/12` section 7.5 measured that mode at 1,106,478
   errors inside a single macro and called it a no-go, and nothing here
-  changes that. No XOR.
+  changes that. No XOR on either layout. **No campaign, STA or power
+  number in this corpus has been re-measured on either of them**, and
+  setup is still broken at the slow corner on both.
   Antenna repair took 538 net and 729 pin violations to 2 and 2, and the
   two left are real -- `net166` into
   `u_ram.g_ram_2048x64_ecc.u_b0/A_ADDR[4]` on Metal3 at 2.26x and an
