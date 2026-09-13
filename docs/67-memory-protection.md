@@ -1336,7 +1336,51 @@ counted.
     `docs/12` section 8's prediction held: 2,316 markers over 57 cells
     for one macro, 9,668 for six, 11,048 for eight.
 
-  **And what it did not measure.** No Magic DRC on this layout. No XOR.
+  * **Magic DRC**, abstracted (`MAGIC_DRC_USE_GDS = 0`, so the vendor
+    macros enter as their LEF abstracts), reports **170** error boxes
+    against **123** for the six-macro layout `s77gate-drc-abstract`.
+    `scripts/classify_magic_drc.py` attributes them --- and that script
+    is new, because the classifications this repository already cites
+    were produced by one that was never committed and could not be
+    re-derived from a checkout. It reproduces `s77gate`'s recorded
+    LEF-footprint split exactly, 16 inside and 107 outside of 123.
+
+    On the eight-macro layout: **20 inside a macro footprint, 150
+    outside**. The 150 is the abstraction, not the design. `M3.f` alone
+    is 102 of it, and `M3.f`, `M2.f` and `M4.f` are all *wide-metal*
+    spacing rules --- a LEF `OBS` blanket is one shape more than 10 um
+    wide, so ordinary routing beside it violates a rule it would not
+    violate against the macro's real geometry. This is the mechanism
+    `docs/54` section 4 characterises for the KLayout deck, in Magic's
+    vocabulary.
+
+    **Four of the twenty are new, and they are worth naming.** `M2.d`,
+    minimum area, fires four times: twice in `u_c0` and twice in `u_c1`,
+    at 0.26 x 0.26 um. They are the check macro's own pin rectangles
+    for **`A_DOUT[14]` and `A_DOUT[15]`** --- 108 of the macro's 111
+    pins are exactly that size, and those two are the ones with nothing
+    routed to them, so no attached wire grows the shape past the
+    minimum. That is not a defect but a design fact made visible: a
+    `512x16` row carries **two words' check bits, 7 + 7 = 14 of its 16**,
+    and the top two outputs are unused. `cout0[14]` and `cout0[15]`
+    appear exactly once each in the routed netlist, at the macro port
+    and nowhere else, where every used bit appears twice. In the
+    macro's real GDS that pin attaches to internal metal and has ample
+    area; it is isolated only because this run reads the abstract.
+
+    One caution about the other split this script prints. Against the
+    *drawn* extent --- the LEF box plus a 0.225 um NWell overhang --- 33
+    boxes straddle an edge, and **31 of them overlap by exactly
+    0.0050 um**, at three different macro edges. The markers sit 0.220
+    um from the LEF edge; the 0.225 model overshoots by five
+    nanometres. Set the constant to 0.220 and all 31 move to *outside*.
+    The drawn-extent number is decided by a 5 nm modelling choice and
+    the LEF-footprint number is the one to quote.
+
+  **And what it did not measure.** Magic DRC ran abstracted, not over
+  the vendor GDS; `docs/12` section 7.5 measured that mode at 1,106,478
+  errors inside a single macro and called it a no-go, and nothing here
+  changes that. No XOR.
   Antenna repair took 538 net and 729 pin violations to 2 and 2, and the
   two left are real -- `net166` into
   `u_ram.g_ram_2048x64_ecc.u_b0/A_ADDR[4]` on Metal3 at 2.26x and an
