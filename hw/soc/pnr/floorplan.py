@@ -340,6 +340,11 @@ def build(channel, pdk_root, density_pct=None, cell_area=CELL_AREA):
         rows = math.floor((y - core_y0) / SITE_H + 1e-9)
         return round(core_y0 + rows * SITE_H, 6)
 
+    def _row_align_up(y):
+        """The lowest row-aligned y not below `y`."""
+        rows = math.ceil((y - core_y0) / SITE_H - 1e-9)
+        return round(core_y0 + rows * SITE_H, 6)
+
     band_bot_top = round(y_bot + ram_h, 6)      # top of the bottom band
     band_top_top = round(y_top + ram_h, 6)      # top of the top band
     rom_x = round(core_x0 + COL_SITES[2] * SITE_W, 6)
@@ -352,6 +357,23 @@ def build(channel, pdk_root, density_pct=None, cell_area=CELL_AREA):
     # and the check macro takes the blind space above it.
     rom_top_y = y_top
     chk_top_y = _row_align(band_top_top - chk_h)
+
+    # EACH CHECK MACRO SITS AT THE OUTER EDGE OF ITS BAND, and that was
+    # measured against the alternative rather than chosen.
+    #
+    # Placed hard against its ROM with only the halo between -- 20.34 um
+    # at the bottom, 22.64 at the top -- the power grid builds and the
+    # design does NOT route: run s83romecc4 stopped at step 31 with
+    # [GRT-0116] Global routing finished with congestion. Moving a macro
+    # into the strip between the ROM and the band edge takes that strip
+    # away from the router, and this column has the accelerator's fabric
+    # on the other side of it.
+    #
+    # At the band edge the design routes: run s83romecc2 reached step 50
+    # of 80 with global routing, detailed routing, antenna repair and
+    # the disconnected-pin checker all behind it. What it failed on is
+    # the power grid, and pdn_macro.tcl is where that is answered rather
+    # than here -- see the ROM_CHK grid it defines.
 
     chk_place = {ROM_CHK_INSTS[0]: (chk_bot_y, ORIENT_BOTTOM),
                  ROM_CHK_INSTS[1]: (chk_top_y, ORIENT_TOP)}
@@ -494,6 +516,16 @@ def main():
                          "named for: docs47 = two words per row, ecc = "
                          "docs/67's one protected word per row. Same "
                          "macros, same places, different instance paths")
+    ap.add_argument("--lvs-blackbox", action="store_true",
+                    help="emit the variant that RUNS LVS with the vendor "
+                         "macro as a BLACK BOX: RUN_LVS=1 and no "
+                         "EXTRA_SPICE_MODELS. This is the only recipe in "
+                         "hw/soc/pnr/runs/s77lvs-* that matches uniquely; "
+                         "handing netgen the macro CDL while Magic "
+                         "extracts the macro from its LEF compares a "
+                         "netlist that has the transistors against a "
+                         "layout that does not, and run A measured that "
+                         "as `Netlists do not match`")
     ap.add_argument("--write", metavar="PATH", default=None,
                     help="write a whole variant of config.json to PATH; the "
                          "path must be inside hw/soc/pnr/, because "
@@ -565,6 +597,61 @@ def main():
             out["PDN_MACRO_CONNECTIONS"] = [
                 _relabel_pdn(line, relabel)
                 for line in base["PDN_MACRO_CONNECTIONS"]]
+            if a.memory == "ecc-rom":
+                # THE CHECK MACROS NEED THEIR OWN POWER LINES, and the
+                # loop above cannot supply them: it RELABELS the entries
+                # config.json already has, and config.json has none for
+                # an instance it does not place. Without these the two
+                # macros are placed, routed and left unpowered, and the
+                # flow stops at Checker.DisconnectedPins with four
+                # critical pins -- which is exactly what the first run
+                # of this mode did, at step 43 of 80, on 2026-09-13.
+                #
+                # The clause above warns about the neighbouring form of
+                # this ("a relabelled instance path has to be relabelled
+                # there too or OpenROAD.Floorplan finds no macro to
+                # power and stops") and the warning did not reach the
+                # case where the instance is NEW rather than renamed.
+                #
+                # The two supply lines are the ROM's own, because it is
+                # the same vendor part family and the same two supplies:
+                # VDD! for the periphery and VDDARRAY! for the array,
+                # both returned on VSS!.
+                chk_re = r"u_rom\.g_rom_1024x32_ecc\.u_c[01]"
+                out["PDN_MACRO_CONNECTIONS"] += [
+                    chk_re + " VPWR VGND VDD! VSS!",
+                    chk_re + " VPWR VGND VDDARRAY! VSS!",
+                ]
+        if a.lvs_blackbox:
+            # docs/54: the deck that actually blocks. config.json carries
+            # EXTRA_SPICE_MODELS "so that a later LVS run has what it
+            # needs" -- that turned out to be the wrong need. Netgen
+            # builds circuit2 from the powered netlist and Magic builds
+            # circuit1 by extracting the LAYOUT, where every macro is the
+            # abstract its LEF describes. Give netgen the CDL and it
+            # expands transistors on one side only. Measured on this
+            # eight-macro layout 2026-09-13: with the CDLs, 64901 netlist
+            # nets against 63155 layout nets and `Netlists do not match`;
+            # the same layout in this mode is the run below.
+            del out["EXTRA_SPICE_MODELS"]
+            del out["//lvs"]
+            out["RUN_LVS"] = 1
+            out["//lvs_blackbox"] = (
+                "THE VENDOR MACRO IS A BLACK BOX, the recipe of "
+                "config-lvs-b-blackbox.json carried to the floorplan that "
+                "places ALL THREE macro types. With no CDL in circuit2 "
+                "netgen builds a pin-list-only cell for each macro from "
+                "the powered netlist and compares it against the "
+                "pin-list-only cell Magic extracted from the macro LEF, "
+                "so LVS checks what this project drew -- every net, every "
+                "standard-cell connection, and net-by-net which top-level "
+                "net lands on which macro pin -- and not the macro "
+                "internals, which docs/12 section 7.5 measured as "
+                "un-signoff-able in this PDK version. Generated, not "
+                "copied: config-lvs-b-blackbox.json was hand-written "
+                "before the 512x16 check macros existed and still "
+                "declares two macros."
+            )
         out["//floorplan48"] = (
             "GENERATED BY hw/soc/pnr/floorplan.py --arrangement "
             f"{a.arrangement} --channel {channel} --density {density} "
@@ -583,11 +670,20 @@ def main():
         # VERILOG_FILES: a generator that can quietly change a fifth key
         # is a generator whose output cannot be attributed.
         added = set(out) - set(base)
-        changed = {k for k in base if base[k] != out[k]}
+        removed = set(base) - set(out)
+        changed = {k for k in base if k in out and base[k] != out[k]}
         allowed_added = {"//floorplan48"}
         if fp.get("synth_parameters"):
             allowed_added.add("SYNTH_PARAMETERS")
+        if a.lvs_blackbox:
+            allowed_added.add("//lvs_blackbox")
         assert added == allowed_added, f"generator added {added}"
+        # A generator that can quietly DROP a key is as unattributable as
+        # one that can quietly add a fifth. `--lvs-blackbox` removes two
+        # and it says which two.
+        allowed_removed = ({"EXTRA_SPICE_MODELS", "//lvs"}
+                           if a.lvs_blackbox else set())
+        assert removed == allowed_removed, f"generator removed {removed}"
         # `<=` and not `==` on purpose: at --channel 700.08 --density 40
         # this generator reproduces config.json exactly and `changed` is
         # EMPTY, which is the strongest self-check available -- the tool
@@ -597,6 +693,8 @@ def main():
                            "PL_TARGET_DENSITY_PCT"}
         if relabel:
             allowed_changed.add("PDN_MACRO_CONNECTIONS")
+        if a.lvs_blackbox:
+            allowed_changed.add("RUN_LVS")
         assert changed <= allowed_changed, f"generator changed {changed}"
         for kind in out["MACROS"]:
             if kind == ROM_CHK and kind not in base["MACROS"]:

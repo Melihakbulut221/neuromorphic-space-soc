@@ -46,3 +46,43 @@ source $::env(SCRIPTS_DIR)/openroad/common/pdn_cfg.tcl
 add_pdn_connect \
     -grid macro \
     -layers "Metal4 $::env(PDN_VERTICAL_LAYER)"
+
+# ---------------------------------------------------------------------
+# The ROM's two check macros, added 2026-09-13.
+# ---------------------------------------------------------------------
+#
+# They are the narrowest parts in the design at 236.80 um, and the grid
+# above does not reach all of their supply pins. Measured, on run
+# s83romecc2: OpenROAD.IRDropReport failed with [PSM-0069] Check
+# connectivity failed on VPWR, and every [PSM-0038] unconnected shape it
+# listed lies in one of the two check macros' y bands -- 60.480 to
+# 251.820 and 1821.960 to 2013.300 -- each broken at 206.355 to 212.995,
+# whose centre is 209.675 um against a horizontal strap at 210.160
+# (PDN_HOFFSET 13.6, PDN_HPITCH 75.6, core bottom 45.36). The Metal4 was
+# cut around the horizontal strap instead of bonded to it.
+#
+# WHY THIS IS A SECOND GRID AND NOT A SECOND LAYER ON THE FIRST. Adding
+# "Metal4 $::env(PDN_HORIZONTAL_LAYER)" to the `macro` grid above was
+# tried first, on run s83romecc3, and it took the flow down far earlier
+# -- OpenROAD.GeneratePDN, step 13, [PDN-0179] Unable to repair all
+# channels. That grid covers every macro in the design, including four
+# RAM macros 784.48 um wide whose channels it then could not close. The
+# fix has to reach the two narrow macros and leave the six wide ones
+# exactly as they were, so it is scoped by instance.
+#
+# On a configuration whose netlist has no check macros -- every `rom0`
+# build, which is all of them before this date -- `-instances` matches
+# nothing and this grid is not created, so the six-macro flow is
+# untouched and its runs stay comparable.
+set _chk0 [[ord::get_db_block] findInst "u_rom.g_rom_1024x32_ecc.u_c0"]
+if {$_chk0 != "NULL" && $_chk0 != ""} {
+    define_pdn_grid \
+        -macro \
+        -name rom_chk \
+        -instances {u_rom.g_rom_1024x32_ecc.u_c0 u_rom.g_rom_1024x32_ecc.u_c1} \
+        -halo "0 0 0 0"
+    add_pdn_connect -grid rom_chk \
+        -layers "Metal4 $::env(PDN_VERTICAL_LAYER)"
+    add_pdn_connect -grid rom_chk \
+        -layers "Metal4 $::env(PDN_HORIZONTAL_LAYER)"
+}
