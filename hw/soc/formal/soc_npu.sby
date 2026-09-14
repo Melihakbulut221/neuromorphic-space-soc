@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+# SymbiYosys job for the event engine's H5 invariant, hw/soc/rtl/soc_npu.v.
+# docs/56 section 9.4: the file had no property set; this is the first.
+#
+#   sby -f soc_npu.sby bmc      bounded, depth 30
+#   sby -f soc_npu.sby prove    k-induction
+#   sby -f soc_npu.sby cover    E_PIN_S reachable, so H5 is not vacuous
+#
+# Properties live in soc_npu_props.v, included INTO the module under
+# `ifdef FORMAL -- soc_npu_ser.sby's arrangement -- so the FSM's signals
+# are in scope natively. [files] is the transitive instantiation closure
+# of soc_npu.v plus the two register-map headers, because unlike
+# soc_npu_ser it is not self-contained. Only soc_npu.v and the props are
+# read with -formal: the six submodules are read with -sv so that their
+# own `ifdef FORMAL includes (aer_fifo_props.v, lif_ctrl_props.v, ...)
+# stay out of this model -- their assumptions would otherwise constrain
+# this proof's environment from inside. Nine modules that looked missing
+# to a one-file-per-module resolver are defined inside aer_fifo.v,
+# lif_core.v and pilot_top.v and need no entry of their own.
+
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 30
+prove: mode prove
+prove: depth 16
+cover: mode cover
+cover: depth 120
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -formal soc_npu.v
+read_verilog -sv aer_fifo.v
+read_verilog -sv pilot_top.v
+read_verilog -sv soc_npu_ser.v
+read_verilog -sv soc_tmr_bank.v
+read_verilog -sv tmr_voter.v
+read_verilog -sv lif_core.v
+read_verilog -sv secded_dec.v
+read_verilog -sv secded_enc.v
+prep -top soc_npu
+
+[files]
+../rtl/soc_npu.v
+../../../hw/rtl/aer_fifo.v
+../../../hw/rtl/pilot_top.v
+../rtl/soc_npu_ser.v
+../rtl/soc_tmr_bank.v
+../../../hw/rtl/tmr_voter.v
+../../../hw/rtl/lif_core.v
+../../../hw/rtl/secded_dec.v
+../../../hw/rtl/secded_enc.v
+../rtl/soc_npu_regs.vh
+soc_npu_props.v
+../../../hw/rtl/npu_regs.vh

@@ -2304,4 +2304,8 @@ module soc_npu #(
   // off here rather than left to a lint warning.
   wire _unused_free = &{1'b0, clk_free_i, 1'b0};
 
+`ifdef FORMAL
+`include "soc_npu_props.v"
+`endif
+
 endmodule

@@ -934,6 +934,19 @@ instances of a green check read wider than the thing it examined and
   one textual guard** rather than over all reachable states. `docs/55`
   section 9.3 named this gap and declined to close it; declining twice is
   a decision and section 9.3 says so.
+  *Closed 2026-09-14.* `hw/soc/formal/soc_npu.sby` is the property set:
+  H5 as written above, included into `soc_npu.v` under `` `ifdef FORMAL``
+  the way `soc_npu_ser.sby` does it, over the transitive instantiation
+  closure of the module. bmc depth 30 PASS (12 s), prove (k-induction,
+  depth 16) PASS (5 s), cover of `E_PIN_S` PASS (4 s) [fact, the three
+  sby logs]. Two things the first runs taught: the props file must be
+  included, not read as a standalone unit (it has no module wrapper),
+  and the submodules are read without `-formal` so that their own
+  `` `ifdef FORMAL`` property includes -- and the assumptions inside
+  them -- stay out of this model. The first counterexample, before the
+  reset assumption was added, was `ev_state=8` with `aer_in_stb=1` at
+  step 0: a state no reset produces, and the reason the props carry
+  `initial assume (!rst_ni)`.
 - **THE THREE NEW GUARD FLIP-FLOPS ARE ARGUED BENIGN, NOT PROVED BENIGN.**
   Section 6.4's reasoning is about the refill condition's stand-offs and
   it is an argument about an FSM, which is the kind of argument

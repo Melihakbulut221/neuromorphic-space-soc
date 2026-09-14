@@ -205,3 +205,5 @@ paper-design/arxiv.tar.gz
 hw/soc/formal/*_prove/
 hw/soc/formal/*_cover/
 hw/soc/formal/*_bmc/
+# sby's per-job status databases (the bare <job>/ directory beside <job>_bmc/ etc.)
+hw/soc/formal/*/status.sqlite*

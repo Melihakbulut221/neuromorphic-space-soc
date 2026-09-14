@@ -54,9 +54,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
+.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser npu gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser gpio qspi scrub boot bytesecded memecc clkwake
+all: bus apb clint wdog wdogtmr regfile busstat npuser npu gpio qspi scrub boot bytesecded memecc clkwake
 
 include $(REPO)/tools.mk
 
@@ -72,6 +72,15 @@ npuser:
 	@for t in $(TASKS) prove_h3; do \
 	  echo "== soc_npu_ser $$t"; \
 	  $(SBY) -f soc_npu_ser.sby $$t || exit 1; \
+	done
+
+# The event engine's H5 invariant, docs/56 section 9.4, closed
+# 2026-09-14. soc_npu.sby elaborates the whole of soc_npu.v with its
+# submodules; bmc is depth 30, prove is k-induction at 16.
+npu:
+	@for t in $(TASKS); do \
+	  echo "== soc_npu $$t"; \
+	  $(SBY) -f soc_npu.sby $$t || exit 1; \
 	done
 
 apb:

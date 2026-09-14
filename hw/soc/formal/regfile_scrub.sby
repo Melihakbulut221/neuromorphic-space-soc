@@ -32,6 +32,8 @@
 prove
 bmc
 cover
+prove_pdr
+bmc_btor
 
 [options]
 prove: mode prove
@@ -40,12 +42,22 @@ bmc: mode bmc
 bmc: depth 40
 cover: mode cover
 cover: depth 40
+# Engine diversity, added 2026-09-15 after the yices pair sat at step 4
+# for two hours: an unbounded IC3 proof and a second bounded solver,
+# each with a stated bound so the status is TIMEOUT and not KILLED.
+prove_pdr: mode prove
+prove_pdr: timeout 10800
+bmc_btor: mode bmc
+bmc_btor: depth 40
+bmc_btor: timeout 10800
 multiclock off
 
 [engines]
 prove: smtbmc yices
 bmc: smtbmc yices
 cover: smtbmc yices
+prove_pdr: abc pdr
+bmc_btor: smtbmc boolector
 
 [script]
 read_verilog -formal secded_enc.v
