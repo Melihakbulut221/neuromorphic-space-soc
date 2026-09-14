@@ -283,7 +283,14 @@ register-mode QSPI flash controller with two chip selects that feeds
 the NPU its weight image from a modelled flash
 (`docs/66-qspi-flash-controller.md`). SpaceWire, CAN, SPI and I2C are
 fetched, pinned and priced in `docs/65` and still not built. No radiation
-test data. No gate-level result for anything under `hw/soc/`. ~~No DRC,
+test data. ~~No gate-level result for anything under `hw/soc/`.~~
+**-- corrected 2026-09-14:** `docs/74` is a gate-level fault-injection
+campaign on `soc_top`'s own sign-off netlist
+(`hw/soc/pnr/runs/s71boot/final/nl/soc_top.nl.v`), replaying `docs/43`'s
+1,400 injections one for one, and `docs/75` puts a two-by-two of it on
+two placed layouts. The true statement is the narrower one: **no
+gate-level result exists on the CURRENT netlist** -- every one of them
+describes a `rom0` build that predates the eight-macro layout. ~~No DRC,
 LVS or XOR on the laid-out SoC~~ **-- corrected. All four decks have run
 on `soc_top`'s own geometry since 2026-09-11 (`docs/77`, `docs/79`), and
 on 2026-09-13 all three deck families ran on a layout built from the

@@ -344,7 +344,21 @@ macros; \num{5872} flip-flops --- run \texttt{s77gate}, the same run the
 timing below is measured on \\
 Timing & \textbf{$-$\SI{4.6799}{\nano\second} slow-corner setup on
 \num{3088} violating endpoints}; hold met at all three corners;
-detailed-route DRC 0 \\
+detailed-route DRC 0. \emph{Superseded 14 September 2026, and left
+standing: that is the six-macro layout this paper measures throughout.
+The design's default build carries eight macros and is worse, by more
+than the remedies of \S\ref{sec:placement} recovered.
+\texttt{s83romecc5} measures $-$\SI{7.5758}{\nano\second} on
+\num{3529} endpoints and \texttt{s83ant}
+$-$\SI{7.3492}{\nano\second} on \num{3550}, against
+$-$\SI{4.6799}{\nano\second} on \num{3088} here---and hold, met at
+all three corners in every layout this paper reports, is LOST in
+\texttt{s83ant}: \num{55} violations at $-$\SI{0.4351}{\nano\second}.
+The hold loss is the price of repairing that layout's last two antenna
+violations, it is structural rather than a tuning artefact---a gentler
+repair setting produces a byte-identical layout---and no number in this
+paper has been re-measured on either build}
+\\
 Geometric decks & Run for this paper, having been off in the
 configuration since the design existed. Magic DRC \num{39969214} error
 boxes, which the report itself says to divide by 3 or 4, and KLayout

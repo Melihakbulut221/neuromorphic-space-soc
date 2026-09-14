@@ -83,3 +83,71 @@ def test_the_roadmap_does_not_call_the_push_blocked_by_the_licence():
         assert _inside_strike(roadmap, m.start()), (
             "ROADMAP.md still says the push is blocked, unstruck, while "
             "docs/14 is signed:\n  " + _line_at(roadmap, m.start()))
+
+
+# =====================================================================
+# the formal task count, which had been corrected once and wrongly
+# =====================================================================
+
+FORMAL = ROOT / "hw" / "soc" / "formal"
+
+
+def _formal_tasks():
+    """-> (jobs, tasks), counted from the [tasks] sections themselves."""
+    jobs = sorted(FORMAL.glob("*.sby"))
+    tasks = 0
+    for j in jobs:
+        in_tasks = False
+        for line in j.read_text(errors="ignore").split("\n"):
+            st = line.strip()
+            if st.startswith("["):
+                in_tasks = (st == "[tasks]")
+                continue
+            if in_tasks and st:
+                tasks += 1
+    return len(jobs), tasks
+
+
+def test_the_newest_formal_count_in_the_documents_matches_the_tree():
+    """The LATEST dated count must be true; the older ones must not be.
+
+    docs/64's rule is that a superseded measurement is left standing with
+    a dated marker, so this cannot assert that every count in these files
+    is current -- most of them are deliberately not. What it asserts is
+    that the NEWEST one is, which is the only one a reader takes as a
+    description of the tree.
+
+    WHY IT EXISTS. On 2026-09-14 the tree carried 64 tasks across 15
+    jobs. docs/00-index.md said 52 across fourteen. ROADMAP.md corrected
+    that to 56 across 14 -- and the correction was ALSO wrong, because
+    clkgate_wake.sby's six tasks (docs/77) postdate both. A roadmap
+    correcting an index with a number that was already stale is the
+    defect ROADMAP's own 2026-09-12 amendment was written about, and it
+    recurred one cell away from it. Nothing was looking, so it accrued a
+    third paragraph instead of a check.
+    """
+    jobs, tasks = _formal_tasks()
+    assert jobs and tasks, "no .sby jobs found under hw/soc/formal"
+
+    # Every "N tasks across M jobs/property sets" in either file, with the
+    # position of the last one -- the newest, by the append-only rule.
+    pat = re.compile(r"\*\*(\d+)\s+tasks across (\d+)\s+(?:jobs|property sets)\*\*"
+                     r"|\*\*(\d+)\*\*\s+SymbiYosys tasks across (\w+) property")
+    for name in ("docs/00-index.md", "ROADMAP.md"):
+        text = (ROOT / name).read_text(errors="ignore")
+        # Both files also count the PILOT's formal/ directory, which is a
+        # different tree with its own number. Keep only the counts whose
+        # neighbourhood names the SoC's, or the guard compares 64 against
+        # the pilot's 54 and fails for the wrong reason.
+        hits = [m for m in pat.finditer(text)
+                if re.search(r"hw/soc/formal|SoC:",
+                             text[max(0, m.start() - 400):m.end() + 200])]
+        assert hits, "{} states no hw/soc/formal task count at all".format(name)
+        last = hits[-1]
+        got_tasks = int(last.group(1) or last.group(3))
+        assert got_tasks == tasks, (
+            "{}'s NEWEST formal count says {} tasks; the tree has {} "
+            "across {} jobs. Older counts above it are left standing on "
+            "purpose (docs/64); this is the one that must be true. "
+            "Re-count with the [tasks] sections, not with a document."
+            .format(name, got_tasks, tasks, jobs))

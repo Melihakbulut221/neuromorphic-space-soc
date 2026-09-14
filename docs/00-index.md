@@ -511,6 +511,20 @@ counts above are the `docs/67` measurement and are left standing rather
 than edited, `docs/64`'s rule; `docs/68` section 11.6 records the
 intermediate 437 and 387.
 
+**Re-measured again 2026-09-14 [fact].** `pytest sw/tests -q` collects
+and passes **515**; `scripts/run_cocotb.sh` runs **464** with 0
+failures; and `hw/soc/formal` carries **64 tasks across 15 jobs**,
+counted by summing the `[tasks]` sections rather than by reading a
+document. Every earlier count above is left standing, `docs/64`'s rule.
+
+The formal figure is the one worth a sentence, because it had been
+corrected once already and the correction was wrong too: this file said
+52 across fourteen, `ROADMAP.md` amended that to 56 across 14, and both
+predate `clkgate_wake.sby`'s six tasks (`docs/77`). The fifteenth job is
+in neither. What is missing is not an edit but a guard --- nothing in
+the suite fails when a count in this file drifts, which is why these
+paragraphs accumulate instead of the number simply being right.
+
 **Re-measured again 2026-09-05 with `docs/70` [fact].** `pytest
 sw/tests -q` collects and passes **451** with that document absent and
 **452** with it present. The extra test is not a new check: section 5's
