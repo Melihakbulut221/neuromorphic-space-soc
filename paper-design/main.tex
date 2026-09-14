@@ -1,0 +1,452 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{microtype}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}
+
+\sisetup{group-separator={,}, group-minimum-digits=4,
+         group-digits=integer, text-series-to-math=true}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\file}[1]{\texttt{\small #1}}
+
+\title{A Fault-Tolerant Neuromorphic System-on-Chip\\
+in an Open \SI{130}{\nano\meter} PDK:\\
+\large Architecture, Protection Cost and Physical Implementation}
+
+\author{Hasan Melih Akbulut\thanks{Independent researcher.
+Correspondence: \texttt{57303760+Melihakbulut221@users.noreply.github.com}.
+Sources, harnesses and the full design record are open; see
+\S\ref{sec:artefacts}.}}
+
+\date{14 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We describe a system-on-chip that places a RISC-V management core and an
+event-driven spiking-neural-network node on one die in the IHP SG13G2
+open \SI{130}{\nano\meter} process, hardened through an entirely open
+flow, and we report what its fault-tolerance costs where the cost is
+measurable.
+
+The design is \num{168737} placed instances around eight vendor SRAM
+macros on a \SI{4.79}{\milli\meter\squared} die. Protection is layered
+rather than uniform: the register file carries a \num{39}/\num{32}
+SECDED code with a background scrub, the system memory carries four
+byte-wide \num{16}/\num{8} codewords per \num{64}-bit row so that a byte
+store needs no read-modify-write, the boot ROM carries its own
+\num{39}/\num{32} word code, the watchdog's state is triplicated, and the
+accelerator's \num{55} configuration bits are triplicated in the netlist.
+Every correction and every uncorrectable syndrome is counted in a
+telemetry block that lives in the power-on domain and survives the reset
+the watchdog causes.
+
+\textbf{The costs are stated as measured pairs, not as estimates.}
+Protecting the system memory costs \num{2068} cells, \num{234}
+flip-flops and \SI{31391}{\micro\meter\squared}---\SI{4.78}{\percent} of
+the standard-cell area---and halves the usable RAM from \num{64} to
+\num{32}\,KiB, because the protection buys its check bits out of the
+word width rather than out of a seventh macro. Protecting the register
+file costs \num{222} flip-flops.
+
+The layout routes with zero detailed-routing violations, zero
+disconnected pins and zero antenna violations, matches its netlist
+uniquely under Netgen, and returns zero XOR differences. It does
+\emph{not} meet its timing constraint: \SI{-7.35}{\nano\second} of setup
+slack at the slow corner against a \SI{20}{\nano\second} period, on
+\num{3550} violating endpoints. We report that with the same weight as
+the results that pass, and \S\ref{sec:limits} states the four remedies
+that were measured and what each returned.
+
+\textbf{No silicon exists.} Nothing here has been fabricated or exposed
+to a beam, and neither open PDK involved publishes total-ionising-dose or
+single-event data. Every reliability figure is a seeded fault-injection
+measurement on register-transfer or gate-level models.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+Spacecraft that want to run inference on sparse, event-driven sensor data
+have recently acquired a commercial option: Frontgrade Gaisler's
+GR801~\cite{gr801}
+pairs a fault-tolerant NOEL-V RV64GC core with a licensed BrainChip
+Akida accelerator on \SI{28}{\nano\meter} FDSOI, under a national space
+agency contract. It is the reference this work measures itself against
+and it is ahead on every axis a mission cares about: process node,
+qualification status, flight heritage and the fact that it will exist as
+silicon.
+
+This design is not a competitor to that. It is an open one. Every
+source, every harness, every measurement record and every negative
+result is published, on a process design kit and a tool flow that anyone
+can install. What that buys is not performance. It is that each claim
+below can be re-derived by a reader rather than believed.
+
+\paragraph{What is on the die.} A \num{32}-bit RISC-V management core
+with physical memory protection; \num{72}\,KiB of on-chip memory in six
+vendor macros---\num{64}\,KiB of SRAM in four and an \num{8}\,KiB boot
+ROM in two---with two further macros carrying the ROM's check bits, for
+eight in the layout; a system fabric with an error slave and
+plug-and-play device tables; a core-local interruptor, a general-purpose
+timer and a three-stage escalating watchdog; a console UART, a
+\num{16}-pin GPIO port and a QSPI flash controller; and one node of an
+event-driven spiking accelerator, instantiated from a frozen shuttle
+submission rather than copied from it.
+
+\paragraph{What this paper reports.} The architecture
+(\S\ref{sec:arch}); the protection scheme and its measured cost
+(\S\ref{sec:protect}); the verification, which is three independent
+kinds and is counted (\S\ref{sec:verify}); the physical implementation
+and its sign-off (\S\ref{sec:phys}); and what the design does not do,
+which is a long list and is stated rather than omitted
+(\S\ref{sec:limits}).
+
+\section{Architecture}
+\label{sec:arch}
+
+\subsection{Management core}
+
+The core is lowRISC's Ibex in its \texttt{small-pmp} configuration:
+RV32IMC with a two-stage pipeline, a flip-flop register file, no
+instruction cache, no branch-target ALU and no writeback stage, with
+four physical-memory-protection regions at granularity~\num{0}.
+
+It is vendored \emph{pristine}. The upstream commit is pinned, the
+SystemVerilog is converted to Verilog-2005 by sv2v, and \textbf{no patch
+is applied to Ibex itself}. Everything this project adds to the core is
+outside it or substituted at a module boundary, which is what makes
+``the core is unmodified'' a checkable statement rather than an
+intention.
+
+\texttt{SecureIbex} is \num{0}: no lockstep, no shadow register file, no
+dummy instructions, no memory-interface ECC. That is a recorded decision
+rather than an omission---the lockstep configuration roughly doubles the
+core, and this design spends that area on memory protection instead,
+where \S\ref{sec:protect} shows the upset population actually is.
+
+\subsection{Fabric and memory map}
+
+The system fabric speaks Ibex's own request/grant/response protocol
+rather than a standard bus, with two masters (the instruction and data
+ports), six slave ports, round-robin arbitration and two outstanding
+requests. No-starvation is proved rather than argued.
+
+The peripheral bus is real AMBA~3 APB---a \num{1}\,MiB window of sixteen
+\num{4}\,KiB slots---and the bridge between the two is proved by
+k-induction.
+
+Two properties of the map are worth stating because they are the kind
+that are usually absent. \textbf{Every unmapped address raises a bus
+error} that the core takes as an access fault: there is no silent read
+of zero anywhere in the map. And two plug-and-play device tables in
+GRLIB's record layout let software enumerate what is present instead of
+being told.
+
+\subsection{Neuromorphic node}
+
+The accelerator is one node of a sixteen-node address space, of which
+one is instantiated and the other fifteen decode and fault. The node is
+the frozen Tiny Tapeout TTIHP26b pilot, \textbf{instantiated out of its
+own directory rather than copied}, with a test that fails if that
+directory has been modified---so the SoC cannot quietly drift away from
+the part that was submitted.
+
+The node carries \num{8} neurons, \num{8} axons and \num{64} four-bit
+signed synapses in an event-driven leaky-integrate-and-fire
+organisation, with a \num{72}/\num{64} Hsiao SECDED code on the weight
+word, \num{55} configuration bits triplicated in the netlist, and four
+fault-report pins.
+
+\textbf{It is driven exactly as external silicon would be.} A hardware
+serial master issues one \num{40}-bit mode-0 frame per register
+transaction, costing \num{176} clock cycles per register access. That is
+deliberately expensive: the point is that the interface the SoC uses is
+the interface a separate die would present, so the integration is not
+made easy by being made unrealistic.
+
+Events reach the node through two AER queues carrying the die's own
+pointer voting, entry parity and drop counting, reported through a
+\num{14}-bit interrupt cause register.
+
+\section{Fault tolerance, and what it costs}
+\label{sec:protect}
+
+\subsection{The scheme is layered, not uniform}
+
+Different structures get different mechanisms, chosen by what the
+structure is and what an upset in it does:
+
+\begin{center}
+\begin{tabular}{L{3.4cm}L{4.3cm}L{5.2cm}}
+\toprule
+structure & mechanism & why this one \\
+\midrule
+register file & \num{39}/\num{32} SECDED, background scrub over
+  \texttt{x1}--\texttt{x31} & dense, hot, and an upset propagates
+  immediately into computation \\
+system SRAM & four \num{16}/\num{8} byte codewords per \num{64}-bit row,
+  plus a scrubber & a byte store must not become a read-modify-write \\
+boot ROM & \num{39}/\num{32} word code, two check macros & its contents
+  decide whether the part boots at all \\
+watchdog state & triplication with a voter & small, and its failure mode
+  is an unwanted reset \\
+accelerator config & \num{55} bits triplicated in the netlist & written
+  once, read for the lifetime of a configuration \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{The memory protection, and the trade it makes}
+
+The system memory's scheme is the one with a real design consequence and
+it is worth stating plainly. A \num{72}/\num{64} code would need eight
+check bits that a \num{64}-bit macro row does not have, so the check bits
+would need a seventh macro---costing roughly a fifth of the macro area
+and putting a read-modify-write on every \texttt{sb} and \texttt{sh}.
+
+Instead the usable word narrows: \textbf{one \num{32}-bit word per
+\num{64}-bit row, as four \num{16}/\num{8} byte codewords}, each the
+shortening of the one SECDED code this design already owns. A byte is
+written through the macro's own bit mask with no read-modify-write, no
+extra cycle and nothing for the fabric to re-prove. \textbf{The price is
+that the usable RAM is \num{32}\,KiB, out of the \num{64}\,KiB the four
+macros physically hold.}
+
+That is a real cost and it is the right one for this part, whose
+bring-up program's static data is \num{192} bytes---but it is a trade
+that a design with a larger working set could not make, and it is stated
+here as a trade rather than as a feature.
+
+\subsection{Measured cost}
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+& cells & flip-flops & area \\
+\midrule
+register-file SECDED and scrub & --- & \num{222} & --- \\
+system-memory protection & \num{2068} & \num{234} &
+  \SI{31391}{\micro\meter\squared} (\SI{4.78}{\percent}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two things about that table. It is measured at the whole-SoC boundary
+rather than at the block, because a block-level figure for a protection
+mechanism is a number that does not survive synthesis. And the
+whole-SoC cycle invariant is \emph{unmoved} at \num{217682} with the RAM
+halved---the protection buys its correctness out of area and word width,
+not out of time.
+
+\subsection{Telemetry that survives the reset}
+
+Every correction, every corrected read cycle, every uncorrectable
+syndrome and every watchdog voter mismatch is counted, in four
+saturating counters with four sticky status bits and a maskable
+interrupt.
+
+The design decision worth naming is where that record lives: \textbf{in
+the power-on domain}, so it survives the system reset the watchdog
+causes. A counter that is cleared by the event it is counting is not
+telemetry, and this one is not.
+
+\section{Verification}
+\label{sec:verify}
+
+Three independent kinds, all counted and all runnable from a checkout.
+
+\paragraph{Formal.} \num{64} SymbiYosys tasks across \num{15} property
+sets covering the fabric, the APB bridge, the memory codec, the boot
+block, the CLINT, the QSPI controller, the GPIO port, the scrubber, the
+watchdog and its triplicated state, and the clock-gate wake path. The
+fabric's no-starvation property and the APB bridge's conformance are
+both proved rather than tested.
+
+\paragraph{Simulation.} \num{464} cocotb tests across the SoC blocks and
+the pilot, and \num{520} Python tests that check the generated register
+maps, the memory map, the golden model, the documentation's own counts
+and the invariants this project keeps about its flow configurations.
+
+\paragraph{Fault injection.} Seven register-transfer campaigns covering
+the management core, the NPU connection, the event engine, the watchdog
+and the node itself, each with per-structure outcome distributions and
+stated Wilson bounds---plus a gate-level campaign that replays one of
+them on the sign-off netlist, one injection for one, to see whether the
+register-transfer result survives the transformation to gates.
+
+\paragraph{And a negative result we keep.} One of those campaigns
+produced \emph{bit-identical} output on a defective design and its
+repaired version, which is not a pass: it is a campaign that was not
+looking at the structure it was supposed to check. That finding, and
+what it says about fault-injection campaigns as instruments, is the
+subject of a companion paper~\cite{companion_tmr} and is named here
+because a verification section that lists only its successes is a
+brochure.
+
+\section{Physical implementation}
+\label{sec:phys}
+
+\subsection{The flow}
+
+Entirely open: Yosys for synthesis, OpenROAD through LibreLane for place
+and route, Magic and KLayout for design-rule checking, Netgen for
+layout-versus-schematic, OpenSTA for timing. The process kit is IHP's
+open SG13G2 at a pinned commit. No step of the flow is a black box to a
+reader, which is the property that makes the rest of this section
+checkable.
+
+\subsection{The layout}
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+placed instances & \num{168737} \\
+\quad of which standard cells & \num{64409} \\
+\quad of which vendor SRAM macros & \num{8} \\
+die area & \SI{4.79}{\milli\meter\squared} \\
+macro area & \SI{2.34}{\milli\meter\squared} (\SI{49}{\percent} of the die) \\
+routed wirelength & \SI{5.75}{\meter} \\
+total power, typical corner & \SI{56.1}{\milli\watt} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Synthesis of the whole SoC as one design gives \num{27694} cells,
+\num{3077} flip-flops and \SI{392932.89}{\micro\meter\squared}
+(\num{54.141}\,kGE), which is \SI{1.11}{\percent} \emph{smaller} than the
+sum of the nine blocks synthesised separately---the whole is not the sum
+of its parts, and the difference is worth knowing before anyone budgets
+from block figures.
+
+\subsection{Sign-off}
+
+\begin{center}
+\begin{tabular}{lL{8.4cm}}
+\toprule
+detailed-route DRC & \num{0} \\
+disconnected pins & \num{0} \\
+antenna violations & \num{0} nets, \num{0} pins \\
+Netgen LVS & circuits match uniquely, all seven difference counters
+  \num{0}, with the vendor macros abstracted to their pin lists \\
+KLayout XOR & \num{0} differences \\
+KLayout DRC & \num{11048} markers, \textbf{all of them inside the vendor
+  SRAM macros}; \num{0} name a cell this design drew \\
+Magic DRC & \num{182} boxes, \num{20} inside a macro footprint, and every
+  one of the other \num{162} within \SI{0.5}{\micro\meter} of a macro
+  edge \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The last two rows need their qualifier, and it is the subject of a
+second companion paper~\cite{companion_decks}: the vendor SRAM macro does not pass this PDK's own
+geometric decks, which is a property of the kit rather than of this
+design, and the honest form of a deck result here is therefore two
+numbers---inside the macro and outside it---rather than one.
+
+\section{What this design does not do}
+\label{sec:limits}
+
+\paragraph{It does not meet its timing constraint.}
+\SI{-7.35}{\nano\second} of setup slack at the slow corner against a
+\SI{20}{\nano\second} period, on \num{3550} violating endpoints. Four
+remedies were measured rather than assumed: a second floorplan, a
+synthesis restructuring pass, a register on the memory read return, and
+an explicit capacitance constraint. \textbf{Two of the four made it
+worse}, and the diagnosis that had ranked the capacitance constraint
+first modelled it at \SI{+4.3}{} to \SI{+5.5}{\nano\second} when it in
+fact cost \SI{0.53}{\nano\second}---wrong by about five nanoseconds and
+in the wrong direction. Timing-driven placement is what helped.
+
+\paragraph{Hold is met in the shipping layout and lost in one variant.}
+Repairing that variant's last two antenna violations required
+\num{60} additional diodes, whose load breaks hold at
+\SI{-0.44}{\nano\second} on \num{55} endpoints. The trade is structural:
+a gentler repair setting converges on a byte-identical layout. The
+layout reported above is the one that meets hold and carries two antenna
+violations; the alternative is reported rather than hidden.
+
+\paragraph{It is not a flight part and it is not radiation-hardened.}
+No silicon. No beam. The process kit publishes no total-ionising-dose or
+single-event data, so the word ``rad-hard'' is not used of this part and
+every reliability number here is a seeded injection on a model.
+
+\paragraph{The spacecraft interfaces are mostly absent.} SpaceWire, CAN,
+SPI, I2C and a second UART are unbuilt; four candidates are fetched,
+elaborated and priced, and nine of the sixteen peripheral slots are
+reserved addresses with nothing behind them.
+
+\paragraph{The accelerator is one node, and the mesh is a
+specification.} The inter-node link is frozen as an interface---a
+\num{24}-bit link word, a valid/ready handshake, a node identifier and
+per-node fault counters---and no RTL implements it. In single-node
+builds the routing prefix is tied off at the boundary.
+
+\paragraph{There is no DFT.} No scan, no memory built-in self-test, no
+test mode. Both clock gates take their test enable tied low.
+
+\paragraph{One clock, one mode.} No clock gating beyond two instances,
+no power domains, no retention, no sleep.
+
+\section{Related work}
+\label{sec:related}
+
+Spiking accelerators on open PDKs through open flows are established:
+OpenSpike~\cite{openspike2023} taped one out in SkyWater
+\SI{130}{\nano\meter} at roughly thirty times this node's scale in 2023,
+and further open \SI{130}{\nano\meter} neuromorphic silicon has
+followed~\cite{kumaresan2026}. The neuromorphic-for-space framing is a
+survey topic~\cite{naoukin2023}. An SNN on an
+open PDK is not a contribution and is not claimed as one here.
+
+Neuromorphic hardware under radiation has beam data that this work does
+not: an open SNN processor~\cite{frenkel2019} has been characterised in a
+neutron beam and cross-sections extracted~\cite{nijsink2026}. That is the tier above this work and the
+difference is not one of degree.
+
+Radiation-tolerant neuromorphic silicon exists in fabricated form, and
+GR801 is the commercial reference named in \S\ref{sec:intro}.
+
+\paragraph{The nearest neighbour is the author's own.}
+ZIRH-2~\cite{zirh2_2026} is a
+rad-hard experiment chip on this same open PDK, public under
+Apache-2.0, carrying a triplicated SERV RISC-V, TMR chains placed in two
+deliberately different arrangements and SECDED RAM with scrub-on-read,
+through an open flow to a routed layout. That is nearly every property
+this design holds except the spiking accelerator and the management
+core's scale. It is cited because a design paper that does not name its
+author's adjacent chip invites the reading that it was not looked for.
+
+\paragraph{What is left, then.} Not the architecture, and not the
+substrate. What this design offers is a complete, open, re-derivable
+record of one fault-tolerance scheme taken from register transfer to
+routed layout with its costs measured at each boundary and its failures
+kept---including the layout that does not close, the remedies that made
+it worse, and the campaign that was blind.
+
+\section{Artefacts}
+\label{sec:artefacts}
+
+The design, the harnesses, the flow configurations, the measurement
+records and both companion papers are published. Numbers printed here
+are either re-derived from the tree by a checked registry or marked as
+read by hand from a named artefact; the ratio is printed rather than
+implied.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

@@ -189,3 +189,12 @@ paper-residual/*.blg
 paper-residual/*.log
 paper-residual/*.out
 paper-residual/arxiv.tar.gz
+
+# paper-design build output
+paper-design/main.pdf
+paper-design/*.aux
+paper-design/*.bbl
+paper-design/*.blg
+paper-design/*.log
+paper-design/*.out
+paper-design/arxiv.tar.gz

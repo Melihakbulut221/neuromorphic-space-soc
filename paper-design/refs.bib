@@ -1,0 +1,109 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+%
+% Every entry carries a `note` recording HOW WELL IT WAS VERIFIED, on the
+% scale the survey behind it used:
+%
+%   [V] existence, authorship and venue corroborated by an authoritative
+%       source;
+%   [P] existence and venue corroborated, one metadata field (a DOI, a
+%       page range, part of an author list) reconstructed from convention
+%       or reported by a secondary source and not independently confirmed.
+%
+% References that reached only [U] -- surfaced in a search and not
+% independently verified -- are NOT in this file, and the paper does not
+% cite them. Four are named in the paper's own limitations section
+% instead, because a claim that something exists in the literature is a
+% claim, and an unverified one belongs where the other unverified things
+% are. A bibliography that hides its own confidence is the same defect
+% this paper is about, wearing a different hat.
+@misc{openspike2023,
+  author       = {F. Modaresi and M. Guthaus and J. K. Eshraghian},
+  title        = {{OpenSpike}: An {OpenRAM} {SNN} Accelerator},
+  howpublished = {arXiv:2302.01015}, year = {2023},
+  note         = {[V]. Fully open EDA and open PDK, taped out in SkyWater
+                  130\,nm at roughly thirty times this design's scale. An
+                  SNN on an open PDK is not a contribution}
+}
+@misc{kumaresan2026,
+  author       = {P. Kumaresan and S. Sivasubramani},
+  title        = {An Open-Source {LFSR}-Based Stochastic Leaky
+                  Integrate-and-Fire Neuron in {SkyWater} 130\,nm},
+  howpublished = {arXiv:2606.23532}, year = {2026},
+  note         = {[V]}
+}
+@misc{nijsink2026,
+  author       = {W. Nijsink and B. {Endres Forlin} and A. Yousefzadeh and
+                  M. Ottavi},
+  title        = {Shooting Neutrons at Neurons: Radiation Testing of a Spiking
+                  Neural Network on Flash-Based {FPGAs}},
+  howpublished = {arXiv:2605.00030}, year = {2026},
+  note         = {[V]. Beam data for an SNN; the evidence tier this paper
+                  explicitly does not reach}
+}
+@misc{naoukin2023,
+  author       = {J. Naoukin and M. Isik and K. Tiwari},
+  title        = {A Survey Examining Neuromorphic Architecture in Space and
+                  Challenges from Radiation},
+  howpublished = {arXiv:2311.15006}, year = {2023},
+  note         = {[V]}
+}
+@article{frenkel2019,
+  author  = {C. Frenkel and M. Lefebvre and J.-D. Legat and D. Bol},
+  title   = {A 0.086-mm$^2$ 12.7-pJ/SOP 64k-Synapse 256-Neuron Online-Learning
+             Digital Spiking Neuromorphic Processor in 28-nm {CMOS}},
+  journal = {IEEE Transactions on Biomedical Circuits and Systems},
+  year    = {2019},
+  note    = {DOI 10.1109/TBCAS.2018.2880425. [V]. ODIN, the substrate Nijsink et al. irradiated}
+}
+@misc{zirh2_2026,
+  author       = {H. M. Akbulut},
+  title        = {{ZIRH-2}: A Rad-Hard Experiment Chip with a {TMR}
+                  {SERV} {RISC-V}, Placement-{A/B} {TMR} Chains and
+                  {SECDED} {RAM} on {IHP} {SG13G2}},
+  howpublished = {\url{https://github.com/Melihakbulut221/zirh2}},
+  year         = {2026},
+  note         = {[V]. THE AUTHOR'S OWN PRIOR WORK, Apache-2.0, public
+                  since 2026-08-15, on the same open PDK as this paper.
+                  It carries source-level TMR and SECDED through an open
+                  flow to a routed layout, which is every property this
+                  design holds except the spiking accelerator. Cited
+                  because a novelty claim that does not name its
+                  author's nearest neighbour is a novelty claim a
+                  reviewer will read as concealment}
+}
+
+@misc{companion_decks,
+  author       = {H. M. Akbulut},
+  title        = {What the Deck Checked: The Design-Side Residual of an
+                  Open-{PDK} Sign-off Run},
+  howpublished = {\url{https://github.com/Melihakbulut221/nssoc}},
+  year         = {2026},
+  note         = {[V]. Companion paper, same design and same run trees.
+                  Carries the deck accounting this paper's sign-off table
+                  summarises}
+}
+
+@misc{companion_tmr,
+  author       = {H. M. Akbulut},
+  title        = {Triplicated in the Netlist, Adjacent in the Die:
+                  Instrumenting a Redundancy Claim Across an Open
+                  130\,nm Flow},
+  howpublished = {\url{https://github.com/Melihakbulut221/nssoc}},
+  year         = {2026},
+  note         = {[V]. Companion paper. Carries the fault-injection
+                  campaign that produced bit-identical output on a
+                  defective design and its repair, named in section 4}
+}
+
+@misc{gr801,
+  author       = {{Frontgrade Gaisler}},
+  title        = {{GR801}: Radiation-Hardened Neuromorphic Processor},
+  howpublished = {\url{https://www.gaisler.com/products/gr801}},
+  year         = {2026},
+  note         = {[V]. Product brief, status "under development",
+                  released April 2026; NOEL-V RV64GC with a licensed
+                  BrainChip Akida accelerator on ST 28\,nm FDSOI. The
+                  commercial reference this design positions against and
+                  does not compete with}
+}
