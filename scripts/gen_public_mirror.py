@@ -51,6 +51,7 @@ stated it is gone.*
 
 import argparse
 import hashlib
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -99,6 +100,42 @@ decision to hold it, the argument for that decision and the full list of
 what else is held are in `docs/14-licensing-decision.md` section 11 and
 `LICENSES.md` section 2.1.
 """
+
+# Fragments cut out of a file that otherwise travels whole: a clause,
+# not a section. Each is (path, REGEX, replacement, why).
+#
+# THE PATTERNS DO NOT CONTAIN THE TEXT THEY REDACT, and that is the
+# whole design. The first version of this table held the literal
+# strings -- whereupon this file, which is itself published, carried
+# every secret it was written to remove. The sweep that caught it is
+# the same one that found the fragments: grep the OUTPUT, not the
+# inputs. So each pattern is anchored on innocuous surrounding text and
+# matches the sensitive span structurally.
+#
+# Found by the pre-publication audit of 2026-09-14, after two prior
+# publications had carried both.
+HELD_FRAGMENTS = [
+    (
+        "ROADMAP.md",
+        r'(refusing to start jobs on this account -- )\*"[^"]*"\*',
+        r"\1*(the exact wording is the owner's account status and is not "
+        r"published: it names a billing condition on the account, not a "
+        r"fault in this repository)*",
+        "personal financial status of a named individual",
+    ),
+    (
+        "scripts/ci_local.sh",
+        r"(was refused before starting -- )'[^']*'",
+        r"\1'(account status, not published)'",
+        "the same wording, quoted a second time",
+    ),
+    (
+        "docs/07-design-review.md",
+        r"EUR \d+(?:\.\d+)?k NLnet ask",
+        "NLnet ask *(figure held; `docs/06` carries it)*",
+        "the headline grant figure, which is the class docs/06 is held for",
+    ),
+]
 
 SECTION_STUB = """{start}
 
@@ -204,6 +241,16 @@ def build():
         files[rel] = (text[:a] + SECTION_STUB.format(start=start, what=what)
                       + text[b:]).encode()
 
+    for rel, pattern, replacement, why in HELD_FRAGMENTS:
+        text = files[rel].decode("utf-8")
+        redacted, n = re.subn(pattern, replacement, text, flags=re.S)
+        assert n == 1, (
+            "held fragment in {} matched {} times, expected 1 ({}). A "
+            "fragment that has been reworded upstream must fail the "
+            "build, because the alternative is that it travels."
+            .format(rel, n, why))
+        files[rel] = redacted.encode()
+
     # The docs workflow explains, at length, why it does not deploy to
     # Pages, and the first reason it gives is that the repository is
     # private. In the mirror that sentence is FALSE. A generated tree
@@ -247,10 +294,14 @@ def build():
     # text, replace, and fail if the two are equal. That holds even if
     # someone later rewrites the search string and forgets the guard,
     # because it tests the effect rather than the precondition.
-    billing = (
-        "#   \"The job was not started because recent account payments have failed\n"
-        "#    or your spending limit needs to be increased.\"")
-    if billing not in text:
+    # The quoted paragraph is GitHub's own message about the OWNER's
+    # account, and the 2026-09-14 audit ruled it personal financial
+    # status that should not travel. It is matched STRUCTURALLY -- the
+    # pattern is anchored on the innocuous line above it and never
+    # contains the wording -- because this file is published too, and a
+    # redaction table that quotes what it redacts publishes it twice.
+    billing_re = r'(are non-starts, on\n#\n)#   "[^"]*"'
+    if not re.search(billing_re, text, re.S):
         raise SystemExit(
             "gen_public_mirror.py: the checks workflow no longer carries the "
             "billing paragraph this script rewrites. That paragraph explains "
@@ -258,16 +309,17 @@ def build():
             "not this one's; if it has been reworded or removed, re-read the "
             "workflow and update this block rather than shipping it as-is.")
     before = text
-    text = text.replace(
-        billing,
-        billing + "\n"
+    text = re.sub(
+        billing_re,
+        r"\1#   (the exact wording is the owner's account status and is\n"
+        r"#    not published; it names a billing condition on the account)\n"
         "#\n"
         "# IN THIS MIRROR that history is the DEVELOPMENT repository's and\n"
         "# not this one's: this repository has its own runner, its own\n"
         "# billing and no run history at all at the moment of generation.\n"
         "# The paragraph is kept rather than deleted because it is why the\n"
         "# checks live in a script instead of in this file, and that reason\n"
-        "# holds wherever the file is.")
+        "# holds wherever the file is.", text)
     if text == before:
         raise SystemExit(
             "gen_public_mirror.py: the mirror rewrite of the billing "
