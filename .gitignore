@@ -180,3 +180,12 @@ paper/*.out
 # reason this line exists instead of a note saying it was fine.
 paper/arxiv.tar.gz
 paper/*.out
+
+# paper-residual build output, same reasoning as paper/
+paper-residual/main.pdf
+paper-residual/*.aux
+paper-residual/*.bbl
+paper-residual/*.blg
+paper-residual/*.log
+paper-residual/*.out
+paper-residual/arxiv.tar.gz

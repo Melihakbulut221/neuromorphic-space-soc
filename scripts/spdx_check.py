@@ -96,7 +96,9 @@ SYNTAX = {
 # their data under CC-BY-4.0. The Python that re-derives those numbers is
 # a program and stays Apache-2.0, because it is the kind of thing section
 # 6.5 wants to be able to offer upstream.
-DIR_IS_DOCUMENT = ("paper/",)
+# paper-residual/ joined it 2026-09-14: a second paper, same three
+# kinds of file, same reason.
+DIR_IS_DOCUMENT = ("paper/", "paper-residual/")
 DOCUMENT_SUFFIXES = {".tex", ".bib", ".yaml", ".yml", ".csv", ".tsv"}
 
 # Hardware sources take CERN-OHL-W-2.0; everything else executable takes

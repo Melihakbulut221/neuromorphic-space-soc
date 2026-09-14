@@ -1,0 +1,478 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{microtype}
+\usepackage{tabularx}
+\usepackage[hidelinks]{hyperref}   % loaded last, as it patches others
+
+\sisetup{group-separator={,}, group-minimum-digits=4,
+         group-digits=integer, text-series-to-math=true}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\file}[1]{\texttt{\small #1}}
+
+\title{What the Deck Checked:\\
+The Design-Side Residual of an Open-PDK Sign-off Run}
+
+\author{Hasan Melih Akbulut\thanks{Independent researcher.
+Correspondence: \texttt{57303760+Melihakbulut221@users.noreply.github.com}.
+Sources and records are open; see \S\ref{sec:artefacts}.}}
+
+\date{14 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+``DRC clean'' names one outcome and hides four populations: the rules a
+shipped deck contains, the subset a run evaluates, the subset a design
+actually fires, and where the resulting markers land. We account for all
+four on one completed design---a routed \SI{130}{\nano\meter}
+system-on-chip on the IHP SG13G2 open PDK containing eight vendor SRAM
+macros---and report the residual.
+
+The run's deck declares \num{173} rule categories in 47 groups. \textbf{Three
+fire.} Every marker they produce lies inside the vendor macro hierarchy:
+across three layouts of two different sizes, the count of markers naming
+a cell that is not vendor-supplied is \textbf{zero}, on \num{192} and then
+\num{204} distinct cells. The same PDK commit ships a second deck of
+\num{371} further rules which the sign-off flow does not run, and which a
+prior measurement found returns zero on this vendor macro.
+
+Marker counts are not violation counts and the gap is stable rather than
+incidental: two rules over one derived layer report an identical
+(cell, geometry) set, so \num{11048} markers are \num{6584} distinct
+shapes, a ratio of \num{1.68} that reproduces at \num{9668}/\num{5750}
+on a six-macro layout of the same design.
+
+The sharpest result is a distance. Running Magic's deck against the
+LEF abstraction rather than the vendor GDS produces \num{182} error boxes
+of which \num{20} fall inside a macro footprint; \textbf{every one of the
+other \num{162} lies within \SI{0.500}{\micro\meter} of a macro edge}, in
+six discrete values and no others, with nothing in the open field of
+standard cells and routing. The bound reproduces at
+\SI{0.500}{\micro\meter} on a second layout and, run backwards, at
+\SI{0.380}{\micro\meter} on a six-macro layout measured eleven days
+earlier---so the property held for a published measurement all along and
+was not asked of it.
+
+We also report what the deck is the \emph{only} instrument for: the
+detailed router declines \texttt{LEF58\_ENCLOSURE} on all seven cut
+layers this PDK defines, because the technology LEF states plain
+\texttt{ENCLOSURE} and qualifies none of it with \texttt{CUTCLASS}. And
+we report an asymmetry in the accompanying LVS: the comparison passes
+only when the vendor macro is black-boxed on both sides, and the passing
+comparison is \emph{weaker} than the one that fails, whose failure is a
+bus-delimiter naming artefact rather than a connectivity error.
+
+No silicon exists. Nothing here was fabricated or exposed to a beam.
+Every number is a deck output on a layout.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:intro}
+
+A design that has passed design-rule checking is usually reported as a
+single fact. The report is a number and the number is zero, or the
+number is not zero and the design is not finished. Neither form says
+which rules were in the deck, which of them the run evaluated, which of
+those the design contained geometry capable of firing, or---when a
+marker does appear---whether it names something the design drew or
+something it instantiated.
+
+Those four questions have different answers and only the last is
+commonly asked. This paper asks all four of one design and reports the
+residual: what a shipped open PDK's sign-off deck actually checked, and
+what it never exercised.
+
+The object is a routed \SI{130}{\nano\meter} system-on-chip on IHP
+SG13G2, an open process design kit~\cite{ihppdk}, hardened through an entirely open
+flow. It contains \num{168737} instances and eight vendor SRAM macros of
+three types. It is not a small design and it is not a clean one: it
+misses its timing constraint at the slow corner by
+\SI{7.35}{\nano\second}. That is stated here because a deck result is
+usually presented alongside a design that closed, and the accounting
+below does not depend on closure.
+
+\paragraph{What this is not.} It is not a claim that the deck is wrong.
+It is not a radiation result, a silicon result, or a comparison of open
+tools against commercial ones. It is an accounting of one run.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+\item A four-population accounting of one sign-off run: deck contents,
+  run coverage, design firings, and marker attribution
+  (\S\ref{sec:accounting}).
+\item The attribution result, at two design sizes and on three layouts:
+  zero markers name a cell the design drew (\S\ref{sec:attribution}).
+\item A distance bound on the abstraction's artefacts that replaces a
+  mechanistic argument with a measurement, including the backwards test
+  that shows it held for an earlier published run (\S\ref{sec:distance}).
+\item The complementary negative: the rules the router declines, which
+  makes the deck the only instrument looking at them
+  (\S\ref{sec:router}).
+\item An asymmetry in the accompanying LVS, in which the passing
+  configuration checks strictly less than the failing one
+  (\S\ref{sec:lvs}).
+\end{enumerate}
+
+\section{The four populations}
+\label{sec:accounting}
+
+\subsection{What the deck contains}
+
+The PDK ships its KLayout rules as a tree of \num{39} files under
+\file{libs.tech/klayout/tech/drc/rule\_decks/}, of which \num{38}
+contain at least one rule. Counting \texttt{.output()} calls statically
+across them gives \num{376} distinct rule names, of which \num{25} are
+constructed by string interpolation over a layer index---so
+\texttt{M\#\{met\_no\}.a} is one call and several rules.
+
+That count divides unevenly. \textbf{Three hundred and fifty-one of the
+\num{376} are in a single file}, \file{sg13g2\_maximal.drc}, which the
+sign-off flow does not run. The PDK's own README distinguishes the two:
+the main set is ``intended for foundry precheck purposes'' and its rules
+``have been thoroughly verified, tested, and optimized''; the maximal set
+is ``additional residual rules \ldots{} not been verified or tested and
+may be slower''. The PDK's own \file{run\_drc.py} runs both by default.
+The flow used here runs only the first.
+
+A prior measurement on this PDK~\cite{companion} ran the maximal deck
+deliberately: it
+evaluates \num{371} rules and returns zero, both on the vendor macro
+standalone and on a smaller full design, and a positive control built
+from four shapes with two deliberate violations shows it reporting five
+errors---so the zeros are results and not a silent no-op. That
+measurement is not repeated here and is cited rather than re-derived.
+
+\subsection{What the run evaluated}
+
+The report the flow emits is a KLayout \file{.lyrdb}, and it declares a
+category for every rule the run registered. On this design that is
+\textbf{\num{173} categories across \num{47} groups}: \texttt{M1} through
+\texttt{M5}, \texttt{V1} through \texttt{V4}, \texttt{TM1}, \texttt{TM2},
+\texttt{MIM}, \texttt{NW}, \texttt{Act}, \texttt{Gat}, \texttt{Seal},
+\texttt{Pad}, the \texttt{Fil} family, and the rest.
+
+The \num{173} is the number that matters for reading the result, and it
+is not printed anywhere in the flow's own summary. A reader is given a
+count of errors. Whether that count came from a deck of three rules or
+three hundred is not in the artefact the flow presents.
+
+\subsection{What the design fired}
+
+\textbf{Three categories fire.} They are the same three on every layout
+of this design we measured:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+& one macro & six macros & eight macros \\
+\midrule
+\texttt{Sdiod.d}       & --- & \num{3918} & \num{4464} \\
+\texttt{Sdiod.e}       & --- & \num{3918} & \num{4464} \\
+\texttt{Cnt.c.digibnd} & --- & \num{1832} & \num{2120} \\
+\midrule
+markers                & \num{2316} & \num{9668} & \num{11048} \\
+distinct shapes        & \num{1294} & \num{5750} & \num{6584} \\
+ratio                  & \num{1.79} & \num{1.68} & \num{1.68} \\
+distinct cells         & \num{57}   & \num{192}  & \num{204} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The one-macro column is a prior measurement on the vendor macro alone and
+is included for the series; its per-rule split is in that record.
+
+\paragraph{Markers are not violations, and the gap is structural.}
+\texttt{Sdiod.d} and \texttt{Sdiod.e} are evaluated over the same derived
+layer. Comparing their items as (cell, geometry) pairs, the intersection
+is the whole of both: \num{4464} shared, \num{0} in either alone. Every
+flagged shape is reported twice. So \num{11048} markers are \num{6584}
+distinct shapes, and the ratio \num{1.68} reproduces exactly on the
+six-macro layout. A headline that does not say which it is has a
+\num{68}\,\% error bar attached to it and no indication that it does.
+
+\section{Where the markers are}
+\label{sec:attribution}
+
+Each item in the report names the cell it lies in. That makes
+attribution a lookup rather than a geometric test, which matters: a
+containment test against a footprint cannot distinguish a marker
+\emph{in} the macro from a marker the macro's presence provoked
+\emph{beside} it, and the hierarchy name can.
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+layout & distinct cells & vendor cells & \textbf{cells the design drew} \\
+\midrule
+six macros, \file{s77gate}   & \num{192} & \num{192} & \textbf{0} \\
+eight macros                 & \num{204} & \num{204} & \textbf{0} \\
+eight, antenna-repaired      & \num{204} & \num{204} & \textbf{0} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every cell named by every marker is an \texttt{RM\_IHPSG13\_1P\_ROWDEC*},
+\texttt{COLDEC*} or \texttt{RSC\_IHPSG13\_*}---row decoders, column
+decoders and the standard cells inside the vendor's own array. The
+design's standard cells, its routing, its power grid and its pads
+produce nothing.
+
+\paragraph{The third row is a measurement and not a repetition.} The
+antenna-repaired layout differs from the second by \num{60} inserted
+diodes and a re-route. Every figure above is identical: the same
+\num{11048}, the same \num{6584}, the same \num{204} cells, the same
+equality between the two Schottky rules. Sixty cells of the design's own
+geometry entered the layout and the deck's output did not move. That is
+the control this section would otherwise lack.
+
+\paragraph{Scale.} From six macros to eight, markers rise by \num{1380}
+and cells by \num{12}. The added markers name cell types that exist only
+inside the added macro; no pre-existing cell's count changes. The series
+\num{2316}, \num{9668}, \num{11048} across one, six and eight instances
+is therefore consistent with the count being a property of the vendor
+array and its instantiation, not of the surrounding design---but array
+size and instance count move together across these three points, and a
+sweep over the PDK's other macro sizes, which would separate them, has
+not been run.
+
+\section{A distance, where an argument used to be}
+\label{sec:distance}
+
+Magic's deck can be run two ways: over the vendor GDS, or over the LEF
+abstraction, in which each macro is the obstruction rectangles its
+abstract declares. The first mode on the six-macro layout produces
+\num{39969214} error boxes in \SI{17.2}{\hour}, all of them inside a macro
+footprint. The second is cheap and is the one reported here.
+
+Abstracted, the eight-macro layout produces \num{182} boxes: \num{20}
+inside a macro footprint, \num{162} outside. The standard reading of the
+\num{162} is mechanistic---a LEF \texttt{OBS} blanket is one shape wider
+than \SI{10}{\micro\meter}, so ordinary routing beside it violates a
+wide-metal spacing rule it would not violate against the macro's real
+geometry. That reading is an interpretation. It can be replaced.
+
+For each box outside a footprint, take the distance to the nearest of the
+eight rectangles the placement reserves:
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+gap to nearest macro edge & \multicolumn{3}{c}{boxes} \\
+\cmidrule(l){2-4}
+ & eight macros & eight, repaired & six macros \\
+\midrule
+\SI{0}{\micro\meter} (touching) & 2  & 2  & 4  \\
+\SI{0.220}{\micro\meter}        & 31 & 31 & 1  \\
+\SI{0.260}{\micro\meter}        & 39 & 55 & 27 \\
+\SI{0.280}{\micro\meter}        & 4  & 5  & 21 \\
+\SI{0.320}{\micro\meter}        & 54 & 54 & 51 \\
+\SI{0.380}{\micro\meter}        & 15 & 12 & 3  \\
+\SI{0.500}{\micro\meter}        & 5  & 3  & 0  \\
+\midrule
+total outside                   & \num{150} & \num{162} & \num{107} \\
+\textbf{maximum}                & \textbf{\SI{0.500}{\micro\meter}}
+                                & \textbf{\SI{0.500}{\micro\meter}}
+                                & \textbf{\SI{0.380}{\micro\meter}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The gaps take six values and no others. Not one box sits in the field of
+standard cells and routing where almost every polygon in this layout is.
+The claim the mechanism was advanced to support---that these are
+artefacts of the boundary the abstraction invents---is now a distance
+rather than an interpretation, and a reader can check it with the
+placement and the report.
+
+\paragraph{It held for a published run and was not asked of it.} The
+third column is a six-macro layout measured eleven days before this
+analysis existed, whose \num{107} outside boxes had been reported without
+a distance. Its maximum is \SI{0.380}{\micro\meter}. The property was
+true of that measurement all along. This is the ordinary way a result is
+missed: not by measuring wrongly, but by not putting a question to an
+instrument that could already answer it.
+
+\paragraph{One caution, stated because it changes a number.} A second
+split is available---against the drawn extent, the LEF box plus a
+\SI{0.225}{\micro\meter} well overhang---and it should be read with care.
+Of the \num{33} boxes it reclassifies as straddling an edge, \num{31}
+overlap by exactly \SI{0.005}{\micro\meter}, at three different macro
+edges. The markers sit \SI{0.220}{\micro\meter} from the LEF edge and the
+\SI{0.225}{\micro\meter} model overshoots them by five nanometres. Set
+the constant to \SI{0.220}{\micro\meter} and all \num{31} move. That
+split is decided by a modelling choice below the resolution of the thing
+it models; the footprint split above it is not.
+
+\section{What the deck is the only instrument for}
+\label{sec:router}
+
+An accounting of what a deck checks is incomplete without the
+complementary question: what checks nothing else does.
+
+Every detailed-routing log this design has produced carries seven
+instances of
+\texttt{[DRT-0349] LEF58\_ENCLOSURE with no CUTCLASS is not supported.
+Skipping for layer X}---for \texttt{Cont}, \texttt{Via1} through
+\texttt{Via4}, \texttt{TopVia1} and \texttt{TopVia2}, which is every cut
+layer the technology defines.
+
+The cause is in the technology LEF, and it is not a defect: the file
+states plain LEF \texttt{ENCLOSURE} on all seven cut layers and qualifies
+none of them with \texttt{CUTCLASS}. The router reads those as
+\texttt{LEF58\_ENCLOSURE} rules it cannot interpret and declines all
+seven.
+
+So for via enclosure on this PDK, the sign-off deck is not a second
+opinion. It is the only opinion. A design that runs with the deck
+switched off---which is a supported configuration, and was this project's
+configuration for an extended period---has no instrument checking cut
+enclosure at all. That is a stronger statement about the value of the
+\num{173} than the firing count alone supports, and it runs in the
+opposite direction.
+
+\section{The LVS asymmetry}
+\label{sec:lvs}
+
+The same run tree carries a layout-versus-schematic comparison, and it
+has a property worth reporting alongside the deck: \emph{the
+configuration that passes checks strictly less than the configuration
+that fails}.
+
+Supplying the vendor CDL, netgen expands the macro's transistors on the
+schematic side while the extraction sees the LEF abstract on the layout
+side. The comparison fails: \num{64901} netlist nets against \num{63155}
+layout nets, and a top-level pin-matching failure. The cause is
+\emph{naming}. The CDL spells buses \texttt{A\_DIN<32>} and globals
+\texttt{VSS!}, \texttt{VDD!} where the layout has \texttt{A\_DIN[32]},
+\texttt{VSS}, \texttt{VDD}; the net difference follows from the
+delimiters.
+
+Black-boxing the macro on both sides, the comparison passes:
+\num{63155} = \num{63155}, circuits match uniquely, all seven difference
+counters zero. But circuit~2 is then built with no SRAM model at all, the
+extracted side carries an empty subcircuit per macro, and \num{974} macro
+pins are disconnected nodes on both sides alike. What passes is top-level
+connectivity into the macro pins. Nothing inside the macro is compared,
+and nothing was going to be: the vendor CDL covers two of the three macro
+types instantiated here, so the third was a black box in the failing run
+as well.
+
+Dropping the CDL does not repair the comparison. It removes the part of
+it that looked inside the macro. Both facts belong in a report of what
+the run checked.
+
+\section{An error class that only the larger design has}
+\label{sec:m2d}
+
+Of the \num{20} Magic boxes inside a macro footprint, four are a rule the
+six-macro layout cannot produce: \texttt{M2.d}, minimum area, twice in
+each of the two \SI{512}{}$\times$\SI{16}{} check macros, at
+\SI{0.26}{\micro\meter} square.
+
+They are the macro's own pin rectangles for \texttt{A\_DOUT[14]} and
+\texttt{A\_DOUT[15]}. One hundred and eight of the macro's \num{111} pins
+are exactly that size; those two are the ones with nothing routed to
+them, so no attached wire grows the shape past the minimum. The design
+uses fourteen of the sixteen bits---two words' worth of seven check bits
+each---and the top two outputs are unconnected, which the routed netlist
+confirms: those two nets appear once, at the macro port, where every used
+bit appears twice.
+
+In the macro's real geometry the pin attaches to internal metal and has
+ample area. The marker exists because the run reads the abstract. It is
+reported here because it is an instance of the general point with a
+concrete mechanism: the error population a deck produces is a function of
+the abstraction the run was given, and it changes when the design grows
+in a way that has nothing to do with the design being more or less
+correct.
+
+\section{Threats to validity}
+\label{sec:threats}
+
+\paragraph{One design, one PDK.} Everything here is one system-on-chip on
+one process. The attribution result reproduces across three layouts and
+two design sizes, but those are three layouts of the same design.
+
+\paragraph{The expensive mode was not repeated.} The
+\SI{17.2}{\hour} full-hierarchy Magic run exists for the six-macro layout
+only. Neither the \num{39969214} nor the finding derived from it has an
+eight-macro counterpart, and the two macro types added since have never
+been checked standalone.
+
+\paragraph{The scale series confounds two variables.} Array size and
+instance count move together across the three points. A sweep over the
+PDK's remaining macro sizes would separate them and has not been run.
+
+\paragraph{The deck is not validated here.} We report what it did on this
+design. Whether its rules are correct is a different question with its
+own literature, and the PDK's own issue tracker carries open items on it.
+
+\paragraph{The design does not close timing.} It misses the slow corner
+by \SI{7.35}{\nano\second}. Nothing in the accounting depends on that,
+but a reader should not take this design as an example of a finished one.
+
+\section{Related work}
+\label{sec:related}
+
+Krinke, Fischbach and Lienig~\cite{krinke2024} measured open-source
+layout verification against a commercial PDK and characterised what a generated deck can
+express. That work is tool-side: it asks what the checker is capable of.
+This paper is design-side: it asks what one run, of a shipped deck, on
+one completed layout, actually exercised. The two compose and neither
+substitutes.
+
+The vendor-macro exclusion is documented in open-silicon practice as a
+workaround---precheck flows carry flags to exclude SRAM from
+checks---and the reading here is not that the exclusion is novel but that
+its \emph{extent} on a real design has not been reported: how many rules
+remain, which fire, and whether anything the design drew is among them.
+
+The prior measurement of the second deck on this PDK, its positive
+control, and the marker-versus-shape correction that this paper's
+\num{1.68} ratio extends, are the author's own~\cite{companion} and are
+cited as such rather than rederived.
+
+\paragraph{The author's own nearest neighbour.} ZIRH-2~\cite{zirh2} is a
+rad-hard
+experiment chip on this same open PDK, public under Apache-2.0, carrying
+triplicated logic and error-coded memory through an open flow to a routed
+layout. It is named here because it is the closest artefact to this one
+and because a paper that does not cite its author's adjacent work invites
+the reading that it was not looked for. It does not carry the accounting
+this paper reports.
+
+\section{Artefacts}
+\label{sec:artefacts}
+
+The classifier that produces the footprint split and the distances is
+\file{scripts/classify\_magic\_drc.py}. It reproduces a previously
+recorded classification of the six-macro layout exactly---\num{16} inside,
+\num{0} straddling, \num{107} outside of \num{123}---which is the check
+that it is measuring what the earlier, uncommitted script measured.
+
+Two defects in it are recorded because they shaped the numbers. It
+refuses to report when it finds no macro in the placement, after a first
+version anchored its pattern at the wrong column, found none, and
+reported every box as ``outside''---the most useful-looking answer
+available and the exact inverse of the result. And a macro edge lands on
+a binary-float sum, so a box touching an edge over zero area counted as
+straddling it until a tolerance was added; that was one box in \num{123},
+and it was the difference between reproducing the recorded number and
+quietly disagreeing with it.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
