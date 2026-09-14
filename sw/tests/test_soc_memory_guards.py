@@ -269,6 +269,33 @@ def test_the_codec_is_read_from_hw_rtl_and_not_copied_into_the_memory():
             "a copy of {} appeared under hw/soc/rtl/".format(name))
 
 
+def _tracked_pnr_configs():
+    """The P&R configs a CHECKOUT carries, usable where there is no git.
+
+    docs/78 section 4 states the principle for the SPDX check and it
+    applies to every guard: "a generated tree is a plain directory until
+    it is committed, and a check that cannot run there is a check that
+    does not run where it is most needed". The public mirror is exactly
+    that tree, and `git ls-files` raises there rather than answering.
+
+    Falling back to "everything present" is correct rather than lax: the
+    mirror is BUILT from `git ls-files`, so in a non-git tree every
+    config on disk is by construction a tracked one. In a git tree the
+    fallback is never taken and untracked scratch is still excluded.
+    """
+    import subprocess as _sp
+    cfg_dir = ROOT / "hw" / "soc" / "pnr"
+    on_disk = {p.name for p in cfg_dir.glob("config*.json")}
+    try:
+        out = _sp.run(["git", "ls-files", "hw/soc/pnr/config*.json"],
+                      cwd=ROOT, check=True, capture_output=True,
+                      text=True).stdout.split()
+    except (OSError, _sp.CalledProcessError):
+        return on_disk           # not a git tree; see the docstring
+    names = {pathlib.PurePosixPath(t).name for t in out}
+    return names if names else on_disk
+
+
 def test_the_memory_protection_defaults_on_and_nothing_turns_it_off():
     """The same rule the watchdog's, the CLINT's and the NPU's HARDEN
     carry: a parameter that can turn a defence off is a parameter
@@ -314,9 +341,18 @@ def test_the_memory_protection_defaults_on_and_nothing_turns_it_off():
     # than what it opened, sitting inside the guard written to stop it.
     # Corrected 2026-09-13. The guard now finds them BY THE PROPERTY
     # instead of by name, and holds every one of them to two rules.
+    # TRACKED configs only, and the reason is a defect this guard shipped
+    # with. The first version walked the glob and asserted `len >= 6`,
+    # which is what the developer's working tree happens to hold --
+    # config-ecc-clint.json and config-ecc-clint2.json are git-ignored
+    # scratch. The public mirror carries tracked files only, so it has
+    # four, and the guard failed there while passing here: a check that
+    # encodes one machine's untracked state is not a check. Caught by the
+    # pre-publication audit of 2026-09-14, before the mirror was pushed.
+    tracked = _tracked_pnr_configs()
     rom0 = []
     for path in sorted((ROOT / "hw" / "soc" / "pnr").glob("config*.json")):
-        if path.name == "config.resolved.json":
+        if path.name == "config.resolved.json" or path.name not in tracked:
             continue
         cfg = json.loads(path.read_text())
         params = cfg.get("SYNTH_PARAMETERS") or []
@@ -337,8 +373,16 @@ def test_the_memory_protection_defaults_on_and_nothing_turns_it_off():
                 assert not (macro.get("instances") or {}), (
                     "{} sets ROM_HARDEN=0 and still places {}".format(
                         path.name, kind))
-    assert len(rom0) >= 6, (
-        "expected the six known ROM_HARDEN=0 configs, found {}".format(rom0))
+    # A census, not a magic number: every tracked config that names
+    # ROM_HARDEN=0 must be one of these, and all four must be present.
+    # If a new one appears it has to be added here deliberately, which is
+    # the point -- turning the ROM's protection off is a decision.
+    assert set(rom0) == {"config-ecc.json", "config-timing.json",
+                         "config-timing-drv.json", "config-timing-ptd.json"}, (
+        "the set of tracked configs naming ROM_HARDEN=0 has moved: {}. "
+        "Turning the ROM's protection off is a deliberate act; add it here "
+        "with its reason rather than widening this assertion.".format(
+            sorted(rom0)))
     # And the converse: the configuration that DOES place the check
     # macros must not be unhardening the ROM.
     eccrom = ROOT / "hw" / "soc" / "pnr" / "config-ecc-rom.json"
@@ -478,10 +522,7 @@ def test_the_pnr_floorplans_name_the_arms_the_rtl_has():
     check that a new floorplan cannot be added behind."""
     sram = (SOC_RTL / "soc_mem_sram.v").read_text()
     labels = set(re.findall(r"begin\s*:\s*(g_r[ao]m_\w+)", sram))
-    tracked = subprocess.run(
-        ["git", "ls-files", "hw/soc/pnr/config*.json"], cwd=ROOT,
-        check=True, capture_output=True, text=True).stdout.split()
-    tracked = {pathlib.PurePosixPath(t).name for t in tracked}
+    tracked = _tracked_pnr_configs()
     # docs/79's LVS arms are 2026-09-10 experiment snapshots and docs/64
     # keeps them as they were run; they predate the check macros.
     FROZEN = {"config.resolved.json"} | {

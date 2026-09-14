@@ -3165,10 +3165,7 @@ def test_every_pnr_config_declares_every_macro_the_rtl_instantiates():
         "config-lvs-f-equateclasses.json": "docs/79's LVS arm F, 2026-09-10",
     }
 
-    tracked = subprocess.run(
-        ["git", "ls-files", "hw/soc/pnr/config*.json"], cwd=ROOT,
-        check=True, capture_output=True, text=True).stdout.split()
-    tracked = {pathlib.PurePosixPath(p).name for p in tracked}
+    tracked = _tracked_pnr_configs()
 
     missing = {}
     for cfg in sorted((ROOT / "hw" / "soc" / "pnr").glob("config*.json")):
@@ -3284,3 +3281,30 @@ def test_the_router_skips_every_enclosure_rule_this_pdk_declares():
     assert sum(declared.values()) >= len(DRT_0349_LAYERS), (
         "the PDK declares fewer ENCLOSURE statements than it has cut "
         "layers; this guard's premise no longer holds")
+
+
+def _tracked_pnr_configs():
+    """The P&R configs a CHECKOUT carries, usable where there is no git.
+
+    docs/78 section 4 states the principle for the SPDX check and it
+    applies to every guard: "a generated tree is a plain directory until
+    it is committed, and a check that cannot run there is a check that
+    does not run where it is most needed". The public mirror is exactly
+    that tree, and `git ls-files` raises there rather than answering.
+
+    Falling back to "everything present" is correct rather than lax: the
+    mirror is BUILT from `git ls-files`, so in a non-git tree every
+    config on disk is by construction a tracked one. In a git tree the
+    fallback is never taken and untracked scratch is still excluded.
+    """
+    import subprocess as _sp
+    cfg_dir = ROOT / "hw" / "soc" / "pnr"
+    on_disk = {p.name for p in cfg_dir.glob("config*.json")}
+    try:
+        out = _sp.run(["git", "ls-files", "hw/soc/pnr/config*.json"],
+                      cwd=ROOT, check=True, capture_output=True,
+                      text=True).stdout.split()
+    except (OSError, _sp.CalledProcessError):
+        return on_disk           # not a git tree; see the docstring
+    names = {pathlib.PurePosixPath(t).name for t in out}
+    return names if names else on_disk

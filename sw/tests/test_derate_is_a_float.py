@@ -46,9 +46,22 @@ KEY = "TIME_DERATING_CONSTRAINT"
 
 
 def _tracked_configs():
-    out = subprocess.run(["git", "ls-files", "*config*.json"], cwd=ROOT,
-                         check=True, capture_output=True, text=True).stdout
-    return [ROOT / p for p in out.split("\n") if p.strip()]
+    """docs/78 section 4's principle: a generated tree is a plain
+    directory until it is committed, and a check that cannot run there
+    is a check that does not run where it is most needed. This raised
+    in the public mirror, which is exactly that tree. Falling back to
+    what is on disk is correct rather than lax -- the mirror is BUILT
+    from `git ls-files`, so every config present there is tracked."""
+    try:
+        out = subprocess.run(["git", "ls-files", "*config*.json"], cwd=ROOT,
+                             check=True, capture_output=True,
+                             text=True).stdout
+        paths = [ROOT / p for p in out.split("\n") if p.strip()]
+        if paths:
+            return paths
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return sorted(ROOT.glob("**/*config*.json"))
 
 
 def _carrying_the_key(paths):
