@@ -79,8 +79,8 @@ fails 3{,}088 setup endpoints at the slow corner and closes at
 in full including the arm that made it worse. Its geometric decks had been switched off for
 three years' worth of runs on the strength of one experiment; we ran
 them, and \textbf{of \num{39969214} Magic error \emph{boxes} and
-\num{9668} KLayout \emph{markers}, zero fall outside the vendor SRAM
-macros}. Neither headline is a count of distinct violations and we
+\num{9668} KLayout \emph{markers} on that layout, zero fall outside the
+vendor SRAM macros}. Neither headline is a count of distinct violations and we
 caveat both: Magic's own report ends by saying to divide it by 3 or 4,
 and \num{3918} of the KLayout markers are one population of shapes
 reported a second time by a second rule, leaving \num{5750} distinct.
@@ -90,6 +90,20 @@ a macro'' is not the same as ``the vendor's'': of the \num{39969214},
 \num{128} are not produced by the macro checked on its own, and
 \S\ref{sec:decks} says what makes them.} Netgen matches the layout to
 the netlist uniquely with those macros abstracted.
+\emph{Superseded 14 September 2026, and left standing: every deck figure
+above is the six-macro layout's. The eight-macro layout has since been
+through the same decks. KLayout returns \num{11048} markers and still
+\textbf{zero outside}: the \num{1380} added markers all name four cell
+types that exist only inside the newly added macro, not one pre-existing
+cell's count moves, and \num{4464} of the \num{11048} are the doubled
+population, leaving \num{6584} distinct. Netgen still matches uniquely.
+The seventeen-hour full-hierarchy Magic run has not been repeated, so
+neither the \num{39969214} nor the \num{128} has an eight-macro
+counterpart, and the newly added macro has never been checked on its own
+either. What the cheap abstracted deck does give is stronger than the
+case \S\ref{sec:decks} argues box by box: of its \num{170} boxes,
+\num{20} sit inside a macro footprint and \textbf{every one of the other
+\num{150} lies within \SI{0.500}{\micro\meter} of a macro edge}.}
 What we do have is a design whose redundancy claim was checked at three
 levels and was wrong at two of them.
 At the register-transfer level the claim was true. In the mapped netlist
@@ -1173,6 +1187,31 @@ boxes were reported. The wide metal exists only in the abstraction,
 because the macro's boundary description carries blanket obstruction
 rectangles and the tool paints an obstruction as drawn metal.
 
+\emph{On the eight-macro layout the same experiment returns a stronger
+form of that conclusion, and this time it does not need the mechanism to
+state it.} The abstracted run over \texttt{s83ant} returns 182 boxes, 20
+inside a macro footprint and 162 outside---and \textbf{every one of the
+162 lies within \SI{0.500}{\micro\meter} of a macro footprint edge},
+measured as the gap from each box to the nearest of the eight
+rectangles the placement reserves. The gaps take six values and no
+others: \SI{0.220}{\micro\meter} on 31 boxes,
+\SI{0.260}{\micro\meter} on 55, \SI{0.280}{\micro\meter} on 5,
+\SI{0.320}{\micro\meter} on 54, \SI{0.380}{\micro\meter} on 12 and
+\SI{0.500}{\micro\meter} on 3, with two boxes touching an edge exactly.
+Not one sits out in the field of standard cells and routing where almost
+every polygon in this layout is. That is this paragraph's claim in its
+plainest form---the abstraction produces errors at the boundary it
+invented and nowhere else---and unlike the wide-metal argument it is a
+distance rather than an interpretation. The pre-repair layout
+\texttt{s83romecc5} gives 170 boxes, the same 20 inside, 150 outside and
+the same \SI{0.500}{\micro\meter} maximum, so the bound is not an
+accident of one run. \emph{And the test applies backwards}: run over
+\texttt{s77gate}'s 107 outside boxes it returns a maximum of
+\SI{0.380}{\micro\meter}. The property was true of the six-macro
+measurement all along and nobody had measured it, which is the ordinary
+way a strong result gets missed---by not asking the instrument a
+question it could already answer.
+
 \textbf{The remaining box is not covered by that argument, and an
 earlier draft of this paragraph said ``every rule involved'' and swept
 it in.} It is a single \texttt{M4.e} marker---\emph{Metal4 $>$
@@ -1244,6 +1283,15 @@ million is not a reason to doubt the layout---the geometry that would be
 fabricated is unchanged---but a containment test that was read as a
 statement about blame was, for those \num{128}, answering a different
 question from the one being asked of it.
+
+All of that is \texttt{s77gate}'s full run, and none of it has been
+re-asked of the eight-macro layout, because there is no full run there
+to ask. The two \texttt{1024x32} instances that carried the \num{128}
+are still in the floorplan and the merge that re-expressed their via
+cells is the same merge, so we expect the \num{128} to recur and two
+more macros to be added to the question. That is a prediction. It is not
+a measurement, and this paragraph will not be read as though it were
+one.
 
 \subsection{The timing scope, which is the same defect inverted}
 
@@ -1596,7 +1644,8 @@ written without checking it against the tool it was bounding.}
 
 The same picture appears on the system-on-chip across three independent
 triplicated structures---a 29-bit watchdog bank, a 23-bit boot bank, a
-25-bit accelerator bank---on two independent hardening runs, by a
+25-bit accelerator bank---on two independent hardening runs,
+\texttt{s71boot} and \texttt{s75w9}, by a
 completely different attribution method, because that flow flattens
 instance names and the cells must be reached through fan-in cones.
 Per-bit critical separations are \SI{4.48}{\micro\meter},
