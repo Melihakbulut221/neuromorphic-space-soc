@@ -283,8 +283,9 @@ because `Sdiod.d` and `Sdiod.e` report the same set and `docs/54`
 section 3.1 says to count it that way -- of which 0 are outside the
 vendor macro hierarchy; and 182 Magic boxes of which 20 are inside a
 macro footprint and **all 162 others lie within 0.5 um of a macro
-edge**, none in open routing area (`docs/67` section 11). XOR has not
-been re-run.** What the original sentence got right is the reason,
+edge**, none in open routing area; and the KLayout XOR deck reports
+**0 differences** (`docs/67` section 11). All four deck families have
+now run on a layout built from the current RTL.** What the original sentence got right is the reason,
 and the reason is a PDK property rather than a schedule: `docs/12`
 measured 1,106,478 Magic errors inside a single RM_IHPSG13 macro's own
 footprint and recorded it a no-go for this PDK version, which is why

@@ -1430,9 +1430,46 @@ counted.
   **And what none of it measured.** Magic DRC ran abstracted, not over
   the vendor GDS; `docs/12` section 7.5 measured that mode at 1,106,478
   errors inside a single macro and called it a no-go, and nothing here
-  changes that. No XOR on either layout. **No campaign, STA or power
-  number in this corpus has been re-measured on either of them**, and
-  setup is still broken at the slow corner on both.
+  changes that. **XOR ran on the antenna-repaired layout, 2026-09-14:
+  `design__xor_difference__count` = 0 (`s83antxor`), which closes the
+  fourth deck family and is the first XOR result in this repository on
+  anything carrying the ROM's check macros.**
+
+  **The STA and the power numbers were not missing --- they were
+  unread.** Both layouts carry a full three-corner post-P&R STA and a
+  `power.rpt` per corner, produced by the flow itself; no document had
+  quoted them, which is a different failure from not having measured
+  them and had been recorded as the same one **[fact, the runs' own
+  `15-` and `49-openroad-stapostpnr` steps]**:
+
+  | slow corner `nom_slow_1p08V_125C` | `s83romecc5` | `s83ant` |
+  |---|---|---|
+  | setup worst slack | -7.5758 ns | -7.3492 ns |
+  | setup violations | 3,529 | 3,550 |
+  | hold worst slack | **+0.0296 ns** | **-0.4351 ns** |
+  | hold violations | **0** | **55** (38 fast, 16 typ, 1 slow) |
+  | total power, typ corner | 56.41 mW | 56.11 mW |
+  | VPWR drop / VGND | 0.86 % / 3.68 % | 0.84 % / 3.37 % |
+
+  **Reading them is what found the regression.** `s83ant` reaches 0/0
+  on antennas and loses hold, which `s83romecc5` met. That is a bad
+  trade --- a hold violation is a functional failure at any frequency,
+  where the two antenna violations it removes are 1.22x and 2.26x over
+  a ratio limit --- and **it cannot be tuned away**. `s83ant2` repeats
+  the repair at 5 iterations and a 15 % margin against `s83ant`'s 8 and
+  25 and lands on **exactly** the same layout: 168,737 instances, 1,635
+  diodes, hold -0.4351 with 55 violations, every corner identical to
+  four decimals. Both settings converge on the same 60 extra diodes,
+  because the repair stops when it is clean and the default 3
+  iterations simply stopped early. The 60 diodes are what clearing the
+  last two antenna violations costs, and their load is what breaks
+  hold. The lever that remains is the resizer's hold margin rather than
+  the antenna repair's aggression.
+
+  **What is still genuinely un-re-measured is the campaigns.** No
+  gate-level fault-injection campaign has run on either layout; every
+  campaign number in this corpus describes a `rom0` build. And setup is
+  broken at the slow corner on both.
   Antenna repair took 538 net and 729 pin violations to 2 and 2, and the
   two left are real -- `net166` into
   `u_ram.g_ram_2048x64_ecc.u_b0/A_ADDR[4]` on Metal3 at 2.26x and an
