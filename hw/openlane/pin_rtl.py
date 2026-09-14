@@ -62,7 +62,17 @@ def main():
             f.write(git("cat-file", "blob", blob))
         print(f"  {blob}  hw/rtl/{n}")
 
+    # object_pairs_hook=list is needed at the TOP level, because a config
+    # carries duplicate `//` comment keys that a dict would collapse. It
+    # applies at EVERY nesting level though, so a nested object -- what
+    # LAYERS_RC, VIAS_R, TECH_LEFS and MACROS are -- came back as a list
+    # of pairs and re-serialised as a JSON array, producing a config the
+    # flow cannot read. docs/25 open item 2; the second load is the fix,
+    # and it is a second load rather than a cleverer hook because the two
+    # requirements are genuinely opposed: keep duplicates at the top,
+    # keep objects below it.
     pairs = json.load(open(base_config), object_pairs_hook=list)
+    nested = json.load(open(base_config))
     base_dir = os.path.dirname(base_config)
     out = []
     for k, v in pairs:
@@ -70,6 +80,8 @@ def main():
             v = [os.path.join(rtl, os.path.basename(x.split("::", 1)[1])) for x in v]
         elif k == "VERILOG_INCLUDE_DIRS":
             v = [rtl]
+        elif isinstance(v, list) and isinstance(nested.get(k), dict):
+            v = nested[k]          # a nested object, not an array
         elif isinstance(v, str) and v.startswith("dir::"):
             # Any other dir:: path -- the pin-frame DEF template above all --
             # has to be absolutised too, because the config no longer lives

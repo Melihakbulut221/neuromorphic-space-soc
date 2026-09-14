@@ -420,6 +420,12 @@ uint32_t boot_main(void) {
   puts_(" stat "); puthex(stat);
   puts_(" wdog "); puthex(wstat);
   puts_(" rpt "); puthex(last_rpt);
+  /* docs/69's TMR replica report. It is counted in hardware, sticky and
+     saturating, and until 2026-09-14 nothing outside the testbench read
+     it -- so a voter that had corrected an upset said so to no one. Two
+     words on the banner is the whole fix. */
+  puts_(" tmr "); puthex(BOOT_STAT_TMRCNT(stat));
+  if (stat & BOOT_STAT_TMRERR) puts_(" TMRERR");
   putc_('\n');
 
   /* THE EPOCH. mtime is in the system reset domain and a stage-2 reset

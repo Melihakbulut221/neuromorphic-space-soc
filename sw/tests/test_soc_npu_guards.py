@@ -780,3 +780,81 @@ def test_every_cause_bit_the_block_has_is_a_fault_bit_the_program_knows():
             "NPUCFG_C_{} is cause bit {} and is not in NPUCFG_C_FAULTS, "
             "so the program reads a part that raised it as clean".format(
                 name, bit))
+
+
+# =====================================================================
+# the freeze, pinned by content rather than by cleanliness
+# =====================================================================
+
+FREEZE_DOC = ROOT / "docs" / "34-pilot-freeze.md"
+FREEZE_HEADING = "Every file in `hw/rtl/` at the freeze commit"
+
+
+def _git_blob_sha1(path):
+    """The blob hash git would compute, WITHOUT git.
+
+    docs/78 section 4's principle again: the public mirror is a plain
+    directory, and a freeze check that cannot run there is a freeze
+    check that does not run where a stranger reads the files.
+    """
+    import hashlib
+    data = Path(path).read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def _pinned_blobs():
+    """-> {relative path: 12-hex prefix} from docs/34's LIVE table.
+
+    docs/34 carries TWO tables. The first is the freeze; the second is
+    introduced as "The superseded list" and is left standing under
+    docs/64's rule. Taking the last match in the file -- which is what a
+    naive scan does -- pins the superseded bytes, and the check would
+    then pass while guarding the wrong content. So this anchors on the
+    heading and reads only the block beneath it.
+    """
+    text = FREEZE_DOC.read_text(errors="ignore")
+    i = text.find(FREEZE_HEADING)
+    assert i >= 0, (
+        "docs/34 no longer carries the heading this guard anchors on "
+        "({!r}); re-read the document before editing this test, because "
+        "the fallback is pinning the superseded table".format(FREEZE_HEADING))
+    block = text[i:text.find("```", text.find("```", i) + 3)]
+    return {m.group(2): m.group(1)
+            for m in re.finditer(r"([0-9a-f]{12})\s+(hw/rtl/\S+)", block)}
+
+
+def test_the_frozen_pilot_files_still_hash_to_what_docs34_pinned():
+    """Content, not cleanliness -- a COMMITTED edit must fail this.
+
+    test_the_pilot_directory_is_unmodified_against_the_index above
+    compares the working tree with the index, so it catches an
+    uncommitted edit and nothing else. It computes each file's blob hash
+    and then asserts only that the hash is truthy; it never compares it
+    with anything. A change to hw/rtl/ that was committed passed both
+    that check and every default cocotb run, because scripts/run_cocotb.sh
+    holds fi, gl and glfi out of SKIP_DEFAULT for a good reason -- they
+    rewrite a results file docs/34 pins by blob hash -- which leaves the
+    frozen RTL exercised by no gate-level or fault-injection check unless
+    somebody types RUN_FROZEN=1.
+
+    This is the check that closes that: the bytes on disk must hash to
+    what the freeze document says, whoever committed them and whether or
+    not the expensive suites ran.
+    """
+    pinned = _pinned_blobs()
+    assert len(pinned) >= 10, (
+        "docs/34's freeze table lists {} files; it pinned ten"
+        .format(len(pinned)))
+    wrong = []
+    for rel, want in sorted(pinned.items()):
+        f = ROOT / rel
+        assert f.is_file(), "{} is pinned by docs/34 and missing".format(rel)
+        got = _git_blob_sha1(f)
+        if not got.startswith(want):
+            wrong.append("{}: docs/34 pins {}, disk has {}"
+                         .format(rel, want, got[:12]))
+    assert not wrong, (
+        "the frozen pilot RTL does not match docs/34's freeze:\n  "
+        + "\n  ".join(wrong)
+        + "\nThe shuttle submission is this content. If the change is "
+          "deliberate, docs/34 is what has to move first.")

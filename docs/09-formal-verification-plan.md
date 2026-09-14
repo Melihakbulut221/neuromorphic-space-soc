@@ -518,6 +518,47 @@ Fallback conditions (trigger -> action):
   isolation degrades to supervisor-checked software partitioning and this
   is documented as a downgrade of the isolation claim.
 
+**Amended 2026-09-14, from `docs/46`.** That document asked, on
+2026-09-01, that its five requirements be recorded here, and they were
+not: this file has not been edited since 2026-08-31 and the request sat
+in another document's open items for thirteen days. They are recorded
+now, and they bear on the S2 bullet above rather than merely sitting
+beside it.
+
+| | requirement | what it comes from |
+|---|---|---|
+| **R1** | The supervisor is **time-triggered**: every frame opens on a periodic tick and the supervisor idles between the end of one frame's work and the start of the next. | `docs/46` section 7. Work-triggered dispatch admits no window at any timeout |
+| **R2** | **Exactly one kick per frame**, after every partition has run and returned, and the isolation mechanism must deny U-mode the peripheral bus so that no other code *can*. | `docs/46` sections 4 and 5.3 |
+| **R3** | The **frame period** is at least the worst-case frame execution time, with a stated CPU margin. | `docs/46` section 5.1 |
+| **R4** | The operational phase's `i_min` and `i_max` are **measured on the shipping software** and the timeout chosen inside `i_max < T < 2*i_min`. The build refuses otherwise. | `docs/46` sections 6.2 and 6.4 |
+| **R5** | The contract is armed **after a kick**, and a stage-2 reset restores `WINS = 0`. | `docs/46` section 6.3 |
+
+**R1 contradicts the S2 bullet above**, which specifies an event-driven
+loop. That is the point of recording these: the windowed watchdog is a
+precondition on the supervisor's whole dispatch discipline, not a
+peripheral setting, and this track chose the discipline that forecloses
+it.
+
+**They bind only while the window is armed, and as built it is not.**
+`soc_gptimer.v` instantiates `soc_wdog` without overriding `WINDOW`,
+whose default is 1, so W7 is in the netlist that has been synthesised,
+placed and routed eight times. It is inert at reset because `WINS = 0`
+is the reset default. Nothing is unsafe; what was missing is the written
+record, and `docs/60` still describes W7 as *"built, measured, and
+recommended for removal"*.
+
+- T4. Track 3 commits to a time-triggered frame schedule and adopts
+  R1-R5 for reasons of its own -> re-run `docs/46` section 6.1's sweep
+  on the shipping supervisor and keep W7 if it passes.
+
+**And a fault surface this track's own choice created, still unpriced.**
+`docs/46` section 8.6 measured `csr_pmp` as the worst stratum in its
+campaign by wrong answers --- **23 of 58 injections produce a WRONG
+result** and 24 of 58 are detected, against zero wrong in the register
+file. The PMP registers became live architectural state because S2 chose
+them as the isolation mechanism, and no document has priced them. That
+puts them on the same list as `docs/43` section 12's `mtime`.
+
 ---
 
 ## Part C — Phased plan

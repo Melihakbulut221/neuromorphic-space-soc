@@ -46,6 +46,14 @@
 #define BOOT_STAT_LAST      (1u << 8)
 #define BOOT_STAT_OVER      (1u << 9)
 #define BOOT_STAT_LIMIT(v)  (((v) >> 16) & 0xFFu)
+/* TMRERR and TMRCNT are the watchdog-replica report BSTAT carries and
+ * nothing decoded. hw/soc/rtl/soc_boot.v puts TMRERR at bit 31 and
+ * TMRCNT in the four bits below it; hw/soc/tb/cocotb/test_soc_boot.py
+ * lines 415-416 already decode them that way, and until 2026-09-14 the
+ * C side did not, so a counter that is sticky and saturating had no
+ * reader outside the testbench. */
+#define BOOT_STAT_TMRERR    (1u << 31)
+#define BOOT_STAT_TMRCNT(v) (((v) >> 27) & 0xFu)
 
 /* BRPT, the report the loader writes before it hands over or gives up.
  * It is EVIDENCE and never authority -- nothing in the hardware or in
