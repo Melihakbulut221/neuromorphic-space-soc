@@ -1044,6 +1044,19 @@ from the PDK, which is the point of having made that run.
    > will have to make the delimiter and `!`-suffix decision explicitly,
    > because that -- not the macro scope, and not the reader -- is what
    > actually broke the comparison when it was tried.
+
+   > **THE PATH IS BUILT, 2026-09-14.** `hw/soc/pnr/lvs/verilog_to_spice.py`
+   > takes the post-P&R netlist and writes the schematic side: the
+   > standard cells read from Liberty (the vendor Verilog's `specify`
+   > blocks use the conditional path form yosys 0.33 rejects), the three
+   > macros read as black boxes, and yosys's `write_spice` wrapped in the
+   > `.SUBCKT soc_top` the deck needs, with buses expanded to bits the way
+   > the instances already were. On `s83ant` it writes **168,737**
+   > instance lines -- exactly the layout's instance count -- inside one
+   > subcircuit. It takes the black-box branch, and its header says why,
+   > so the file cannot be mistaken for Magic's extraction: the two
+   > sides now differ in their first line. What remains is running the
+   > deck, which is now a deck waiting to be run.
 5. **Whether `sg13g2_maximal.drc` returning 0 means anything** depends on
    a judgement about that deck's status that this document declines to
    make and section 6 explains. If IHP confirms the residual set's SRAM

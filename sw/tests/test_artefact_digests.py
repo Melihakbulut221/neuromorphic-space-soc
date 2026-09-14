@@ -21,6 +21,7 @@ the relationship between the two FILES, which is true in any checkout.
 """
 
 import pathlib
+import sys
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -86,3 +87,33 @@ def test_the_manifest_is_not_empty_and_is_tab_separated():
         .format(len(rows)))
     assert all("\t" in r for r in rows[:20]), \
         "the manifest has stopped being tab-separated"
+
+
+# =====================================================================
+# docs/09 target #5's cross-check, as a gate rather than a script
+# =====================================================================
+
+def test_the_any_state_theorem_and_the_campaign_agree():
+    """docs/09 gate F3: any disagreement here is a blocker.
+
+    formal/lif_ctrl.sby's bmc_safe task proves that from an ILLEGAL
+    state encoding the design reaches SAFE. The fault-injection
+    campaigns corrupt exactly that encoding, so every lif_fsm record is
+    an empirical instance of the theorem's antecedent, and the theorem
+    forbids one outcome: silent data corruption.
+
+    Nothing compared them until 2026-09-14. docs/35 called it the
+    largest piece of unclaimed ground reachable without new RTL, and it
+    stayed unclaimed because it sits across hw/tb/ and formal/ and
+    neither pass owned it. The script that does the comparison is
+    scripts/formal_fi_crosscheck.py; this is what makes it run.
+    """
+    import subprocess
+    script = ROOT / "scripts" / "formal_fi_crosscheck.py"
+    assert script.is_file(), "the cross-check script is gone"
+    out = subprocess.run([sys.executable, str(script)], cwd=str(ROOT),
+                         capture_output=True, text=True, timeout=300)
+    assert out.returncode == 0, (
+        "the any-state theorem and the injection campaign disagree, "
+        "which docs/09 gate F3 calls a blocker:\n" + out.stdout + out.stderr)
+    assert "AGREE" in out.stdout, out.stdout
