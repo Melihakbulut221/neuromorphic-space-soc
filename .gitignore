@@ -142,12 +142,27 @@ _site_builtin/
 # paper/render_html.py output
 paper/main.html
 
-# pdflatex output. Deliberately NOT tracked, and the reason is the same
+# pdflatex output. Deliberately NOT tracked, and the reason WAS the same
 # one docs/80 section 4 gives about digests: there is no pdflatex on the
 # development machine, so a committed PDF is a binary this repository
 # cannot rebuild, cannot diff and cannot check against paper/main.tex.
 # The published mirror's CI compiles it on every push and uploads it as
 # a build artefact, which is where a downloadable copy comes from.
+#
+# BOTH HALVES OF THAT REASON FAILED, and it is worth writing down which
+# way. 2026-09-14: tectonic 0.17.0 is now installed and `make -C paper`
+# builds the PDF here, so "cannot rebuild" is no longer true. And CI has
+# not started a job since 2026-09-10 -- the runs fail with zero steps
+# executed, which is the account's Actions spending limit -- so "CI
+# uploads it as a build artefact" has not been true either, and the
+# consequence is that for four days there was NO downloadable copy of
+# this paper anywhere.
+#
+# The file stays untracked: a binary in git is still not diffable, and
+# that part of the argument never depended on the missing toolchain. The
+# downloadable copy is a RELEASE ASSET on the mirror instead, built from
+# a named revision, which is the form that says which source it came
+# from.
 paper/main.pdf
 paper/*.aux
 paper/*.bbl

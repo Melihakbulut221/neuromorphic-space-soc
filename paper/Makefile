@@ -5,12 +5,21 @@
 #   make -C paper check      re-derive every number the paper prints
 #   make -C paper clean
 #
-# THE PDF IS NOT BUILT IN THIS REPOSITORY'S DEVELOPMENT ENVIRONMENT.
+# ~~THE PDF IS NOT BUILT IN THIS REPOSITORY'S DEVELOPMENT ENVIRONMENT.
 # There is no TeX installation on the machine this paper was written on;
 # `pdflatex`, `xelatex`, `lualatex`, `latexmk` and `tectonic` are all
-# absent. The source is written to compile on arXiv, which runs its own
-# TeX Live, and CI builds it on every push so that "it compiles" is a
-# checked claim rather than an assumed one.
+# absent.~~
+#
+# CORRECTED 2026-09-14: tectonic 0.17.0 is installed, into an isolated
+# conda prefix rather than the system, so no root was needed and nothing
+# outside that prefix moved. `make` now builds the PDF here: 31 pages,
+# zero undefined citations, seven overfull/underfull boxes. The sentence
+# above was true when it was written and had become a reason not to try.
+#
+# The rest of the original note still holds and is why this target is
+# written the way it is: the source is written to compile on arXiv,
+# which runs its own TeX Live, and CI builds it on every push so that
+# "it compiles" is a checked claim rather than an assumed one.
 #
 # Corrected 2026-09-12: this named .github/workflows/paper.yml, which
 # was deleted in 74fdddf when three workflows were replaced by the
@@ -26,6 +35,13 @@
 # `make arxiv` builds the tarball arXiv actually wants: the .tex and the
 # .bbl, no .bib. It refuses to write one without a .bbl.
 
+# tectonic resolves its own packages and runs the passes itself, so it
+# is preferred when present; the pdflatex path is kept because arXiv and
+# CI have TeX Live and not tectonic. --keep-intermediates is NOT
+# optional: the arxiv target ships main.bbl, and without it tectonic
+# deletes the one file that target exists to carry.
+TECTONIC ?= $(shell command -v tectonic 2>/dev/null || \
+              ls $(HOME)/.local/opt/tectonic-env/bin/tectonic 2>/dev/null)
 LATEX ?= pdflatex
 BIBTEX ?= bibtex
 DOC := main
@@ -34,8 +50,16 @@ DOC := main
 all: $(DOC).pdf
 
 $(DOC).pdf: $(DOC).tex refs.bib
+ifneq ($(TECTONIC),)
+	$(TECTONIC) -X compile $(DOC).tex --outdir . --keep-logs \
+	  --keep-intermediates
+	@grep -qE 'Citation .* undefined' $(DOC).log \
+	  && { echo "undefined citations -- see $(DOC).log"; exit 1; } || true
+	@test -s $(DOC).bbl || { echo "no $(DOC).bbl -- the arxiv target \
+	  needs it and tectonic was asked to keep it"; exit 1; }
+else
 	@command -v $(LATEX) >/dev/null || { \
-	  echo "no $(LATEX) on this machine."; \
+	  echo "no $(LATEX) and no tectonic on this machine."; \
 	  echo "The source is arXiv-ready and CI builds it; see the header."; \
 	  exit 1; }
 	$(LATEX) -interaction=nonstopmode $(DOC)
@@ -44,6 +68,7 @@ $(DOC).pdf: $(DOC).tex refs.bib
 	$(LATEX) -interaction=nonstopmode $(DOC)
 	@grep -qE 'Citation .* undefined' $(DOC).log \
 	  && { echo "undefined citations -- see $(DOC).log"; exit 1; } || true
+endif
 
 check:
 	python3 check_claims.py
