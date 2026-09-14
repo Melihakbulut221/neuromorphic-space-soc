@@ -2077,6 +2077,21 @@ roughly thirty times this design's scale in 2023, and further open
 open PDK is not a contribution and is not claimed as one. The
 neuromorphic-for-space framing is a survey topic~\cite{naoukin2023}.
 
+\paragraph{The nearest neighbour is the author's own, and it is not
+neuromorphic.} ZIRH-2~\cite{zirh2_2026} is a rad-hard experiment chip on
+this same open PDK, public under Apache-2.0 since August 2026: a
+triplicated SERV RISC-V, TMR chains placed in two deliberately different
+arrangements, and SECDED RAM with scrub-on-read, carried through an open
+flow to a routed layout. That is every property this design holds
+\emph{except} the spiking accelerator. So the conjunction ``open plus
+open-PDK plus triplicated plus error-coded plus routed'' is not what is
+new here---it was already occupied, by us, on the same process. What
+distinguishes the present work is not the artefact but the question
+asked of it: ZIRH-2 places its replicas apart \emph{by construction} and
+does not measure whether the toolchain preserved the structure it was
+given, which is exactly the measurement
+Sections~\ref{sec:placement} and~\ref{sec:decks} report.
+
 \paragraph{Neuromorphic hardware under radiation has beam data.}
 Nijsink~\emph{et~al.}~\cite{nijsink2026} put an open SNN
 processor~\cite{frenkel2019} in a neutron beam and extracted

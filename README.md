@@ -21,9 +21,19 @@ that is realistic for an open PDK and a small team.
 
 ## Status
 
-**The pilot is frozen and signed off; the SoC around it is not built.**
+~~**The pilot is frozen and signed off; the SoC around it is not
+built.**~~ **Half of that is out of date, corrected 2026-09-14.** The
+pilot is still frozen and signed off. The SoC around it IS built: it has
+been synthesised, placed and routed whole, most recently as an
+eight-macro layout carrying the ROM's error-correcting check macros,
+with zero detailed-routing violations, a unique Netgen LVS match, and
+all four geometric deck families run on it (`docs/67` section 11). What
+remains true, and is what the original sentence was reaching for, is
+that **no silicon exists**: nothing here has been fabricated or put in
+front of a beam.
+
 Read `docs/00-index.md` for the full what-exists-and-what-does-not, and
-`ROADMAP.md` for the plan. In short, as of 2026-09-03:
+`ROADMAP.md` for the plan. The inventory below is as of 2026-09-03:
 
 *Exists, and is verified.* An event-driven LIF inference core, its AER
 event queues, a register bank generated from a single-source map, a
