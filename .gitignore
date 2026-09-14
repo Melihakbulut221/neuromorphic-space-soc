@@ -169,3 +169,14 @@ paper/*.bbl
 paper/*.blg
 paper/*.log
 paper/*.out
+# `make -C paper arxiv` output. Untracked for the same reason as the PDF
+# and for one more: it is a tarball of two files that are both already
+# in this repository, so publishing it would put main.tex in the tree
+# twice, once where it can be diffed and once where it cannot. It was
+# committed by accident on 2026-09-14 -- the first `make arxiv` this
+# repository has ever been able to run produced it, and nothing was
+# ignoring a file that had never existed before. Caught by reading the
+# mirror's staged file list rather than by any check, which is the
+# reason this line exists instead of a note saying it was fine.
+paper/arxiv.tar.gz
+paper/*.out
