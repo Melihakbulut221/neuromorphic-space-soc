@@ -198,3 +198,10 @@ paper-design/*.blg
 paper-design/*.log
 paper-design/*.out
 paper-design/arxiv.tar.gz
+
+# sby run directories, all of them: model copies, engine output, traces.
+# regfile_scrub_* were committed by accident on 2026-09-14 in df1e3df
+# (164 files) and amended out; the existing rule below did not name them.
+hw/soc/formal/*_prove/
+hw/soc/formal/*_cover/
+hw/soc/formal/*_bmc/

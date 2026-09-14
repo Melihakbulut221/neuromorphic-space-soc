@@ -9,7 +9,7 @@ spiking-neural-network node built around the frozen TTIHP26b pilot die.
 Technology: IHP SG13G2, 130 nm bulk CMOS, open PDK, open RTL-to-GDS
 flow.
 
-Revision 0.1, 3 September 2026. Status: **preliminary, pre-silicon,
+Revision 0.2, 14 September 2026 (0.1 issued 3 September 2026). Status: **preliminary, pre-silicon,
 pre-sign-off**.
 
 ---
@@ -23,8 +23,16 @@ they belong on the first page rather than in an appendix, because each
 one changes what the rest of the document is worth.
 
 **1. Nothing here has been geometrically verified.** The one
-place-and-route run this document reports has **no DRC result, no LVS
-result and no XOR result**, and the reason is not schedule. The design
+place-and-route run this document reports ~~has **no DRC result, no LVS
+result and no XOR result**, and the reason is not schedule~~ **-- superseded
+2026-09-14, revision 0.2: the eight-macro layout `s83ant` has all four.
+Netgen LVS matches uniquely with all seven counters zero; the KLayout deck
+puts 0 of its 11,048 markers (6,584 distinct) outside the vendor macro
+hierarchy; Magic reports 182 boxes, 20 inside a macro footprint and every
+one of the other 162 within 0.5 um of a macro edge; XOR 0. `docs/67`
+section 11 carries them. What the original sentence got right survives:
+the vendor macro itself does not pass this PDK's decks, so every figure
+above is stated inside-the-macro and outside it, never as a total.** The design
 needs six `RM_IHPSG13` SRAM macros; running the three decks over one
 such macro returns **1,106,478 Magic DRC error boxes, 2,316 KLayout
 deep-mode DRC errors and 359 Netgen LVS errors**
@@ -159,6 +167,10 @@ disagreement**.
 
 - **64 KiB system SRAM** and **8 KiB boot ROM**, 72 KiB total
   **[measured, `regmap/memmap.yaml`]**
+  *Revision 0.2, 2026-09-14:* the default build carries **eight** vendor
+  macros, not six -- the ROM's two `512x16` check macros were placed and
+  routed (`docs/67` section 11). The 72 KiB is unchanged; what changed
+  is that its protection is now in the layout.
 - **System fabric on Ibex's own request/grant/response protocol**, two
   masters (instruction and data ports), **six slave ports**, round-robin
   arbitration with a proved no-starvation property, two outstanding
@@ -2482,6 +2494,7 @@ if that stops being true. **This document modifies nothing.**
 
 | Date | Revision | Changes |
 |---|---|---|
+| 2026-09-14 | **0.2** | Retargeted from commit `7721719` to the current tree. Section 0 statement 1 corrected: all four sign-off deck families now have a result on the eight-macro layout (`docs/67` section 11). Sections 1 and 12.2 carry a dated note that the default build holds eight macros, not six, since the ROM's two `512x16` check macros were placed and routed (`s83romecc5`, `s83ant`). Owed by `docs/58` item 5, `docs/67` item 7, `docs/68` item 6, `docs/70` item 6, `docs/71` item 2. Every 0.1 number is left standing, `docs/64`'s rule; the layout figures in sections 5-11 still describe the six-macro `rom0` build and say so |
 | 2026-09-10 | **0.1d** | Section 9.10 added: the two SoC-wide denominators that bound the whole of section 9 — 1,003 to 1,051 of the placed design's 5,873 flip-flops are in a block no campaign has injected into (`soc_busstat` entire, and with it every counter the SoC's own upset telemetry reports through), and the flip-flop-only fault model leaves 96.68 % of the 176,663 placed instances and 90.35 % of the 60,868 standard cells outside the model. No campaign figure in section 9 changed; what changed is that the numerators now have a stated denominator. Section 9.9's *"`soc_top` has never been simulated as a netlist"* is corrected in place against `docs/74` and left standing. |
 | 2026-09-05 | **0.1a** | Section 14: the seven disagreements are resolved in the documents that own them, each correction left visible in place, and recorded in `docs/64-document-reconciliation.md`. No figure in this datasheet changed; section 9 already followed the committed campaign log. |
 | 2026-09-05 | **0.1c** | Sections 1 and 4.1: the "no QSPI" statements are corrected in place. `docs/66-qspi-flash-controller.md` builds the register-mode QSPI controller; the whole-SoC invariant is unchanged at 217,634 with the block present and the program as it was, and that document explains why the new checks are a second image. |

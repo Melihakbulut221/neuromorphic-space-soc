@@ -1,0 +1,64 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# SymbiYosys job for the register file WITH its storage and its scrub:
+# hw/soc/rtl/ibex_regfile_secded.v at SCRUB=1, the real module, nothing
+# abstracted. docs/63 section 11 item 3, route 2.
+#
+#   sby -f regfile_scrub.sby prove     k-induction proof of R1-R4
+#   sby -f regfile_scrub.sby bmc       bounded backstop, depth 40 -- one
+#                                      full scrub pass is 31 cycles, so
+#                                      this crosses the wrap
+#   sby -f regfile_scrub.sby cover     every register visited by the scrub
+#
+# WHY THIS EXISTS BESIDE regfile_secded.sby. That job proves the (40,32)
+# shortening of the codec and its header says what it deliberately is
+# not: "no storage, no read multiplexer, no scrub, no addresses". The
+# property that does involve storage and scrub -- riscv-formal's reg
+# check on the substituted core -- proves to check cycle 18 and times
+# out at 21, 23 and 25 under six engines at four hours each, because it
+# asks the solver to reason about the whole core between a write and a
+# read. This job asks only the register file. docs/63's own ranking of
+# the routes out says that form "would close by induction" and "would
+# be an honest and much stronger statement about the scrub than
+# anything here".
+#
+# Properties live in regfile_scrub_props.v, which instantiates the
+# module rather than being included into it: the register file already
+# carries an `ifdef FORMAL include of a file that does not exist in this
+# tree, and binding from outside avoids making that hook load-bearing.
+
+[tasks]
+prove
+bmc
+cover
+
+[options]
+prove: mode prove
+prove: depth 40
+bmc: mode bmc
+bmc: depth 40
+cover: mode cover
+cover: depth 40
+multiclock off
+
+[engines]
+prove: smtbmc yices
+bmc: smtbmc yices
+cover: smtbmc yices
+
+[script]
+read_verilog -formal secded_enc.v
+read_verilog -formal secded_dec.v
+read_verilog -formal ibex_regfile_secded.v
+read_verilog -formal regfile_scrub_props.v
+hierarchy -check -top regfile_scrub_props
+chparam -set SCRUB 1 ibex_register_file_ff
+prep -top regfile_scrub_props
+
+[files]
+../../rtl/secded_enc.v
+../../rtl/secded_dec.v
+../rtl/ibex_regfile_secded.v
+regfile_scrub_props.v
+ibex_regfile_secded_props.v
