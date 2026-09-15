@@ -1185,6 +1185,15 @@ table is a measurement of the flow.
    2026-09-06, and it should not be run as "the next variant" — only
    as the answer to that sentence, with the crossing count on the
    register-file read *and* on the mtime loop as its two metrics.
+   *Run twice, 2026-09-16, and the answer is no: section 16.* The set
+   was re-derived on the eight-macro netlist (1,802 cells) and placed
+   as one group at two utilisations. At 0.39 the flow reaches post-GRT
+   timing repair and stops with GRT-0116, total overflow 20; at 0.17 it
+   does not get past the first global route, overflow 6 --- and that is
+   the run with MORE room, whose wirelength is 260,258 um shorter.
+   Utilisation was never the binding constraint, and the requirement of
+   item 2 is a floorplan requirement rather than a placement one.*
+
 2. **The condition, stated as a condition.** What the three layouts
    establish is not a placement recipe but a requirement: the CLINT's
    response registers, the fabric decode that selects them, and the
@@ -1212,3 +1221,125 @@ table is a measurement of the flow.
    carries what the guard does and what it deliberately does not.
 6. **The remaining items of `docs/68` section 16 and `docs/71` section
    15 are unchanged.**
+
+---
+
+## 16. Item 1, run twice, and the answer is no (added 2026-09-16)
+
+Section 15 item 1 asked one question and said it should be asked only
+once: *does a set that captures the response registers together with
+their decode and the mtime decoder remove the crossing rather than
+moving it?* The set is the register-to-register closure of the CLINT
+unioned with its exclusive fan-in. It was derived on the eight-macro
+netlist, placed as one group, and carried through the whole flow ---
+twice, with two different amounts of room --- and **neither run
+routes.**
+
+### 16.1 The set, re-derived on the design that exists
+
+The 1,830-cell union of section 3.4 was derived on `s70-rom0-syn`.
+Re-derived by the same two rules on the eight-macro sign-off netlist
+(`s83romecc5`'s own `13-openroad-generatepdn/soc_top.nl.v`), it is
+**1,802 cells, 26,103.7728 um2** **[fact,
+`hw/soc/pnr/clint_region.py members` plus the closure, both recorded in
+`clint_union_cur.json`]**: 983 in the corrected exclusive fan-in, 1,442
+in the closure, 138 CLINT flip-flops, overlapping to 1,802. The
+28-cell difference from section 3.4 is the ROM ECC macros' arrival and
+the netlist that came with them; the set is the same set by the same
+definition.
+
+### 16.2 Two runs, two amounts of room
+
+| | `s84clint5` | `s84clint6` |
+|---|---|---|
+| fence box | 320.16 x 207.90 um | **550.08 x 283.50 um** |
+| region utilisation | 0.3922 | **0.1674** |
+| cells placed as one group | 1,802 | 1,802 |
+| global route, step 31 | **clean: total overflow 0** | **GRT-0116: total overflow 6** (1 H, 2 V) |
+| post-GRT timing repair, step 36 | **GRT-0116: total overflow 20** (3 H, 3 V) | --- |
+| wirelength at step 31 | 7,745,198 um | 7,484,940 um |
+| nets routed | 61,382 | 61,356 |
+
+**[fact, each run's `openroad-globalrouting.log` and
+`openroad-resizertimingpostgrt.log`.]**
+
+**The second run is the surprising one.** It was launched because the
+first failed with a small overflow and a nearly-full pocket, and the
+obvious next question was whether the cluster simply needed room. It
+got 2.3 times the area and less than half the utilisation --- and its
+FIRST global route, which the tight box had passed cleanly, is the one
+that fails.
+
+The mechanism is visible in the same table: wirelength went DOWN by
+260,258 um and congestion went UP. Spreading a co-placed cluster over a
+box 1.7 times wider does not spread its wiring; it lengthens the nets
+between its own members and pushes them through the same channel
+tracks, and the tracks are what ran out. Utilisation was never the
+binding constraint.
+
+### 16.3 What this settles for section 15 item 1
+
+**The condition of item 2 is not satisfiable by placement.** Item 2
+stated the requirement --- the response registers, the decode that
+selects them and the time base that feeds them have to be on one side
+of the ROM --- and item 1 asked whether a set large enough to capture
+all three, placed as one, delivers it. It does not: at 0.39
+utilisation the flow gets to post-GRT timing repair and stops there, and
+at 0.17 it does not get past the first global route. Three earlier
+layouts moved a set that cut through the cluster and relocated the
+crossing; this one does not cut through the cluster and does not route.
+
+That is the answer item 1 asked for, and it is a negative one. **It
+does not weaken item 2 --- it confirms the shape of it.** What the
+five layouts now say together is that the pocket beside the ROM column
+cannot hold the CLINT's whole register-to-register closure at a
+utilisation this flow can route, which makes the requirement a
+FLOORPLAN requirement and not a placement one: either a channel with
+room for the cluster, or `docs/72` section 15 item 5's structural
+answer, a registered request phase that takes the decode off the read
+path and makes the pocket a latency question instead of a crossing one.
+Both remain unpriced.
+
+### 16.4 Reproducing section 16
+
+```
+export PATH=$HOME/.local/opt/llbin:$PATH PDK_ROOT=$HOME/.ciel
+P=<scratch>
+
+# the set, on the eight-macro netlist
+NL=hw/soc/pnr/runs/s83romecc5/13-openroad-generatepdn/soc_top.nl.v
+python3 hw/soc/pnr/clint_region.py members $NL --write $P/clint_members_cur.json
+python3 $P/clint_closure.py $NL $P/clint_members_cur.json $P/clint_union_cur.json
+#   983 exclusive + 1,442 closure + 138 flops -> 1,802 cells, 26,103.7728 um2
+
+# one fence, one detailed placement, one placement file, one config, one run.
+# The box must sit on the site grid: x = 60.00 + n*0.48, y = 45.36 + n*3.78.
+openroad -exit -no_splash -python hw/soc/pnr/clint_region.py apply \
+  --odb-in hw/soc/pnr/runs/s83romecc5/13-openroad-generatepdn/soc_top.odb \
+  --members $P/clint_union_cur.json --box 1599.84 1099.98 2149.92 1383.48 \
+  --odb-out $P/v6/soc_top.odb --def-out $P/v6/soc_top.def \
+  --state-in hw/soc/pnr/runs/s83romecc5/15-odb-addroutingobstructions/state_out.json \
+  --state-out $P/v6/state_in.json                       # util 0.1674
+SYN_NETLIST=$PWD/$NL PNR_CONFIG=$PWD/hw/soc/pnr/config-ecc-rom.json \
+PNR_STATE=$PWD/hw/soc/pnr/state/s84v6fence.state.json \
+  hw/soc/flow/pnr_soc_top.sh s84v6fence --overwrite \
+  -F OpenROAD.GlobalPlacementSkipIO -T OpenROAD.DetailedPlacement \
+  -i $P/v6/state_in.json
+python3 hw/soc/pnr/clint_region.py placement \
+  hw/soc/pnr/runs/s84v6fence/11-openroad-detailedplacement/soc_top.def \
+  --members $P/clint_union_cur.json --write hw/soc/pnr/clint_placement_v6.json
+python3 hw/soc/pnr/clint_region.py config --base hw/soc/pnr/config-ecc-rom.json \
+  --placements hw/soc/pnr/clint_placement_v6.json --write hw/soc/pnr/config-ecc-clint6.json
+PNR_CONFIG=$PWD/hw/soc/pnr/config-ecc-clint6.json \
+  hw/soc/flow/pnr_soc_top.sh s84clint6 -F Yosys.JsonHeader -S Yosys.Synthesis \
+  -S Checker.YosysUnmappedCells -S Checker.YosysSynthChecks \
+  -S Checker.NetlistAssignStatements \
+  -i hw/soc/pnr/runs/s83romecc5/04-openroad-staprepnr/state_out.json
+#   stops at 31-openroad-globalrouting, GRT-0116, total overflow 6
+```
+
+`config-ecc-clint5.json` and `config-ecc-clint6.json` are gitignored
+like every other generated configuration; `clint_placement_v5.json` and
+`clint_placement_v6.json` are tracked, so both runs can be rebuilt from
+the repository.
+
