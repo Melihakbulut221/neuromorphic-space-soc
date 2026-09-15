@@ -6,12 +6,14 @@
     make_layout_figures.py <soc_top.def> <soc_top.nl.v> <out-dir>
 
 WHAT THIS ANSWERS.  "Where is the SRAM, where is the processor" is a
-question about a die that carries 168,592 instances, of which only about
-7,700 still have a hierarchical name after synthesis.  Everything else
-is a Yosys name -- `_12345_` -- with no block in it.  A picture that
-only coloured the named instances would colour four per cent of the die
-and would put the processor in the wrong place, because the register
-file keeps its name and the ALU does not.
+question about a die that carries 168,592 instances, and after this
+flow's synthesis almost none of them says which block it came from.
+Only 1,140 instance names in the sign-off DEF contain a dot at all --
+632 of those are the RAM's, most of the rest are clock buffers -- and
+by this script's own prefix test exactly ONE carries a top-level block
+name.  Everything else is a Yosys name, `_12345_`, with no block in it.
+A picture that coloured only the named instances would colour nothing
+and would answer the question wrongly.
 
 HOW THE OTHER NINETY-SIX PER CENT ARE ATTRIBUTED.  By connectivity, in
 three passes over the netlist:

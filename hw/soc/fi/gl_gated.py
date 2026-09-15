@@ -227,8 +227,26 @@ def make_runner(args, g):
     return Runner(args.vvp, image, g["budget"], g["rld"], g["pre"])
 
 
+# X IS A VALUE THE BENCH CAN PRINT AND -1 IS WHAT THIS FILE MEANS BY
+# "not known".  Verilog's %0d writes `x` for a field that is unknown at
+# the moment of the $display, and a gate-level model has plenty of those
+# -- a counter inside a domain whose clock never started, for instance.
+# The first campaign run died on one (`ValueError: invalid literal for
+# int() with base 10: 'x'`, 2026-09-15, arm s77gate) after 6 minutes of
+# simulation, so the parse is widened here rather than at each of the
+# thirteen call sites.  An unknown field is -1, the same value a MISSING
+# field gets, because neither is a measurement; `ii_unknown` counts them
+# so a report can say how many rather than pretending there were none.
+II_UNKNOWN = collections.Counter()
+
+
 def ii(rec, k):
-    return int(rec.get(k, "-1"))
+    v = rec.get(k, "-1")
+    try:
+        return int(v)
+    except ValueError:
+        II_UNKNOWN[k] += 1
+        return -1
 
 
 # =====================================================================
@@ -611,6 +629,9 @@ def cmd_campaign(args):
         max(float(r["wall"]) for r in rows))
     log.close()
 
+    if II_UNKNOWN:
+        say("unknown (x) record fields, counted not ignored: %s",
+            ", ".join("%s=%d" % kv for kv in sorted(II_UNKNOWN.items())))
 
 def summarise_campaign(say, rows):
     say("")
