@@ -54,9 +54,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb clint wdog wdogtmr wdog_tmr_params regfile busstat npuser npu gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
+.PHONY: all bus apb apbwb clint wdog wdogtmr wdog_tmr_params regfile regfilescrub busstat npuser npu gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
 .DEFAULT_GOAL := all
-all: bus apb clint wdog wdogtmr regfile busstat npuser npu gpio qspi scrub boot bytesecded memecc clkwake
+all: bus apb apbwb clint wdog wdogtmr regfile regfilescrub busstat npuser npu gpio qspi scrub boot bytesecded memecc clkwake
 
 include $(REPO)/tools.mk
 
@@ -87,6 +87,28 @@ apb:
 	@for t in $(TASKS); do \
 	  echo "== soc_apb_bridge $$t"; \
 	  $(SBY) -f soc_apb_bridge.sby $$t || exit 1; \
+	done
+
+# The APB3-to-Wishbone bridge, docs/65 section 9.5, added 2026-09-15.
+apbwb:
+	@for t in $(TASKS); do \
+	  echo "== soc_apb_wb $$t"; \
+	  $(SBY) -f soc_apb_wb.sby $$t || exit 1; \
+	done
+
+# The register file WITH its storage and scrub, docs/63 section 23,
+# added 2026-09-15. Only the abstracted-codec job is in `all`: its
+# `abc pdr` task is the unbounded proof of R1-R4 and its cover shows the
+# scrub visits every register. regfile_scrub.sby, the same wrapper on
+# the REAL codec, is deliberately not here -- every engine stalls on
+# the codec's parity network (section 23 records the measurement), and
+# a target that never returns is not a regression test. Its depth-40
+# k-induction and bmc tasks are likewise left out of this target.
+REGFILESCRUB_TASKS := prove_pdr cover
+regfilescrub:
+	@for t in $(REGFILESCRUB_TASKS); do \
+	  echo "== regfile_scrub_abs $$t"; \
+	  $(SBY) -f regfile_scrub_abs.sby $$t || exit 1; \
 	done
 
 clint:

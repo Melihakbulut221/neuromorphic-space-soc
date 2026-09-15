@@ -67,6 +67,38 @@
 //   deleted counters read.  That shadow is a bench instrument and not a
 //   pin, exactly as the RTL counters were.
 //
+// ADDED FOR docs/82 (the gated domains), each off by default so that
+// every record docs/74 and docs/75 report is produced by the same
+// bench behaviour as before:
+//
+//   +own_clk=1     hold the force until the injected flip-flop's OWN
+//                  clock net next rises, plus a quarter cycle, instead
+//                  of until the next edge of the free clock.  For a
+//                  flip-flop on a running clock the two edges are the
+//                  same edge.  For a flip-flop behind a closed clock
+//                  gate they are not: the free-clock release would hand
+//                  Q back to a primitive that has sampled nothing, and
+//                  the upset would vanish -- a transient on the output,
+//                  which is not what a particle does to a storage node.
+//                  Holding until the cell is clocked is what a stored
+//                  upset in an unclocked flip-flop looks like from the
+//                  outside, and it is what docs/77's T2 is about.
+//   +stop_after=N  end the run N free-clock edges after the injection
+//                  edge.  The RECORD is then not classifiable (done=0)
+//                  and is used for the clock-gate observations only.
+//   +cgtrace=<f>   write the two gate enables once per cycle (with the
+//                  clock-gate shadow present).
+//   the own-clock observation: the edge index of the first rising edge
+//                  the injected flip-flop's own clock net has after the
+//                  force, and how many it has to the end of the run --
+//                  reported on every record, with or without a shadow.
+//   fi_gl_cg.vh    the clock-gate shadow (hw/soc/fi/gl_gated.py emit-cg,
+//                  -DFI_GL_CG): the gated clock nets and enables, the
+//                  accelerator's cause word as its voter sees it, and
+//                  the bus-statistics counters that record its fault
+//                  lines.  A bench instrument, exactly as fi_rf_shadow.v
+//                  and fi_gl_wdog.vh are.
+//
 // WHAT THIS TESTBENCH DOES NOT DO
 //
 //   * it has no timing: the cell models are zero-delay and the SRAM
@@ -150,8 +182,13 @@ module tb_soc_fi_gl;
   integer arg_rld    = -1;      // the RTL clean run's reload and prescale
   integer arg_pre    = -1;
   integer arg_zero   = 1;       // zero the RAM macros at time 0
+  integer arg_own_clk = 0;      // docs/82: hold the force until the flop's own clock edge
+  integer arg_stop_after = -1;  // docs/82: end the run N edges after the injection
+  time    t_rst_release = 0;    // docs/82: when reset was released; edge c is 10 ns x c later
   reg [1023:0] trace_file;
   integer trace_fd = 0;
+  reg [1023:0] cgtrace_file;
+  integer cgtrace_fd = 0;
 
   wire wdog_dis = (arg_armed != 0) ? 1'b0 : 1'b1;
 
@@ -232,6 +269,30 @@ module tb_soc_fi_gl;
       endcase
     end
   endtask
+
+  // docs/82: wait for the next rising edge of the injected flip-flop's
+  // own clock net (FI_GL_CLK_CASES, gl_netlist.py).  A sites file
+  // generated before docs/82 has no such case list; the bench then
+  // waits on the free clock, which is what it always did, and the
+  // own-clock observations below report -1.
+`ifdef FI_GL_CLK_CASES
+  localparam OWN_CLK_KNOWN = 1;
+  task gl_wait_clk;
+    begin
+      case (arg_site)
+        `FI_GL_CLK_CASES
+        default: @(posedge clk);
+      endcase
+    end
+  endtask
+`else
+  localparam OWN_CLK_KNOWN = 0;
+  task gl_wait_clk;
+    begin
+      @(posedge clk);
+    end
+  endtask
+`endif
 
   // ------------------------------------------------------------------
   // The memories: the macro models' arrays, addressed the way
@@ -390,6 +451,64 @@ module tb_soc_fi_gl;
 `endif
 
   // ------------------------------------------------------------------
+  // docs/82: the clock gates and what they hide.  Generated per netlist
+  // by hw/soc/fi/gl_gated.py emit-cg from the nets the netlist names:
+  // the two gated clock nets and their enables (a netlist without them,
+  // CLKGATE = 0, gets the free clock and a constant-one enable, and
+  // says so through cg_have_gates), the accelerator's cause word voted
+  // from its three replica banks (docs/75's instrument, on the NPU
+  // structure), and the three bus-statistics counters the accelerator's
+  // fault lines increment.  The wires below are what the include must
+  // drive; the RECORD prints them.
+  // ------------------------------------------------------------------
+  wire        cg_have_gates;
+  wire        cg_bus_en, cg_npu_en;    // the two enables, as the gates see them
+  wire        cg_clk_bus, cg_clk_npu;  // the two gated clock nets
+  wire [31:0] cg_npu_word;             // the cause word, voted
+  wire [31:0] cg_npu_mismatch_cycles;  // cycles a replica disagreed with the vote
+  wire [15:0] cg_bs_cor, cg_bs_det, cg_bs_tmr;  // busstat NPUCOR/NPUDET/NPUTMR
+`ifdef FI_GL_CG
+`include "fi_gl_cg.vh"
+  localparam CG_SHADOW = 1;
+`else
+  assign cg_have_gates = 1'b0;
+  assign cg_bus_en = 1'b1;
+  assign cg_npu_en = 1'b1;
+  assign cg_clk_bus = clk;
+  assign cg_clk_npu = clk;
+  assign cg_npu_word = 32'h0;
+  assign cg_npu_mismatch_cycles = 32'h0;
+  assign cg_bs_cor = 16'h0;
+  assign cg_bs_det = 16'h0;
+  assign cg_bs_tmr = 16'h0;
+  localparam CG_SHADOW = 0;
+`endif
+
+  // Edges of the two gated clock nets after the force, and the edge
+  // index of the first one each; the enables sampled just before the
+  // force and one delta after it (the second is what a fault line the
+  // force raised has done to the enable in the same cycle).
+  integer cg_bus_edges = 0, cg_npu_edges = 0;
+  integer cg_bus_first = -1, cg_npu_first = -1;
+  always @(posedge cg_clk_bus) if (fi_hit) begin
+    cg_bus_edges = cg_bus_edges + 1;
+    if (cg_bus_first < 0) cg_bus_first = ($time - t_rst_release) / (2 * CLK_HALF);
+  end
+  always @(posedge cg_clk_npu) if (fi_hit) begin
+    cg_npu_edges = cg_npu_edges + 1;
+    if (cg_npu_first < 0) cg_npu_first = ($time - t_rst_release) / (2 * CLK_HALF);
+  end
+  reg [1:0] cg_en_before = 2'b00, cg_en_during = 2'b00;  // {npu, bus}
+  reg [31:0] cg_word_before = 32'h0;
+  reg [15:0] cg_bs_tmr_before = 16'h0, cg_bs_cor_before = 16'h0, cg_bs_det_before = 16'h0;
+
+  // The enables once per cycle, sampled on the falling edge so the value
+  // is the one that decides the edge that ends the cycle (docs/76
+  // section 5.1: the latch closes on the rising edge).
+  always @(negedge clk) if (rst_n && cgtrace_fd)
+    $fwrite(cgtrace_fd, "%b%b\n", cg_npu_en, cg_bus_en);
+
+  // ------------------------------------------------------------------
   // Console -- tb_soc_fi.v's receiver, unchanged.
   // ------------------------------------------------------------------
   integer rx_chars = 0;
@@ -437,6 +556,25 @@ module tb_soc_fi_gl;
   // ------------------------------------------------------------------
   reg args_ready = 1'b0;
   time fi_force_time = 0;
+  time fi_release_time = 0;
+
+  // docs/82: the injected flip-flop's own clock, after the force.  The
+  // edge index is taken from the simulation time and not from `cycles`,
+  // for the reason the injection instant is (section 5.2a of docs/74):
+  // edge c is 2*CLK_HALF x c after reset release, exactly, because the
+  // cell models are zero-delay and a leaf of the clock tree rises in
+  // the same time step as the free clock.
+  integer cg_own_edges = 0;         // rising edges of the own clock after the force
+  integer cg_first_own_edge = -1;   // edge index of the first of them
+  initial begin
+    wait (fi_hit);
+    forever begin
+      gl_wait_clk;
+      cg_own_edges = cg_own_edges + 1;
+      if (cg_first_own_edge < 0)
+        cg_first_own_edge = ($time - t_rst_release) / (2 * CLK_HALF);
+    end
+  end
 
   // The instant is ABSOLUTE, not counted.  tb_soc_fi.v waits
   // `while (cycles < arg_cycle) @(posedge clk)`, and `cycles` is
@@ -456,12 +594,26 @@ module tb_soc_fi_gl;
       fi_force_time = $time;
       fi_before = fi_q[arg_site];
       fi_val    = ~fi_before;
+      cg_en_before = {cg_npu_en, cg_bus_en};
+      cg_word_before = cg_npu_word;
+      cg_bs_cor_before = cg_bs_cor;
+      cg_bs_det_before = cg_bs_det;
+      cg_bs_tmr_before = cg_bs_tmr;
       gl_force;
+      #0;
+      cg_en_during = {cg_npu_en, cg_bus_en};
       #1;
       fi_during = fi_q[arg_site];
       fi_hit    = 1'b1;
-      @(posedge clk);
+      // docs/82: with +own_clk=1 the release waits for the flip-flop's
+      // own clock to have risen once since the force -- the monitor
+      // above counts it -- so a flip-flop whose gate is closed keeps the
+      // upset until its block is clocked.  Otherwise the next free-clock
+      // edge, as docs/74.
+      if (arg_own_clk) wait (cg_own_edges != 0);
+      else             @(posedge clk);
       #(CLK_HALF / 2);
+      fi_release_time = $time;
       gl_release;
       #1;
       fi_after  = fi_q[arg_site];
@@ -489,7 +641,10 @@ module tb_soc_fi_gl;
     if (!$value$plusargs("wdog_rld=%d", arg_rld))  arg_rld    = -1;
     if (!$value$plusargs("wdog_pre=%d", arg_pre))  arg_pre    = -1;
     if (!$value$plusargs("zero=%d",   arg_zero))   arg_zero   = 1;
+    if (!$value$plusargs("own_clk=%d", arg_own_clk)) arg_own_clk = 0;
+    if (!$value$plusargs("stop_after=%d", arg_stop_after)) arg_stop_after = -1;
     if ($value$plusargs("trace=%s", trace_file)) trace_fd = $fopen(trace_file, "w");
+    if ($value$plusargs("cgtrace=%s", cgtrace_file)) cgtrace_fd = $fopen(cgtrace_file, "w");
     args_ready = 1'b1;
 
     if ($test$plusargs("vcd")) begin
@@ -499,11 +654,20 @@ module tb_soc_fi_gl;
 
     repeat (20) @(posedge clk);
     rst_n = 1'b1;
+    t_rst_release = $time;
 
     if ($test$plusargs("dumpsites")) $display("SITECOUNT %0d", `FI_GL_COUNT);
 
-    while (!finished && cycles < arg_budget) @(posedge clk);
+    // +stop_after: a run that is only there to watch the gate open is
+    // cut N edges after the injection edge; it reports done=0 and is
+    // not classified.
+    while (!finished && cycles < arg_budget
+           && !(arg_stop_after >= 0 && arg_site >= 0
+                && cycles >= arg_cycle + arg_stop_after)) @(posedge clk);
     done_q = finished;
+    // A flip-flop whose own clock never rose again was never released:
+    // the corruption is still on its output and the record says so.
+    if (fi_hit && !fi_done) fi_after = fi_q[arg_site];
 
     #(BIT_TIME * 24);
 
@@ -557,9 +721,33 @@ module tb_soc_fi_gl;
                wd_mismatch_cycles, wd_tmr_count, wd_tmr_err);
     else
       $display("RECORD wd_mismatch=-1 wd_tmr_count=-1 wd_tmr_err=0 wd_shadow=0");
+    // docs/82.  `released` is 0 when the flip-flop's own clock never
+    // rose again after the force (+own_clk=1 on a block that stayed
+    // asleep); `own_first` is the edge index of the first own-clock
+    // edge after the force, so own_first - cycle is the number of edges
+    // the block waited for its clock, 1 for a flip-flop that is being
+    // clocked.  The gated-net fields are the same observation on the
+    // two gate outputs themselves.
+    $display("RECORD own_clk=%0d own_known=%0d released=%0d release_ps=%0t own_first=%0d own_edges=%0d",
+             arg_own_clk, OWN_CLK_KNOWN, fi_done, fi_release_time,
+             OWN_CLK_KNOWN ? cg_first_own_edge : -1,
+             OWN_CLK_KNOWN ? cg_own_edges : -1);
+    if (CG_SHADOW) begin
+      $display("RECORD cg_shadow=1 cg_gates=%0d cg_en_before=%b cg_en_during=%b cg_npu_first=%0d cg_npu_edges=%0d cg_bus_first=%0d cg_bus_edges=%0d",
+               cg_have_gates, cg_en_before, cg_en_during,
+               cg_npu_first, cg_npu_edges, cg_bus_first, cg_bus_edges);
+      $display("RECORD cg_npu_word_before=%08x cg_npu_word=%08x cg_npu_mismatch=%0d cg_bs_cor=%0d cg_bs_det=%0d cg_bs_tmr=%0d cg_bs_cor_before=%0d cg_bs_det_before=%0d cg_bs_tmr_before=%0d",
+               cg_word_before, cg_npu_word, cg_npu_mismatch_cycles,
+               cg_bs_cor, cg_bs_det, cg_bs_tmr,
+               cg_bs_cor_before, cg_bs_det_before, cg_bs_tmr_before);
+    end else begin
+      $display("RECORD cg_shadow=0 cg_gates=-1 cg_en_before=xx cg_en_during=xx cg_npu_first=-1 cg_npu_edges=-1 cg_bus_first=-1 cg_bus_edges=-1");
+      $display("RECORD cg_npu_word_before=00000000 cg_npu_word=00000000 cg_npu_mismatch=-1 cg_bs_cor=-1 cg_bs_det=-1 cg_bs_tmr=-1 cg_bs_cor_before=-1 cg_bs_det_before=-1 cg_bs_tmr_before=-1");
+    end
     $display("RECORD end");
 
     if (trace_fd) $fclose(trace_fd);
+    if (cgtrace_fd) $fclose(cgtrace_fd);
     $finish;
   end
 

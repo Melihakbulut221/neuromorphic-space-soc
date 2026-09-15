@@ -1,0 +1,220 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+
+\chapter{The measurements, together}
+\label{ch:results}
+
+The preceding chapters each carried their own numbers. This one puts
+them on one page, states what each of them is evidence \emph{of}, and
+then reports the four experiments that were run while this document was
+being written, because they are the newest measurements in the project
+and two of them change what an earlier chapter would otherwise have
+said.
+
+\section{The state of the part, on one page}
+
+\Cref{tab:headline} is the whole design in numbers. Every row names the
+document that owns the measurement; where a figure has been superseded,
+the superseding document is named rather than the figure silently
+replaced, which is the rule \dcite{64}{} sets for this project.
+
+\begin{table}[tbp]
+\centering
+\caption{Headline measurements of the design as of 15 September 2026.
+Each row is measured, not estimated, and names its source. The
+layout rows are all from the sign-off run \code{s83romecc5}, the only
+layout in the project that meets hold at every corner.}
+\label{tab:headline}
+\small
+\begin{tabularx}{\linewidth}{@{}lXr@{}}
+\toprule
+\textbf{What} & \textbf{Value} & \textbf{Source} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Process and floorplan}}\\
+Technology & IHP SG13G2, 130\,nm, open PDK & \code{docs/12} \\
+Die & $2306.40 \times 2075.22$\,\si{\micro\metre} & final DEF \\
+Core area & $(60.00,\,45.36)$ to $(2246.40,\,2029.86)$\,\si{\micro\metre} & \code{clint\_region.py} \\
+Vendor macros & 8: four $2048\times64$ RAM, two $1024\times32$ ROM, two $512\times16$ ROM ECC & \code{docs/79} \\
+Instances placed & 168{,}592 & \code{metrics.json} \\
+Instance utilisation & 0.7538 (standard cells 0.4662) & \code{metrics.json} \\
+Flip-flops & 5{,}998 & final netlist \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Timing, three corners, no frequency claimed}}\\
+Worst hold slack, \code{nom\_fast\_1p32V\_m40C} & $+0.0296$\,ns & \code{metrics.json} \\
+Worst hold slack, \code{nom\_typ\_1p20V\_25C} & $+0.1769$\,ns & \code{metrics.json} \\
+Worst hold slack, \code{nom\_slow\_1p08V\_125C} & $+0.4261$\,ns & \code{metrics.json} \\
+Worst setup slack, slow corner & $-7.5758$\,ns & \code{metrics.json} \\
+Setup TNS, slow corner & $-14{,}735.65$\,ns over 3{,}529 endpoints & \code{violator\_census.py} \\
+Dominant violating launch group & the register-file read into the fabric & \code{docs/72}, \code{docs/73} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Geometric sign-off}}\\
+Route DRC errors & 0 & \code{metrics.json} \\
+Antenna violating nets & 2, and clearing them breaks hold & \code{docs/79} \\
+LVS & matches uniquely, macros as black boxes & \code{docs/67} \\
+XOR & 0 differing shapes & \code{docs/67} \\
+\midrule
+\multicolumn{3}{@{}l}{\textit{Where the logic sits} (\cref{fig:layout_panels})}\\
+Ibex core and its register file & 23{,}942 instances, upper channel & this document \\
+Neuromorphic accelerator & 15{,}686 instances, lower channel and left edge & this document \\
+Fill, decap and antenna diodes & 107{,}890 instances, not drawn in the maps & this document \\
+Cells not attributable by connectivity & 5{,}916, 9.75\,\% of the logic & this document \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Two rows deserve emphasis because they are the ones a reader is most
+likely to misread.
+
+\textbf{The worst setup slack is negative and that is not a defect
+report.} No frequency is claimed for this design
+(\dcite{53}{}, \dcite{05}{rule 5}); the constraint the flow was given is
+a period, and the slack is measured against it. A negative worst slack
+at the slow corner says what period this layout would \emph{not} make
+at that corner, and the honest statement of the result is the number
+and the corner together, never a megahertz figure derived from either.
+
+\textbf{The hold margin is 29.6\,ps and everything competes for it.}
+That single number is the reason three separate experiments in this
+project ended the same way: a change with a clearly positive effect of
+its own spends more hold margin than the design has. The antenna
+repair does it (\dcite{79}{}), and so does the memory read register
+(\cref{sec:rdreg-result}). A design that meets hold by 29.6\,ps is a
+design in which the next improvement must be paid for out of hold.
+
+\section{Four experiments, 14--15 September 2026}
+
+\subsection{The event engine's invariant, proved over all reachable
+states}
+
+\dcite{56}{section 9.4} had named a gap and declined to close it twice:
+the largest register-transfer file in the system-on-chip carried no
+formal property set, and the one-line invariant on which its event
+mechanism rests --- that the strobe presenting an event to a neuron is
+exactly the one state of the event-engine state machine, neither
+implied by it nor implying it --- was checked by one simulation test
+and one textual guard rather than over all reachable states.
+
+It is now a property set, \code{hw/soc/formal/soc\_npu.sby}, and the
+invariant holds: bounded model checking to depth 30, $k$-induction at
+depth 16, and a cover showing the state is reachable, all pass.
+
+Two details of how it was made to work are worth carrying, because they
+are the kind of thing that costs a day and appears in no manual. The
+properties are \emph{included into} the module under a formal guard, not
+read as a separate compilation unit, so that the state machine's
+signals are in scope natively; a hierarchical reference from an outside
+wrapper into a generate scope silently declares a fresh free wire
+instead, which is how an earlier attempt on a different block produced a
+counterexample that the register-transfer code cannot produce. And the
+six submodules in the instantiation closure are read \emph{without} the
+formal flag, so that their own property includes --- and the
+assumptions inside them --- stay out of this model.
+
+\subsection{The register file with its storage and its scrub}
+
+\dcite{63}{section 18} had measured that the register-file consistency
+check of the RISC-V formal framework proves to check cycle 18 on the
+core with the error-correcting register file substituted and times out
+at 21, 23 and 25 under six engines at four hours each. That document
+ranked three routes out and took none of them.
+
+Two were taken here, and the result is a clean separation of what is
+hard from what is merely large.
+
+Route 2 asks only the register file: a wrapper that writes a word,
+waits while the scrub engine walks, and reads it back, with three more
+properties for the scrub's coverage, its arbitration against the core
+and its silence when no fault is present. Cover passes --- the scrub
+visits all 31 architectural registers. Bounded model checking and
+$k$-induction do not: four engines, including a bit-level model checker
+and an IC3 implementation, sit at step 4 and two of them report
+\textsc{timeout} at 10{,}800 seconds. Step 4 is the first cycle at which
+the read-back property examines a stored word, so the solver is being
+asked to relate eight parity trees at the write encoder to eight at the
+read decoder through thirty-two more encoders in the scrub path.
+
+Route 3 removes exactly that. With the codec replaced by a degenerate
+stand-in of the same interface, an IC3 engine proves all four
+properties \emph{unbounded} in 44 seconds. The codec's own correctness
+is a separate theorem that another job in the same directory already
+proves, so the composition is sound: a property of the wrapper that
+holds for every codec satisfying decode-of-encode-is-identity holds for
+the real one.
+
+The abstraction also taught the wrapper's hidden assumptions. The first
+stand-in was the identity code, and bounded model checking failed at
+step 3 with every read bit inverted. The cause is in the read path's
+correction mask, which flips every bit whose syndrome matches its
+column of the parity-check matrix: with an all-zero column set and a
+zero syndrome, that is every bit. The register file therefore assumes
+that every column of its parity-check matrix is non-zero and that the
+encoding of the all-zero word is zero --- both true of the real code by
+construction, and both now written down where the next person to
+abstract this block will find them.
+
+\subsection{The multiply and divide checks, bounded rather than
+stopped}
+\label{sec:mext-result}
+
+\dcite{63}{section 8.4} reported six instruction checks stopped without
+a verdict after 35 to 40 minutes each, and section 11 of the same
+document listed a different solver as the first route out. That route
+was taken: all six checks were run again on both the stock and the
+substituted core under a second bit-blasting solver, each with an
+explicit time bound written into the job so that the status the tool
+records is its own word.
+
+All twelve report \textsc{timeout} at 7{,}200 seconds. None closes.
+
+The interesting number is not in the checks but in the witnesses. The
+same six cover jobs, which the original solver reached in 9 to 73
+seconds, take 1{,}388 to 10{,}999 seconds under the new one --- between
+roughly twenty and one hundred and fifty times slower --- while still
+passing. Whatever eventually closes a sequential multiplier
+equivalence, it is not a change of satisfiability back end: two of them
+have now been given the problem and the second is worse at both halves
+of it.
+
+\subsection{The memory read register, measured on the design that
+exists}
+\label{sec:rdreg-result}
+
+\dcite{50}{} priced a response register on the memory read path twice,
+on two designs that no longer exist, and five later documents each
+recorded that the measurement was owed on the design that does. It was
+taken: one synthesis with the register enabled, one full layout of that
+netlist, one whole-system simulation.
+
+The mechanism works exactly as \dcite{50}{} predicted. The macro read
+return stops being a violating launch group: 360 violating endpoints
+become 17, their total violation falls from $-864.88$ to $-28.87$\,ns,
+and the design's total setup violation improves by 21.9\,\%, the
+largest single-change improvement any layout in this project has
+produced. The seventeen that remain do not reach the bus at all;
+sixteen of them end in the scrub engine's counter.
+
+And it does not make the part. The worst path is unchanged in kind and
+0.16\,ns worse in value, because it was never behind a macro: it is the
+register-file read into the fabric, whose structural answer --- a
+registered request phase --- remains unpriced. Worse, the 61 new
+flip-flops and 683 new instances cost 325.7\,ps of hold margin at the
+fast corner, and the design has 29.6\,ps. The register therefore stays
+at its default of disabled, and what the experiment establishes is its
+price at today's hold margin rather than a recommendation.
+
+\subsection{A run that measured nothing, kept on purpose}
+
+The first attempt at the experiment above completed all 67 flow steps
+and produced a layout of the \emph{baseline} netlist. The synthesis
+knob was set in the environment; the place-and-route script takes its
+netlist from a different variable and had defaulted to the unmodified
+one. Nothing in the flow objected, because the layout was a perfectly
+good layout of the netlist it was given.
+
+The run directory is kept, labelled, and its numbers are in no table.
+It belongs in this chapter because it is the project's most common
+failure shape in its purest form: not a wrong measurement, but a
+correct measurement of the wrong thing. The countermeasure that would
+have caught it in seconds --- count the mechanism in the netlist before
+believing the layout --- is the same one the redundancy guards apply,
+for the same reason.

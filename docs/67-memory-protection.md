@@ -1699,6 +1699,7 @@ uninterrupted invocation, and are quoted as such.
 ---
 
 ## 15. What the next block should be
+   *Measured 2026-09-15 on the eight-macro design: `docs/50` section 16. The macro read return stops being a violating launch group (360 endpoints to 17, their TNS -864.88 to -28.87) and the design's setup TNS improves 21.9 %, at the cost of 325.7 ps of the sign-off layout's 29.6 ps hold margin at the fast corner, which takes hold negative. It stays at its default of 0.*
 
 1. **The boot flow, which is now the ROM's protection.** Section 8. The
    ROM's code and check bits are loaded together or the first fetch

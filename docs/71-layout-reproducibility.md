@@ -811,6 +811,8 @@ steps-1–37 figures, single-threaded throughout, agree within 3 %.
    −6.8564 and the mechanism that splits it has been priced twice on
    designs that no longer exist. It is now known that pricing it a
    third time will give a number that means something.
+   *Measured 2026-09-15 on the eight-macro design: `docs/50` section 16. The macro read return stops being a violating launch group (360 endpoints to 17, their TNS -864.88 to -28.87) and the design's setup TNS improves 21.9 %, at the cost of 325.7 ps of the sign-off layout's 29.6 ps hold margin at the fast corner, which takes hold negative. It stays at its default of 0.*
+
 4. **Close the strap sampling window, or record that it stays open**,
    `docs/69` section 15 item 2, the sharpest thing still open inside
    the placed block.

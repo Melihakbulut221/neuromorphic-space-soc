@@ -1,0 +1,679 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+%
+% Chapter 2: the architecture of the system-on-chip. Every number in
+% this file is cited to a document or a source file in this repository.
+
+\chapter{Architecture}
+\label{ch:arch}
+
+The part is \code{soc\_top}: a 32-bit RISC-V management core, a system
+fabric, a memory subsystem with a code over every stored bit, a
+core-local interruptor, a general-purpose timer carrying a three-stage
+watchdog, a boot controller, two telemetry blocks, a console UART, a
+GPIO port, a QSPI flash controller, two plug-and-play device tables and a
+spiking-neural-network node built around a frozen shuttle die
+(\dcite{60}{}, revision 0.2, 14 September 2026). Its datasheet gives its
+status in three words: preliminary, pre-silicon, pre-sign-off.
+
+One sentence travels with the rest of this chapter. \textbf{This design
+publishes no clock frequency}, by a rule adopted in
+\dcite{53}{section 9.2} and restated in \dcite{60}{section 0}: the
+20\,ns period below is the constraint the synthesis and place-and-route
+flows were run against, and every slack here is measured against it. It
+is not converted into a rating and no rating is implied.
+
+There is no block diagram in this chapter: \cref{fig:arch-panels} shows
+where the placer actually put each block, and the floorplan and the
+density map belong to the physical-design chapter.
+
+\begin{figure}[tbp]
+  \includegraphics[width=\linewidth]{figures/layout_panels.pdf}
+  \caption{Where each block landed. Nine small multiples, one per block,
+  each drawing that block's standard cells against a grey die with the
+  eight vendor memory macros outlined. Only about seven thousand of the
+  die's 168,584 instances still carry a hierarchical name after
+  synthesis, so the rest are attributed by connectivity --- nets keep
+  their hierarchical names, each anonymous cell takes the block most of
+  its nets vote for, and two rounds of neighbour propagation follow
+  (\code{thesis/figures/make\_layout\_figures.py}). The method leaves a
+  remainder: \textbf{5{,}916 of the 60{,}694 logic cells, 9.75\,\%, are
+  unattributed} and are drawn grey rather than hidden
+  (\code{thesis/figures/layout\_attribution.json}). Nothing here was placement-constrained except the macros, so the
+clusters are the placer's.}
+  \label{fig:arch-panels}
+\end{figure}
+
+\section{The management core}
+
+\begin{sloppypar}
+The core is lowRISC Ibex in the \code{small-pmp} configuration: RV32IMC
+with physical memory protection at four regions, a two-stage pipeline, a
+flip-flop register file, no instruction cache, no branch-target ALU, no
+writeback stage, no branch predictor. \code{hw/soc/rtl/soc\_top.v} sets
+\code{BaseIsa} = 0 (RV32I), \code{RV32M} = 2 (RV32MFast),
+\code{RV32B} = 0, \code{RV32ZC} = 0 (Zca), \code{RegFile} = 0
+(flip-flop), \code{PMPEnable} = 1, \code{PMPNumRegions} = 4,
+\code{PMPGranularity} = 0, \code{MHPMCounterNum} = 0 and
+\code{SecureIbex} = 0.
+\end{sloppypar}
+
+\begin{sloppypar}
+The core is vendored pristine at commit
+\code{34b0705760ef3dfa00e99637432473d2be8f22f3}, Apache-2.0, and
+converted to Verilog-2005 by sv2v: 30 of 30 RTL modules and 8 of 8
+vendored primitives, 15{,}873 lines, zero errors and \textbf{zero patches
+to Ibex} (\dcite{38}{sections 2, 4.2}). \textbf{No equivalence between
+the SystemVerilog and the converted Verilog was proven}, because
+upstream's own equivalence script drives a proprietary tool this project
+does not have. Two corroborations were run instead --- two independent SystemVerilog
+front-ends landing within \textbf{0.89\,\% of cell area and two
+flip-flops}, and a self-checking program executing in Icarus --- and
+\dcite{38}{section 5} refuses to call either a proof.
+\end{sloppypar}
+
+\begin{sloppypar}
+PMP was not taken for free. \dcite{09}{part B track 3} had already chosen
+a software architecture whose isolation mechanism is PMP, so a core
+without it does not implement the design already decided. It costs
+\textbf{43{,}634\,$\mu$m$^2$, $+18.8$\,\%} and \textbf{1.21\,ns} of
+pre-layout closing period, because the address-match logic is replicated
+per region and sits in the load/store path
+(\dcite{38}{sections 8.4, 8.6}).
+\end{sloppypar}
+
+\subsection{Why there is no lockstep}
+
+\code{SecureIbex} is 0: no shadow core, no output comparison, no dummy
+instructions, no reset-all flops, no memory-interface ECC. In this Ibex
+those are not separable. \code{ibex\_top.sv} lines 212--216 make
+\code{Lockstep}, \code{ResetAll}, \code{DummyInstructions} and
+\code{RegFileLockstepECC} localparams of \code{SecureIbex}, and
+\code{MemECC} defaults to it at line 41 (\dcite{38}{section 3.3}). It is
+one switch, and it was priced before it was thrown
+(\dcite{38}{section 8.4}):
+
+\begin{center}\small
+\begin{tabular}{lrrrr}
+\toprule
+Configuration & Cells & Flip-flops & Area, $\mu$m$^2$ & kGE \\
+\midrule
+\code{small}, no PMP        & 15{,}736 & 1{,}950 & 232{,}049 & 31.97 \\
+\code{small-pmp}, chosen    & 18{,}921 & 2{,}106 & 275{,}683 & 37.99 \\
+\code{small-pmp-sec}        & 40{,}236 & 4{,}975 & 585{,}233 & 80.64 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Lockstep is \textbf{$+309{,}550\,\mu$m$^2$, $+112$\,\%} over the chosen
+core and costs almost nothing in frequency, 0.27\,ns, because the shadow
+core is parallel rather than in series.
+
+Area is not what decided it. Lockstep \emph{detects} where this project's voters \emph{mask}; the two
+cover disjoint structures, so their costs add rather than share; and the one real overlap, ECC
+over the register file, duplicates a codec this project already owns.
+\code{MemECC} follows \code{SecureIbex}, so the instruction and data
+buses would become 39 bits wide all the way to memory with the check bits
+\emph{stored} rather than regenerated: a 22\,\% SRAM overhead on every
+byte the CPU touches. \textbf{The owner chose \code{small-pmp} on
+2026-08-31} (\dcite{38}{section 10 item 4}), and the same section records
+what the choice takes on: the management processor becomes the least
+hardened block in the design, its own fault-injection campaign stops
+being deferred work, a recovery policy becomes required rather than
+optional, and the decision is cheap to reverse only before floorplanning.
+
+\begin{sloppypar}
+What has happened since: the campaign was run, the register file gained a
+(39,32) SECDED codec with a background scrub at
+$+38{,}050.5762\,\mu$m$^2$ and $+222$ flip-flops (\dcite{43}{}), and the
+watchdog is the recovery policy. The core as shipped is \textbf{22{,}338 cells, 2{,}328
+flip-flops, 316{,}051.6590\,$\mu$m$^2$} (\dcite{45}{section 6.2});
+everything in Ibex except the register file remains unprotected, by
+decision (\dcite{60}{section 9.8}).
+\end{sloppypar}
+
+\section{The bus fabric}
+
+Ibex presents two masters, an instruction port and a data port, each
+speaking a simple request/grant/response protocol; it has no AHB, no AXI
+and no burst. The interconnect takes that protocol as the internal fabric
+and puts \emph{real} AMBA 3 APB at the peripheral boundary.
+\textbf{There is no AHB in this SoC and none is claimed}
+(\dcite{39}{sections 3, 4, 7}).
+
+The obvious argument, area, is the one the record refuses. An honest AHB-Lite cost probe was built and synthesised at \textbf{17{,}154.32\,$\mu$m$^2$ against
+14{,}807.32}, $+15.9$\,\% on the fabric and \textbf{$+0.85$\,\% of the
+CPU}. Nine tenths of one per cent is not a reason to reject a bus; what
+the measurement is good for is excluding the opposite mistake, that the
+decision was made by picking the smaller thing (\dcite{39}{section 6.3}).
+
+Five arguments decided it. \dcite{08}{section 3} defines proximity to
+the reference family at the software-visible layer --- addresses,
+register maps, slot geometry, discovery tables --- and the wires between
+core and RAM are not in it. Not one peripheral core the IP survey
+selected is AHB-native, so every one needs a wrapper whichever bus is
+chosen, and an APB wrapper is the smaller one. \dcite{08}{row 1}'s
+``single AHB-lite layer'' with three masters is a category error, because
+\textbf{AHB-Lite has exactly one master by definition} and Ibex alone
+supplies two. And AHB folds ``your request was accepted'' and ``your
+response is here'' onto one wire, so an arbiter that back-pressures a
+master simultaneously tells it its outstanding data phase has not
+completed; the probe parks the response instead, and \textbf{67 of the
+arbiter's 71 flip-flops are parking registers}.
+
+Evidence settles the rest: nothing in the pinned toolchain is an AHB
+protocol checker, while APB's eight-odd rules are proved by k-induction
+against ghost registers independent of the bridge's own storage
+(\dcite{39}{section 5.3}).
+
+\code{soc\_bus.v} carries two masters onto \textbf{six slave ports} ---
+\code{ram}, \code{rom}, \code{clint}, \code{npu}, \code{apb},
+\code{pnp} --- plus an internal error slave (\dcite{60}{section 5.2}).
+Three of its properties are decisions. It allows \textbf{two outstanding
+requests per master}, because Ibex's prefetch buffer issues two and one
+would halve instruction-fetch bandwidth. \textbf{All of a master's
+outstanding requests must go to one slave}, because Ibex requires
+in-order responses and slaves differ in latency; the alternative was a
+reorder buffer that must store a whole response, and the restriction
+costs one dead cycle when a master changes region. And arbitration is
+\textbf{round-robin}, which makes no-starvation a property of this file
+rather than an argument about the core: the measured worst gap between
+grants is 2 cycles against an asserted bound of 8.
+
+An unmapped access is a \textbf{bus error, never a read of zero}: the
+error slave is inside the fabric, always ready, and Ibex turns its
+response into an access fault. Properties F1--F9 prove one-hot decode against the generated map
+constants, the outstanding limit and that no response is lost or
+duplicated. \textbf{Neither formal job proves liveness}: nothing says a
+transfer ever completes (\dcite{39}{sections 5.3, 5.5}).
+
+On the one recipe every block here is measured with --- Yosys
+\code{stat -liberty} on \code{ihp-sg13g2} typical, \code{abc} at a 20\,ns
+target, one gate equivalent $=$ 7.2576\,$\mu$m$^2$ --- the fabric is 868
+cells, 55 flip-flops, \textbf{10{,}928.8872\,$\mu$m$^2$}, 3.96\,\% of the
+unprotected core, and the APB bridge 201 cells, 94 flip-flops,
+6{,}437.4912\,$\mu$m$^2$ (\dcite{60}{section 5.2}).
+
+\section{The memory map, and its single source}
+
+\begin{sloppypar}
+\code{regmap/memmap.yaml} \emph{is} the memory map. It is not a table in
+prose: \code{regmap/generate\_memmap.py} emits the reader's document, the
+Python constants the test suites use, the RTL's address decoder, both
+device tables' contents, the C header the bare-metal programs include and
+the linker's \code{MEMORY} block, and \code{sw/tests/test\_memmap.py}
+fails if any is stale (\dcite{39}{section 2.1}).
+\end{sloppypar}
+
+\begin{sloppypar}
+Three rules are enforced by the generator rather than commented. Ibex resets to \code{\{boot\_addr\_i[31:8], 8'h80\}}, so the generator
+derives the reset vector and refuses a boot region that does not contain
+it or cannot execute it. Ibex's \code{mtvec} is
+256-byte aligned and vectored-only, so \textbf{every region base must be
+256-byte aligned} and the map is never itself why a trap vector lands
+elsewhere. And every region is a naturally aligned power of two with no
+overlaps, so decode is a prefix compare rather than two magnitude
+comparisons in the address path of every access.
+\end{sloppypar}
+
+\begin{table}[tbp]\small
+\setlength{\tabcolsep}{4pt}
+\centering
+\caption{The system-bus address map, from \code{regmap/memmap.yaml} and
+its generated form \code{docs/memmap-soc.md}. Ten regions, six
+implemented. Everything outside every region reaches the error slave.}
+\label{tab:arch-memmap}
+\begin{tabular}{@{}lllllp{5.1cm}@{}}
+\toprule
+Base & Size & Name & Port & Status & What it is \\
+\midrule
+\code{0x00000000} & 32\,KiB   & RAM    & \code{ram}   & implemented & System SRAM, SECDED per byte lane, scrubbed \\
+\code{0x10000000} & 256\,MiB  & NPU    & \code{npu}   & implemented & Accelerator window; sixteen 4\,KiB node windows \\
+\code{0xC0000000} & 8\,KiB    & ROM    & \code{rom}   & implemented & Boot ROM; reset vector at \code{0xC0000080} \\
+\code{0xD0000000} & 32\,MiB   & QSPI3  & ---          & reserved    & Flash execute-in-place, 3-byte addresses \\
+\code{0xD8000000} & 128\,MiB  & QSPI4  & ---          & reserved    & Flash execute-in-place, 4-byte addresses \\
+\code{0xE0000000} & 64\,KiB   & CLINT  & \code{clint} & implemented & \code{msip}, \code{mtimecmp}, \code{mtime} \\
+\code{0xF8000000} & 4\,MiB    & PLIC   & ---          & reserved    & Interrupt controller; \cref{sec:arch-irq} \\
+\code{0xFE000000} & 16\,MiB   & DEBUG  & ---          & reserved    & RISC-V debug module; there is none \\
+\code{0xFF900000} & 1\,MiB    & APB    & \code{apb}   & implemented & Peripheral bridge, sixteen 4\,KiB slots \\
+\code{0xFFFFF000} & 4\,KiB    & PNP    & \code{pnp}   & implemented & System-bus device table \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{sloppypar}
+\Cref{tab:arch-memmap} is the map, and the addresses are the reference
+family's, taken unchanged from \dcite{08}{section 3.1}.  The RAM is \textbf{32\,KiB,
+not 64}, since the memory-protection work: the region shrank rather than
+the macros growing, and \cref{sec:arch-mem} is why.
+\dcite{60}{section 5.3} carries 64\,KiB in its revision-0.1 body with a
+dated correction beside it; the map is the normative source.
+\end{sloppypar}
+
+\section{The memories}
+\label{sec:arch-mem}
+
+There are two implementations of one module name, and which one a reader
+is looking at decides what the numbers mean. \code{soc\_mem.v} is
+behavioural and is what every simulation and formal job reads;
+\code{soc\_mem\_sram.v} is a drop-in with the same module name and port
+list built on real vendor macros, and \textbf{no simulation ever reads
+it}.
+
+\begin{sloppypar}
+The macro arrangement, confirmed from \code{soc\_mem\_sram.v} and
+\dcite{67}{sections 3, 8}, is \textbf{eight macros}: four
+\code{RM\_IHPSG13\_1P\_2048x64\_c2\_bm\_bist} for the RAM, the smallest
+byte-writable 64\,KiB build the PDK admits (the denser \code{8192x32} part has no byte-mask port, and Ibex emits
+\code{sb} and \code{sh}); two \code{RM\_IHPSG13\_1P\_1024x32\_c2\_bm\_bist} for the
+ROM, because there is no \code{2048x32} part; and two
+\code{RM\_IHPSG13\_1P\_512x16\_c2\_bm\_bist}, one per ROM bank, holding the (39,32) word code's seven check bits at
+$+90{,}618.62\,\mu$m$^2$. The check pair was designed unplaced and was \textbf{placed and routed on
+2026-09-13} in run \code{s83romecc5}, with zero detailed-routing DRC
+errors and a die that does not grow by one database unit; the superseded
+estimate that it would have to grow by about 200\,$\mu$m is kept rather
+than deleted, and it measured the wrong axis.
+\end{sloppypar}
+
+\subsection{Why the check bits cost half the RAM}
+
+A \code{2048x64} row is 64 bits and holds two 32-bit words. The project's
+SECDED code is (72,64) --- eight bits \emph{wider} than the row --- and a
+(39,32) word code needs fourteen spare bits per row. \textbf{There is no
+bit-widening in a hard macro}, so the check field goes into another macro
+or into the space a narrower word leaves. \dcite{67}{section 3} costs six options from the vendor LEF; the cheapest
+that keeps 64\,KiB is a seventh \code{2048x64} at
+$+491{,}633.62\,\mu$m$^2$, $+21.88$\,\% of the macro area, with a
+read-modify-write on every \code{sb} and \code{sh}. That is a design
+change and not a wrapper: a second port cycle per store, a hazard against
+the pipelined request the fabric permits, and a grant the memory would
+have to withhold.
+
+What was built holds \textbf{one 32-bit word per 64-bit row as four
+(16,8) byte codewords}, which is exactly 64 bits. Each is the frozen
+(72,64) Hsiao code with data bits 8--63 tied to zero; three of the eight
+check rows are then identically zero, so what is stored is a (13,8) code
+plus three constant bits, and (13,8) is the minimal SECDED width for a
+byte. A byte write lands through the macro's own per-bit write mask with
+its check bits beside it: no seventh macro, no die growth, no
+read-modify-write, and the response stays one cycle.  What the 32\,KiB that went were holding was measured rather than assumed:
+the 28-check bring-up program uses \textbf{192 bytes} of static data plus
+a stack, and the RTL keeps the two-words-per-row arm for the day a sized
+workload wants 64\,KiB back (\dcite{67}{section 3.4}).
+
+Every read decodes the row on the way out: a single-bit error in any lane
+is corrected before the read data and counted, and an uncorrectable
+syndrome answers with a bus error that Ibex takes as an access fault, so
+\textbf{the recovery is a trap and not a wrong word}. A scrubber sits
+behind the row port rather than on the fabric --- a third bus master would
+have been a re-proof of the arbiter and its ownership queues --- reading
+one row in an idle cycle, examining it in the next, and writing back only
+the lanes the decoder corrected. \textbf{The bus always wins}: if the bus
+asks in the examine cycle the scrub result is dropped, so a bus write
+between a scrub read and its write-back cannot be overwritten.
+
+The protection costs \textbf{$+31{,}391.3124\,\mu$m$^2$, $+4.783$\,\%}
+on the whole SoC at the SRAM boundary, taking it from 43{,}884 cells and
+5{,}599 flip-flops to 45{,}952 and 5{,}833 (\dcite{67}{section 5.1}).
+Routed, the read-return group's worst slack falls from $-2.7112$ to
+$-4.0021$\,ns, and it is still not the binding path. Two limits close the
+section: the row address into
+either memory is \textbf{unprotected}, since a corrupted index reads the
+wrong row, which is a valid codeword; and on this PDK the boot ROM is an
+SRAM that powers up undefined and nothing in the design can write it, so
+check bits on a ROM nobody can write are check bits nobody can initialise
+(\dcite{67}{sections 8, 9}).
+
+\section{Time, interrupts and supervision}
+
+The CLINT and the general-purpose timer are both timers and are not
+duplication. \textbf{The CLINT owns time}: \code{mtime} is a free-running
+64-bit up-counter that is never reloaded and never restarted, and it is
+the only time base with an architectural meaning. \textbf{The GPTIMER
+owns intervals}: its timers count down from a reload value and restart,
+which is what periodic work and timeouts want, and its last timer is the
+watchdog. Neither is a convenient way to do the other's job, and the two
+have independent time bases that nothing synchronises
+(\dcite{40}{section 4}).
+
+The CLINT sits on the system bus rather than behind the APB bridge, which
+costs $+1{,}421.92\,\mu$m$^2$, $+0.52$\,\% of the core, and buys a
+one-cycle \code{mtime} read instead of the bridge's three-cycle minimum
+on the one register software polls in a loop. It has the standard layout
+--- \code{msip} at \code{0x0000}, \code{mtimecmp} at \code{0x4000},
+\code{mtime} at \code{0xBFF8} --- one hart, and a bus error at every other
+offset. One behaviour is deliberately not papered over: the naive two-store
+64-bit \code{mtimecmp} update glitches, and the cocotb suite
+\emph{asserts} that a spurious interrupt occurs on it rather than only
+checking the safe sequence.
+
+\code{mtime} is the one block here whose hardening is a code rather than
+a copy. \dcite{58}{} makes its 64 stored bits the data field of a (72,64)
+SECDED codeword, decoded and corrected on every tick, at \textbf{eight
+added flip-flops} and $+7{,}026.8310\,\mu$m$^2$. It corrects: 144 of 144 single-bit injections into the 72 stored bits came
+back corrected, against an unprotected design that
+displaced the clock in 95 of 128 draws and announced none. That
+document's own negative result sits beside it --- a residue-mod-3
+detector measures \textbf{98.694\,\% of the corrector's area} and
+corrects nothing --- and \code{mtimecmp} gets nothing, because 128
+injections into it displaced the clock zero times.
+
+The CLINT's area is published twice and both numbers are right:
+\dcite{40}{section 9} reports 1{,}038 cells and 16{,}683.48\,$\mu$m$^2$,
+\dcite{45}{section 6.2} reports 1{,}043 and 16{,}712.8164 for the same
+unchanged file, and the difference is the source list the script read on
+the day. The second is the one to quote for the SoC as it stands.
+
+\subsection{No platform interrupt controller}
+\label{sec:arch-irq}
+
+Thirteen interrupt sources are defined and Ibex has fifteen dedicated,
+individually vectored, individually maskable, priority-ordered fast local
+interrupt inputs, each with its own vector-table entry. That is an
+interrupt controller, in the core, at no cost. \textbf{No PLIC is
+built}: the region stays reserved and faults, \code{irq\_external\_i} is
+tied low and left free so that adding a controller later is a wiring
+change, and \textbf{lines 13 and 14 are unassigned}
+(\dcite{40}{section 3}). The condition that reverses the decision is
+mechanical: the generator refuses a line outside 0--14 and refuses two
+sources on one line, so a fourteenth interrupt-bearing peripheral is a
+build failure naming the decision.
+
+The map keeps \textbf{two interrupt namespaces} that must not be
+conflated: \code{irq} is the plug-and-play source number in the device
+table's identification word, running to 24, and \code{line} is the Ibex
+wire index, running to 12.  Four core inputs are architectural rather than
+per-peripheral: MSOFT (ID 3) and MTIMER (ID 7) from the CLINT, MEXT
+(ID 11) unconnected, and \textbf{NMI (ID 31) from the watchdog}.
+
+\subsection{The three-stage watchdog}
+
+The watchdog is not a timer with a reset on the end. It carries the
+weight the \code{SecureIbex} decision put on it --- it is the only
+backstop a silently corrupted processor has --- and its specification is
+eight numbered properties in its own file header, against which the
+formal properties and the cocotb suite are written
+(\dcite{40}{section 5}, \dcite{60}{section 5.6}).
+
+\textbf{W1: armed at reset, not disableable by software.} The enable
+reads 1 out of power-on reset and a write of 0 is accepted by the bus and
+\emph{ignored}, so a driver that tried can discover that it failed. Only
+a bootstrap pin sampled once at power-on reset release can stop it, and
+the status register reports what was sampled. \textbf{W2: the time base is not software-programmable}, because the
+attack on W1 is not to disable the watchdog but to slow it: on a stock
+GPTIMER it shares a writable prescaler. Here it has its own fixed divider that no
+register reaches, and the longest timeout it can be talked into is a
+constant of the netlist, $2^{16}\times16 = 1{,}048{,}576$ clocks. There
+is deliberately no clamp register: \textbf{a bound enforced by the width
+of a counter cannot be misconfigured and one enforced by a comparator
+can}, and the first version's comparator turned out to be dead logic
+pretending to be a defence.
+
+\textbf{W3: three stages.} Stage 1 raises a non-maskable interrupt and
+reloads --- non-maskable because the core clears \code{mstatus.MIE} on
+entry to every trap handler, so a core stuck inside a handler would never
+take a maskable warning in exactly the case it exists for. Stage 2, on a second expiry with stage 1 unacknowledged, asserts the
+system reset, which the core cannot prevent. Stage 3, after two watchdog
+resets, latches an external pin, because resetting has demonstrably not
+worked and the decision belongs outside the chip. \textbf{W4: the state
+survives the reset it causes}, so the whole block is in the power-on
+domain and the SoC has two reset domains with a synchroniser. \textbf{W5:
+keyed writes}, upper half-word \code{0xA51F}, on every register and not
+just the kick, because an unkeyed acknowledge would let a core spraying
+stores hold the machine in stage 1 for ever. \textbf{W6:} the 22 bits of
+persistent, silent state are bundled into one word, tripled and voted
+every cycle, while 36 flip-flops the block rewrites every tick or kick
+are left alone. \textbf{W7 and W8}, a windowed kick mode and a kick
+budget, are both measured; W7 is \textbf{recommended for removal}.
+
+``Armed at reset'' was right and not sufficient, and running it is what
+showed that. The reload register is in the power-on domain by W4, so a
+short timeout software installed before it went wrong \emph{survived the
+reset that going wrong caused}, and the SoC looped with the console never reaching its first character; a
+stage-2 reset now restores the reload to the maximum. \textbf{Putting
+state outside the reset domain is what makes the record survive and also
+what makes a stale configuration survive} (\dcite{40}{section 7.2}). The
+redundancy itself was counted rather than assumed --- 102 mapped
+flip-flops, after stripping every protective attribute from the source
+text --- at $+5{,}091.06\,\mu$m$^2$ and \textbf{1.6\,\% of what lockstep
+would have cost}.
+
+\section{The peripheral bus and what is on it}
+
+Sixteen 4\,KiB slots sit inside the 1\,MiB APB window. The bridge
+\textbf{does not decode which peripheral is selected}: it drives one ``some peripheral'' select and
+\code{soc\_top.v} turns that into per-slot selects from the generated
+constants, because a bridge that decoded slots would be a second copy of
+the memory map, and the second copy is where drift lives
+(\dcite{39}{section 4}).
+
+\begin{table}[tbp]\small
+\centering
+\caption{The peripheral slots, from \code{regmap/memmap.yaml}. Areas are the same recipe as every other block here, from different
+sessions; a block re-measured in a different source list moves by of
+order one per cent (\dcite{45}{section 4.3}).}
+\label{tab:arch-slots}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llp{2.5cm}p{4.3cm}rrr@{}}
+\toprule
+Slot & Address & Block & Registers & IRQ & Line & Area, $\mu$m$^2$ \\
+\midrule
+\code{0x000} & \code{0xFF900000} & UART0, console & 4: data, status, ctrl, scaler & 2 & 0 & 4{,}359.78 \\
+\code{0x001} & \code{0xFF901000} & UART1 & \emph{reserved} & 3 & 1 & --- \\
+\code{0x002} & \code{0xFF902000} & GPIO, 16 pins & 10, plus 9 logical aliases & 4 & 2 & 13{,}162.87 \\
+\code{0x008} & \code{0xFF908000} & TIMER0 and watchdog & scaler, config, 3 timers, \code{WDOGSTAT} & 8 & 3 & 33{,}528.07 \\
+\code{0x009} & \code{0xFF909000} & TIMER1 & \emph{reserved} & 12 & 4 & --- \\
+\code{0x00D} & \code{0xFF90D000} & SpaceWire & \emph{reserved} & 16 & 5 & --- \\
+\code{0x011} & \code{0xFF911000} & CAN & \emph{reserved} & 18 & 6 & --- \\
+\code{0x012} & \code{0xFF912000} & SPI & \emph{reserved} & 19 & 7 & --- \\
+\code{0x013} & \code{0xFF913000} & I2C & \emph{reserved} & 20 & 8 & --- \\
+\code{0x014} & \code{0xFF914000} & QSPI flash & 7, at \code{0x00}--\code{0x18} & 21 & 9 & 19{,}690.62 \\
+\code{0x015} & \code{0xFF915000} & BUSSTAT & 7, at \code{0x00}--\code{0x18} & 22 & 10 & 7{,}060.55 \\
+\code{0x016} & \code{0xFF916000} & SCRUB & 6 counters, 6 stickies, 2 addresses & 23 & 11 & 16{,}710.96 \\
+\code{0x017} & \code{0xFF917000} & BOOTREG & 4: straps, status, report, epoch & --- & --- & 7{,}229.06 \\
+\code{0x018} & \code{0xFF918000} & CLKGATE & \emph{reserved} & --- & --- & --- \\
+\code{0x019} & \code{0xFF919000} & NPUCFG & 12, at \code{0x000}--\code{0x02C} & 24 & 12 & in \code{soc\_npu} \\
+\code{0x0FF} & \code{0xFF9FF000} & APBPNP & two words per slot & --- & --- & 905.27 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{sloppypar}
+\Cref{tab:arch-slots} is the current map: \textbf{nine slots implemented
+and seven reserved}. \dcite{60}{section 4.1} counts nine reserved, which
+was true on its own date of 2026-09-05; the SCRUB and BOOTREG slots were
+implemented afterwards by \dcite{67}{} and \dcite{68}{}, and revision 0.2
+did not recount them. The map is the normative source
+(\dcite{60}{section 0.2}).
+\end{sloppypar}
+
+The \textbf{console UART} mirrors the reference family's register map at
+four offsets and is a real serialiser, not a simulation print hook: the
+testbench decodes its line rather than snooping the register write, so
+the baud divider and the shift register are inside what the run proves.
+It is \textbf{transmit only}: a driver that waits for the data-ready bit
+waits for ever, which is correct for a part with no receiver and better
+than a receiver that appears to exist.
+
+The \textbf{GPIO} port was the first peripheral promoted from reserved to
+implemented, and it was chosen first for a process reason rather than a
+mission one: no block had ever walked the sequence from map promotion through
+top-level decode and source lists to a bring-up check and a proof, and
+walking it on this project's own RTL means that when the second block
+fails a step the failure is in the block and not in the path
+(\dcite{65}{section 2}). It is 16 pins on one shared interrupt line, and \textbf{its data register
+reads the pad and never the output register}: a block that folded one
+into the other would pass a write-then-read-back test with no pin present
+at all.
+
+The \textbf{QSPI flash controller} is register-mode with two chip
+selects. The alternative, wrapping OpenTitan's \code{spi\_host}, was measured
+rather than dismissed: it synthesises to
+\textbf{65.051\,kGE, 171\,\% of the Ibex core}, about four fifths of it
+FIFO storage at depths fixed in a generated package
+(\dcite{65}{section 8}). What was written instead is
+19{,}690.6248\,$\mu$m$^2$, \textbf{4.2\,\% of the size} of the block it
+declined. Its data phase \textbf{pauses at every word}, so a transfer of any length
+needs one word of storage and no FIFO --- ``the storage is where software
+is, not where the block is'' (\dcite{66}{section 3.1}).
+
+Execute-in-place is \textbf{not} built and the two windows stay reserved
+with the reason in the map beside them: it would make the controller a
+fabric slave as well as an APB one --- a seventh port and a re-proof of
+\code{soc\_bus.v} --- and a quad read of one word is about 56 system
+clocks on a core where one extra cycle of memory latency was measured at
+25.23\,\% of run time (\dcite{66}{section 2.1}). The controller is checked against a behavioural \code{W25Q128JV} written
+from the part's datasheet, with every departure from its AC table counted
+and asserted zero --- after which \dcite{66}{section 12} says the
+sentence it most needs to: \textbf{a behavioural model is not a
+flash}.
+
+\section{The boot flow}
+
+Until \dcite{68}{} the boot ROM held the bring-up program, and that had
+stopped working: the 28-check program was 7{,}794 of the 8{,}064 bytes
+the map leaves above the reset vector. Three questions were open --- how the ROM gets contents, who writes the
+RAM's check bits, and what happens when boot fails --- and they are one
+design, because each answer is the next one's mechanism.
+
+\textbf{The ROM holds a loader.} Four candidates were costed against one
+criterion: do the contents exist before the core leaves reset without
+needing something else with the same problem? A mask-programmed array is
+the only terminal answer --- its contents exist because the mask exists,
+and a bit that is a via has no stored-upset mechanism, so it needs no
+check field. An SRAM loaded through the vendor macros' test port
+relocates the question: \textbf{the loader then has a loader}. This PDK
+ships no ROM generator, so the two \code{1024x32} macros are a
+\textbf{stand-in}, and in silicon on this PDK the ROM's contents are
+unprotected and undefined. The loader is 3{,}104 of the 8{,}064 bytes
+available.
+
+\textbf{An uninitialised protected word is an uncorrectable, not a
+zero.} The RAM's check bits do not exist until something writes them, so
+the loader sweeps every word before it reads any, before the stack
+pointer is set --- the only order that works, because its own stack, data
+and BSS are inside what it is initialising --- and it writes \emph{whole
+words}, because a byte store makes one of a row's four codewords valid
+and leaves three as the SRAM powered up. \textbf{The image checksum is then computed from the RAM, not from the
+flash}: a second pass reads the copied words back out and sums them, so a
+word that arrived intact and landed on a row whose codeword did not take
+is caught, and that pass is also where an uncorrectable in the loaded
+image is detected. The sweep costs 6.003 cycles per word, the copy 44.06
+and the verify 17.01.
+
+\textbf{The escalation is the watchdog's; there is no second ladder.}
+Within a boot, the primary image's magic, header checksum, geometry, body
+checksum or ECC each send the loader to a secondary image elsewhere in the device. Both
+failing means the loader shortens the watchdog to its minimum and stops
+kicking --- safe only because a stage-2 reset restores the reload to the
+maximum. The attempt limit is \textbf{three}, tied
+to the watchdog's escalation count of two by an argument rather than by
+taste: the external pin is asserted on the second watchdog reset, which
+is the reset that begins boot number 2, and the loader's last attempt is
+boot number 2, so \textbf{software gives up after the hardware has told
+the platform, never before}. There is no ``wait for an upload'' state, because the console is
+transmit-only. The watchdog is kicked \textbf{on progress, not on
+a schedule}, from inside the copy loop gated on the word index.
+
+\code{soc\_boot.v} is the register block and its design rule is one
+sentence: \textbf{the one field with authority is the one software cannot
+write}. The boot counter is maintained by hardware on each release of the
+system reset, saturating, and no APB write moves it; the report and epoch
+words are software's and are \emph{evidence}. The block therefore needs
+no write key --- a field hardware maintains cannot be forged --- and its
+only outputs are the APB read path, so it can shorten no budget and reach
+no timer.
+
+Hardening it (\dcite{69}{}) produced a ranking rather than a count. Of 92
+flip-flops \textbf{eighteen are protected} --- the boot counter, the
+sampled straps, the watchdog-pin readback, three flags and the
+system-reset sample --- bundled into one word and tripled under the
+frozen voter, while \textbf{74 are deliberately not}, 64 of them the
+report and epoch words, 69.6\,\% of the block's state with zero boot
+consequence. The campaign moved one bit into the protected set: the
+system-reset sample is rewritten every clock, which normally means a
+register sheds an upset on its own, and that is true of the register and
+false of the consequence --- an upset there manufactures a release edge
+and the saturating counter never takes it back. Protection costs
+$+5{,}255.9010\,\mu$m$^2$ and $+51$ flip-flops; placed and routed
+(\dcite{70}{}) it costs \textbf{no die area and no hold margin}.
+
+Boot end to end, through the real fabric from a modelled flash with the
+RAM powered up undefined, is \textbf{195{,}068 cycles}; the program that
+follows is \textbf{220{,}256}, for \textbf{415{,}324} in the run. The
+same program fetched from the boot ROM is 217{,}630, so the move costs
+$+1.207$\,\%, and all of that is the fabric rather than the memory: with
+the program in ROM the two masters never contend, and with it in RAM both
+go to one slave port and one waits (\dcite{68}{section 8.1}).
+
+\section{Telemetry and discovery}
+
+Two blocks exist because a SECDED register file corrects silently, and in
+silicon a corrected upset is indistinguishable from no upset at all. \textbf{BUSSTAT} carries four saturating counters and four
+sticky bits for register-file corrections, corrected read cycles,
+uncorrectable syndromes and watchdog voter mismatches. The counters are different quantities and the header insists they not be
+folded: the correction counter counts an upset the program does not
+overwrite exactly once, while the corrected-read counter is an upper
+bound, because one corrupt word read in a loop raises it every
+iteration. The
+record lives in the power-on domain and survives the reset the watchdog
+causes, while the interrupt enable is deliberately in the system domain,
+so an armed interrupt cannot fire on a fresh boot before software has
+configured it (\dcite{60}{section 5.7}). \textbf{SCRUB} is the memories' equivalent and is a separate block for a
+blunt reason --- BUSSTAT is full --- carrying the same three quantities
+per memory, both scrubbers' enables, the interval, and the byte offset of
+the last uncorrectable row. Both scrubbers ship \emph{walking}, by the
+rule that a mechanism which ships disabled and has never caught anything
+is a liability.
+
+Two \textbf{plug-and-play device tables} are read-only in the reference
+family's record layout: one for the system bus at \code{0xFFFFF000},
+eight words per slave record, one for the peripheral bus at the bridge
+base $+\,$\code{0xFF000}, two words per slot, both generated from the
+same source as the map. The layout is mirrored because a well-known
+layout is what makes a table readable by someone other than its author,
+and two claims are explicitly not made: it is not an AMBA AHB
+plug-and-play table, because there is no AHB, and \textbf{the device IDs
+are assigned by this project and are not registered} with the vendor
+whose ``various contributions'' code they sit under, so a family-aware tool shows a known vendor and an unrecognised device,
+which is the truthful outcome. One field cannot express this map exactly --- the bank address register
+compares \code{addr[31:20]} and four regions are smaller than 1\,MiB ---
+so the exact byte size of every region is carried in user-defined word 1.
+
+\section{What the top level is, and what it is not}
+
+\textbf{There is no pad ring and no package}, so \code{soc\_top}'s port
+list is what a floorplan or a future pad ring would have to serve. Its functional pins are the clock, the power-on reset, the watchdog
+bootstrap pin, four bootstrap straps, the UART transmit line, the
+watchdog's stage-3 output, sixteen GPIO pins as three wires each because
+there is no pad, and the flash controller's clock, two chip selects and
+four lanes as three wires each. Everything else is an observation output for a testbench or a scope. \dcite{60}{section 6.2} says the
+design has three functional pins; that was true of revision 0.1, before
+the GPIO, flash and strap pins.
+
+The design has \textbf{one clock and one mode}: no clock-domain crossing,
+no retention, no sleep state, no power domains, and a reserved address
+where the clock-gate block would be. That is its one measured requirement gap, four orders of magnitude wide:
+on the telemetry mission profile's duty cycle the part is 0.0044\,\%
+busy and 100\,\% powered
+(\dcite{60}{section 4.3}).
+
+Three absences belong beside \cref{tab:arch-slots}, which a reader could
+otherwise take at face value. There is \textbf{no DMA, no descriptor ring and no third bus master}: a
+ring is a bus master, the fabric has two hardcoded master ports and a
+fairness property written for two, so a third is a fabric change plus a
+re-proof --- and at this scale it would save nothing, because the
+transport and not the CPU is the bottleneck. There is \textbf{no debug module and no JTAG}. And there are
+\textbf{no spacecraft link interfaces} --- SpaceWire, CAN, SPI and I2C
+are frozen addresses with nothing behind them, though all four candidate cores have been fetched, pinned and measured
+and an APB-to-Wishbone bridge for two of them is proved but instantiated
+nowhere (\dcite{65}{sections 9.4, 9.5}).
+
+The whole design at the SRAM boundary, synthesised as one netlist at the
+20\,ns target with both memories protected, is \textbf{45{,}952 cells,
+5{,}833 flip-flops, 687{,}776.3676\,$\mu$m$^2$} of standard cells plus
+the eight vendor macros (\dcite{67}{section 5.1}). That row predates the
+boot block's hardening; the netlist the placed design of record was built
+from is a different configuration and carries \textbf{5{,}873
+flip-flops} (\dcite{69}{section 7.4}, \dcite{60}{section 9.10.1}).
+Neither number is a frequency, and none is claimed.

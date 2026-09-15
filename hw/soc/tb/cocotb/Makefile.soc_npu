@@ -72,6 +72,11 @@ AXONS ?= 8
 SER_HALF ?= 2
 INJ_DEPTH ?= 8
 CAP_DEPTH ?= 8
+# docs/77 section 11's wakefulness-qualified grant. 0 is the design;
+# WAKE_GNT=1 builds the block that refuses a grant while asleep, and
+# test_soc_npu.py reads the value back out of the environment so that
+# the tests whose cycle counts it moves assert the right one.
+WAKE_GNT ?= 0
 
 SIM_BUILD ?= sim_build_soc_npu
 COCOTB_RESULTS_FILE ?= results_soc_npu.xml
@@ -83,6 +88,7 @@ export SOC_NPU_AXONS = $(AXONS)
 export SOC_NPU_SER_HALF = $(SER_HALF)
 export SOC_NPU_INJ_DEPTH = $(INJ_DEPTH)
 export SOC_NPU_CAP_DEPTH = $(CAP_DEPTH)
+export SOC_NPU_WAKE_GNT = $(WAKE_GNT)
 
 COMPILE_ARGS += -I$(RTL) -I$(PILOT)
 COMPILE_ARGS += -Psoc_npu.N_NODES=$(NODES)
@@ -91,6 +97,7 @@ COMPILE_ARGS += -Psoc_npu.N_AXONS=$(AXONS)
 COMPILE_ARGS += -Psoc_npu.SER_HALF=$(SER_HALF)
 COMPILE_ARGS += -Psoc_npu.INJ_DEPTH=$(INJ_DEPTH)
 COMPILE_ARGS += -Psoc_npu.CAP_DEPTH=$(CAP_DEPTH)
+COMPILE_ARGS += -Psoc_npu.WAKE_GNT=$(WAKE_GNT)
 COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

@@ -91,6 +91,32 @@ def test_the_pilot_directory_is_unmodified_against_the_index():
         assert _blob(PILOT_RTL / name)
 
 
+
+def _inside_a_solver_run_directory(path):
+    """True if `path` is build output of a SymbiYosys run, not a source.
+
+    sby copies every file of a job's `[files]` section into
+    `<job>_<task>/src/`, so after `make -C hw/soc/formal` the tree
+    carries a copy of `pilot_top.v`, `lif_core.v` and everything else
+    the event engine's proof elaborates. Those copies are exactly what
+    the guard below is looking for and exactly what it must not find:
+    the property is "the SoC keeps no SECOND SOURCE of the frozen
+    pilot", and a solver's scratch copy is not a source -- nobody edits
+    it, nothing reads it but the solver, and `rm -rf` restores it.
+
+    The test is the PROPERTY and not the name (the run directories are
+    called `<job>_bmc`, `<job>_prove`, `soc_npu`, `regfile_scrub`, and
+    the next job will invent another spelling): a directory is a solver
+    run directory when it contains sby's own `config.sby`. Walking up
+    from the file finds it wherever sby chose to put it.
+    """
+    for parent in path.parents:
+        if (parent / "config.sby").exists():
+            return True
+        if parent.name == "soc" and parent.parent.name == "hw":
+            return False
+    return False
+
 def test_the_soc_instantiates_the_frozen_pilot_and_does_not_copy_it():
     """soc_npu.v instantiates `pilot_top`, and no copy of it exists
     under hw/soc/.
@@ -103,6 +129,8 @@ def test_the_soc_instantiates_the_frozen_pilot_and_does_not_copy_it():
     for p in (ROOT / "hw" / "soc").rglob("*.v"):
         if any(part in ("ext", "gen", "genp", "out", "tools", "pnr")
                for part in p.parts):
+            continue
+        if _inside_a_solver_run_directory(p):
             continue
         assert not re.search(r"^\s*module\s+pilot_top\b", p.read_text(),
                              re.M), (

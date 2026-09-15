@@ -814,6 +814,10 @@ verdict** after running, each on its own core, for
 stopped because they were occupying six of the eight job slots and
 nothing else in the run could start behind them.
 
+*2026-09-15: run again under `bitwuzla` at a stated bound of 7200 s on
+both cores, all six report TIMEOUT rather than KILLED and none closes;
+section 22.*
+
 **This is not a pass and it is not a failure.** It is the absence of a
 result, and the reason is the one every formal flow meets at the
 multiplier: proving that a sequential 32x32 multiplier equals `a * b`
@@ -1025,7 +1029,10 @@ line so a log says which run it is.
    repository has not done it.
 2. **Run phase 2.** It is one environment variable and the delta is the
    point of phase 1 existing.
-3. **Decide what to do about the M-extension checks.** Sections 8.4 and
+3. **Decide what to do about the M-extension checks.** *2026-09-15: the
+   first route was taken, section 22 — bitwuzla closes none of the six
+   at 7200 s on either core; `reg_ch0` itself is answered by routes 2
+   and 3 at the register file, section 23.* Sections 8.4 and
    9.2 measure where the solver time went and it is not evenly spread.
    Three routes exist and none is free: a different engine (`abc pdr`,
    `bitwuzla`, `rIC3` — all in the pinned suite, none tried here), a
@@ -1848,3 +1855,112 @@ of all solver time in this document produced no verdict at all, and
 almost all of that went into one check on one register file. And the
 two full runs — the part that produced 297 verdicts — are the smaller
 half.
+
+## 22. The M-extension checks under bitwuzla, at a stated bound (added 2026-09-15)
+
+Section 11 item 3's first route, taken: the six checks section 8.4
+stopped without a verdict were run again under `bitwuzla` (0.9.1, from
+the pinned suite; `RVF_SOLVER=bitwuzla`, section 20's knob), on BOTH
+cores, each with `timeout 7200` written into its generated `.sby` so
+that the status sby records is its own word, **TIMEOUT**, and not the
+KILLED of section 8.4 — the distinction the boxed note in section 11
+insists on. Work trees `hw/soc/out/rvf-m-secded-bitwuzla` and
+`hw/soc/out/rvf-m-upstream-bitwuzla`; `RVF_INSN_FIX=0`, as in section
+8.4, so the numbers are comparable to that section and not to 8.5.
+
+**Result: none of the twelve closes.** Every check on both cores ran
+to its bound and reports `DONE (TIMEOUT, rc=8)` after `Reached TIMEOUT
+(7200 seconds)` **[fact, each job's `logfile.txt`]**: `insn_mul_ch0`,
+`insn_mulh_ch0`, `insn_mulhsu_ch0`, `insn_mulhu_ch0` at depth 21
+(`checks.cfg`'s `insn 20`, which genchecks.py writes as 21) and
+`insn_divu_ch0`, `insn_remu_ch0` at depth 56 (`insn_div 55`), on the
+SECDED core and on the stock core alike. Twelve solver-hours bought the
+same absence of a result section 8.4 had, now bounded and named.
+
+**The covers are the finding.** On the SECDED core the six COVER jobs
+were also run under bitwuzla and all six PASS — `mul` 2476 s / `mulh` 2509 s / `mulhsu` 2377 s / `mulhu` 1388 s / `divu` 10253 s / `remu` 10999 s
+**[fact, `Elapsed clock time` in each `cover/insn_*_ch0/logfile.txt`]**.
+Section 8.4 reports the same six covers under boolector in 9 to 73
+seconds. bitwuzla is therefore between roughly 20 and 150 times slower
+than boolector on the witness problems of this core, and the two divide
+covers alone cost 5.9 hours of the 8.3 the cover set took. Whatever
+route eventually closes the multiplier checks, it is not a change of
+SMT back end: two bit-blasting solvers have now been given the problem
+and the second is worse. The stock-core covers were not re-run under
+bitwuzla (`RVF_WHICH=checks`); section 8.2's boolector covers stand for
+that core.
+
+What this changes in section 8.4: nothing in its numbers, which stand
+as measured, and one word in its conclusion — the six checks are no
+longer "stopped", they are bounded at 7200 s under two solvers. The
+routes that remain are section 11 item 3's other two: the tractability
+question itself, and `RISCV_FORMAL_ALTOPS`, which needs Ibex to
+implement it.
+
+## 23. `reg_ch0` by routes 2 and 3: the register file proved on its own (added 2026-09-15)
+
+Section 11 item 3's neighbour, section 18's `reg_ch0` at check cycle
+25, was taken by the route this document ranked second: a job that asks
+only the register file. `hw/soc/formal/regfile_scrub.sby` binds the
+real `hw/soc/rtl/ibex_regfile_secded.v` at `SCRUB = 1` — nothing
+abstracted — under a wrapper `regfile_scrub_props.v` that states four
+properties: R1, a word written to a register and not written again is
+read back at every later cycle while the scrub walks; R2, the scrub
+pointer visits every register 1..31 and never 0; R3, the scrub and the
+core never contend for the write port; R4, a fault-free file never
+raises `rf_ecc_err_o`. (R2 and R3 live in
+`ibex_regfile_secded_props.v`, included into the module under
+`` `ifdef FORMAL`` so that `scrub_ptr` and `scrub_go` are in native
+scope; the first version bound them hierarchically from outside and
+silently declared fresh free wires — the trace showed `scrub_go` high
+in a cycle the core was writing, which the RTL cannot produce.)
+
+**Route 2 alone does not close, and the reason is the codec.** cover
+PASSES (all 31 visits reached, depth 40) but bmc and prove at depth 40
+under yices sat at step 4 for two hours, and two more engines added
+with a stated bound — `abc pdr` and `smtbmc boolector` — both report
+`DONE (TIMEOUT, rc=8)` at 10 800 s **[fact, `/tmp/rfs-*.log` of
+2026-09-15; the yices pair had no verdict after twelve hours and was
+stopped by hand at 11:45 — KILLED, in this document's vocabulary, and
+recorded as such]**. Step 4 is the first cycle at which R1 checks a stored
+word, so the solver is being asked to relate eight parity trees at the
+write encoder to eight at the read decoder through thirty-two scrub
+encoders on the same storage: parity is the case CDCL SAT cannot do in
+polynomial resolution, and none of the pinned solvers carries Gaussian
+elimination. The stall is structural. It is also exactly what section
+18 measured through the whole core, seen now with the core removed.
+
+**Route 3 on top of route 2 closes it, unbounded.**
+`hw/soc/formal/regfile_scrub_abs.sby` is the same job with the codec
+replaced by the stand-ins in `hw/soc/formal/secded_identity.v`: the
+same module names and ports, a degenerate code — one check bit that
+says "the word is non-zero", a syndrome that is that bit's mismatch, no
+correction. Under it, `abc pdr` proves R1–R4 for every reachable state
+in 44 s **[fact, `regfile_scrub_abs_prove_pdr/logfile.txt`]**, and
+cover reaches all 31 visits in 88 s; the k-induction and bmc tasks
+at depth 40 were still crawling (step 18 after ten hours) when this
+was written and are not needed for the result. The composition is the
+usual one: a property of the wrapper that holds for every codec
+satisfying `dec(enc(x)) == x` holds for the real one, whose
+`dec(enc(x)) == x` is `regfile_secded.sby`'s separate theorem. What the
+composition does NOT cover is any property that depends on the code's
+distance — R4 under an injected upset — and none is claimed.
+
+Two things the abstraction taught about the wrapper, recorded in the
+stand-in's header because a future stand-in must honour them. The first
+version was the identity code (no check bits) and bmc FAILED at step 3
+with every read inverted — `0x80000000` written, `0x7fffffff` read, x0
+reading `0xffffffff`. The cause is the read path's correction mask,
+`mask[j] = (use_syn == h_col[j])` with `h_col[j] = enc(1 << j)`: with an
+all-zero column set and a zero syndrome that flips every bit. So the
+file assumes (1) every column of H is non-zero and (2) `enc(0) == 0`,
+because it resets its check bits to a literal zero rather than to
+`enc(WordZeroVal)`. The real code satisfies both by construction; the
+degenerate one was chosen to.
+
+What this settles for section 18: `reg_ch0`'s question — is the value
+the core wrote the value it reads back, across the scrub — has an
+unbounded answer at the register file, and the reason it had no answer
+at cycle 25 through the core is now located in one arithmetic block
+rather than in the core's size.
+

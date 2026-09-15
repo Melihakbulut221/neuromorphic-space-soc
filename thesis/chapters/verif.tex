@@ -1,0 +1,1126 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+
+\chapter{Verification}
+\label{ch:verif}
+
+\section{Five layers, and the failure they all share}
+\label{sec:verif-shape}
+
+The verification programme has five layers: cocotb simulation of blocks
+and of the whole system, textual and netlist \emph{guards} that read the
+tree without simulating it, SymbiYosys property sets over individual
+blocks, an instruction-set proof of the management core against
+riscv-formal, and fault-injection campaigns at register-transfer and
+gate level. They are five layers and not one because each of them can be
+green about something it never looked at, and the corpus has the receipts.
+\dcite{41}{section 6.6} says this repository has been bitten eight times
+by a green check being read wider than what it examined, and names each
+by document. (Two guard files in \code{sw/tests} cite that same section
+as listing \emph{nine}; the section itself says eight, and both
+statements are in the tree.)
+\code{sw/tests/test\_traceability.py}'s own docstring calls its own
+rewrite ``the eighth instrument in this tree found to have that shape'',
+and \dcite{78}{section 3.2} records the third instance found inside this
+project's own guards --- the first one found in a guard written to
+prevent the shape.
+
+Four standing rules govern how results are reported, and they are worth
+stating before any number. \textbf{Every assert set ships with cover
+obligations, and a target with passing asserts and failing covers is
+red} (\dcite{09}{section B.1}). \textbf{A bounded result is never
+reported as proven}, and every bounded result carries its depth
+(\dcite{09}{C.4 item 6}). \textbf{Timing is outside formal scope}, with
+OpenSTA the separate authority, so formal results hold for any
+timing-clean implementation (\dcite{09}{C.4 item 2}); and \textbf{no
+clock frequency is claimed for this design at all}, by
+\dcite{05}{section 4 rule 5}, which \dcite{53}{section 9.4} applies to
+both of the numbers a layout has reached. Periods, slacks and corner
+names are reported where they are measured, in
+\Cref{ch:phys}; nothing in this chapter is a frequency. Finally,
+\textbf{formal proves mechanisms correct, fault injection measures
+architectural sensitivity, and only beam data speaks to cross-sections}
+(\dcite{09}{C.4 item 4}) --- so no rate appears anywhere below.
+
+One more convention, inherited from \dcite{64}: a superseded measurement
+is reported as superseded, with its date, rather than overwritten. Two
+counts in this chapter are superseded and both are given twice.
+
+\section{Simulation: the cocotb suites}
+\label{sec:verif-cocotb}
+
+Counted in the working tree on 15 September 2026: \textbf{33 cocotb test
+modules carrying 413 test functions}, across \code{hw/tb} (10 modules,
+166 functions), \code{hw/soc/tb/cocotb} (22 modules, 242) and
+\code{tt/test} (1 module, 5). They are driven by 30 makefiles, and
+\code{scripts/run\_cocotb.sh} reaches all of them: 7 of the 10 under
+\code{hw/tb} by default, all 19 under \code{hw/soc/tb/cocotb}, 3 more
+modules that share another suite's makefile and are named in the
+runner's own table, and \code{tt/test}. The declared-function count is a
+floor rather than the number a run reports, because several makefiles
+elaborate one module at more than one parameter point:
+\code{Makefile.secded} runs the encoder and the decoder,
+\code{Makefile.tmr} runs widths 1, 8 and 32, \code{Makefile.scrub} runs
+three parameter triples, and \code{Makefile.soc\_pnp} runs two buses.
+The last recorded whole-tree run is \code{verification-log.tsv}'s row of
+2026-09-11T00:55Z at \code{587fdd8}: \textbf{462 cocotb tests passing, 0
+failing, 0 suites not clean}. That row is four days old at the time of
+writing and is quoted as what it is.
+
+Three suites are skipped by default and the reason is the freeze.
+\code{hw/tb/Makefile.fi} regenerates \code{hw/tb/fi\_campaign\_results.json},
+which \dcite{34} pins by git blob hash for the TTIHP26b submission; running it inside a verification pass rewrote that file's
+\code{wall\_seconds} field and dirtied a frozen tree. The campaign is
+reproducible on demand and its result is committed, so the runner
+declines to re-derive it and says so; \code{RUN\_FROZEN=1} includes it.
+The two gate-level suites are skipped for a different reason --- they
+need artefacts from a hardening run rather than from the source tree.
+
+\subsection{The runner is itself an instrument, and it has a repair history}
+
+\code{scripts/run\_cocotb.sh} exists because \code{pytest} at the
+repository root collects \code{sw/tests} only, so quoting a pytest total
+as ``the tests pass'' is wider than what was measured. Four things in it
+are the residue of measured defects, and they are worth reading as a
+compressed history of how a test count goes wrong.
+
+It \textbf{parses each suite's results XML rather than trusting the make
+exit code}, because a cocotb suite can report all tests passing and then
+segfault in Icarus teardown --- observed on \code{Makefile.soc\_clint}
+and reproducible on committed RTL. That is a tool defect, and the XML is
+the evidence that survives it.
+
+It \textbf{refuses to run twice at once} rather than queueing. Counting
+is by ``the results XMLs written since this marker'', which orders by
+time and not by owner, so two concurrent runs each count the other's
+output. On 2026-09-08 two overlapping runs recorded 558 and 624 cocotb
+tests for a 401-test repository, and both landed in
+\code{verification-log.tsv} looking exactly like measurements; the rows
+are still there, superseded by the 22:35Z row for the same commit
+\code{1ecf509} with the note
+\code{supersedes=two-invalid-rows-for-1ecf509-concurrent-run-overcount},
+because a log that quietly loses its own bad measurements is not a log.
+
+The marker is a \textbf{file touched after a pause} rather than a
+second-resolution timestamp, and \dcite{66} measured what the timestamp
+version cost: the previous suite's XML, written in the same second the
+timestamp was taken, was counted again under the next suite's name, and
+\code{soc\_qspi} reported 47 tests for a 16-test suite because
+\code{soc\_npu}'s 31 had landed three seconds earlier. The runner also
+sums \emph{every} XML written during a suite rather than taking the
+newest, because a parameterised suite writes several and taking one made
+\code{soc\_gptimer} read 10 on one run and 3 on the next while ``0
+failed'' stayed true throughout.
+
+Finally it carries a \textbf{completeness check}: every
+\code{test\_*.py} in those two directories must be named by some
+makefile or by the runner's own table, and one that is not is an error
+at the moment it is added rather than a suite that quietly never runs.
+On 2026-09-11 three modules did not run --- \code{test\_aer\_fifo},
+whose makefile is named \code{Makefile} and so fell outside the
+\code{Makefile.*} glob, and \code{test\_soc\_npu\_defects} and
+\code{test\_soc\_wdog\_strap}, each reachable only by typing
+\code{MODULE=} by hand. All three were green, all three were invisible,
+and an edit re-opening the defect two of them exist to catch would have
+passed every check in the tree.
+
+\subsection{What the suites cover, and what only they can see}
+
+The block suites drive a module's ports and check its contract:
+\code{test\_soc\_bus} (16 functions), \code{test\_soc\_clint} (17),
+\code{test\_soc\_qspi} (16), \code{test\_soc\_wdog} (15),
+\code{test\_soc\_gpio} (14), \code{test\_soc\_uart} (14),
+\code{test\_soc\_boot} (18), \code{test\_soc\_npu} (35 --- the largest
+in the tree). Two of them are \emph{campaigns rather than tests}:
+\code{test\_soc\_wdog\_fi} carries 220 injections inside three test
+functions and \code{test\_ibex\_regfile\_secded} carries 124 inside six
+(\dcite{44}{section 8.3}), which is how the mechanisms' behavioural
+recovery is measured on top of the proof of the code. Two more suites
+have the same shape for their own blocks: \code{test\_soc\_boot\_fi}
+injects into the boot register block's own state, and
+\code{test\_soc\_clint\_fi} into the architectural time base's 72 stored
+bits, each establishing an unhardened baseline and the delta against it
+in the same file.
+
+Three suites exist only to fail against the RTL as it was before a fix
+--- \code{test\_soc\_npu\_defects}, \code{test\_soc\_wdog\_strap},
+\code{test\_soc\_uart\_defects} --- and their headers document a command
+line with \code{MODULE=} on it so they can be run twice, once against
+the tree and once against a copy of the pre-fix source. That is why they
+share a parent makefile rather than acquiring one each: two places to
+keep sources and parameters in step is one place too many.
+
+What simulation sees that nothing below it does is \textbf{a whole
+machine executing a program}. \dcite{38}{section 7} runs a self-checking
+C program on the sv2v output of Ibex under Icarus with no SystemVerilog
+anywhere in the flow: eleven checks covering fetch, the RV32I ALU, every
+RV32M operation including the ISA's divide-by-zero results, loads and
+stores at three widths, branches, recursion, compressed code, CSR access,
+an illegal-instruction trap, and --- test 10 --- PMP enforcement, a
+locked read-only NAPOT region permitting a load and faulting a store with
+\code{mcause = 7}. All eleven pass in \num{131694} cycles. On the
+hardened system the equivalent run is 22 checks, stage~1 at cycle
+\num{174128}, the core asleep after \num{185443} cycles, 587 console
+characters and 0 framing errors, and \dcite{43}{section 9.1} reports it
+cycle-identical to the run before the register file was substituted.
+That cycle-identity is the strongest available evidence that a
+substitution was transparent --- and \dcite{44}{section 9} is explicit
+that it is an expectation and not a measurement, which is why a campaign
+was run anyway.
+
+What simulation cannot see is everything the design is that this program
+never exercises: one workload, one seed, one parameter point. The gate
+level adds a second limit of its own, and it is a tool limit rather than
+a design one. The IHP cell models drive their outputs from
+\code{delayed\_D}, \code{delayed\_CLK} and \code{delayed\_RESET\_B} ---
+the negative-timing-check outputs of \code{\$setuphold} and
+\code{\$recrem} --- which Icarus 12 does not implement. Every
+\code{sg13g2\_dfrbpq\_1} output then sits at \code{x} and the design
+reads back zeros. On the shuttle submission's own suite that is 1 of 5
+passing (\dcite{15}{section 5.4}); in \code{hw/tb} it was 21 of 21
+failing (\dcite{24}{section 3.1}). Both read exactly like a dead
+netlist and neither is one. \code{hw/tb/Makefile.gl} refuses to run
+under Icarus 12; \code{tt/test} is frozen and generated and cannot carry
+a guard of its own, so \code{run\_cocotb.sh} forces \code{GATES=} on its
+command line where it beats an exported \code{GATES=yes}, and applies
+the version check on its behalf under \code{TT\_GATES=1}.
+
+\section{Guards: the checks that do not simulate}
+\label{sec:verif-guards}
+
+A \emph{guard} in this project is a pytest that reads the tree --- RTL
+text, a generated netlist, a flow script, a document, the git index ---
+and asserts a property of it. Guards live in \code{sw/tests}, and on
+15 September 2026 pytest collects \textbf{526 tests across 25 files}
+there. The last recorded whole-suite run is \code{verification-log.tsv}'s
+2026-09-11 row at 509 passing, 0 failing, which is superseded by the
+collection count above; \dcite{44}{section 8.3} reports 315 at its own
+writing and \dcite{43} closed at 295, and both figures are left standing
+as records of their date. The largest files are
+\code{test\_doc\_links.py} (96 tests), \code{test\_soc\_synthesis\_guards.py}
+(68), \code{test\_lif\_core.py} (41), \code{test\_synthesis\_guards.py}
+(40) and \code{test\_secded.py} (37).
+
+Guards exist because, as \code{sw/tests/test\_soc\_npu\_guards.py} puts
+it in its own header, the cocotb suite and the formal job check
+\emph{behaviour}, and neither can notice that a constant has been copied
+instead of generated, that the frozen directory has been written to, or
+that the design has grown a second copy of a register map. The boot
+guards' header states the placement rule the whole family follows: a
+guard belongs at the stage that can satisfy it. \code{soc\_boot.sby}
+proves the boot counter is not writable and says nothing about
+\code{rst\_ni} on that block being the \emph{system} reset, which is what
+makes the counter count boots; \code{test\_soc\_boot.py} drives the
+block's ports by hand and says nothing about the ports being connected;
+the whole-system run boots and says nothing about the RAM sweep being
+first, because on a healthy simulation an unswept RAM is
+indistinguishable from a swept one.
+
+\subsection{The principle: check the property, not the name}
+
+The governing discipline is \dcite{78}'s, and it was learned twice in
+that document alone.
+
+\code{scripts/spdx\_check.py} reported itself as licence-tagged when it
+carried no header at all. The first version searched the first 4,000
+characters for the identifier string, anywhere, in any context --- and
+the file's own docstring and its own regular expression both contain
+that string, so \textbf{the checker read its own prose as its own
+licence}. It went unnoticed because it passed. It surfaced only when an
+unrelated edit pushed the docstring past the 4,000-character window and
+the file abruptly turned up missing. The repair narrows the property: a
+tag counts only on a comment line within the first twelve lines, which
+is where a header is and where prose about headers is not.
+
+The second is sharper because it is a guard failing at guarding.
+\code{scripts/gen\_public\_mirror.py} had to rewrite one sentence in a
+CI workflow before publishing it, and refused to run if the sentence had
+changed. It was written as \code{if wf in files:}, anchored on the
+\emph{filename} \code{.github/\allowbreak workflows/\allowbreak docs.yml}. When three workflows
+were folded into one and that file was deleted, the guard did not fire
+--- it was skipped --- and the generator wrote 511 files as though
+nothing were owed. \dcite{78}{section 3.2} states the rule that came out
+of it: \textbf{a check that cannot fail when the thing it checks is
+absent is not a check.} It now raises on absence and anchors on a
+paragraph's content rather than on a path.
+
+The same rule decided an anchor in the hardening guards.
+\code{test\_soc\_shipped\_netlist\_guards.py} identifies a
+triple-modular-redundancy replica by walking the fan-in cone of
+\emph{the voter's own input pin}, and \dcite{75}{section 4.3} explains
+why the obvious anchor is wrong: anchoring on the bank's output wire
+\code{qb} --- the same net in a correct design --- misses the defect,
+because in a design where the voter reads replica A twice, \code{qb}
+still exists and is still driven by replica B; it is simply not what the
+voter reads. The guard tries \code{u\_prot\_vote.in\_b} first, falls back
+to \code{qb} only where that name did not survive, and reports which
+candidate it used on every row.
+
+\subsection{Three guards that caught something}
+
+\paragraph{The voter wired to one replica twice.} This is the sharpest
+of them because every other instrument in the repository passes on the
+defect. \code{test\_a\_voter\_wired\_to\_one\_\allowbreak replica\_twice\_\allowbreak is\_caught\_only\_by\_the\_cone}
+changes one argument in a scratch copy of \code{soc\_wdog.v} ---
+\code{.in\_b(qa)} where the design has \code{qb} --- and
+\dcite{75}{section 4.3} measures what each instrument then says
+(\Cref{tab:verif-cone}). The \code{(* keep *)} attribute on the bank's
+storage keeps replica B's flip-flops in the netlist although nothing
+reads them, so the mutant is a design with three intact banks whose vote
+is $\mathrm{maj}(q_a, q_a, q_c) = q_a$: \textbf{an upset in replica A is
+not masked at all}. Every count in this repository passes on it, every
+functional test passes, every proof passes, and the cone census fails.
+The shape is named precisely in that section: not an instrument that
+undercounted, but an instrument that counted the right number of the
+wrong thing.
+
+\begin{table}[tbp]
+\centering
+\caption{The mutation that only a connectivity census can see: a voter
+whose second input is wired to the first replica
+(\dcite{75}{section 4.3}). Every flip-flop count agrees; the union of
+the three voter-input cones does not.}
+\label{tab:verif-cone}
+\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Check & intact & mutant \\
+\midrule
+Flip-flops per replica, by instance path & 29 / 29 / 29 & 29 / 29 / 29 \\
+Total flip-flops in the block            & 132          & 132 \\
+Fan-in cone per voter input              & 29 / 29 / 29 & 29 / 29 / 29 \\
+\textbf{Union of the three cones}        & \textbf{87}  & \textbf{58} \\
+\textbf{Flip-flops shared by two inputs} & \textbf{0}   & \textbf{29} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{A fault line that carried a bus signal.}
+\code{test\_soc\_clkgate\_guards.py} discharges an assumption that a
+proof cannot discharge about itself. \code{hw/soc/formal/clkgate\_wake.sby}
+proves a transformation of the accelerator's clock-gate enable from two
+side conditions, one of which (its assumption A2) is that the slow half
+of the enable is a function of registers that are not being clocked ---
+a term that cannot pulse and vanish while the block's clock is stopped.
+The guard elaborates the module, flattens it, walks the fan-in cone of
+\code{npu\_act\_slow} cut at every sequential cell, and fails if any
+input port is reachable. It found \code{C\_INJ\_OVF}, the one fault line
+that carries \code{psel\_i}, which the file's own header records that no
+reading of the source had noticed.
+
+\paragraph{A guard whose arithmetic was wrong for two widths.}
+\dcite{43}{section 9.5} records a latent defect that only a width change
+could expose. A synthesis guard asserted that turning the mixing
+transform off on both mixed replicas loses $2 \times \mathit{collided}$
+flip-flops, where \emph{collided} is the number of bits on which one
+polarity mask is zero. At a protected word of 22 bits that is
+$2 \times 11 = 22$ and it was right; at 29 bits it is $2 \times 15 = 30$
+and the answer is 29. The design was right and the arithmetic was wrong,
+and the comment above the assertion had said the right thing all along:
+on \emph{every} bit one of the three replicas must collide, because
+polarity offers exactly two storage functions per bit and there are three
+replicas. The expression is now $\mathit{intact} - \mathit{PROT\_W}$.
+
+\subsection{What guards cannot do}
+
+They read text and netlists, so they catch the ordinary edit and not the
+determined one --- the supervisor guards' own header says they cannot
+see a watchdog kick reached through a function pointer or an unknown
+macro. They compare port \emph{lists} and not port \emph{meanings}: a
+port whose semantics changed upstream without its name changing is
+invisible to them and to the build, and \dcite{43}{section 3} names that
+as an accepted risk. And the netlist guards read git-ignored build
+products, so on a fresh clone they skip, with the command that
+regenerates the evidence --- and the files say in as many words that a
+skip is evidence of nothing.
+
+One guard failure is worth recording because it is the counting layer
+failing. Until 2026-09-09 \code{scripts/verify.sh} enumerated formal
+results with a two-level glob over \code{hw/soc/formal/*/} and
+\code{formal/*/}. riscv-formal does not put its jobs there: its job
+directories are four to six levels down under \code{hw/soc/out/}, so the
+glob could not reach a single one, and the log recorded
+\code{formal\_pass=118, formal\_other=0} for a tree that had 35
+non-passing formal jobs in it. The enumeration is now
+location-independent by construction --- every directory in the tree
+holding both a \code{config.sby} and a \code{logfile.txt} --- and the
+verdict is read from sby's own marker file rather than grepped out of
+the log, because two jobs died on a configuration error before any
+\code{DONE} line was printed and the old code's empty-string arm dropped
+them silently: not counted as pass, not counted as other, not counted at
+all. The old rows are left standing, and read as what they measured. On
+the tree as reported the same day the counts became 425 and 35, and
+\code{formal-dispositions.tsv} carries all 35 with a reason and a date:
+\textbf{6 FAIL, 3 ERROR, 26 STOPPED}.
+
+\section{The SymbiYosys property sets}
+\label{sec:verif-sby}
+
+Counted in the tree on 15 September 2026: \textbf{28 property sets
+carrying 137 tasks} --- 8 sets and 54 tasks under \code{formal/} for the
+frozen pilot, 20 sets and 83 tasks under \code{hw/soc/formal/} for the
+system fabric. \dcite{63}{section 2} states ``87 sby tasks across 16
+property sets --- eight under \code{formal/} for the pilot and eight
+under \code{hw/soc/formal/}''; that was correct when it was written and
+is superseded by the count above, and both are given because the
+document is still in the tree saying it. All 54 pilot task directories
+carry a \code{PASS} marker. Of the SoC's 83 tasks, 79 have a recorded
+workdir: \textbf{76 PASS, 2 TIMEOUT, 1 UNKNOWN}, and the remaining four
+have no verdict --- two were stopped by hand and two were still running
+when this was written. \Cref{tab:verif-sby} is the complete list.
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash\small}p{0.195\linewidth}
+                   >{\raggedright\arraybackslash\small}p{0.245\linewidth}
+                   >{\raggedright\arraybackslash\small}p{0.225\linewidth}
+                   >{\raggedright\arraybackslash\small}p{0.235\linewidth}@{}}
+\caption{Every SymbiYosys job under \code{hw/soc/formal/}, read from the
+job headers and \code{hw/soc/formal/Makefile}. Depths are sby depths.
+Engines are \code{smtbmc yices} unless named. Results are the verdict
+recorded in each task's workdir on 15 September 2026.}
+\label{tab:verif-sby}\\
+\toprule
+\textbf{Job} & \textbf{What it binds} & \textbf{Tasks and depths} &
+\textbf{Recorded} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Job} & \textbf{What it binds} & \textbf{Tasks and depths} &
+\textbf{Recorded} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+\code{soc\_bus} & \code{soc\_bus.v}, F1--F9; the decode proved against
+the generated \code{soc\_memmap.vh} & bmc 24, prove 12, cover 24 &
+3 PASS \\
+\code{soc\_apb\_bridge} & \code{soc\_apb\_bridge.v}, A1--A11, clauses of
+AMBA 3 APB & bmc 24, prove 12, cover 24 & 3 PASS \\
+\code{soc\_apb\_wb} & \code{soc\_apb\_wb.v}, I1, W1--W8, P1--P3, D1--D2,
+clauses of Wishbone B3 and APB & bmc 24, prove 12, cover 24 & 3 PASS,
+2026-09-15 \\
+\code{soc\_clint} & \code{soc\_clint.v}, C1--C4, P1--P3, E1--E2 (the
+SECDED time base) & bmc 20, prove 10, cover 20 & 3 PASS \\
+\code{soc\_wdog} & \code{soc\_wdog.v} over three \code{soc\_tmr\_bank}
+replicas and a voter; W1--W5, W7, W8, W9a--c & bmc 40, prove 15,
+prove\_w0 15, cover 60 & 4 PASS \\
+\code{soc\_wdog\_tmr} & three replicas under one voter, with a free
+fault at the voter & prove / \_w4 / \_w5 / \_w21 / \_w23 / \_rst1 /
+\_abc at 4, bmc 20, cover 8; \code{boolector}, \code{abc pdr} for
+\_abc & 9 PASS \\
+\code{soc\_busstat} & \code{soc\_busstat.v}, B1--B6 & bmc 20, prove 10,
+prove\_w16 10, cover 24 & 4 PASS \\
+\code{soc\_gpio} & \code{soc\_gpio.v}, P1--P7 & bmc 20, prove 8,
+prove\_w16 8, cover 20 & 4 PASS \\
+\code{soc\_qspi} & \code{soc\_qspi.v}, Q1--Q8 & bmc 40, prove 12,
+prove\_full 12, cover 110 & 4 PASS \\
+\code{soc\_scrub} & \code{soc\_scrub.v}, C1--C7 & bmc 20, prove 10,
+prove\_w16 10, cover 24 & 4 PASS \\
+\code{soc\_boot} & \code{soc\_boot.v}, D1--D10, at two counter widths
+and at \code{HARDEN}~$=0$ & bmc 20, prove 10, prove\_full 10,
+prove\_h0 10, cover 24 & 5 PASS \\
+\code{soc\_mem\_ecc} & \code{soc\_mem\_ecc.v} over a four-row array,
+M1--M6 & bmc 10, prove 4, cover 14 & 3 PASS \\
+\code{byte\_secded} & the $(16,8)$ byte shortening of the codec, four
+per RAM row & bmc / prove / prove\_abc / cover at 4; \code{abc pdr} for
+prove\_abc & 4 PASS \\
+\code{regfile\_secded} & the $(40,32)$ shortening the register file
+stores & bmc / prove / prove\_abc / cover at 4; \code{abc pdr} for
+prove\_abc & 4 PASS \\
+\code{soc\_npu\_ser} & \code{soc\_npu\_ser.v}, the transport's P, H and
+D properties, at two half-period settings & bmc 30, prove 16, cover 220,
+prove\_h3 16 & 4 PASS \\
+\code{soc\_npu} & \code{soc\_npu.v} with its whole submodule closure;
+H5 over all reachable states & bmc 30, prove 16, cover 120 & 3 PASS,
+2026-09-14 \\
+\code{clkgate\_wake} & \code{clkgate\_wake.v}, an abstraction; T1, T2,
+W1--W4, and the same three tasks with assumption A2 dropped & bmc 24,
+prove 12, cover 24, each also in an \code{\_upset} group & 6 PASS \\
+\code{clkgate\_wake\_gnt} & \code{clkgate\_wake\_gnt.v}, the
+wakefulness-qualified grant; G1--G3, T2 & bmc 24, prove 12, cover 24 &
+3 PASS, 2026-09-15 \\
+\code{regfile\_scrub} & \code{ibex\_regfile\_secded.v} at
+\code{SCRUB}~$=1$ with the \emph{real} codec; R1--R4 & prove 40, bmc 40,
+cover 40, prove\_pdr, bmc\_btor; \code{yices}, \code{abc pdr},
+\code{boolector} & cover PASS; prove\_pdr and bmc\_btor TIMEOUT at
+their bounds; prove and bmc KILLED by hand after 12\,h \\
+\code{regfile\_scrub\_abs} & the same wrapper with the codec abstracted
+to \code{secded\_identity.v} & prove 40, bmc 40, cover 40, prove12 at
+12, prove\_pdr unbounded; \code{abc pdr} for prove\_pdr & prove\_pdr
+PASS (44\,s), cover PASS, prove12 UNKNOWN; prove and bmc still running \\
+\end{longtable}
+
+\subsection{The design rules the table encodes}
+
+\textbf{Properties live beside the design, not inside it.} Every fabric
+block's properties sit in \code{<block>\_props.v}, included at the end of
+the module body under \code{`ifdef FORMAL}, so the Icarus and Verilator
+fault-injection flows never see them. Two jobs bind from outside
+instead --- \code{soc\_mem\_ecc} and the register-file scrub pair --- and
+\code{regfile\_scrub\_props.v}'s header records why that is dangerous: the
+first version bound R2 and R3 hierarchically from an outside wrapper and
+Yosys silently declared fresh free wires, so the trace showed the scrub
+enable high in a cycle the core was writing, which the RTL cannot
+produce. Those two properties now live in a file included \emph{into} the
+module.
+
+\textbf{A narrow parameter point for the covers, and a second task at the
+shipped width.} \code{soc\_busstat} is proved at a counter width of 4 and
+again at 16, and its header gives the reason plainly: the saturation
+covers are the point of the job, a counter needing 65,535 increments
+cannot be driven to its top in a bounded model, and a job that could not
+reach the cover would report a green result for a case it never examined.
+\code{soc\_gpio} does the same at 4 and 16 bits, \code{soc\_qspi} at
+narrow and shipped frame and divider widths, \code{soc\_scrub} and
+\code{soc\_boot} likewise. Nothing in any property file mentions either
+number; every property is written against the parameter.
+
+\textbf{A copied parameter is guarded by reading the RTL back.}
+\code{soc\_wdog\_tmr.sby} rebuilds the composition \code{soc\_wdog.v}
+builds, because a fault model needs free inputs at the voter and the
+block has no port for them, and three things are therefore copied: the
+three polarity masks and which replicas carry the mixing transform. The
+makefile's \code{wdog\_tmr\_params} target reads all six back out of
+\code{hw/soc/rtl/soc\_wdog.v} and fails if any has moved, and it runs
+first. \code{boot\_tmr\_params} does the same for the boot block, which
+instantiates the identical composition at a 23-bit word --- which is why
+\code{soc\_wdog\_tmr} is proved at 22, 21, 23, 5 and 4 bits: a width it is
+not proved at is a width it does not cover.
+
+\textbf{Engine diversity is a task, not a footnote.}
+\dcite{09}{C.4 item 7} asks for a second engine family on key proofs, and
+\code{prove\_abc} in three jobs is that request expressed as a task.
+\code{soc\_wdog\_tmr}'s \code{prove\_abc} additionally strips the
+\code{keep\_hierarchy} attribute in that task's model only --- the AIGER
+path cannot carry a hierarchical cell --- and never in the RTL, because
+that attribute is one of the two defences that stop Yosys merging the
+three replicas.
+
+\textbf{And the jobs say what they do not prove.}
+\code{soc\_wdog\_tmr}'s header records that every property in it stays
+true of a design in which the three banks were hashed into one, because
+the anti-merge argument is a property of the mapped netlist and stays
+with the guards. \code{soc\_mem\_ecc}'s says the important half is
+missing: nothing in that harness injects a fault, because a formal
+harness that deposits into a row is proving a property of the harness.
+\code{byte\_secded}'s says its fault model is one error vector over
+sixteen stored bits and nothing about transients in the codec's own
+gates.
+
+\subsection{Two gaps in the makefile, one deliberate}
+
+The makefile's \code{all} target runs 18 of the 20 jobs.
+\code{regfile\_scrub} is excluded on purpose and the file says why: every
+engine stalls on the codec's parity network, and a target that never
+returns is not a regression test. \code{clkgate\_wake\_gnt.sby} is not
+named in the makefile at all --- no target, no mention --- so its three
+recorded passes of 2026-09-15 are reproducible only by invoking sby on
+the file directly. That is a gap and it is stated here rather than left
+to be discovered.
+
+\section{riscv-formal on the management core}
+\label{sec:verif-rvf}
+
+\dcite{09}{part B track 1} named riscv-formal in August 2026 and nothing
+was run with it until \dcite{63}. That document is the bring-up, and it
+is two phases: the stock Ibex with upstream's register file, and the same
+proofs against the SECDED-protected register file the system ships.
+
+\subsection{Binding it, which is where the work was}
+
+\dcite{09}{B.1} recorded that Ibex exposes RVFI trace ports. True of the
+SystemVerilog; \code{hw/\allowbreak soc/\allowbreak gen/\allowbreak ibex\_top.v}, the Verilog-2005 this
+system is actually built from, contains \textbf{zero} occurrences of the
+string \code{rvfi}, because the ports are inside \code{`ifdef RVFI} and
+the sv2v invocation passes only the two defines upstream's own synthesis
+flow passes. So a \emph{second} tree was generated rather than the first
+one changed: \code{hw/soc/genrvfi}, 34 files against 34, 16,770 lines of
+Verilog-2005 against 15,873, 132 \code{rvfi} occurrences against 0, and
+zero sv2v errors in both. A three-argument run of the converter into a
+scratch directory diffs empty against \code{hw/soc/gen}, so every area,
+timing and campaign number measured from that tree still reproduces
+byte-identically.
+
+Then the finding that decided the harness's shape: \textbf{Ibex's RVFI
+block reads sixteen signals out of its submodules by hierarchical
+reference}, up to three levels deep. sv2v carries
+them through verbatim --- it is a translator, not an elaborator --- and
+Yosys's Verilog-2005 front end treats every dotted name as an implicitly
+declared net and stops, with an error saying it cannot detect the sign
+and width of an auto-wire node. There is no flag for it. The route out was
+already in the tree: the pinned toolchain ships a SystemVerilog front end
+that resolves all sixteen when pointed at the sv2v output. The cost is
+carried as an assumption --- \textbf{the front end that elaborates the
+core in this proof is not the front end that elaborates it in the build}
+--- and the only corroboration is \dcite{38}{section 5}, which measured
+the two front ends on the same source at \SI{0.89}{\percent} of area and
+two flip-flops apart, on the SystemVerilog rather than on this tree.
+
+One construct the second front end refuses is rewritten by a tracked
+script into the run's work tree rather than patched into Ibex, so that
+``patches required to Ibex: zero'' survives; the script refuses to run
+unless it finds the construct exactly once, so an upstream commit that
+adds another is an error and not a quietly different core.
+
+\subsection{The ledger, and the vacuity control}
+
+Nine assumptions are ledgered in \dcite{63}{section 4.1}, and the
+\code{[defines]} block writes the switchable ones into every generated
+job in plain text so that a \code{grep} lists what was assumed per check
+without reading any Verilog. A1 and A2 are the bus contract; A3 ties bus
+errors low, and the ledger states its cost --- nothing here says anything
+about the core's behaviour on a bus error, and \code{soc\_bus.v} raises
+one on every unmapped address. A4 and A5 keep the PMP transparent so that
+the privilege-blind instruction models can be compared at all, at the
+cost that \textbf{none of this proves PMP enforcement}. A6 bounds memory
+to grant in two cycles and respond in four, on the two checks that need
+it. A7 substitutes a transparent clock gate, so the core keeps clocking
+through the sleep a \code{wfi} enters. A8 excludes debug entry. A9 is an
+adapter, not an assumption, and \S\ref{sec:verif-rvf-defects} is the
+finding behind it. Interrupts are \emph{not} assumed away: all five lines
+are free every cycle.
+
+Vacuity control matters more here than anywhere else in the programme,
+because every instruction check begins by assuming the instruction
+retires at the check cycle. If the depth is too small for the core to get
+there the assumption is unsatisfiable, there is no trace, and
+\textbf{the bounded model check passes having examined nothing}. Ibex's
+sequential divider takes about 37 cycles on its own, so a divide check at
+the instruction default depth of 20 would be a vacuous pass. Three things
+answer it. The configuration is expanded \emph{twice}, into a bmc job set
+and a cover job set, and both are run. The solver's own front end reports
+\code{PREUNSAT} when the assumptions at the check step are unsatisfiable,
+and sby maps that to \code{ERROR} rather than to \code{PASS} --- read out
+of the pinned tool's source, so the crudest form of vacuity cannot be
+green on any of the 79 checks. And the cover obligation is strictly
+stronger than \code{PREUNSAT}: it requires the instruction to retire at
+the check cycle \emph{and not trap while doing it}, which is not a
+hypothetical difference, because one early configuration retired every
+instruction with the trap flag set. \textbf{79 of 79 cover jobs pass},
+and the cover set cost 1,122 job-seconds against the bmc set's 7,790 ---
+finding one witness is cheap and proving no counterexample exists is not.
+The gap is stated rather than left to be inferred: only two of
+riscv-formal's checkers carry cover statements at all, so for the other
+seven consistency checks the anti-vacuity argument is \code{PREUNSAT}
+alone.
+
+\subsection{What closed, and what did not}
+
+\begin{table}[tbp]
+\centering
+\caption{riscv-formal on Ibex, both phases, at the depths of
+\dcite{63}{section 8.1} and under the nine assumptions of its section
+4.1. Phase 2 substitutes the SECDED register file and changes nothing
+else: the two generated job files differ only in which file supplies the
+register module.}
+\label{tab:verif-rvf}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & \textbf{Phase 1}, stock & \textbf{Phase 2}, SECDED \\
+\midrule
+bmc, 79 jobs   & 70 PASS, 3 FAIL, 6 stopped
+               & 69 PASS, 3 FAIL, 6 stopped, 1 ERROR \\
+cover, 79 jobs & 79 PASS & 79 PASS \\
+Instruction checks (70) & 62 PASS, 2 FAIL, 6 stopped & identical \\
+Consistency checks (9)  & 8 PASS, 1 FAIL & 7 PASS, 1 FAIL, 1 ERROR \\
+Wall clock at \code{-j8} & 50\,min 52\,s & 54\,min 45\,s \\
+CPU as attributed        & 9{,}076\,s    & 14{,}027\,s ($\times 1.55$) \\
+Cover set, job-seconds   & 1{,}122       & 2{,}154 ($\times 1.92$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:verif-rvf} is the result. What is now proved that was not
+proved before: for \textbf{62 of the 70 instructions of RV32IMC}, on
+every execution the core can reach from reset within that check's depth,
+the instruction's effect on the architectural state --- destination
+register and value, source register numbers, next PC, memory address,
+byte masks, store data, and whether it traps --- agrees with
+riscv-formal's model of the ISA. Add eight consistency properties over
+the retirement stream, and a bounded \emph{proof} about Ibex's bus
+behaviour: within every depth in the table the core never has more than
+two requests in flight on either port. Before this, the evidence for any
+of it was \dcite{38}{section 7}'s one self-checking program, eleven
+checks, one path through the machine.
+
+The phase-2 cell reading \code{1 ERROR} carries a correction of 2026-09-09
+that is worth repeating, because it is about vocabulary. The table
+originally said \code{1 TIMEOUT}. The job's own log says
+\code{DONE (ERROR, rc=16)} after a \code{SIGTERM} at 1\,h 41\,m 26\,s,
+its generated configuration has no timeout option, and nothing in the
+flow could have sent that signal. \textbf{TIMEOUT means a bound was set,
+the job reached it, and the measurement is complete; ERROR from an
+outside kill means no bound was set and no measurement was completed.}
+Calling it a timeout would silently promote an interrupted run into a
+finished experiment. The fix in both directions is the same: read the
+runner's return code before choosing the noun.
+
+\subsection{Five defects, and the one in the specification}
+\label{sec:verif-rvf-defects}
+
+Not one of the five is in Ibex's execution of an instruction. Three are
+in this project's harness: an assumption that guarded two CSR ranges and
+needed five, found because a machine-mode lockdown bit made every
+instruction fetch fault; a bus response permitted in the same cycle as
+the grant, whose counterexample is a \emph{real} reachable deadlock ---
+a zero-latency memory hangs this core, which is a fact anyone
+integrating it needs; and an assertion in the harness that bounded the
+data port at one outstanding request when a misaligned access makes it
+two. The fourth is a genuine mismatch between what Ibex's RVFI means and
+what riscv-formal's RVFI means, in two halves: the interrupt flag marks
+only interrupt entries and not exception entries, and the reported next
+PC is the ALU's branch target, which is the wrong answer for a return
+from trap. Neither is an execution bug and neither is harmless; both are
+worked around by A9, which relaxes the PC checks across a handler entry
+or a return and conceals nothing else.
+
+The fifth is the one that argues for running the tool rather than
+reasoning about it, and it is in the \emph{specification}.
+\code{insn\_div\_ch0} failed on \code{div x31, x6, x25} with
+$-347 \div 1{,}075{,}056{,}129$: Ibex answers 0, which is correct for
+signed division truncating toward zero, and riscv-formal's model answers
+3, which is what 4,294,966,949 divided by 1,075,056,129 gives ---
+\emph{the same bit pattern read as unsigned}. \code{insn\_rem\_ch0}
+failed the same way independently. The cause is Verilog signedness
+propagation in three lines of upstream's model: the operands of a
+conditional operator are context-determined, the expression type is
+unsigned if either is, one branch is an unsigned concatenation, and it
+therefore demotes the branch carrying the signed casts. This was checked
+in a second tool rather than argued from the language reference --- Icarus
+Verilog, which shares no code with Yosys, evaluates upstream's expression
+on the counterexample's operands to 3 and the same division on its own
+self-determined wire to 0. Phase 2 then reproduced the defect
+independently on fresh operands with negative \emph{divisors} where phase
+1 had a negative dividend, so the diagnosis rests on four counterexamples
+from two runs.
+
+Two consequences are recorded and neither is comfortable. Correcting the
+specification made the proof \emph{harder}: against the defective model
+the two checks failed in 852\,s and 731\,s, because finding one
+counterexample is a satisfiability question; against corrected models
+they had proved nothing after 40\,min 43\,s and 48\,min 52\,s. And the
+residual risk is stated plainly in \dcite{63}{section 6}: a model that is
+wrong in the same direction as the core would be invisible to this entire
+document, and nothing in the flow reduces that.
+
+\subsection{The M extension, and \code{reg\_ch0}}
+
+\textbf{All eight instructions of the M extension have no formal result
+in this project.} Six --- the four multiplies, \code{divu} and
+\code{remu} --- were stopped after 35 to 40 minutes each in phase 1
+because they occupied six of eight job slots; \dcite{63}{section 22},
+added 2026-09-15, re-ran all six on both cores under a second solver with
+a 7,200\,s bound written into the job, so that the status is the tool's
+own word. \textbf{None of the twelve closes.} The covers are the finding
+there: all six cover jobs pass, but at 1,388 to 10,999 seconds against 9
+to 73 seconds for the same covers under the first solver, so the second
+bit-blasting solver is between roughly 20 and 150 times slower on the
+witness problems and a change of SMT back end is not the route out. The
+other two, \code{div} and \code{rem}, produced a verdict against a model
+that was wrong. So over the M extension \textbf{the delta between the two
+phases is undefined, not clean}: if the substituted register file changed
+\code{mulh}'s result, this experiment would not know.
+
+\code{reg\_ch0} is the check phase 2 exists for. It carries two free
+constants --- which architectural register, and which instruction in the
+retirement stream --- so the solver picks both, and it asserts that the
+value the core reads out of a register is the value the last instruction
+to write it wrote. Between that write and that read, the substituted file
+encodes the word to a 40-bit codeword, holds it in flip-flops, may scrub
+it, and decodes and corrects it on the way out. \Cref{tab:verif-regch0}
+is what it cost.
+
+\begin{table}[tbp]
+\centering
+\caption{\code{reg\_ch0} against check depth on both register files
+(\dcite{63}{section 18.4}, and section 20 for the depth-25 cells). The
+stock column is not monotonic because these checks assert at \emph{one}
+cycle, so a deeper check is a different satisfiability problem and not a
+superset of a shallower one.}
+\label{tab:verif-regch0}
+\small
+\begin{tabular}{@{}rlll@{}}
+\toprule
+Check cycle & Stock register file & SECDED register file & Ratio \\
+\midrule
+12 & 5\,s   & 6\,s                       & 1.2 \\
+15 & 14\,s  & 15\,s                      & 1.1 \\
+18 & 31\,s  & \textbf{353\,s}            & \textbf{11.4} \\
+21 & 66\,s  & TIMEOUT at 14{,}400\,s     & $>218$ \\
+23 & 411\,s & TIMEOUT at 14{,}400\,s     & $>35$ \\
+25 & 189\,s alone, 399\,s in the run & TIMEOUT at 14{,}400\,s, six engines & $>36$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The cliff is between check cycle 15 and 18. Six engines were given the
+depth-25 case under a four-hour bound and every one reached it; the
+control matters more than the six rows, because on the \emph{stock} file
+only two of those six close the check at all, so four of the six say
+nothing by failing the hard case. The two that matter both time out.
+\dcite{63}{section 17.2} states the consequence in both directions:
+nothing there may be read as evidence that the substitution preserves the
+property at cycle 25, and nothing may be read as evidence that it breaks
+it. What does close is cycles 12, 15 and 18 --- deeper than a write and a
+read, and shallower than one scrub pass, which is 31 cycles when the core
+is idle.
+
+\dcite{63}{section 23}, added 2026-09-15, takes the two routes that
+document itself ranked second and third, and the result is the
+register-file scrub pair in \Cref{tab:verif-sby}. Route~2 asks only the
+register file: \code{regfile\_scrub.sby} binds the real
+\code{ibex\_regfile\_secded.v} at \code{SCRUB}~$=1$ and states R1 (a word
+written and not rewritten reads back at every later cycle while the scrub
+walks), R2 (the pointer visits every register 1--31 and never 0), R3 (the
+scrub and the core never contend for the write port) and R4 (a fault-free
+file raises no error). \textbf{Route 2 alone does not close, and the
+reason is the codec.} Cover passes at depth 40 with all 31 visits
+reached, and bmc and prove sit at step 4 --- the first cycle at which R1
+checks a stored word --- because the solver is being asked to relate
+eight parity trees at the write encoder to eight at the read decoder
+through thirty-two scrub encoders on the same storage. Parity is the
+textbook hard case for conflict-driven SAT and none of the pinned solvers
+carries Gaussian elimination, so the stall is structural. Two further
+engines with a stated bound both report \code{TIMEOUT} at 10,800\,s; the
+first pair had no verdict after twelve hours and was stopped by hand,
+which is \textsc{killed} in this document's vocabulary and is recorded as
+such.
+
+\textbf{Route 3 on top of route 2 closes it, unbounded.}
+\code{regfile\_scrub\_abs.sby} is the same wrapper with the codec
+replaced by stand-ins in \code{hw/soc/formal/secded\_identity.v} --- same
+module names, same ports, a degenerate code with one check bit that says
+``the word is non-zero''. Under it, \code{abc pdr} proves R1--R4 for
+every reachable state in \textbf{44 seconds}, and the cover reaches all
+31 visits. The composition is the usual one: a property of the wrapper
+that holds for every codec satisfying $\mathrm{dec}(\mathrm{enc}(x)) = x$
+holds for the real one, whose $\mathrm{dec}(\mathrm{enc}(x)) = x$ is
+\code{regfile\_secded.sby}'s separate theorem. What it does not cover is
+any property that depends on the code's \emph{distance} --- R4 under an
+injected upset, for instance --- and none is claimed.
+
+Two things the abstraction taught are recorded in the stand-in's header
+because a future stand-in must honour them. The first version was the
+true identity code and bmc failed at step 3 with every read inverted:
+\code{0x80000000} written, \code{0x7fffffff} read. The cause is in the
+wrapper and not the stand-in --- the fast-correction read path flips
+every bit whose syndrome column matches, and with an all-zero column set
+and a zero syndrome that is every bit. So the register file carries two
+structural assumptions about its codec that no property had ever stated:
+every column of the parity-check matrix is non-zero, and the encoding of
+the all-zero word is zero, because the file resets its check bits to a
+literal zero. The real code satisfies both by construction; the
+degenerate one was chosen to. Note also what the recorded
+\code{prove12 UNKNOWN} in \Cref{tab:verif-sby} means: k-induction at
+$k=12$ fails its induction step on R1 --- the property needs an inductive
+invariant the wrapper does not state --- while the unbounded IC3 proof
+succeeds. Those are not contradictory results; they are two methods, and
+only one of them is a proof.
+
+The cost ledger for the whole riscv-formal exercise is
+\dcite{63}{section 21}: \textbf{304,049 core-seconds, 84.5 core-hours,
+300 verdicts} --- and about \SI{92}{\percent} of that solver time
+produced no verdict at all, almost all of it on one check on one register
+file.
+
+\section{Fault injection}
+\label{sec:verif-fi}
+
+\begin{table}[tbp]
+\centering
+\caption{The fault-injection campaigns of record. The register-transfer
+campaigns run each injection twice, once with the watchdog armed and
+once held off; a simulation count is given only where the document
+states one. The instrument measures and the classifier judges, and they
+are different files --- a division kept unchanged since \dcite{16}.}
+\label{tab:verif-fi}
+\small
+\begin{tabularx}{\linewidth}{@{}llrl>{\raggedright\arraybackslash}X@{}}
+\toprule
+Campaign & Level & Injections & Simulations & What it isolates \\
+\midrule
+\dcite{42}{} & RTL & 1{,}300 & --- & the unhardened core, 13 strata
+weighted by 2{,}198 bits \\
+\dcite{43}{} A & RTL & 1{,}400 & 2{,}800 & the SECDED register file,
+same draws, byte-identical workload image \\
+\dcite{43}{} AW & RTL & 1{,}400 & 2{,}800 & the watchdog's cadence
+contract on top of A \\
+\dcite{44}{} & RTL & 1{,}400 & 2{,}800 & the fast-correction path and
+the fault-report port \\
+\dcite{46}{} & RTL & 812 & 1{,}624 & the window, on a partitioned
+supervisor workload, 58 draws per stratum \\
+\dcite{74}{} & gate & 1{,}424 & 1{,}739 & \dcite{43}'s records replayed
+on the sign-off netlist \\
+\dcite{75}{} & gate & 174 & 4 netlists & the reset on a corrected upset:
+two layouts and both designs' synthesis netlists \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{At register-transfer level}
+
+The campaigns share one instrument and one classifier, and each draw is
+seeded per stratum and index, which is what makes a re-run a
+\emph{paired} comparison rather than a new experiment.
+\dcite{43}{section 8.1} checks rather than assumes it: the workload
+compiles to a byte-identical ROM image, the clean run is the same 18,682
+cycles with the same signature and the same injection window, and a
+twenty-line check prints \code{True} on the claim that 1,300 draws are
+identical draw for draw to the earlier campaign's.
+
+The register file is the result the hardening was bought for. With the
+watchdog held off --- the core with no backstop at all --- the two
+register-file strata go from 78 masked, 0 corrected, 3 silently corrupt
+and 4 hung in 100 draws, to 6, 94, 0 and 0; the new stratum covering the
+protection's own 253 flip-flops gives 4, 96, 0, 0. All 190 corrected
+injections ended with the golden answer, and there were \textbf{zero
+uncorrectable syndromes in 1,400 injections}. Design-weighted, silent
+corruption falls from \SI{2.8}{\percent}~$\pm$~1.6 to
+\SI{1.3}{\percent}~$\pm$~0.4 and hangs from \SI{2.1}{\percent} to
+\SI{0.3}{\percent}. Two cautions travel with that table in
+\dcite{43}{section 8.2} and both cut against it: the \emph{denominator}
+changed, because the design has 253 more flip-flops and the new stratum
+takes \SI{10.3}{\percent} of the weight at a measured rate of zero, so
+part of the weighted improvement is arithmetic rather than physics; and
+0 of 100 is a rate below about \SI{3.7}{\percent}, not a rate of zero.
+
+\dcite{44} re-ran that campaign on a design with a rebuilt register read
+path and got the strongest null result the harness can express: the two
+1,400-record files are \textbf{byte-identical}, same md5, 27 columns
+each, and the two logs differ in one line, which is the output path. That
+is stronger than ``the rates agree'', because an aggregate delta of zero
+is consistent with two records moving in opposite directions and this is
+not: no record moved.
+
+\dcite{46}'s campaign is the one that produced a design decision. The
+windowed watchdog rejected a kick as too early on 9 of 812 injections,
+and the seven records that did not leave the core dead were replayed
+verbatim against a build identical except that the window is off. \textbf{Two of them are genuine
+catches} --- wrong answers in the multiplier's state register that
+nothing else in the design announced, silently corrupt without the window
+and announced with it. \textbf{Two of the four spurious escalations are
+the window's and two are not}; the other two escalate by ordinary expiry
+at the window off, because the window forced the timeout down into a band
+and a shorter timeout is more easily tripped. The arithmetic is then
+honest about itself: benefit 2 of 812, \SI{0.25}{\percent}
+[0.07--0.89]; cost 2 of 728, \SI{0.27}{\percent} [0.08--1.00]. The
+intervals overlap almost completely, and both numbers are two draws at
+one site each, so they are two site behaviours and not four independent
+events. \dcite{46}{section 9.1} takes the third answer --- the mechanism
+is conditional and the condition should not be taken --- and records that
+the feasibility argument alone carries the recommendation, because under
+the other dispatch discipline no admissible window exists at any timeout
+and that is arithmetic before it is a measurement.
+
+\subsection{At gate level}
+
+\dcite{74} is the first gate-level simulation of the whole system in this
+project, and it replays the register-transfer campaign of record one
+record at a time on the netlist of the sign-off layout ---
+\code{hw/soc/pnr/runs/s71boot/final/nl/soc\_top.nl.v}, md5
+\code{2e43d08f\ldots}, \num{10831575} bytes, 5,873 sequential cells and
+six vendor macros. Choosing the layout netlist over the synthesis netlist
+costs nothing that this campaign can measure, and that was measured
+rather than assumed: the two files have identical flip-flop instance
+names in the same order, and 5,823 of 5,873 identical Q-net names.
+
+Before any comparison, the 1,400 records were replayed on the current RTL
+to ask whether the RTL had moved under the design: \textbf{0 of 1,400
+changed}, histogram for histogram and record for record. So whatever the
+netlist campaign says differently is a difference between two levels and
+not between two RTLs.
+
+Of the 1,400 records, \textbf{1,175 have a netlist twin} the campaign can
+inject through, identified by a per-cycle trace of both designs, by the
+elaborated design's own alias names, or both; 225 do not. Of those 1,175,
+\textbf{1,158 classify identically}, and of the 1,129 like-for-like
+records --- excluding 46 injections into a flip-flop that synthesis made
+the twin of two register-transfer registers at once --- \textbf{1,126 are
+identical}. The 17 disagreements are two structures: 15 are injections
+into the instruction register that an optimisation pass stored once for
+two copies, and 2 are the multiplier's re-encoded state; the netlist is
+the worse of the two every time.
+
+The controls are where the campaign earns the right to those numbers,
+and control 5 is the one to state. Four records were run at both levels
+with the whole mapped flip-flop state written out per cycle and compared
+over the 964 flip-flops the trace identifies: \textbf{0 of 964 differing
+anywhere in 18,681 cycles}. An upset deposited into a register and an
+upset forced onto its netlist flip-flop leave the two designs in the same
+state, cycle for cycle, for the rest of the run. That control also caught
+two things on its own: an injection-instant race that cost the first pass
+of 450 records, and a controller state bit whose netlist flop carries the
+register-transfer name but toggles while that bit is constant, because a
+re-encoding pass kept a name. Seven records were withdrawn from the
+replay by the second, and the mapping rule now refuses any alias-only
+mapping that the trace contradicts.
+
+What the redundancy did in the gates that would be manufactured: the
+register file corrected 171 of 180 upsets --- the same 171, record for
+record, with 0 silent corruptions and 0 uncorrectable --- and the
+watchdog's three replica banks voted out 174 of 174.
+
+\subsection{The finding only the gate level could produce}
+
+\textbf{And in every one of those 174 the system reset itself one clock
+after the upset.} \dcite{75} is that finding. The watchdog's reset
+request was a combinational decode --- five bits of the \emph{voted}
+word, two of whose three replicas present an exclusive-or tree over all
+29 of their flip-flops --- and the top level hung the reset synchroniser
+off it asynchronously, under a comment asserting that the signal was
+registered in that clock domain. It was not. The netlist says it is a
+glitch three ways: the settled decode is correct on all 174 records, the
+same deposit at register-transfer level does not reset, and a census of
+every asynchronous-reset fan-in set in the design shows that four of the
+five are driven by nothing or by registered signals while the fifth is
+driven by 25 flip-flops of the three replica banks and nothing else.
+
+The repair, W9, is one flip-flop: the same predicate computed from the
+pre-storage word instead of the voted one, and-ed with the decode.
+\textbf{And no proof, no simulation and no register-transfer campaign in
+this repository can tell the two designs apart}, because they are the
+same function of the same state on every cycle --- \code{soc\_wdog.sby}
+proves exactly that as property W9a by k-induction at depth 15, which is
+what makes the ``no behaviour change'' claim a theorem rather than a
+comment. So the evidence had to come from two other places. On the mapped
+netlist, a satisfiability check shows that no assignment to the netlist's
+inputs asserts the reset request while the added flip-flop holds zero,
+and two mutations that would make that vacuous both fail it. And the
+campaign was re-run as a two-by-two: 174 injections into the same 87
+replica flip-flops at the same 174 cycles, on the unrepaired and repaired
+layouts \emph{and} on both designs' synthesis netlists, mapped on
+separate occasions with no clock tree and no placement. \textbf{Resets
+per corrected upset: 174 of 174 before, 0 of 174 after, on both pairs.}
+The row is the design and the column is nothing.
+
+There is also a cocotb test for W9, and its own docstring states what it
+cannot do: it cannot fail on the design W9 replaced. What it catches is
+W9 implemented \emph{wrongly}, and that mutation is measured --- a
+flip-flop registered off the decode instead of off the pre-storage
+function fails exactly one of the suite's 15 tests, and the other
+fourteen pass on the mutant.
+
+\section{The cross-check, and where the layers meet}
+\label{sec:verif-cross}
+
+\dcite{09}{target \#5} is the any-state recovery template, and its
+acceptance criterion says the formal result and the force/release
+campaign ``must agree'', with any disagreement a blocker at gate F3.
+Nothing compared them until 2026-09-14, and the reason is structural: the
+comparison sits across \code{hw/tb/} and \code{formal/} and neither pass
+owned it.
+
+\code{scripts/formal\_fi\_crosscheck.py} makes the comparison.
+\code{formal/lif\_ctrl.sby}'s \code{bmc\_safe} task starts a trace from an
+\emph{illegal} state encoding and proves the design reaches its safe
+state --- a task its own header records is not redundant with the
+induction proof, because the inductive invariant ``the encoding is always
+legal'' makes the recovery antecedent unreachable in the induction step,
+so a default arm that resumed in idle would pass \code{prove} and fail
+\code{bmc\_safe}. The campaigns inject into exactly that encoding, so
+every such record is an empirical instance of the theorem's antecedent,
+and the theorem forbids one outcome class: silent corruption. Run on the
+tree today, the script compares \textbf{24 injections across two arms ---
+12 gate-level and 12 register-transfer, all 12 of each classified
+DETECTED} --- and reports agreement. \code{sw/tests/test\_artefact\_digests.py}
+is what makes it run, because a script nobody runs is not a gate; the
+same file checks that every run tree the paper cites is named in the
+artefact manifest, for the same reason.
+
+The script prints what it does not do, which is half of the item: it
+compares the theorem's prediction with the campaign's outcomes, and does
+not check that the netlist the gate-level arm injected into is the one
+the proof elaborated. Closing that is an equivalence obligation, and
+\textbf{no equivalence job exists in this repository} --- the same
+sentence \dcite{09}{B.2 layer 3} has to write about its own target \#2,
+repeated in \dcite{63}{section 6} and listed sixth in that document's
+ranked next steps.
+
+\section{What each layer sees, and where the blind spots are}
+\label{sec:verif-layers}
+
+The argument for five layers is that each sees a class of defect the one
+below it structurally cannot, and the corpus has a measured instance of
+each.
+
+\textbf{A proof sees what a simulation cannot: all reachable states.}
+\code{soc\_npu.sby}'s H5 --- that the accelerator's input strobe is
+exactly one state of the event engine, equal and not merely implied ---
+had been checked by one cocotb test and one textual guard;
+\dcite{55}{section 9.3} named the gap and declined to close it and
+\dcite{56}{section 9.4} declined again, in those words, before the job
+was written. \code{regfile\_scrub\_abs.sby} proves the read-after-write
+contract for every register, every value and every reachable state, which
+is what the core-level check could not do at depth 25 in four hours under
+six engines.
+
+\textbf{A simulation sees what a proof cannot: a whole machine running a
+program.} The proofs are per block; nothing proves the composition. The
+cycle-identical whole-system run, the 22 checks and the 587 console
+characters are the only evidence that the blocks fit together.
+
+\textbf{A guard sees what neither can: the netlist, the wiring and the
+tree.} All twenty formal tasks stayed green on a design where the
+synthesiser had collapsed three banks into one (\dcite{41}{section 9.4}),
+and the only check that could see it counted flip-flops in the mapped
+netlist. The voter-input cone census sees the case a flip-flop count
+cannot reach at all. And a guard is the only layer that can notice that
+the frozen directory has been written to, or that a constant was copied
+instead of generated.
+
+\textbf{A fault-injection campaign sees what none of them can: what an
+upset actually costs this workload.} The proofs say the mechanisms are
+correct; the campaign says that the class of failure a hardening was
+bought for went from 3 silent corruptions and 4 hangs in 100 draws to 0
+and 0.
+
+\textbf{And the gate level sees what the register-transfer level cannot,
+in both directions.} 17 records classify differently, every one of them
+worse on the netlist, because an optimisation pass stored two registers
+once. And the reset on a corrected upset exists only in the gates: it is
+invisible to every proof, every simulation and every register-transfer
+campaign in this repository, by construction rather than by oversight.
+
+The blind spots that remain, stated as the documents state them:
+
+\begin{itemize}
+\item \textbf{No equivalence job exists.} The register-transfer design
+and the mapped netlist have never been formally related, and the
+front-end split of \S\ref{sec:verif-rvf} has now added a second place
+where one would be worth having.
+\item \textbf{No CSR is checked.} riscv-formal's CSR checks bind to ports
+Ibex does not carry, so nothing says anything about the machine status,
+trap vector, exception PC, cause, interrupt or PMP registers --- which is
+what the intended software architecture rests on. Closing it means a
+patch to Ibex.
+\item \textbf{PMP enforcement is not proved.} The hardware is elaborated
+and in the load/store path of everything proved above, and the evidence
+that it enforces anything is one simulated test: one locked read-only
+region, one permitted load, one faulting store.
+\item \textbf{The M extension has no formal result}, under two solvers
+and at two stated bounds.
+\item \textbf{Nothing anywhere injects a single-event transient.} Every
+campaign forces or deposits into storage. The register file's decoder
+alone is 528 combinational cells, the voter is combinational, the fetch
+address adder is combinational, and a processor is mostly not flip-flops.
+\item \textbf{No timing, anywhere in this chapter.} Formal results hold
+for any timing-clean implementation and the gate-level simulations use
+zero-delay cell models, so a fault whose effect depends on a setup or
+hold miss is invisible --- and the layout this campaign ran on does not
+meet its setup constraint (\dcite{70}{section 6}). The physical glitch W9
+repairs therefore has a width that is unmeasured and unmeasurable here.
+\item \textbf{One workload, one seed, one parameter point}, deliberately,
+so that records could be replayed. Nothing says what a program that used
+the PMP or took interrupts would see.
+\item \textbf{No rate.} Fault injection measures architectural
+sensitivity; only beam data speaks to cross-sections.
+\item \textbf{Some evidence is only as good as the tree it is run in.}
+The netlist and coverage guards read git-ignored build products and skip
+on a fresh clone; the shuttle submission's gate-level arm needs a netlist
+nothing in this repository produces and refuses rather than falling back
+to a register-transfer run.
+\end{itemize}
+
+Two of those --- the transient and the equivalence obligation --- are the
+ones that would change what the rest of this chapter means, and neither
+is scheduled.

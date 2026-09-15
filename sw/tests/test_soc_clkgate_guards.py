@@ -355,8 +355,12 @@ YOSYS = _find_yosys()
 needs_yosys = pytest.mark.skipif(YOSYS is None, reason="yosys not available")
 
 
-def _elaborate_npu(tmp_path, src_override=None):
+def _elaborate_npu(tmp_path, src_override=None, params=None):
     """soc_npu, flattened, as JSON. keep_hierarchy is dropped for the walk.
+
+    `params` overrides module parameters with `chparam` after the
+    hierarchy is set, which is how the WAKE_GNT = 1 arm is elaborated
+    without a second source file; the module keeps its name.
 
     soc_tmr_bank and the pilot's own blocks carry `keep_hierarchy` so that
     `opt_merge` cannot fold the TMR replicas together -- docs/33's whole
@@ -369,12 +373,14 @@ def _elaborate_npu(tmp_path, src_override=None):
     if src_override is not None:
         srcs[0] = src_override
     out = tmp_path / "soc_npu_flat.json"
+    chparam = "".join("chparam -set {} {} soc_npu; ".format(k, v)
+                      for k, v in sorted((params or {}).items()))
     script = (
         "read_verilog -I {inc1} -I {inc2} {files}; "
-        "hierarchy -top soc_npu; proc; "
+        "hierarchy -top soc_npu; {chparam}proc; "
         "setattr -mod -unset keep_hierarchy; flatten; opt_clean; "
         "write_json {out};".format(
-            inc1=SOC_RTL, inc2=PILOT_RTL,
+            inc1=SOC_RTL, inc2=PILOT_RTL, chparam=chparam,
             files=" ".join(str(p) for p in srcs), out=out))
     r = subprocess.run([YOSYS, "-p", script], capture_output=True,
                        text=True, timeout=900)
@@ -506,3 +512,92 @@ def test_the_wake_bit_is_on_the_ungated_clock():
         "wake bit")
     assert re.search(r"\.clk_i\s*\(\s*clk_npu\s*\)", top), (
         "soc_top.v no longer hands soc_npu the GATED clock for the rest")
+
+
+# ---------------------------------------------------------------------
+# 5. docs/77 section 18: the wakefulness-qualified grant, built and OFF
+# ---------------------------------------------------------------------
+#
+# docs/77 section 11 priced the one change that could close the
+# accelerator's clock-gating check by construction -- refuse the grant
+# and the APB completion in a cycle the block is not clocked, and take
+# `req_i | psel_i` off the enable -- and section 18 builds it behind
+# soc_npu.v's WAKE_GNT. Two things are guarded: that it ships OFF, for
+# the reason CLKGATE = 0 is guarded plus one more (it moves the
+# whole-SoC cycle count the corpus quotes as an invariant); and that at
+# WAKE_GNT = 1 the enable really does read no input, which is the
+# by-construction claim, discharged by the same cone census as A2.
+
+def test_wake_gnt_defaults_off_and_is_forwarded():
+    """The design ships WAKE_GNT = 0, in both modules, and soc_top.v
+    forwards its own value to soc_npu -- the one place the parameter
+    is read."""
+    assert re.search(r"parameter\s+integer\s+WAKE_GNT\s*=\s*0\b", TOP), (
+        "soc_top.v's WAKE_GNT no longer defaults to 0: the whole-SoC cycle "
+        "count docs/68 section 8 quotes as an invariant moves with it, and "
+        "docs/77 section 18 says what the default should be and why")
+    assert re.search(r"parameter\s+integer\s+WAKE_GNT\s*=\s*0\b", NPU), (
+        "soc_npu.v's WAKE_GNT no longer defaults to 0")
+    assert re.search(r"\.WAKE_GNT\s*\(\s*WAKE_GNT\s*\)", TOP), (
+        "soc_top.v no longer forwards its own WAKE_GNT to soc_npu")
+
+
+def test_nothing_in_the_design_selects_the_wake_qualified_grant():
+    """Only the three flow scripts that carry SOC_CLKGATE may carry
+    SOC_WAKE_GNT, and nothing in the RTL sets the parameter itself."""
+    offenders = []
+    for p in sorted(SOC_RTL.glob("*.v")) + sorted(SOC_RTL.glob("*.vh")):
+        text = p.read_text()
+        for m in re.finditer(r"\.WAKE_GNT\s*\(\s*(\d+)\s*\)", text):
+            if m.group(1) != "0":
+                offenders.append((p.name, m.group(0)))
+        if re.search(r"defparam[^;]*WAKE_GNT\s*=\s*[1-9]", text):
+            offenders.append((p.name, "defparam WAKE_GNT != 0"))
+    assert not offenders, (
+        "the RTL selects the wakefulness-qualified grant somewhere: "
+        "{}".format(offenders))
+    allowed = {"syn_soc_top.sh", "sim_soc.sh", "fi_core.sh"}
+    setters = {p.name for p in sorted(SOC_FLOW.glob("*.sh"))
+               if re.search(r"SOC_WAKE_GNT", p.read_text())}
+    assert setters <= allowed, (
+        "a flow script this test does not know about carries the knob: "
+        "{}. Add it here with the reason, or remove it.".format(
+            sorted(setters - allowed)))
+
+
+@needs_yosys
+def test_at_wake_gnt_the_enable_and_the_acceptance_read_no_input_port(
+        tmp_path):
+    """The by-construction claim, as a cone census.
+
+    At WAKE_GNT = 1 `clk_en_o` is `wake_q || (wake_hold != 0)` and the
+    grant and the APB completion are qualified by the same term. The
+    walk cuts at every sequential cell, so an input port in any of the
+    three cones would be a path from outside the block to the GATE pin
+    -- which is exactly the path docs/77 section 3 measures as the
+    -5.0198 ns, and exactly what this configuration exists to remove.
+    """
+    design = _elaborate_npu(tmp_path, params={"WAKE_GNT": 1})
+    for wire in ("clk_en_o", "may_accept", "pready_o"):
+        reached = _input_ports_in_cone(design, wire)
+        reached -= {"clk_i", "clk_free_i", "rst_ni"}
+        assert not reached, (
+            "at WAKE_GNT = 1, soc_npu.v's {} depends combinationally on {}: "
+            "the enable is not a function of the block's registers alone, "
+            "and the clock-gating check does not close by construction"
+            .format(wire, sorted(reached)))
+
+
+@needs_yosys
+def test_at_the_default_the_enable_reads_exactly_the_two_transient_inputs(
+        tmp_path):
+    """And the complement, so that the two configurations cannot be
+    confused: at WAKE_GNT = 0 the enable's cone reaches `req_i` and
+    `psel_i` and nothing else, which is docs/77 section 5.1's fast half
+    and the reason the check misses there."""
+    design = _elaborate_npu(tmp_path)
+    reached = _input_ports_in_cone(design, "clk_en_o")
+    reached -= {"clk_i", "clk_free_i", "rst_ni"}
+    assert reached == {"req_i", "psel_i"}, (
+        "at WAKE_GNT = 0 soc_npu.v's clk_en_o reaches {}; docs/77 built "
+        "it to reach exactly req_i and psel_i".format(sorted(reached)))

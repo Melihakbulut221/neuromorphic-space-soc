@@ -1,0 +1,118 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+
+\chapter{What exists, what does not, and what comes next}
+\label{ch:conclusion}
+
+\section{What exists}
+
+A radiation-hardened neuromorphic system-on-chip for the IHP SG13G2
+130\,nm open process design kit, in register-transfer form and in
+layout, built end to end with open tools.
+
+In register-transfer form: a 32-bit RISC-V application core with a
+single-error-correcting register file and a scrub engine that walks it;
+a spiking accelerator with its event engine, its address-event queues
+and its serial attachment to the core; a bus fabric with a real
+peripheral bus behind it; a time base, a general-purpose timer and a
+three-stage watchdog; memories behind error-correcting codes; a boot
+path that is hardened rather than assumed; and triple-modular
+redundancy where the design decided it was worth its area.
+
+In layout: a placed and routed die of $2306.40 \times
+2075.22$\,\si{\micro\metre} carrying eight vendor memory macros and
+168{,}592 instances, with zero routing design-rule errors, a layout
+versus schematic comparison that matches uniquely, a zero-difference
+geometric comparison against the extracted view, and positive hold
+slack at all three corners. Every geometric error the sign-off decks do
+report lies inside a vendor macro or within half a micrometre of one:
+the design is clean where the design drew.
+
+And, throughout, an instrumentation layer that is part of the result
+rather than scaffolding around it: guards that count redundancy in the
+netlist because the source cannot be trusted to survive synthesis,
+formal property sets that state one-line invariants over all reachable
+states, fault-injection campaigns at both register-transfer and gate
+level, and a cross-check that asks whether an any-state theorem and a
+campaign agree about the same block.
+
+\section{What does not exist, stated plainly}
+
+No silicon of this system-on-chip. A frozen slice of the accelerator
+was prepared for a multi-project shuttle and is pinned by hash; the
+submission itself is an owner decision with a deadline and a cost, and
+nothing in this document should be read as saying the part has been
+fabricated.
+
+No frequency. The project adopted a rule early --- report periods,
+slacks and corner names, never a megahertz figure --- and has kept it
+through every layout. A reader who wants a speed grade will not find
+one here, and that is deliberate.
+
+No mesh. The multi-node link that would make this a neuromorphic
+\emph{fabric} rather than a single accelerator is specified down to its
+24-bit link word and its per-node counters, and no register-transfer
+code implements any of it. By the project's own ranking it is the
+highest-leverage unbuilt item in the design.
+
+No closed multiplier proof. Six instruction checks in the formal
+programme have no verdict on either core, under two solvers, at a
+stated bound of two hours each. The absence is bounded and named; it is
+not a pass.
+
+No verdict for the register-file consistency check on the substituted
+core at its required depth. What exists instead is a stronger statement
+about a smaller thing --- the register file and its scrub proved
+unbounded with the codec abstracted --- and a located reason for the
+original difficulty.
+
+No flight heritage, no qualification campaign, and no claim that any of
+the hardening in this design has been validated by irradiation. Every
+hardening claim in this document is a claim about a mechanism, its
+cost, and what an injected-fault campaign observed in simulation.
+
+\section{The open items, ranked by what they would settle}
+
+\begin{enumerate}
+\item \textbf{The mesh link and a second node.} The largest unbuilt
+      thing, and the one that changes what the part is rather than how
+      well it does what it already does.
+\item \textbf{A registered request phase in the fabric.} The
+      register-file read into the peripheral space is the dominant
+      violating path in every layout this project has produced, and no
+      placement experiment has moved it, because it is a structure and
+      not a placement. It is the one change that would change the worst
+      number in \cref{tab:headline}, and it is unpriced.
+\item \textbf{Hold margin as a first-class budget.} Three separate
+      improvements have now been refused because they cost more hold
+      than the design has. The next layout study worth running is not
+      another improvement but a hold-repair pass aimed at the fast
+      corner, to find out whether the 29.6\,ps is structural or
+      tunable.
+\item \textbf{Irradiation.} Everything in \cref{ch:harden} is a
+      mechanism with a simulated campaign behind it. The step that
+      would turn it into evidence about silicon is a beam, and it is
+      not a step this project can take alone.
+\item \textbf{The remaining peripherals.} A second serial port, the
+      synchronous and two-wire interfaces, and the space-oriented link
+      and bus codecs are specified and unbuilt; one of them is now
+      unblocked by a bridge that exists and is proved, and none of them
+      is on the critical path of anything above.
+\end{enumerate}
+
+\section{What this document is}
+
+A record, not a report. Its distinguishing habit is the one stated in
+the introduction and applied in every chapter since: a measurement that
+is superseded is marked with its date and left standing, because the
+history of a number is evidence about the number. A check that did not
+finish is reported in the word its tool used. A result whose scope is
+narrower than its headline says so in the same paragraph as the
+headline. A run that measured the wrong thing is kept and labelled
+rather than deleted, because the failure shape is more instructive than
+the result would have been.
+
+That habit has a cost --- this document is longer and less quotable
+than a datasheet --- and one benefit that seems worth it: everything in
+it can be checked, and the places where it is weakest are the places it
+says so itself.

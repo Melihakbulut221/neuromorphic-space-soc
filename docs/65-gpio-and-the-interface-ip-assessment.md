@@ -619,6 +619,296 @@ an AXI4-Lite variant (`i2c_master_axil`) is in the same directory.
 is the strongest structural argument in this table: it is the bridge
 whose proof, once done, is reused.
 
+### 9.5 The bridge, built (added 2026-09-15)
+
+The bridge section 9.4 priced now exists and is proved on its own,
+before either core is wrapped, for the reason section 2 gave: when the
+first wrapper fails, the failure should be in the wrapper. Three files,
+the same trio as `soc_apb_bridge`'s:
+
+| File | What |
+|---|---|
+| `hw/soc/rtl/soc_apb_wb.v` | AMBA 3 APB completer to Wishbone B3 classic initiator, 8-bit data, with the 32-to-8 lane adapter |
+| `hw/soc/formal/soc_apb_wb_props.v` | the properties, included into the module under `` `ifdef FORMAL `` |
+| `hw/soc/formal/soc_apb_wb.sby` | `bmc`, `prove`, `cover`; `smtbmc yices`; the same depths as `soc_apb_bridge.sby` |
+
+`.gitignore` gains the job's two working-directory lines by section
+12's rule. `hw/soc/formal/Makefile` does not gain a target in this
+section, and the formal-count line in `docs/00-index.md` is not brought
+forward here; this job is one job of three tasks toward it.
+
+**What the two cores actually present**, read from the pinned
+checkouts, which is where "32-to-8 lane adapter" in sections 9.2 and
+9.3 comes from **[fact]**:
+
+| Core | Address | Data | Handshake | Not present |
+|---|---|---|---|---|
+| `can_top.v` with `CAN_WISHBONE_IF` | `wb_adr_i[7:0]` | `wb_dat_i[7:0]`, `wb_dat_o[7:0]` | `wb_cyc_i`, `wb_stb_i`, `wb_we_i`, `wb_ack_o` | SEL, ERR, RTY |
+| `i2c_master_wbs_8.v` | `wbs_adr_i[2:0]` | `wbs_dat_i[7:0]`, `wbs_dat_o[7:0]` | `wbs_cyc_i`, `wbs_stb_i`, `wbs_we_i`, `wbs_ack_o` | SEL, ERR, RTY |
+
+Both are byte-addressed byte-wide register files; both are classic,
+not pipelined; neither has a select, error or retry pin. The bridge has
+all three anyway, because they are the B3 initiator interface and a
+bridge without them would be re-proved for the first core that has
+them; at these two instantiations `err_i` and `rty_i` are tied low and
+`sel_o` is left open. The CAN core resynchronises `cyc & stb` into its
+own clock domain and pulses `ack` once; the I2C core toggles `ack`
+every cycle it sees `stb`. Both therefore need what a classic
+initiator promises and a pipelined one does not: the strobe held with
+stable controls until the acknowledge, then dropped.
+
+**The lane mapping, and why it is this one.** One APB transfer is one
+Wishbone cycle. ~~`adr_o` carries the whole APB offset, and the byte
+travels on the lane of `PWDATA` / `PRDATA` that `PADDR[1:0]` names:~~
+*Corrected 2026-09-15: the byte travels on the lane `PSTRB` names and
+`adr_o` carries the word offset with that lane in its low two bits.
+The table below is the first draft's, left standing; the correction
+after it says why it could not be driven and gives the table that
+replaced it.*
+
+| `PADDR[1:0]` | write: `dat_o` | read: `prdata_o` |
+|---|---|---|
+| `00` | `pwdata[7:0]` | `{24'h0, byte}` |
+| `01` | `pwdata[15:8]` | `{16'h0, byte, 8'h0}` |
+| `10` | `pwdata[23:16]` | `{8'h0, byte, 16'h0}` |
+| `11` | `pwdata[31:24]` | `{byte, 24'h0}` |
+
+That is the lane an Ibex byte access already uses — `lb`/`lbu` at
+address A takes `rdata[8*A[1:0] +: 8]`, `sb` at A places the byte
+there — so a driver reads and writes the cores' byte registers with
+byte accesses at their natural byte offsets and shifts nothing. A word
+access reaches lane 0 only. ~~`PSTRB` is not consulted, the position
+`soc_top.v`'s note takes for every completer in this SoC.~~ *Corrected
+2026-09-15: `PSTRB` is the only thing consulted; `PADDR[1:0]` is not,
+and the Ibex byte access the previous sentence describes never puts
+its offset there. See the correction.* Truncating
+`adr_o` to the core's own width (8 bits, 3 bits) and inverting the
+reset (both cores are active-high) belong to the instantiation.
+
+**Correction, 2026-09-15: the lane is the strobe's, not the
+address's.** The table above was written for a requester that puts the
+byte offset in `PADDR[1:0]`, and the proof passed against that
+requester. This fabric has no such requester, for three facts read
+from the pinned sources **[fact]**:
+
+- Ibex word-aligns every data address it issues.
+`hw/soc/ext/ibex/rtl/ibex_load_store_unit.sv` at the pinned commit
+`34b0705`, under the comment "output data address must be word
+aligned" (lines 718-722): `data_addr_o = {data_addr[31:2], 2'b00}`.
+The byte offset travels in `data_be_o`, whose generation (the BE
+block from line 137) is a function of the access type and the offset
+alone — a byte at offset 1 is `4'b0010`, at offset 3 `4'b1000`, for
+loads exactly as for stores — and a load takes its byte back from the
+lane the enable named (`rdata_b_ext`, selected by `rdata_offset_q`,
+from line 324).
+- `soc_bus.v` line 326 passes `md_be_i` through as `s_be_o`,
+unchanged.
+- `soc_apb_bridge.v` lines 106-109 capture `addr_i[19:0]` into
+`paddr_o` and `be_i` into `pstrb_o` unconditionally, reads and writes
+alike; `soc_apb_bridge_props.v` A11 proves both reach the completer.
+
+So at every APB completer `PADDR[1:0]` is `2'b00` for every CPU access
+and `PSTRB` alone carries the byte offset. The first draft therefore
+reached only offsets `0, 4, 8, ...` of the CAN core's 256 registers and
+only offsets `0` and `4` of the I2C core's eight, and a byte store to
+any other register landed in the aligned one carrying `PWDATA[7:0]`.
+Measured on the first-draft source — the `prove` job's `src/` copy,
+saved before the re-run below replaced it — with a scratch Icarus
+testbench that drives each request as Ibex issues it, through a
+byte-wide classic target preloaded `mem[i] = 0x10 + i` **[fact]**:
+
+| Request, as Ibex issues it | First draft, `PADDR[1:0]` lane | Corrected, `PSTRB` lane |
+|---|---|---|
+| `sb 0x5A` at byte offset 1: `PADDR 0x000`, `PSTRB 0010`, byte on `PWDATA[15:8]` | target saw `adr 0x000`, `dat 0x00`; `mem[0]` became `0x00`, `mem[1]` untouched | target saw `adr 0x001`, `dat 0x5A`; `mem[1]` became `0x5A` |
+| `sb 0xA5` at byte offset 3: `PSTRB 1000`, byte on `PWDATA[31:24]` | `adr 0x000`, `dat 0x00` | `adr 0x003`, `dat 0xA5` |
+| `lbu` at byte offset 1: `PSTRB 0010`; Ibex takes `PRDATA[15:8]` | `adr 0x000`, `PRDATA 0x00000000`; Ibex reads `0x00` | `adr 0x001`, `PRDATA 0x00005A00`; Ibex reads `0x5A` |
+| `sh` at byte offset 2 of word 1: `PADDR 0x004`, `PSTRB 1100`, `PWDATA 0x77660000` | `adr 0x004`, `dat 0x00` | `adr 0x006`, `dat 0x66`, the lowest strobed byte |
+
+The testbench and the first-draft source are not in the tree — the
+draft was never committed, and the formal work directories now hold
+the corrected source — so that table is a record of the run, and the
+three citations above are what the tree can be checked against.
+
+**The corrected contract.** `pstrb_i` is a port. The lane is the
+lowest set bit of `PSTRB`, lane 0 when none is set, and `adr_o =
+{paddr[11:2], lane}`, so the target is addressed with the byte offset
+the software wrote:
+
+| `PSTRB` | lane | write: `dat_o` | read: `prdata_o` |
+|---|---|---|---|
+| `???1` | 0 | `pwdata[7:0]` | `{24'h0, byte}` |
+| `??10` | 1 | `pwdata[15:8]` | `{16'h0, byte, 8'h0}` |
+| `?100` | 2 | `pwdata[23:16]` | `{8'h0, byte, 16'h0}` |
+| `1000` | 3 | `pwdata[31:24]` | `{byte, 24'h0}` |
+| `0000` | 0 | `pwdata[7:0]` | `{24'h0, byte}` |
+
+A half-word or word access reaches its lowest strobed byte only:
+`1100` is lane 2, `0110` is lane 1, `1111` is lane 0, and a read with
+no strobe is lane 0. `PADDR[1:0]` is not consulted and carries the
+`_unused_` tie with the reason, beside `penable_i`'s. What changed
+with it: E4 holds `PSTRB` stable with the rest of the payload, which
+`soc_apb_bridge_props.v` A3 proves of the fabric's requester; D1
+states the address as the word offset with the strobe's lane and the
+data as the byte from that lane; D2's lane is the strobe's; the lane
+covers are stated as Ibex issues the request — `PADDR[1:0]` zero, a
+one-hot `PSTRB` — so that the shape that was wrong is the shape that
+is covered; and three more covers were added the same day as
+witnesses for the two target misbehaviours the properties tolerate (a
+termination in the SETUP cycle before the strobe is up, ACK and ERR
+together) and for ACCESS without SETUP. The bridge is now the one
+completer in the SoC that consults `PSTRB`. `soc_top.v`'s
+`_unused_pstrb` note — "neither peripheral implements sub-word writes"
+— stays true of the completers it was written for and is the
+instantiation's to retire, with a dated correction there, when this
+bridge is wired in.
+
+**The design.** Three states. `PSEL` in idle launches the cycle — that
+is SETUP for a requester that obeys APB, and APB guarantees the payload
+from SETUP, so waiting for ACCESS would add a cycle for nothing; a
+requester that presents ACCESS without a SETUP is served from ACCESS
+instead, so nothing hangs on that mistake. The strobe cycle holds
+`cyc`, `stb`, `sel`, `adr`, `we`, `dat` until `ack`, `err` or `rty`.
+The response is registered: the data byte and the error flag are
+captured at the terminating edge and `PREADY` rises the next cycle
+from the copies, so there is no combinational path from any Wishbone
+input to any output and a target whose `ack` is combinational from
+`stb` cannot close a loop through the bridge. `RTY` is an error to
+APB, which has no retry: a hardware retry loop would turn a target
+that keeps saying "retry" into a bus that never answers, the hang
+`docs/39` section 4 chose APB to exclude. Three cycles per access with
+a zero-wait target, plus the target's wait states.
+
+**The properties**, every one a clause of a specification that
+predates the RTL, per `docs/39` section 5.3 and the rule
+`soc_apb_bridge_props.v` states about restated implementations:
+
+- **E1-E5, assumed**: the APB requester's clauses — PENABLE only with
+  PSEL; SETUP one cycle then ACCESS; ACCESS held until PREADY; payload
+  stable from SETUP to the end of ACCESS (`PSTRB` included, from the
+  2026-09-15 correction); PENABLE low after PREADY.
+  They are the clauses `soc_apb_bridge_props.v` A1-A5 *prove* of the
+  fabric's requester, which is what makes the composition sound.
+  Nothing is assumed about the target.
+- **I1**: the ghost tracks the state machine; the one property that
+  names the design's own state, for induction and nothing else.
+- **W1-W8, Wishbone B3 initiator side** (sections 3.1.3, 3.1.4, 3.2.1,
+  3.2.2, 3.5): STB only inside CYC; single cycles only, CYC never held
+  across an idle strobe; no cycle without an APB transfer in ACCESS;
+  strobe and controls held until termination; STB and CYC drop the
+  cycle after termination; SEL equals STB; exactly one termination per
+  APB transfer, no strobe after it; idle bus low.
+- **P1-P3, APB completer side**: PREADY exactly one cycle after the
+  termination of the cycle this bridge launched and never otherwise;
+  PREADY only in ACCESS; PSLVERR only with PREADY.
+- **D1-D2, the adapter**: while the strobe is up (and through the
+  PREADY cycle, see below) the target sees ~~the whole offset~~ *the
+  word offset with the strobe's lane in its low two bits (corrected
+  2026-09-15)*, the
+  direction and the byte from the named lane; in the PREADY cycle
+  PSLVERR is the target's ERR or RTY and, on a read, the byte the
+  target returned sits on the named lane with the other three zero.
+  The lane is the one `PSTRB` names, per the correction above.
+- ~~**Nine covers**~~ *Fifteen covers, from 2026-09-15*: read, write,
+  ERR and RTY completions; zero and three
+  wait states; a SETUP in the cycle after PREADY; ~~a byte on the top
+  lane in and out~~ *the lanes as Ibex issues them — `lbu` on lane 3
+  in, `sb` on lane 1 out, a half-word strobe on lane 2, a word strobe
+  and a no-strobe read on lane 0 — and the three witnesses the
+  correction names: a stray termination in SETUP, ACK with ERR, ACCESS
+  without SETUP*.
+
+**Results**, `sby` as `tools.mk` resolves it, from `hw/soc/formal/`
+**[fact]**:
+
+| Task | What | Result |
+|---|---|---|
+| `bmc` | bounded, depth 24 | PASS, 7 s |
+| `prove` | k-induction, depth 12 | **PASS**, base case and induction, 2 s |
+| `cover` | depth 24 | PASS, **9 of 9** reached: zero-wait termination and the write lane at step 3, the four completions and the read lane at step 4, back-to-back at step 5, three wait states at step 6; 2 s |
+
+*The table above is the first draft's run of 01:44 on 2026-09-15 and
+is superseded. Re-run 2026-09-15 07:02 on the corrected source with
+the same pinned `sby`, from `hw/soc/formal/`; the `src/` copies in the
+three work directories are now this source* **[fact]**:
+
+| Task | What | Result |
+|---|---|---|
+| `bmc` | bounded, depth 24 | PASS, 3 s |
+| `prove` | k-induction, depth 12 | **PASS**, base case and induction, 1 s |
+| `cover` | depth 24 | PASS, **15 of 15** reached: zero-wait termination, the `sb` lane, the half-word and word lanes and the stray termination at step 3; the four completions, the `lbu` lane, the no-strobe read, ACK with ERR and ACCESS without SETUP at step 4; back-to-back at step 5; three wait states at step 6; 3 s |
+
+**The proof found a defect in the RTL before a transaction was ever
+driven.** The first `prove` run passed its base case and failed
+induction at D2, from a state in which a separate two-bit register
+holding the lane — a copy of `adr_o[1:0]`, captured in the same cycle
+— disagreed with the address: unreachable, but not excluded, and the
+byte came back on lane 0 for an offset ending in `11`. The copy is
+gone; `prdata_o` decodes its lane from `adr_o` itself, and a register
+that does not exist cannot disagree. D1 was then extended to hold
+through the PREADY cycle as well as the strobe, which B3 does not ask
+for and which is where D2's lane is anchored to the request; it is the
+one property that changed, it became stronger, and the file says so.
+*2026-09-15: the lane correction above then changed E4, D1, D2 and
+the covers as well; the induction defect and its fix are as
+described, and the proof that found it did not find the lane, because
+a proof checks the contract it is given.*
+
+**Lint and size.** `verilator --lint-only -Wall` and `iverilog -g2005
+-Wall` are clean **[fact]**; Verilator's one finding, `penable_i`
+unused, is a decision — the response lands in ACCESS by the
+requester's own rules — and is recorded with the `_unused_` idiom
+`soc_top.v` uses for `pstrb` (*2026-09-15: `paddr_i[1:0]` carries the
+same tie since the correction, and both linters stay clean on the
+corrected file*). With `flow/syn_soc.sh`'s recipe on the
+block alone, 20 ns, typical liberty, in a scratch directory like
+section 9's runs **[fact]**:
+
+| Block | Cells | Flops | Area, um2 | kGE |
+|---|---:|---:|---:|---:|
+| `soc_apb_wb` | 121 | 33 | 2,964.73 | 0.408 |
+| `soc_apb_bridge`, the requester half, same recipe | 201 | 94 | 6,437.49 | 0.887 |
+
+All 33 flip-flops are `sg13g2_dfrbpq_1`; no latch. The whole bridge is
+under half a kGE, which is the number section 9.2's "smallest bridge
+in this set" was waiting for.
+
+*Re-measured 2026-09-15 on the corrected RTL, same recipe, same
+liberty at `c4b8b4e5`* **[fact]**. The two rows above were produced
+with Yosys 0.67+94, the oss-cad-suite build, and not with the Yosys
+0.33 that `tools.soc.mk` resolves and `syn_soc.sh` itself would run;
+both are given so that the comparison with the row above is like for
+like and the number the flow would print is on record too:
+
+| Block | Cells | Flops | Area, um2 | kGE |
+|---|---:|---:|---:|---:|
+| `soc_apb_wb`, corrected, Yosys 0.67+94 as the rows above | 157 | 33 | 2,973.50 | 0.410 |
+| `soc_apb_wb`, corrected, Yosys 0.33 as `syn_soc.sh` runs it | 164 | 32 | 2,953.81 | 0.407 |
+
+The strobe decode costs 36 cells and 8.77 um2 like for like. All
+flip-flops are `sg13g2_dfrbpq_1` in both, no latch in either, and the
+bridge is still under half a kGE.
+
+**Guard tests.** `.venv/bin/python -m pytest sw/tests -q -k "spdx or
+lint or rtl or formal"`: 17 passed, 1 failed **[fact]**. The failure is
+`test_the_newest_formal_count_in_the_documents_matches_the_tree`,
+because the tree's task count has moved past `docs/00-index.md`'s
+newest figure; this job's three tasks are part of that movement and
+the figure is not corrected in this section.
+*2026-09-15, after the correction: `1 failed, 17 passed, 508
+deselected`, the same failure, now quoting "the tree has 81 across 20
+jobs" (`assert 64 == 81`); three of the twenty are untracked jobs of
+work in flight, this one among them* **[fact]**.
+
+**What this section does not cover.** The bridge is not instantiated:
+`soc_top.v` is unchanged, no slot is promoted, no core is wrapped, and
+not one transaction has been driven through it in simulation — the
+proof is standalone, which is what `docs/39` section 5.3 asks of a
+bridge and all it asks. Liveness is not proved: a target that never
+terminates holds PREADY low forever and every property still holds;
+the covers show completion is reachable, which is weaker. The target is
+not assumed to obey Wishbone at all. The CAN core's two-clock register
+path is the wrapper's problem, not the bridge's.
+
 ---
 
 ## 10. Defects found
@@ -741,6 +1031,12 @@ decision that gates it is not an engineering one.
 
 **After that, one APB-to-Wishbone bridge, proved once, serves CAN and
 I2C both.** Section 9.4.
+
+*2026-09-15: the bridge is built and proved, section 9.5. What remains
+after the licence decision is the two wrappers, and neither is started.
+Later the same day its lane contract was corrected — the lane is the
+strobe's, not the address's, section 9.5's dated correction — before
+anything was wired to it.*
 
 ---
 

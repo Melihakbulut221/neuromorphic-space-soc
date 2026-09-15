@@ -1202,6 +1202,8 @@ table is a measurement of the flow.
    instead of a slack one. Not priced here.
 4. **`docs/50`'s read register and `docs/69`'s strap window**,
    `docs/72` section 15 items 2 and 3, unchanged and still unblocked.
+   *Measured 2026-09-15 on the eight-macro design: `docs/50` section 16. The macro read return stops being a violating launch group (360 endpoints to 17, their TNS -864.88 to -28.87) and the design's setup TNS improves 21.9 %, at the cost of 325.7 ps of the sign-off layout's 29.6 ps hold margin at the fast corner, which takes hold negative. It stays at its default of 0.*
+
 5. **Guard the step-rerun form**, `docs/72` section 15 item 4: two more
    re-runs here needed the same by-hand `5 → 5.0` correction. ~~The
    guard is still owed.~~ **DONE 2026-09-12**,

@@ -84,6 +84,10 @@ N_AXONS = int(os.environ.get("SOC_NPU_AXONS", "8"))
 SER_HALF = int(os.environ.get("SOC_NPU_SER_HALF", "2"))
 INJ_DEPTH = int(os.environ.get("SOC_NPU_INJ_DEPTH", "8"))
 CAP_DEPTH = int(os.environ.get("SOC_NPU_CAP_DEPTH", "8"))
+# docs/77 section 18: the wakefulness-qualified grant. 0 is the design;
+# Makefile.soc_npu exports the value it passed by -P, and the three tests
+# whose expectations it moves read it from here.
+WAKE_GNT = int(os.environ.get("SOC_NPU_WAKE_GNT", "0"))
 
 NPU_BASE = REGIONS["NPU"][0]
 
@@ -1747,6 +1751,16 @@ async def test_no_state_moves_in_a_cycle_the_gate_would_have_removed(dut):
     env = Env(dut)
     await env.reset()
     leaves = _npu_leaves(dut)
+    if WAKE_GNT:
+        # THE ONE REGISTER ON THE UNGATED CLOCK IS NOT STATE THE GATE
+        # CAN LOSE. `wake_q` is clocked by `clk_free_i` precisely so that
+        # it can move while `clk_en_o` is low -- that is how the block
+        # wakes -- and at WAKE_GNT = 1 it does exactly that on every
+        # request that finds the block asleep. At WAKE_GNT = 0 it never
+        # moves in such a cycle (a fast term in the enable has the clock
+        # running first), so the walk is left whole there and the
+        # 2,249-signal figure docs/77 section 7.3 quotes is unchanged.
+        leaves = [h for h in leaves if not h._path.endswith("g_clkgate.wake_q")]
     assert len(leaves) > 200, (
         f"only {len(leaves)} signals found under soc_npu; the hierarchy "
         "walk broke and this test would prove nothing")
@@ -1820,6 +1834,14 @@ async def test_a_request_is_never_accepted_at_an_edge_the_gate_removes(dut):
     `gnt_o` is `req_i && win_state == W_IDLE` and `pready_o` is 1, so a
     transaction this block has accepted and then not been clocked in is a
     transaction it has dropped. docs/77 section 5.1.
+
+    AT WAKE_GNT = 1 THE CONTRACT IS THE SAME AND THE SIGNALS ARE NOT.
+    `req_i` and `psel_i` are then allowed -- expected -- to be high with
+    the enable low, because that is the cycle the block refuses; what
+    must never coincide with a low enable is the ACCEPTANCE: `gnt_o`, or
+    an APB access cycle with `pready_o` high. docs/77 section 18, and
+    hw/soc/formal/clkgate_wake_gnt_props.v G1 is the same statement
+    proved.
     """
     env = Env(dut)
     await env.reset()
@@ -1835,7 +1857,12 @@ async def test_a_request_is_never_accepted_at_an_edge_the_gate_removes(dut):
         while True:
             await RisingEdge(dut.clk_i)
             await Timer(T_SAMPLE, unit="ns")
-            live = int(dut.req_i.value) or int(dut.psel_i.value)
+            if WAKE_GNT:
+                live = int(dut.gnt_o.value) or (
+                    int(dut.psel_i.value) and int(dut.penable_i.value)
+                    and int(dut.pready_o.value))
+            else:
+                live = int(dut.req_i.value) or int(dut.psel_i.value)
             if live:
                 accepted += 1
                 if int(dut.clk_en_o.value) == 0:
@@ -1846,9 +1873,9 @@ async def test_a_request_is_never_accepted_at_an_edge_the_gate_removes(dut):
     w.kill()
     assert accepted > 50, "no transaction was seen; this measured nothing"
     assert bad == 0, (
-        f"{bad} of {accepted} cycles carried req_i or psel_i with clk_en_o "
-        "low: the block would have been asked for something at an edge the "
-        "gate removed")
+        f"{bad} of {accepted} cycles carried an accepted transaction with "
+        "clk_en_o low: the block would have been asked for something at "
+        "an edge the gate removed")
 
 
 @cocotb.test()
@@ -1888,3 +1915,141 @@ async def test_a_frozen_term_has_the_clock_running_one_cycle_later(dut):
     assert late == 0, (
         f"{late} of {checked} cycles followed a high npu_act_slow with "
         "clk_en_o low, which T2 says cannot happen")
+
+
+# ---------------------------------------------------------------------------
+# docs/77 section 18: the price of the wakefulness-qualified grant, on
+# the block, in whichever configuration the Makefile built.
+# ---------------------------------------------------------------------------
+@cocotb.test()
+async def test_a_request_that_finds_the_block_asleep_costs_what_wake_gnt_says(dut):
+    """The cost of docs/77 section 11's grant, measured rather than priced.
+
+    At WAKE_GNT = 0 a request that arrives while the block is asleep is
+    granted in its own cycle: `req_i` is in the enable and the gate opens
+    with it. At WAKE_GNT = 1 the block refuses that cycle, `wake_q` is set
+    at the edge that ends it, and the grant comes in the next -- ONE
+    cycle, asserted as exactly one and not as "at most". In neither
+    configuration is a grant given with the enable low, and in both a
+    request that finds the block AWAKE is granted in its own cycle: the
+    price is per sleep interval and not per access, which is what makes
+    docs/77 section 11's 56 the right count for the whole-SoC self-test.
+
+    The APB face pays nothing in either configuration, and that is
+    measured too: its SETUP cycle is the wake cycle, so PREADY is high at
+    the first ACCESS cycle whether or not the block was asleep.
+    """
+    env = Env(dut)
+    await env.reset()
+    d = dut
+
+    async def sleep_until_gated(limit=64):
+        for _ in range(limit):
+            await RisingEdge(d.clk_i)
+            await Timer(T_SAMPLE, unit="ns")
+            if int(d.clk_en_o.value) == 0:
+                return
+        raise AssertionError(
+            f"clk_en_o did not fall in {limit} idle cycles; the block never "
+            "went to sleep and this test would measure nothing")
+
+    async def request(addr):
+        """req_i up at T_DRIVE and held until granted, soc_bus.v rule 1.
+
+        Returns (cycles from the request to the grant, the enable as
+        sampled in the request's first cycle, grants seen with the enable
+        low), then drains the response so the block is quiet again.
+        """
+        await RisingEdge(d.clk_i)
+        await Timer(T_DRIVE, unit="ns")
+        d.req_i.value = 1
+        d.addr_i.value = addr
+        d.we_i.value = 0
+        cycles, first_en, bad = 0, None, 0
+        while True:
+            await Timer(T_SAMPLE - T_DRIVE, unit="ns")
+            cycles += 1
+            en = int(d.clk_en_o.value)
+            if first_en is None:
+                first_en = en
+            if int(d.gnt_o.value):
+                bad += (en == 0)
+                break
+            assert cycles < 16, "no grant in 16 cycles"
+            await RisingEdge(d.clk_i)
+            await Timer(T_DRIVE, unit="ns")
+        await RisingEdge(d.clk_i)
+        await Timer(T_DRIVE, unit="ns")
+        d.req_i.value = 0
+        d.addr_i.value = 0xDEADBEEF
+        for _ in range(4000):
+            await Timer(T_SAMPLE - T_DRIVE, unit="ns")
+            if int(d.rvalid_o.value):
+                assert not int(d.err_o.value)
+                return cycles, first_en, bad
+            await RisingEdge(d.clk_i)
+            await Timer(T_DRIVE, unit="ns")
+        raise AssertionError("no rvalid in 4000 cycles")
+
+    # 1. A request into a sleeping block.
+    await sleep_until_gated()
+    cycles, first_en, bad = await request(node(0, ADDR["ID"]))
+    assert bad == 0, "a grant was given in a cycle the enable was low"
+    if WAKE_GNT:
+        assert first_en == 0, (
+            "the enable was high in the cycle the request arrived, so the "
+            "block was not asleep and this measured nothing")
+        assert cycles == 2, (
+            f"a request that found the block asleep was granted after "
+            f"{cycles} cycles at WAKE_GNT=1; the price is exactly one cycle")
+    else:
+        assert first_en == 1, (
+            "the enable was low in the cycle a request arrived, at "
+            "WAKE_GNT=0 where req_i is in the enable")
+        assert cycles == 1, (
+            f"a request took {cycles} cycles to a grant at WAKE_GNT=0, "
+            "where an idle slave grants in the request's own cycle")
+
+    # 2. A request into an AWAKE block: the cycle after a response the
+    #    block is still held awake, and the grant must be immediate in
+    #    both configurations. Otherwise the cost would be per access.
+    cycles, first_en, bad = await request(node(0, ADDR["ID"]))
+    assert bad == 0
+    assert first_en == 1 and cycles == 1, (
+        f"a request into an awake block took {cycles} cycles to a grant "
+        f"with the enable at {first_en} in its first cycle; the price of "
+        "WAKE_GNT is supposed to be per sleep interval, not per access")
+
+    # 3. An APB read into a sleeping block: SETUP, then ACCESS.
+    await sleep_until_gated()
+    await RisingEdge(d.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    d.psel_i.value = 1
+    d.penable_i.value = 0
+    d.paddr_i.value = C_ID
+    d.pwrite_i.value = 0
+    await Timer(T_SAMPLE - T_DRIVE, unit="ns")
+    en_setup = int(d.clk_en_o.value)
+    await RisingEdge(d.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    d.penable_i.value = 1
+    await Timer(T_SAMPLE - T_DRIVE, unit="ns")
+    pready = int(d.pready_o.value)
+    en_access = int(d.clk_en_o.value)
+    await RisingEdge(d.clk_i)
+    await Timer(T_DRIVE, unit="ns")
+    d.psel_i.value = 0
+    d.penable_i.value = 0
+    assert pready == 1 and en_access == 1, (
+        f"the first ACCESS cycle had pready={pready} and clk_en_o="
+        f"{en_access}; the SETUP cycle was supposed to be the wake cycle")
+    if WAKE_GNT:
+        assert en_setup == 0, (
+            "the enable was already high in the SETUP cycle, so the block "
+            "was not asleep and the APB half of this test measured nothing")
+    else:
+        assert en_setup == 1, "psel_i is in the enable at WAKE_GNT=0"
+    dut._log.info("WAKE_GNT=%d: a request into a sleeping block is granted "
+                  "after %d cycle(s); into an awake one after 1; an APB "
+                  "access completes at its first ACCESS cycle", WAKE_GNT,
+                  2 if WAKE_GNT else 1)

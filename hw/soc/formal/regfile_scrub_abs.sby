@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# regfile_scrub.sby with the codec ABSTRACTED TO THE IDENTITY CODE --
+# docs/63 section 11 item 3's third route, taken on 2026-09-15 after
+# regfile_scrub.sby's four engines all stalled at bmc step 4 on the
+# parity network (secded_identity.v's header carries the diagnosis).
+#
+#   sby -f regfile_scrub_abs.sby prove     k-induction proof of R1-R4
+#   sby -f regfile_scrub_abs.sby bmc       bounded backstop, depth 40
+#   sby -f regfile_scrub_abs.sby cover     every register visited
+#
+# Same properties, same wrapper, same real hw/soc/rtl/ibex_regfile_secded.v
+# at SCRUB=1; the ONE difference is [files]/[script]: secded_identity.v
+# is read in place of hw/rtl/secded_enc.v and secded_dec.v. What the
+# result then means -- the file and its scrub proved for every codec
+# that satisfies dec(enc(x)) == x, the real codec being proved to
+# satisfy it by regfile_secded.sby -- is spelled out in the stand-in's
+# header, together with what the composition does not cover.
+#
+[tasks]
+prove
+bmc
+cover
+prove12
+prove_pdr
+
+[options]
+prove: mode prove
+prove: depth 40
+bmc: mode bmc
+bmc: depth 40
+cover: mode cover
+cover: depth 40
+# Added 2026-09-15 after prove/bmc at depth 40 had reached step 18 in ten
+# hours: k-induction at a small k, and an unbounded IC3 proof, each bounded.
+prove12: mode prove
+prove12: depth 12
+prove12: timeout 14400
+prove_pdr: mode prove
+prove_pdr: timeout 14400
+multiclock off
+
+[engines]
+prove: smtbmc yices
+bmc: smtbmc yices
+cover: smtbmc yices
+prove12: smtbmc yices
+prove_pdr: abc pdr
+
+[script]
+read_verilog -formal secded_identity.v
+read_verilog -formal ibex_regfile_secded.v
+read_verilog -formal regfile_scrub_props.v
+hierarchy -check -top regfile_scrub_props
+chparam -set SCRUB 1 ibex_register_file_ff
+prep -top regfile_scrub_props
+
+[files]
+secded_identity.v
+../rtl/ibex_regfile_secded.v
+regfile_scrub_props.v
+ibex_regfile_secded_props.v

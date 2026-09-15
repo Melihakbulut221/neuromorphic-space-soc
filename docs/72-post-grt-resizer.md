@@ -915,6 +915,8 @@ grep SIZE $PDK_ROOT/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x32_c2
    4 ns swing on a 51-flop change does not mean the instrument is
    broken, it means the binding path moved by one cell. A re-measurement
    of the read register should report that structure beside its slack.
+   *Measured 2026-09-15 on the eight-macro design: `docs/50` section 16. The macro read return stops being a violating launch group (360 endpoints to 17, their TNS -864.88 to -28.87) and the design's setup TNS improves 21.9 %, at the cost of 325.7 ps of the sign-off layout's 29.6 ps hold margin at the fast corner, which takes hold negative. It stays at its default of 0.*
+
 3. **`docs/69`'s strap sampling window**, `docs/70` section 15 item 4,
    likewise unblocked and unchanged.
 4. **Guard the step-rerun form.** Section 7.1: a test that a step

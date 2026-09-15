@@ -1314,6 +1314,11 @@ for the figures; the wall times are costs and not benchmarks]**
    hand, whether a slave that answers a cycle late is worth it.
    **Do not do the same for the fabric** until that question is
    answered: 12,153 intervals is a different kind of price.
+   **BUILT 2026-09-15, behind `soc_npu.v`'s `WAKE_GNT`, default 0 -- see
+   section 18**, which has the default-unchanged evidence, the corner
+   results, the formal result, the measured cost against the 56
+   predicted here, and the recommendation. The layout beside `s77gate`
+   is what section 18 does NOT have, and it says why.
 2. **A gate-level fault-injection campaign into the gated domains.**
    `docs/76` section 14 item 2, unchanged and now sharper: T2 says a
    frozen fault line true in cycle N has the block clocked at the end of

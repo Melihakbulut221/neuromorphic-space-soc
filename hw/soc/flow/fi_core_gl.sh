@@ -104,6 +104,11 @@ RF_DEFINE=()
 # The watchdog voter shadow (fi_gl_wdog.vh, gl_netlist.py --emit-wdog),
 # the same way.
 [ -f "$OUT/fi_gl_wdog.vh" ] && RF_DEFINE+=(-DFI_GL_WDOG)
+# The clock-gate shadow of docs/82 (fi_gl_cg.vh, gl_gated.py emit-cg):
+# the two gated clock nets and their enables, the accelerator's cause
+# word as its voter sees it, and the bus-statistics counters that
+# record the accelerator's fault lines.  The same way.
+[ -f "$OUT/fi_gl_cg.vh" ] && RF_DEFINE+=(-DFI_GL_CG)
 
 "$GL_IVERILOG" -g2005-sv -o "$OUT/tb_soc_fi_gl.vvp" \
   -I "$OUT" \

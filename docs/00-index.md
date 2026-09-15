@@ -517,6 +517,17 @@ failures; and `hw/soc/formal` carries **64 tasks across 15 jobs**,
 counted by summing the `[tasks]` sections rather than by reading a
 document. Every earlier count above is left standing, `docs/64`'s rule.
 
+**Re-measured again 2026-09-15 [fact].** `hw/soc/formal` carries
+**83 tasks across 20 jobs**, counted the same way. The five jobs added
+since the 2026-09-14 count are `soc_npu.sby` (the event engine's H5
+invariant, `docs/56` section 9.4), `regfile_scrub.sby` and
+`regfile_scrub_abs.sby` (the register file with its storage and scrub,
+`docs/63` section 23), `soc_apb_wb.sby` (the APB-to-Wishbone bridge,
+`docs/65` section 9.5) and `clkgate_wake_gnt.sby` (the
+wakefulness-qualified grant, `docs/77` section 18); `regfile_scrub.sby`
+also gained two engine-diversity tasks and `regfile_scrub_abs.sby` two
+more. The 2026-09-14 figure above is left standing, `docs/64`'s rule.
+
 The formal figure is the one worth a sentence, because it had been
 corrected once already and the correction was wrong too: this file said
 52 across fourteen, `ROADMAP.md` amended that to 56 across 14, and both

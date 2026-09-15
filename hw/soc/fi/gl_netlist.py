@@ -238,6 +238,20 @@ def emit_vh(flops, path):
     for f in flops:
         lines.append("  %d: release dut.%s.int_fwire_IQ; \\" % (f.idx, f.inst))
     lines.append("")
+    # docs/82.  The edge the flip-flop ITSELF sees next: the net on its
+    # own CLK pin, which after CTS is a leaf of one clock tree and, for a
+    # flip-flop behind an integrated clock gate, rises only when that
+    # gate is open.  The bench waits on it (+own_clk=1) so that a force
+    # on a flip-flop whose clock is stopped is held until the cell is
+    # next clocked -- which is what a stored upset in an unclocked
+    # flip-flop is -- instead of being released a cycle later while the
+    # cell has sampled nothing, which would be a transient on Q and not
+    # an upset at all.  For a flip-flop on a free-running clock the two
+    # are the same edge, so docs/74's records are unaffected.
+    lines.append("`define FI_GL_CLK_CASES \\")
+    for f in flops:
+        lines.append("  %d: @(posedge %s); \\" % (f.idx, verilog_ref(f.clk)))
+    lines.append("")
     with open(path, "w") as fh:
         fh.write("\n".join(lines) + "\n")
 

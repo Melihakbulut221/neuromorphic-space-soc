@@ -210,6 +210,16 @@ if [ "$SOC_CLKGATE" != 1 ]; then
   TOP_CHPARAM="$TOP_CHPARAM
 chparam -set CLKGATE $SOC_CLKGATE soc_top"
 fi
+# docs/77 section 11's knob, on soc_top's own parameter, which forwards
+# it to soc_npu. 1 qualifies the accelerator's grant and APB completion
+# by its wake bit and takes `req_i | psel_i` off its clock-gate enable,
+# which is the netlist docs/77 section 18 times the clock-gating check
+# on. Defaults to the design, 0.
+SOC_WAKE_GNT=${SOC_WAKE_GNT:-0}
+if [ "$SOC_WAKE_GNT" != 0 ]; then
+  TOP_CHPARAM="$TOP_CHPARAM
+chparam -set WAKE_GNT $SOC_WAKE_GNT soc_top"
+fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -615,6 +625,6 @@ awk -v top=soc_top -v ge=7.2576 '
 ' "$OUT/$AREA_SUMMARY"
 
 echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE"
-echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  clkgate=$SOC_CLKGATE  abc -D $PERIOD_NS"
+echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  clkgate=$SOC_CLKGATE  wake_gnt=$SOC_WAKE_GNT  abc -D $PERIOD_NS"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"

@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+
+# SymbiYosys job for docs/77 section 18's wakefulness-qualified grant.
+#
+#   sby -f clkgate_wake_gnt.sby prove    k-induction proof of G1-G3, T2
+#   sby -f clkgate_wake_gnt.sby bmc      bounded check, depth 24
+#   sby -f clkgate_wake_gnt.sby cover    reachability of W1, W2, W5-W8
+#
+# The design is hw/soc/formal/clkgate_wake_gnt.v, an ABSTRACTION in the
+# shape of clkgate_wake.v and not a block of the SoC; its header says
+# what is and is not proved. It is a sibling job rather than a task of
+# clkgate_wake.sby because the two abstractions are two enables -- the
+# one the design ships and the one soc_npu.v's WAKE_GNT builds -- and a
+# result quoted for one must not be readable as a result for the other.
+#
+# The cover task is not optional, for docs/09 section B.1's reason: G1
+# is satisfied by an enable that is the constant 1, and G3 by a request
+# that never arrives.
+
+[tasks]
+bmc
+prove
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 24
+prove: mode prove
+prove: depth 12
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc yices
+
+[script]
+read_verilog -I. -formal clkgate_wake_gnt.v
+prep -top clkgate_wake_gnt
+
+[files]
+clkgate_wake_gnt.v
+clkgate_wake_gnt_props.v

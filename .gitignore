@@ -98,6 +98,8 @@ hw/soc/formal/soc_npu_ser/
 hw/soc/formal/soc_npu_ser_*/
 hw/soc/formal/soc_gpio/
 hw/soc/formal/soc_gpio_*/
+hw/soc/formal/soc_apb_wb/
+hw/soc/formal/soc_apb_wb_*/
 hw/soc/formal/soc_qspi/
 hw/soc/formal/soc_qspi_*/
 hw/soc/formal/soc_boot/
@@ -207,3 +209,26 @@ hw/soc/formal/*_cover/
 hw/soc/formal/*_bmc/
 # sby's per-job status databases (the bare <job>/ directory beside <job>_bmc/ etc.)
 hw/soc/formal/*/status.sqlite*
+
+# sby writes one run directory per TASK, and the task names grew past
+# the three the rules above name: prove12, prove_pdr and bmc_btor are
+# regfile_scrub's engine-diversity tasks (docs/63 section 23). The
+# property is "a directory sby wrote", which .gitignore cannot express,
+# so the patterns are enumerated and this comment says why a fourth one
+# will need a fourth line.
+hw/soc/formal/*_prove12/
+hw/soc/formal/*_prove_pdr/
+hw/soc/formal/*_bmc_btor/
+
+# The thesis: main.pdf and main.bbl ARE tracked -- the PDF is the
+# deliverable and the .bbl is what an arXiv upload needs -- and every
+# other LaTeX intermediate is not.
+thesis/main.aux
+thesis/main.log
+thesis/main.out
+thesis/main.toc
+thesis/main.lof
+thesis/main.blg
+thesis/main.synctex.gz
+thesis/*.fdb_latexmk
+thesis/*.fls

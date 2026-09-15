@@ -1320,3 +1320,132 @@ cd hw/soc/tb/cocotb && \
 
 `hw/soc/out/`, `hw/soc/pnr/runs/`, `hw/soc/pnr/config.resolved.json` and
 `hw/soc/tb/cocotb/sim_build*/` are gitignored.
+
+## 16. The third measurement, on the design that exists (added 2026-09-15)
+
+`docs/67` item 3, `docs/70` item 3, `docs/71` item 3, `docs/72` item 2
+and `docs/73` item 4 all carry the same debt: the two prices in this
+document were taken on designs that no longer exist, and the macro read
+return is the largest launch group of every layout since. This section
+pays it. One synthesis at `SOC_MEM_RDREG=1`, one layout of that netlist
+through the whole flow, and one whole-SoC simulation, all on the
+eight-macro design of `docs/79`, against `s83romecc5` as the arm.
+
+**The arms.** `s83romecc5` is the sign-off layout with `RDREG = 0`;
+`s84rdreg2` is the same flow, the same configuration
+(`hw/soc/pnr/config-ecc-rom.json`) and the same initial state, on the
+netlist `hw/soc/out/s84-rdreg-syn/soc_top.netlist.v` that
+`SOC_MEM_RDREG=1 hw/soc/flow/syn_soc_top.sh` writes. The netlist
+carries the response register: six `g_rd2` scope names and 6,059
+flip-flops against the baseline's 5,998 **[fact, `grep` on the two
+`final/nl/soc_top.nl.v`]**.
+
+> **A RUN THAT MEASURED NOTHING, KEPT HERE BECAUSE IT IS THE FAILURE
+> MODE THIS DOCUMENT IS ABOUT.** The first attempt, `s84rdreg`, was
+> launched with `SOC_MEM_RDREG=1` in the environment and completed all
+> 67 steps. It placed the BASELINE netlist:
+> `hw/soc/flow/pnr_soc_top.sh` takes its netlist from `SYN_NETLIST`,
+> which defaults to `hw/soc/out/s47-sram/soc_top.netlist.v`, and the
+> synthesis knob does not reach it. `grep -c g_rd2` on that run's own
+> netlist returns 0. Its numbers are not in the table below and are not
+> a measurement of anything; the run directory is left in place with
+> this sentence as its label. The shape is the one `docs/44` names and
+> `docs/64` collects: **the measurement was taken on the wrong
+> design**, and nothing in the flow said so -- the layout is a perfectly
+> good layout of the netlist it was given.
+
+**The result, both arms at the slow corner
+`nom_slow_1p08V_125C` [fact, each run's `final/metrics.json` and
+`violator_census.py`]:**
+
+| | `s83romecc5`, `RDREG = 0` | `s84rdreg2`, `RDREG = 1` | delta |
+|---|---:|---:|---:|
+| macro-read-launched violators | **360** | **17** | **-343** |
+| worst of those | -4.1587 | **-2.4798** | +1.6789 |
+| their TNS | -864.88 | **-28.87** | **+836.01** |
+| violating endpoints, all | 3,529 | **2,913** | -616 |
+| setup TNS, all | -14,735.65 | **-11,509.24** | **+3,226.41, 21.9 %** |
+| worst setup slack | **-7.5758** | -7.7394 | **-0.1636** |
+| worst hold, fast corner | **+0.0296** | **-0.2961** | **-0.3257** |
+| worst hold, typical corner | +0.1769 | +0.0278 | -0.1491 |
+| worst hold, slow corner | +0.4261 | +0.4384 | +0.0123 |
+| instances | 168,592 | 169,275 | +683 |
+| flip-flops | 5,998 | 6,059 | **+61** |
+| instance utilisation | 0.7538 | 0.7602 | +0.0064 |
+| antenna violating nets | 2 | **1** | -1 |
+| route DRC errors | 0 | 0 | 0 |
+
+**The mechanism works and the document's prediction holds.** Section 4
+priced this as a split of the 14.0728 ns macro access into two cycles
+so that the standard-cell stages after `A_DOUT` no longer share a
+period with it. The launch census is the direct evidence: the macro
+read return stops being a violating launch group. 360 endpoints become
+17, and those 17 are not on the bus at all -- their captures are
+`u_scrub.cnt[*]`, the scrub engine's counter, sixteen of the seventeen
+**[fact, resolving each endpoint's `Q` net in the netlist]**. The
+design's total violation improves by 21.9 %, which is the largest
+single-change improvement in any layout this project has run.
+
+**AND IT DOES NOT MAKE THE PART.** Two things go the wrong way, and the
+second one is disqualifying.
+
+The worst path is unchanged in kind and 0.1636 ns worse in value: it
+was, and remains, the register-file read into the fabric --
+`register_file_i.raddr_b_i` launching 1,081 endpoints at -7.7394
+**[fact, `violator_census.py`]**. The read register was never going to
+touch that path: it is between the register file and the peripherals,
+not behind a macro. `docs/72` section 15 item 5 named the structural
+answer to that path -- a registered request phase in the fabric -- and
+it is still unpriced.
+
+**Hold at the fast corner goes negative: +0.0296 becomes -0.2961.**
+`s83romecc5` is the only layout in this project that meets hold, and it
+meets it by 29.6 ps. Sixty-one new flip-flops and 683 new instances,
+placed by the same tool with the same constraints, cost 325.7 ps of
+that margin. This is the same trade `docs/79` measured for the antenna
+diodes: a change whose own effect is positive spends the margin that
+the sign-off layout has almost none of. The read register therefore
+STAYS AT ITS DEFAULT OF 0 in the shipped configuration, and what this
+section establishes is the price of turning it on with the hold margin
+as it is today, not a recommendation to turn it on.
+
+**Function, at `RDREG = 1`.** `SOC_MEM_RDREG=1 hw/soc/flow/sim_soc.sh`
+elaborates with `g_rd2` selected and the whole-SoC test passes:
+`[TB] PASS`, 1,150 console characters decoded with 0 framing errors,
+boot status `0x00030000`, `$finish` at 5,164,015,000 ps **[fact,
+`hw/soc/out/sim-soc-rdreg/sim.log`]**. The arm check inside the script
+confirms `g_rd2` and not `g_rd1` is in the elaborated image.
+
+**What this closes and what it does not.** `docs/67` item 3, `docs/70`
+item 3, `docs/71` item 3, `docs/72` item 2 and `docs/73` item 4 are
+answered: the read register is measured on the design that exists, and
+the answer is 21.9 % of the total violation for 325.7 ps of hold
+margin. What is not answered is whether a layout exists that takes the
+first without the second -- a hold-repair pass aimed at the fast corner
+on this netlist, which `docs/79`'s antenna experiment suggests is
+structural rather than tunable, and which nobody has run.
+
+### 16.1 Reproducing section 16
+
+```
+export PDK_ROOT=$HOME/.ciel
+SOC_MEM_RDREG=1 hw/soc/flow/syn_soc_top.sh 20 hw/soc/out/s84-rdreg-syn
+grep -c g_rd2 hw/soc/out/s84-rdreg-syn/soc_top.netlist.v            # 12, not 0
+
+# THE KNOB DOES NOT REACH THE LAYOUT: name the netlist and the state.
+SYN_NETLIST=$PWD/hw/soc/out/s84-rdreg-syn/soc_top.netlist.v \
+PNR_STATE=$PWD/hw/soc/pnr/state/syn_soc_top_rdreg.state.json \
+PNR_CONFIG=$PWD/hw/soc/pnr/config-ecc-rom.json \
+  hw/soc/flow/pnr_soc_top.sh s84rdreg2 -F Yosys.JsonHeader -S Yosys.Synthesis \
+  -S Checker.YosysUnmappedCells -S Checker.YosysSynthChecks \
+  -S Checker.NetlistAssignStatements \
+  -i $PWD/hw/soc/pnr/state/syn_soc_top_rdreg.state.json
+
+python3 hw/soc/pnr/violator_census.py hw/soc/pnr/runs/s84rdreg2 \
+  --corner nom_slow_1p08V_125C                                     # 2,913 / -7.7394
+grep -c A_DOUT hw/soc/pnr/runs/s84rdreg2/*stapostpnr*/nom_slow_1p08V_125C/violator_list.rpt   # 17
+
+OSS_CAD_SUITE=<a suite whose iverilog is 12> SOC_MEM_RDREG=1 \
+  hw/soc/flow/sim_soc.sh hw/soc/out/sim-soc-rdreg                  # [TB] PASS
+```
+

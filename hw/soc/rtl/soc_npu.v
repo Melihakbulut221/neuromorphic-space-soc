@@ -413,6 +413,29 @@ module soc_npu #(
     // an enable without a gate or a gate without an enable is not a
     // reachable configuration.
     parameter integer CLKGATE = 1,
+
+    // ---- the wakefulness-qualified grant, docs/77 section 11 ----
+    //
+    // 0 is the design docs/76 and docs/77 measured: `gnt_o` answers a
+    // request in the cycle it arrives, `pready_o` is the constant 1, and
+    // `req_i | psel_i` sit combinationally in `clk_en_o` so that the
+    // block is clocked at the edge that ends any cycle it accepted
+    // something in. 1 refuses the grant and the APB completion in any
+    // cycle the block is not clocked, and takes the two inputs OFF the
+    // enable: `clk_en_o` becomes a function of `wake_q` and `wake_hold`
+    // and of nothing else, so the clock-gating check that docs/77
+    // section 3 traces to the CPU's own register-file read address has
+    // no path from the CPU left to fail on. The price is one cycle on
+    // the first request after every sleep interval -- docs/77 section
+    // 11 priced it at 56 cycles of 415,324 on docs/51's self-test, and
+    // section 18 is the measurement -- and with it the corpus's
+    // 415,324-cycle invariant moves. OFF BY DEFAULT: section 11's
+    // judgement stands until the layout section 17 item 1 asks for has
+    // been made, and sw/tests pins the default so that a cycle count
+    // the corpus quotes cannot move without a document saying why.
+    // At CLKGATE = 0 there is no wake bit to qualify on and the
+    // g_noclkgate arm below makes the parameter inert.
+    parameter integer WAKE_GNT = 0,
     // Cycles the clock keeps running after the last activity. Not a
     // correctness term -- see the enable's own comment -- but the margin
     // that covers a settling chain inside the frozen die that no term
@@ -973,7 +996,19 @@ module soc_npu #(
     else if (rvalid_o)  win_out <= 1'b0;
   end
 
-  assign gnt_o = req_i && (win_state == W_IDLE) && (!win_out || rvalid_o);
+  // docs/77 section 11, built behind WAKE_GNT: `may_accept` is the
+  // constant 1 unless that parameter is set, and then it is the block's
+  // own wake bit -- "I am clocked at the end of this cycle". Declared
+  // here beside the grant it qualifies and driven from the clock-gate
+  // section at the bottom of the file, where the block's knowledge of
+  // its own wakefulness lives. A grant given in a cycle the gate then
+  // removes is a request this block has accepted and dropped; the
+  // qualification is what makes that unreachable by construction rather
+  // than by the enable's timing.
+  wire may_accept;
+
+  assign gnt_o = req_i && may_accept && (win_state == W_IDLE)
+              && (!win_out || rvalid_o);
 
   // `>=` rather than `==`, for soc_npu_ser.v's reason: an upset that
   // pushes the counter above the bound must expire now, not wrap.
@@ -1167,8 +1202,17 @@ module soc_npu #(
   // alone on the same rule.
   reg        flush_pulse, scrub_pulse;
 
-  wire apb_wr = psel_i && penable_i &&  pwrite_i;
-  wire apb_rd = psel_i && penable_i && !pwrite_i;
+  // Qualified by `may_accept` for the same reason `gnt_o` is. Under
+  // WAKE_GNT an ACCESS cycle this block answers with `pready_o` low is a
+  // cycle it is not clocked in, and a write that acted in it would be a
+  // write the gated silicon never saw -- and, in a bare simulation of
+  // this block with no gate in front of it, a write that acted TWICE.
+  // With a compliant master the case is never reached (see `pready_o`);
+  // the term is here so that the statement is the slave's and not the
+  // master's. At WAKE_GNT = 0 it is the constant 1 and these two lines
+  // are what they were.
+  wire apb_wr = psel_i && penable_i &&  pwrite_i && may_accept;
+  wire apb_rd = psel_i && penable_i && !pwrite_i && may_accept;
 
   // -------------------------------------------------------------------
   // SoC-side event queues
@@ -2213,8 +2257,10 @@ module soc_npu #(
   // slow corner the CPU-derived signal reaches this enable AFTER the
   // check's required time, so the check fails with the enable's logic
   // deleted entirely. Closing it needs `gnt_o` qualified by wakefulness
-  // -- a fabric-visible cycle on every wake -- and docs/77 section 11
-  // prices that and does not take it.
+  // -- a fabric-visible cycle on every wake -- which docs/77 section 11
+  // priced and did not take, and which WAKE_GNT now builds behind a
+  // parameter that defaults to off (docs/77 section 18); the parameter's
+  // own comment at the top of the file is the argument.
   // -------------------------------------------------------------------
   generate
   if (CLKGATE != 0) begin : g_clkgate
@@ -2257,19 +2303,65 @@ module soc_npu #(
       else         wake_q <= npu_act;
     end
 
+    // RELOADED BY ACCEPTED ACTIVITY. `npu_act && may_accept` is
+    // `npu_act` at WAKE_GNT = 0. At WAKE_GNT = 1 it is what the gate
+    // already makes of `npu_act` in silicon: this counter is on the
+    // GATED clock, so an edge at which it could reload is an edge at
+    // which the block is clocked, and that is `may_accept`. Where the
+    // qualification matters is where there is no gate -- a bare
+    // simulation of this block, in which a refused request would
+    // otherwise reload the counter in a cycle the enable was low, and
+    // the executed A1 in hw/soc/tb/cocotb/test_soc_npu.py would report
+    // the mechanism's own register moving at an edge the gate removes.
     reg [HOLD_W-1:0] wake_hold;
     always @(posedge clk_i or negedge rst_ni) begin
-      if (!rst_ni)                   wake_hold <= HOLD_LOAD;
-      else if (npu_act)              wake_hold <= HOLD_LOAD;
+      if (!rst_ni)                     wake_hold <= HOLD_LOAD;
+      else if (npu_act && may_accept)  wake_hold <= HOLD_LOAD;
       else if (wake_hold != HOLD_ZERO) wake_hold <= wake_hold - HOLD_ONE;
     end
 
-    // Written with the LATE term first and alone at the top level, so
-    // that what the mapper has to put next to the gate is one OR of a
-    // late signal against a signal that settled a cycle ago.
-    assign clk_en_o = npu_act_fast
-                   || wake_q
-                   || (wake_hold != HOLD_ZERO);
+    // THE REGISTERED HALF, NAMED. Both of its terms settled at the
+    // previous edge -- `wake_q` on the ungated clock, `wake_hold` on this
+    // block's own -- so it is what the block knows about its own
+    // wakefulness without reading an input, and docs/77 section 11's
+    // grant is made of it.
+    wire awake = wake_q || (wake_hold != HOLD_ZERO);
+
+    if (WAKE_GNT != 0) begin : g_wake_gnt
+      // docs/77 section 11, BUILT. No input in the enable: the two
+      // transient terms are gone from it, and what replaces them is the
+      // refusal -- `gnt_o` and `pready_o` are both qualified by
+      // `may_accept`, so a request that arrives while this block is
+      // asleep is not accepted in that cycle. It is not lost either:
+      // `wake_q` is still set by `npu_act`, which still carries `req_i`
+      // and `psel_i`, so the block is clocked at the end of the NEXT
+      // cycle and the grant is given then. One cycle, once per sleep
+      // interval, and never on a block that is already awake.
+      //
+      // What that buys the clock-gating check is that its whole cone is
+      // now four flip-flops -- `wake_q` and the three bits of
+      // `wake_hold` -- and the CPU's register-file read address, which
+      // docs/77 section 3 measures as the whole of the -5.0198 ns, has
+      // no path to the GATE pin at all. sw/tests/test_soc_clkgate_guards.py
+      // walks the fan-in cone of `clk_en_o` at this setting and fails
+      // if any input port is reachable.
+      assign clk_en_o   = awake;
+      assign may_accept = awake;
+    end else begin : g_fast_gnt
+      // Written with the LATE term first and alone at the top level, so
+      // that what the mapper has to put next to the gate is one OR of a
+      // late signal against a signal that settled a cycle ago. AND
+      // WRITTEN OUT IN FULL rather than as `npu_act_fast || awake`,
+      // which is the same function: this arm is the design that ships,
+      // and keeping the expression the mapper sees textually what it
+      // was before WAKE_GNT existed is what lets the default's netlist
+      // be checked IDENTICAL to docs/77's rather than argued equivalent
+      // -- docs/77 section 18 diffs the two.
+      assign clk_en_o   = npu_act_fast
+                       || wake_q
+                       || (wake_hold != HOLD_ZERO);
+      assign may_accept = 1'b1;
+    end
   end else begin : g_noclkgate
     // MEASUREMENT ONLY, and it is the baseline the gate's area and power
     // are priced against -- docs/41 section 6.5's rule. Nothing in this
@@ -2281,10 +2373,21 @@ module soc_npu #(
     // design WITHOUT the mechanism rather than the design with it
     // disconnected.
     assign clk_en_o = 1'b1;
+    // And nothing to refuse on: WAKE_GNT qualifies the grant on a wake
+    // bit this arm does not elaborate, so it is inert here by
+    // construction rather than by a check.
+    assign may_accept = 1'b1;
   end
   endgenerate
 
-  assign pready_o  = 1'b1;
+  // The constant 1 at WAKE_GNT = 0, which is every configuration the
+  // design ships. Under WAKE_GNT it is the wake bit, so an ACCESS cycle
+  // in which this block is not clocked is a wait state and not a
+  // completion. With a compliant master the wait state is never taken:
+  // the SETUP cycle's `psel_i` sets `wake_q` through `npu_act`, so the
+  // block is awake by the ACCESS cycle and the APB face pays nothing.
+  // What the line buys is that the statement holds of the slave.
+  assign pready_o  = may_accept;
   assign pslverr_o = psel_i && !hit;
 
   assign obs_ser_sck_o     = ser_sck;

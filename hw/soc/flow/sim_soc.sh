@@ -206,6 +206,16 @@ if [ "$SOC_CLKGATE" != 1 ]; then
   DEFPARAMS="$DEFPARAMS
   defparam tb_soc.dut.CLKGATE = $SOC_CLKGATE;"
 fi
+# SOC_WAKE_GNT, docs/77 section 11: soc_top.v's WAKE_GNT, the
+# accelerator's wakefulness-qualified grant. 1 is the build docs/77
+# section 18 measures the cycle cost on; the design ships 0 and sw/tests
+# enforces it, because the whole-SoC cycle count is a corpus invariant
+# and this is the one knob that moves it.
+SOC_WAKE_GNT=${SOC_WAKE_GNT:-0}
+if [ "$SOC_WAKE_GNT" != 0 ]; then
+  DEFPARAMS="$DEFPARAMS
+  defparam tb_soc.dut.WAKE_GNT = $SOC_WAKE_GNT;"
+fi
 if [ -n "$DEFPARAMS" ]; then
   RF_ROOT=(-s soc_param_override)
   RF_SRC=("$OUT/soc_param_override.v")

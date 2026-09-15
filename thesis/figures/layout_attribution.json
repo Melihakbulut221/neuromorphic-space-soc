@@ -1,0 +1,30 @@
+{
+ "named": 1,
+ "clock": 1075,
+ "filler": 107890,
+ "named_nets": 643,
+ "by_net_vote": 19790,
+ "total": 168584,
+ "logic": 60694,
+ "unattributed": 5916,
+ "per_block": {
+  "__filler__": 107890,
+  "__clock__": 1075,
+  "Ibex RV32IMC core": 23942,
+  "CLINT time base": 1739,
+  "Console UART": 335,
+  "General-purpose timer": 2480,
+  "GPIO": 1123,
+  "Neuromorphic accelerator": 15686,
+  "Bus fault counters": 1165,
+  "Memory scrub engine": 1173,
+  "QSPI flash controller": 1688,
+  "Bus fabric and APB": 600,
+  "Plug-and-play ROM": 334,
+  "Boot controller": 891,
+  "ROM control and ECC": 1037,
+  "RAM control and ECC": 1510,
+  "__unattributed__": 5916
+ },
+ "unattributed_fraction": 0.09747
+}

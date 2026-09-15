@@ -196,7 +196,18 @@ module soc_top #(
     // k-induction, soc_npu.v's by measurement over a frozen die -- but
     // there is no configuration in which one is wanted and the other is
     // not, and a second parameter would be a second thing to get wrong.
-    parameter integer CLKGATE = 1
+    parameter integer CLKGATE = 1,
+    // docs/77 section 11's wakefulness-qualified grant on the
+    // accelerator, built behind a parameter and OFF by default. It is
+    // forwarded to soc_npu and read by nothing else, and the fabric's
+    // gate is deliberately NOT given the same treatment: docs/77 section
+    // 11 prices the accelerator's at 56 cycles of 415,324 and the
+    // fabric's at 12,153, and section 17 item 1 says the two are not to
+    // be decided together. sw/tests pins the default for the reason it
+    // pins CLKGATE, with one more: what this changes is the cycle count
+    // of every program that touches the accelerator after an idle gap,
+    // and the corpus quotes that count as an invariant.
+    parameter integer WAKE_GNT = 0
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -1010,7 +1021,8 @@ module soc_top #(
       .SER_HALF  (2),
       .INJ_DEPTH (8),
       .CAP_DEPTH (8),
-      .CLKGATE   (CLKGATE)
+      .CLKGATE   (CLKGATE),
+      .WAKE_GNT  (WAKE_GNT)
   ) u_npu (
       .clk_i (clk_npu), .rst_ni (rst_sys_n),
       // The gated clock for the block, and the UNGATED one for the

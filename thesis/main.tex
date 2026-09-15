@@ -1,0 +1,125 @@
+% SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+% SPDX-License-Identifier: CC-BY-4.0
+%
+% The thesis: a design description of the neuromorphic space SoC.
+%
+%   make            -> main.pdf   (tectonic, or pdflatex+bibtex)
+%
+% Chapters live in chapters/ and are written one per file so that they
+% can be worked on independently; figures/ carries the generated PDFs
+% and the scripts that generate them, so that every picture in this
+% document can be reproduced from the run trees it was drawn from.
+
+\documentclass[11pt,a4paper,oneside]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=2.4cm,bottom=2.8cm]{geometry}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{siunitx}
+\usepackage[dvipsnames,table]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,calc,backgrounds}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{csquotes}
+\usepackage{fancyhdr}
+\usepackage[hidelinks,breaklinks]{hyperref}
+\usepackage[nameinlink]{cleveref}
+
+% ---- house style ----------------------------------------------------
+\definecolor{accent}{HTML}{0072B2}
+\definecolor{rule}{HTML}{555555}
+\hypersetup{colorlinks=true,linkcolor=accent,citecolor=accent,urlcolor=accent}
+
+\newcommand{\code}[1]{{\small\texttt{#1}}}
+% \dcite{63}{section 8.4} -> docs/63 section 8.4
+\newcommand{\dcite}[2]{\mbox{\code{docs/#1}\,#2}}
+\newcommand{\fact}{\textsuperscript{[fact]}}
+
+\sisetup{detect-all,group-separator={,},group-minimum-digits=4}
+
+\captionsetup{font=small,labelfont=bf,width=0.94\linewidth}
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0pt}
+
+\lstset{basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single,
+        rulecolor=\color{rule},framesep=4pt,columns=fullflexible,
+        showstringspaces=false,captionpos=b}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\title{\bfseries A Radiation-Hardened Neuromorphic\\System-on-Chip on an Open 130\,nm PDK\\[0.4em]
+\large Design, Hardening, Verification and Layout}
+\author{Hasan Melih Akbulut}
+\date{15 September 2026}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent
+This document describes a radiation-hardened neuromorphic
+system-on-chip designed for the IHP SG13G2 130\,nm open process design
+kit with open tools only. The part joins a 32-bit RISC-V application
+core to a spiking neural-network accelerator, protects both with
+triple-modular redundancy, single-error-correcting double-error-detecting
+codes and a scrubbing engine, and carries the whole through synthesis,
+placement, routing and geometric sign-off on eight vendor memory macros.
+
+Two things distinguish the record. The first is that every claim in it
+is a measurement with a named source: where a number was superseded it
+is marked and kept rather than rewritten, and where a check did not
+finish the document says so in the word the tool used, because
+\textsc{timeout}, \textsc{killed} and \textsc{error} are three
+different results. The second is that the design's own instrumentation
+is part of the subject: guards that count redundancy in the netlist
+rather than in the source, formal property sets that state one-line
+invariants over all reachable states, and fault-injection campaigns at
+register-transfer and gate level whose verdicts are cross-checked
+against those invariants.
+
+No clock frequency is claimed for this design, by a rule the project
+adopted early and has kept. No silicon of the full system-on-chip
+exists; a frozen slice of the accelerator was submitted to a
+multi-project shuttle and is pinned by hash. What exists is a design in
+register-transfer form, a placed and routed layout that meets hold and
+is clean where the design drew, and the measurements that say what each
+of its mechanisms costs.
+\end{abstract}
+
+\clearpage
+\tableofcontents
+\clearpage
+\listoffigures
+\clearpage
+
+\input{chapters/intro}
+\input{chapters/arch}
+\input{chapters/npu}
+\input{chapters/harden}
+\input{chapters/verif}
+\input{chapters/phys}
+\input{chapters/results}
+\input{chapters/conclusion}
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
