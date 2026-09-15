@@ -628,12 +628,42 @@ def cmd_campaign(args):
                                 own_clk=args.own_clk)
 
     rows = []
+    unknown, unchanged = [], []
     t0 = time.time()
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
         for n, (item, r) in enumerate(ex.map(job, todo), 1):
             p, f = item
-            if ii(r, "hit") != 1 or ii(r, "during") == hx(r, "before"):
-                sys.exit("a force did not land: flop %d" % f["idx"])
+            # A FORCE THAT DID NOT LAND IS A RESULT, NOT A CRASH.
+            #
+            # The first three campaign runs died here on the FIRST site
+            # of the plan, throwing away the arm [fact, 2026-09-15].
+            # The record says why:
+            #
+            #   hit=1 before=0000000000000000000000000000000X
+            #         during=x persist=0
+            #
+            # `\u_npu.u_node0.u_lif.w_data_all [72]` holds X at cycle
+            # 10672. It is a weight-data register with no reset, in a
+            # domain whose clock is stopped, and this workload never
+            # writes it: a gate-level model leaves such a flip-flop
+            # unknown until something clocks a value into it. Forcing
+            # an unknown bit to its "complement" produces another
+            # unknown, so `during == before` and the injection cannot
+            # be an upset -- there was no state to upset.
+            #
+            # That is a property of the site and the workload, and
+            # counting it is the measurement. `hit != 1` still aborts:
+            # that one means the bench never applied the force at all,
+            # which is a tool fault and not a result.
+            if ii(r, "hit") != 1:
+                sys.exit("the bench did not apply the force: flop %d"
+                         % f["idx"])
+            if hx(r, "before") < 0 or r.get("during", "").strip() in ("x", "X"):
+                unknown.append((f["idx"], f["q"].strip(), int(p["cycle"])))
+                continue
+            if ii(r, "during") == hx(r, "before"):
+                unchanged.append((f["idx"], f["q"].strip(), int(p["cycle"])))
+                continue
             cls, df = campaign.classify(r, golden)
             rows.append(row_of(args.arm, p["kind"], p.get("asleep", ""), f,
                                int(p["cycle"]), r, g, cls, df))
@@ -644,6 +674,13 @@ def cmd_campaign(args):
     path = os.path.join(out_dir, "records_gated.csv")
     write_rows(path, rows)
     say("records: %s", path)
+    say("injected %d of %d planned sites; %d held an UNKNOWN value at the "
+        "injection cycle and %d were unchanged by the force, both skipped "
+        "and neither is a fault", len(rows), len(todo), len(unknown),
+        len(unchanged))
+    for tag, lst in (("unknown", unknown), ("unchanged", unchanged)):
+        for idx, q, cyc in lst:
+            log("  %s: flop %d %s at cycle %d" % (tag, idx, q, cyc))
     summarise_campaign(say, rows)
     say("wall: %.1f s for %d simulations at %d jobs (contended); per simulation "
         "min %.1f, median %.1f, max %.1f",

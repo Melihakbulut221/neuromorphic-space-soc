@@ -17,7 +17,8 @@ on the system-on-chip that instantiates it.
 
 \section{What it computes: leaky integrate-and-fire, in integers}
 
-The neuron model is classical digital leaky integrate-and-fire. Each
+The neuron model is classical digital leaky integrate-and-fire
+\cite{frenkel2019}. Each
 neuron carries a 24-bit state word: a signed 16-bit membrane potential
 \code{V}, an unsigned 4-bit refractory countdown \code{R}, and four
 reserved bits \dcite{10}{section 3} holds open as a per-neuron parity
@@ -79,7 +80,10 @@ spurious or missed spike and then decays back toward rest --- on the
 order of 100 ticks at the reset leak shift of 3 from full scale --- and
 an upset in \code{R} costs at most $T_{\mathrm{REFR}} \leq 15$ ticks of
 wrong gating. The four reserved bits are the hook if a campaign shows
-the bet is wrong.
+the bet is wrong. The pilot did not wait for that: \code{lif\_core.v}
+holds the 20-bit $\{R,V\}$ word under one SECDED $(26,20)$ codeword, six
+check bits per neuron, so the elaborated slice corrects what the
+specification leaves bare (\dcite{16}{section 2.1}).
 
 E8 is what makes the rest possible: no arbitration, no clock-dependent
 reordering, no dropped event on the processing path, so the core is a
@@ -126,12 +130,12 @@ neuron $j$, 4-bit signed, at bit address
 $(a \cdot \mathrm{N\_NEURONS} + j)\cdot 4$ --- axon-major, so one
 event's weight column is a contiguous burst. Physically, at full scale,
 they are an SRAM with a single update pipeline time-multiplexed across
-all neurons: \dcite{02}{section 3}'s Candidate~B, chosen because
+all neurons \cite{openspike2023}: \dcite{02}{section 3}'s Candidate~B, chosen because
 flip-flop weights do not scale.
 
 The physical word is 64 data bits, exactly 16 weights, plus 8 check
-bits of a single-error-correcting double-error-detecting code: a 72-bit
-macro word at 12.5\,\% overhead. At the 512-by-512 default that is
+bits of a single-error-correcting double-error-detecting code
+\cite{hsiao1970}: a 72-bit macro word at 12.5\,\% overhead. At the 512-by-512 default that is
 16,384 words --- 128\,KB of data and 16\,KB of check bits, the dominant
 area of the block (\dcite{10}{section 5}) --- and one synaptic event
 reads 32 of them, the pipeline applying E1--E5 to 16 neurons per
@@ -157,7 +161,7 @@ latches the word index, and processing continues. The core is
 deliberately fail-operational --- a dead weight word degrades the
 network rather than stopping the node --- and a background scrubber
 walks the array while the input queue is empty, so single-bit errors do
-not accumulate into double-bit ones.
+not accumulate into double-bit ones \cite{saleh1990}.
 
 \textbf{What the pilot stores is flip-flops, and that is a fallback
 that was taken rather than a simplification.}
@@ -166,7 +170,7 @@ flip-flop file with a one-weight-per-cycle load port and no SRAM macro
 --- \dcite{02}{section 3}'s Candidate~A storage class, reached by that
 document's fallback trigger F1. The trigger fired for a measured
 reason: \dcite{12}{sections 7.5 and 8} hardened one \code{RM\_IHPSG13}
-macro and returned a \textsc{no-go} for this shuttle, because the macro
+macro \cite{ihppdk} and returned a \textsc{no-go} for this shuttle, because the macro
 places, routes and closes timing and then fails Magic design-rule
 checking, KLayout design-rule checking and Netgen
 layout-versus-schematic on causes entirely inside the vendor views ---
@@ -208,11 +212,11 @@ than approximating them.
 Until \dcite{51}{} the repository held a RISC-V system-on-chip and a
 separate accelerator that had never been in the same simulation. The
 connection is built the hard way: \code{hw/rtl/pilot\_top.v}, the
-shuttle submission itself, frozen by blob hash and unmodified, is
-\emph{instantiated} inside \code{soc\_top.v} and reached over the same
-four serial pins the die will have. No copy exists under
-\code{hw/soc/}, and a guard suite fails if any of the seven frozen
-files it reads is touched.
+frozen die's own top level, pinned by blob hash and unmodified, is
+\emph{instantiated} inside \code{hw/soc/rtl/\allowbreak{}soc\_npu.v}
+and reached over the same four serial pins the die will have. No copy
+exists under \code{hw/soc/}, and a guard suite fails if any of the ten files
+\dcite{34}{section 2.1} pins is edited against the index.
 
 \subsection{Two faces, because there are two problems}
 
@@ -230,7 +234,9 @@ offset above \code{0x1FC} where the die's seven-bit register address
 runs out, and a sub-word write --- because the serial frame carries no
 byte enable, so a slave that accepted a byte store would write three
 bytes of a register the master never named. Check 25 of the bring-up
-program requires a load-access fault for all of them.
+program requires a fault for every one of them --- a load-access fault
+at each of its five bad addresses, a store-access fault for the byte
+store.
 
 \subsection{Why the transport is serial}
 
@@ -301,9 +307,12 @@ the same edge, so a single state that both started a frame and watched
 for its completion starts a second on the way out --- a read of the
 output queue, which pops, reaching an engine that has moved on, and it
 was measured duplicating one barrier echo in a twelve-event stream.
-\code{E\_DECIDE} is bounded because it holds while the die's input
-queue is full and only a drain unblocks it; its escape returns there
-with the event word untouched, so no event is lost.
+\code{E\_DECIDE} would otherwise hold for as long as the die's input
+queue stays full, so it carries both an escape and a bound: the escape
+detours to a drain and comes back to the same event word, losing
+nothing, and the bound gives up after \code{DECIDE\_MAX} cycles,
+discards the event and raises a sticky cause bit --- bounded, reported
+loss, which the file argues is better than an engine that stops.
 
 \subsection{One interrupt, and a cause register that scales}
 
@@ -340,10 +349,16 @@ accelerator's gated net and 55 to the fabric's, and the share of the
 design behind a gate rises from 39.5\,\% to 76.0\,\%. Idle power of the
 whole chip at the typical corner falls from 18.745\,mW to 8.287\,mW, a
 factor of 2.26, on two runs one parameter apart whose resolved
-configurations differ in no key. The accelerator's share had been
+configurations differ in no key --- and \dcite{76}{section 8.7} lets
+that figure travel only with the rest of its sentence, which is that
+both layouts fail setup at the slow corner, fail maximum slew and
+maximum capacitance, and have never been through design-rule or
+layout-versus-schematic checking. The accelerator's share had been
 measured before the gate existed: it multiplied the chip's idle power
-by 5.588, and all 2,178 flip-flops it brought sat on the ungated net
-(\dcite{57}{section 9}, \dcite{61}{section 7.3}). It is one domain
+by 5.588 over 2,152 ungated flip-flops (\dcite{57}{section 9}), a
+population \dcite{61}{section 7.3} counts again in the clock tree as
+2,178 with \dcite{58}{}'s 26 added, every one of them on the ungated
+net. It is one domain
 because the serial master divides the block's clock to make the die's
 serial clock, so two would put a clock-domain crossing on the serial
 port of a frozen block.
@@ -382,13 +397,13 @@ bit of the CPU's register-file read address.
 \section{The golden-model comparison}
 
 \dcite{51}{section 7} is the demonstration, and its structure is what
-makes it evidence. \code{hw/soc/flow/\allowbreak{}gen\_npu\_\allowbreak{}vectors.py}
-runs on every build of the boot image, \emph{before} the compiler,
-running \code{sw/golden/lif\_core.py} over the stimulus and emitting
-the node register map in C plus the stimulus and the expected output
-stream. The program compares against those constants and never asks the
-hardware what the answer is --- the difference between a check and a
-tautology. The stimulus is the pilot's own testbench's, unchanged, so a
+makes it evidence. The generator \code{gen\_npu\_\allowbreak{}vectors.py}
+runs on every build of the boot image, \emph{before} the compiler: it
+runs the golden model \code{sw/golden/lif\_core.py} over the stimulus
+and emits the node register map in C plus the stimulus and the expected
+output stream. The program compares against those constants and never
+asks the hardware what the answer is --- the difference between a check
+and a tautology. The stimulus is the pilot's own testbench's, unchanged, so a
 disagreement between the two runs is attributable.
 
 In the loop are Ibex, the boot ROM, the fabric, the peripheral bridge,
@@ -485,9 +500,11 @@ run was attempted; the number applies a measured placed area to a
 measured row count, and the error runs the wrong way for the small
 block, since a denser floorplan makes the resizer work harder. The
 eight-tile shape was then found 2.13\,\% \emph{over} the project's
-70\,\% planning criterion, and the submission moved to twelve tiles in
-a six-by-two arrangement, on routing convergence, timing and clock skew
-as well as area.
+70\,\% planning criterion, and that finding is what forced the move to
+twelve tiles; the choice of the six-by-two arrangement over the
+three-by-four was made on routing convergence, timing and clock skew
+\emph{rather than} on area, both twelve-tile shapes sitting far inside
+the criterion (\dcite{23}{}).
 
 \subsection{How the artefacts are sealed}
 
@@ -496,7 +513,7 @@ by running commands: \emph{is what I am submitting the thing that was
 verified?} It pins the ten files of the frozen directory by git blob
 hash, the submission tree by a manifest of 31 files whose own hash is
 recorded, six flow configurations by hash inside the generator, and the
-toolchain and process-kit versions.
+toolchain and process-kit versions \cite{lamb2022}.
 
 The tightest statement it makes is an equality of hashes. Four hardens
 --- two configurations, two dates --- produce a \textbf{bit-identical
@@ -560,7 +577,7 @@ not count them as hardware.
 The connection has been fault-injected and hardened twice, and the
 second wave is where one flip-flop turned out to carry a block's whole
 failure rate. \dcite{56}{} split the event engine into five sub-strata
-and drew 100 times into each, and the result did not match the ranking
+and drew 100 times into each \cite{leveugle2009}, and the result did not match the ranking
 by size: the event word in flight, 64 bits and 45.7\,\% of the engine,
 produced 0 silent wrong inferences in 100, as did the 32 counter bits,
 while the rate lived in the sequencer's 19 bits (13 of 100), the
@@ -598,9 +615,10 @@ the flag was corrupted, 18 of 18 of the measured draws, and it
 the module cannot distinguish. That direction is a failure mode the
 work introduced.
 
-\textbf{For two waves the one-line claim was checked by one simulation
-test and one textual guard rather than over all reachable states.}
-\dcite{55}{section 9.3} named the gap and declined to close it;
+\textbf{The one-line claim was checked by one cocotb test and one
+textual guard rather than over all reachable states.}
+\dcite{55}{section 9.3} named the gap underneath it --- the module had
+no property set at all --- and declined to close it;
 \dcite{56}{section 9.3} declined a second time and said so, on the
 ground that declining twice is a decision. It is now closed, and that
 is the newest result in this chapter:
@@ -630,22 +648,25 @@ about it.
 \code{soc\_top}: the Ibex core (left) and the neuromorphic accelerator
 with the frozen die inside it (right), drawn against the same die
 outline, core box and eight fixed vendor macros. Generated by
-\code{thesis/figures/\allowbreak{}make\_layout\_figures.py} from the
-sign-off run's placement database and netlist.}
+\code{thesis/figures/\allowbreak{}make\_layout\_figures.py} from a
+sign-off run's placement database and netlist, which is the only
+provenance that script records.}
 \label{fig:npu-layout}
 \end{figure}
 
-\Cref{fig:npu-layout} answers ``where is the accelerator'' for the only
-layout of the full system-on-chip that has one, and it must be read
-with its method in mind. The die carries 168,592 instances --- the
+\Cref{fig:npu-layout} answers ``where is the accelerator'' on a placed
+and routed layout of the whole system-on-chip, and it must be read with
+its method in mind. The die carries 168,592 instances --- the
 attribution file the same script writes totals 168,584, a difference of
-eight --- of which only about 7,700 still have a hierarchical name
-after synthesis, so a picture that coloured only those would colour
-four per cent of the die and put the processor in the wrong place. The
-remainder is attributed by connectivity: nets keep the hierarchical
-names Yosys did not create, so every net votes for a block; each
-anonymous cell takes the block most of its pins' nets vote for; and two
-rounds of neighbour propagation resolve the rest.
+eight --- and after this flow's synthesis only 1,140 of those instance
+names carry a dot at all, 632 of them the RAM's, with exactly one
+passing the script's own top-level-block prefix test. A picture that
+coloured only the named instances would colour one cell and answer the
+question wrongly. Everything else is attributed by connectivity: nets
+keep the hierarchical names Yosys did not create, so every net that
+still carries a top-level prefix votes for that block; each anonymous
+cell takes the block most of its pins' nets vote for; and two rounds of
+neighbour propagation resolve the rest.
 
 \textbf{The error bar is published with the picture and is 9.75\,\%.}
 Of the 60,694 instances that are not fill, decap, tie or antenna cells,
@@ -689,20 +710,26 @@ flash controller changed where the words come from, not how they enter
 
 Most of the connection's flip-flops are unprotected by decision --- the
 transport's shift register, the engine's state, the window's captured
-request, the queues' stored words and the frame guards --- and the
-reason is a measurement rather than a budget. The queues' storage is
-41.2\,\% of the connection's flip-flops and 53.5\,\% of its area and
-produced zero silent wrong inferences in 100 draws, because occupancy
-is low and most of those bits are storage nothing will read: a wave
-that started with the biggest structure would have bought nothing. The
-largest site now left is the engine's state register, at 7 of 20, which
+request and the frame guards --- and the queues' stored words carry
+\code{aer\_fifo}'s detect-only entry parity and nothing beyond it. In
+both cases the reason is a measurement rather than a budget. That queue
+storage is 37.6\,\% of the connection's flip-flops now that the block
+has grown, was 41.2\,\% when the campaign measured it, and is 53.5\,\%
+of the area \dcite{51}{section 11} reports; it produced zero silent
+wrong inferences in 100 draws, because occupancy is low and most of
+those bits are storage nothing will read: a wave that started with the
+biggest structure would have bought nothing. The largest site now left
+is the engine's state register, at 7 of 20, which
 \cref{eq:h5} has made load-bearing for a pin it was only implicitly
 related to before.
 
 One limit applies to everything measured here: every campaign in this
 chapter is register-transfer, single-bit and flip-flop-only. No
-gate-level netlist of the connection has ever been simulated, no
 back-annotated timing, no multi-bit strike, and no single-event
-transient in combinational logic --- which matters because the strobe
+transient in combinational logic \cite{shivakumar2002} --- which matters because the strobe
 gate \emph{is} combinational logic, so a transient on it is a failure
-mode no instrument here can see.
+mode no instrument here can see. A gate-level netlist carrying the
+connection has since been injected into --- \dcite{82}{} draws into the
+accelerator's gated domain on a placed layout --- but at zero cell
+delay and under a workload that never touches the accelerator
+(\dcite{82}{section 8}).

@@ -1,0 +1,203 @@
+\begin{thebibliography}{10}
+
+\bibitem{companion_tmr}
+H.~M. Akbulut.
+\newblock Triplicated in the netlist, adjacent in the die: Instrumenting a
+  redundancy claim across an open 130\,nm flow.
+\newblock \url{https://github.com/Melihakbulut221/nssoc}, 2026.
+\newblock [V]. Companion paper. Carries the fault-injection campaign that
+  produced bit-identical output on a defective design and its repair, named in
+  section 4.
+
+\bibitem{companion_decks}
+H.~M. Akbulut.
+\newblock What the deck checked: The design-side residual of an open-{PDK}
+  sign-off run.
+\newblock \url{https://github.com/Melihakbulut221/nssoc}, 2026.
+\newblock [V]. Companion paper, same design and same run trees. Carries the
+  deck accounting this paper's sign-off table summarises.
+
+\bibitem{clear2018}
+E.~Cheng, S.~Mirkhani, L.~G. Szafaryn, C.-Y. Cher, H.~Cho, K.~Skadron, M.~R.
+  Stan, K.~Lilja, J.~A. Abraham, P.~Bose, and S.~Mitra.
+\newblock Tolerating soft errors in processor cores using {CLEAR}.
+\newblock {\em IEEE Transactions on Computer-Aided Design of Integrated
+  Circuits and Systems}, 37(9):1839--1852, 2018.
+\newblock DOI 10.1109/TCAD.2017.2752705. [V], DOI [P]; arXiv:1709.09921. 586
+  cross-layer resilience combinations against cost and residual SDC.
+
+\bibitem{cho2013}
+H.~Cho, S.~Mirkhani, C.-Y. Cher, J.~A. Abraham, and S.~Mitra.
+\newblock Quantitative evaluation of soft error injection techniques for robust
+  system design.
+\newblock In {\em 50th ACM/EDAC/IEEE Design Automation Conference (DAC)}, 2013.
+\newblock DOI 10.1145/2463209.2488859. [V]. The outcome taxonomy this paper's
+  classes map onto, and the measurement of what a higher abstraction level
+  costs.
+
+\bibitem{esa_ftmr}
+{ESA Microelectronics Section}.
+\newblock Functional triple modular redundancy ({FTMR}).
+\newblock Technical Report FPGA-003-01, European Space Agency, 2000.
+\newblock [V] as a technical note, not peer reviewed. Documents the use of
+  synthesis-preservation attributes to stop the tool removing redundancy.
+
+\bibitem{ecss60_15c}
+{European Cooperation for Space Standardization}.
+\newblock Space product assurance --- radiation hardness assurance: {EEE}
+  components.
+\newblock Technical Report ECSS-Q-ST-60-15C, ESA-ESTEC, 2012.
+\newblock [V]. Rev.1 issued 2025. The standard whose evidence tiers this work
+  does not reach.
+
+\bibitem{frenkel2019}
+C.~Frenkel, M.~Lefebvre, J.-D. Legat, and D.~Bol.
+\newblock A 0.086-mm$^2$ 12.7-pj/sop 64k-synapse 256-neuron online-learning
+  digital spiking neuromorphic processor in 28-nm {CMOS}.
+\newblock {\em IEEE Transactions on Biomedical Circuits and Systems}, 2019.
+\newblock DOI 10.1109/TBCAS.2018.2880425. [V]. ODIN, the substrate Nijsink et
+  al. irradiated.
+
+\bibitem{gr801}
+{Frontgrade Gaisler}.
+\newblock {GR801}: Radiation-hardened neuromorphic processor.
+\newblock \url{https://www.gaisler.com/products/gr801}, 2026.
+\newblock [V]. Product brief, status "under development", released April 2026;
+  NOEL-V RV64GC with a licensed BrainChip Akida accelerator on ST 28\,nm FDSOI.
+  The commercial reference this design positions against and does not compete
+  with.
+
+\bibitem{hsiao1970}
+M.~Y. Hsiao.
+\newblock A class of optimal minimum odd-weight-column {SEC-DED} codes.
+\newblock {\em IBM Journal of Research and Development}, 14(4):395--401, 1970.
+\newblock DOI 10.1147/rd.144.0395. [V].
+
+\bibitem{ihppdk}
+{IHP GmbH}.
+\newblock {IHP-Open-PDK}: Open source {PDK} for the {IHP} {SG13G2} 130\,nm
+  {BiCMOS} technology.
+\newblock \url{https://github.com/IHP-GmbH/IHP-Open-PDK}, 2026.
+\newblock [V]. The process design kit under test. Deck contents, the
+  main-versus-maximal rule-set distinction and its README wording were read
+  from the installed commit c4b8b4e5e7a05f375cca3815d51b3a37721fbf5c.
+
+\bibitem{tcls2019}
+X.~Iturbe, B.~Venu, E.~Ozer, J.-L. Poupat, G.~Gimenez, and H.-U. Zurek.
+\newblock The {Arm} triple core lock-step ({TCLS}) processor.
+\newblock {\em ACM Transactions on Computer Systems}, 2019.
+\newblock DOI 10.1145/3323917. [V]; the extended author list is [P].
+
+\bibitem{johnson2010}
+J.~Johnson and M.~Wirthlin.
+\newblock Voter insertion algorithms for {FPGA} designs using triple modular
+  redundancy.
+\newblock In {\em ACM/SIGDA International Symposium on Field Programmable Gate
+  Arrays (FPGA)}, 2010.
+\newblock DOI 10.1145/1723112.1723154. [V].
+
+\bibitem{krinke2024}
+Andreas Krinke, Robert Fischbach, and Jens Lienig.
+\newblock Layout verification using open-source software.
+\newblock In {\em Proceedings of the 2024 International Symposium on Physical
+  Design}, ISPD '24, pages 137--142. ACM, 2024.
+\newblock [V]. Title, full author list, venue, year and page range retrieved
+  from Crossref, api.crossref.org/works/ 10.1145/3626184.3635289, 2026-09-14.
+  Tool-side: what a generated deck can express for a commercial PDK. This paper
+  is design-side and the two compose.
+
+\bibitem{kumar2023}
+A.~Kumar.
+\newblock Pragmatic formal verification of sequential error detection and
+  correction codes ({ECCs}) used in safety-critical design.
+\newblock In {\em Design and Verification Conference (DVCon) U.S.}, 2023.
+\newblock [V]; arXiv:2404.18270. Formally proving an ECC is routine industrial
+  practice.
+
+\bibitem{lamb2022}
+C.~Lamb and S.~Zacchiroli.
+\newblock Reproducible builds: Increasing the integrity of software supply
+  chains.
+\newblock {\em IEEE Software}, 39(2):62--70, 2022.
+\newblock DOI 10.1109/MS.2021.3073045. [V]; arXiv:2104.06020. The framework
+  citation for hash pinning.
+
+\bibitem{leveugle2009}
+R.~Leveugle, A.~Calvez, P.~Maistri, and P.~Vanhauwaert.
+\newblock Statistical fault injection: Quantified error and confidence.
+\newblock In {\em Design, Automation and Test in Europe (DATE)}, 2009.
+\newblock DOI 10.1109/DATE.2009.5090716. [P], DOI reconstructed. How many
+  faults must be injected for a stated margin.
+
+\bibitem{mitra2002}
+S.~Mitra, N.~R. Saxena, and E.~J. McCluskey.
+\newblock A design diversity metric and analysis of redundant systems.
+\newblock {\em IEEE Transactions on Computers}, 51(5), 2002.
+\newblock DOI 10.1109/TC.2002.1004589. [P], DOI reconstructed. The citation
+  against identical replication: identical replicas have diversity near zero
+  against correlated physical disturbances.
+
+\bibitem{openspike2023}
+F.~Modaresi, M.~Guthaus, and J.~K. Eshraghian.
+\newblock {OpenSpike}: An {OpenRAM} {SNN} accelerator.
+\newblock arXiv:2302.01015, 2023.
+\newblock [V]. Fully open EDA and open PDK, taped out in SkyWater 130\,nm at
+  roughly thirty times this design's scale. An SNN on an open PDK is not a
+  contribution.
+
+\bibitem{mukherjee2003}
+S.~S. Mukherjee, C.~Weaver, J.~Emer, S.~K. Reinhardt, and T.~Austin.
+\newblock A systematic methodology to compute the architectural vulnerability
+  factors for a high-performance microprocessor.
+\newblock In {\em 36th Annual IEEE/ACM International Symposium on
+  Microarchitecture (MICRO-36)}, 2003.
+\newblock [V]; the author list beyond the first two is [P]. Origin of AVF,
+  ACE/un-ACE, SDC and DUE.
+
+\bibitem{naoukin2023}
+J.~Naoukin, M.~Isik, and K.~Tiwari.
+\newblock A survey examining neuromorphic architecture in space and challenges
+  from radiation.
+\newblock arXiv:2311.15006, 2023.
+\newblock [V].
+
+\bibitem{nijsink2026}
+W.~Nijsink, B.~{Endres Forlin}, A.~Yousefzadeh, and M.~Ottavi.
+\newblock Shooting neutrons at neurons: Radiation testing of a spiking neural
+  network on flash-based {FPGAs}.
+\newblock arXiv:2605.00030, 2026.
+\newblock [V]. Beam data for an SNN; the evidence tier this paper explicitly
+  does not reach.
+
+\bibitem{saleh1990}
+A.~M. Saleh, J.~J. Serrano, and J.~H. Patel.
+\newblock Reliability of scrubbing recovery techniques for memory systems.
+\newblock {\em IEEE Transactions on Reliability}, 39(1):114--122, 1990.
+\newblock DOI 10.1109/24.52622. [P], DOI reconstructed from the Xplore document
+  number.
+
+\bibitem{santos2023}
+D.~A. Santos, A.~M.~P. Mattos, D.~R. Melo, and L.~Dilillo.
+\newblock Enhancing fault awareness and reliability of a fault-tolerant
+  {RISC-V} system-on-chip.
+\newblock {\em Electronics}, 12(12):2557, 2023.
+\newblock DOI 10.3390/electronics12122557. [V]. The closest published work to
+  this paper's angle: its stated contribution is extending fault OBSERVABILITY.
+
+\bibitem{openlane2020}
+M.~Shalan and T.~Edwards.
+\newblock Building {OpenLANE}: A 130nm {OpenROAD}-based tapeout-proven flow.
+\newblock In {\em IEEE/ACM International Conference on Computer-Aided Design
+  (ICCAD)}, 2020.
+\newblock DOI 10.1145/3400302.3415735. [V].
+
+\bibitem{shivakumar2002}
+P.~Shivakumar, M.~Kistler, S.~W. Keckler, D.~Burger, and L.~Alvisi.
+\newblock Modeling the effect of technology trends on the soft error rate of
+  combinational logic.
+\newblock In {\em International Conference on Dependable Systems and Networks
+  (DSN)}, pages 389--398, 2002.
+\newblock [V], DOI not established. Logical, electrical and latching-window
+  masking.
+
+\end{thebibliography}

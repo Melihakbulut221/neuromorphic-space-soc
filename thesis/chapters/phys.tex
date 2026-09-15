@@ -6,8 +6,8 @@
 
 The layout is the run \code{s83romecc5}, completed 2026-09-13: the
 eight-macro build, carrying the two check macros that hold the boot
-ROM's error-correcting code (\dcite{67}{section 11}), and the only
-layout in the project that meets hold at all three corners. Its own
+ROM's error-correcting code (\dcite{67}{section 11}), and a layout that
+meets hold at all three corners. Its own
 \code{final/metrics.json} is the source for every unattributed number
 below; a figure from a superseded layout is marked with its date, the
 rule \dcite{64}{} sets.
@@ -29,15 +29,16 @@ binary is fronted by a shim that establishes only its own
 \code{LD\_LIBRARY\_PATH}, because the OpenROAD build ships a newer glibc
 that segfaults every other host binary if it leaks into the ambient
 environment (\dcite{12}{section 2.1}). \Cref{tab:phys-tools} is the pin
-list.
+list~\cite{lamb2022}.
 
 \begin{table}[tbp]
 \centering
 \caption{The pinned toolchain (\dcite{12}{section 2.2}, recorded
-2026-08-25 in this environment). The PDK commit is not chosen: every
-LibreLane release ships \code{pdk\_hashes.yaml} naming the commit it was
-tested against, and the runner reads that pin out of the installed wheel
-and refuses to run against anything else.}
+2026-08-25 in this environment). The PDK commit~\cite{ihppdk} is not
+chosen: every LibreLane~\cite{openlane2020} release ships
+\code{pdk\_hashes.yaml} naming the commit it was tested against, and the
+runner reads that pin out of the installed wheel and refuses to run
+against anything else.}
 \label{tab:phys-tools}
 \small
 \begin{tabular}{@{}ll@{}}
@@ -62,12 +63,12 @@ Standard cells & \code{sg13g2\_stdcell}, 84 Liberty cells \\
 runner hands LibreLane a netlist as an initial state and skips
 \code{Yosys.Synthesis}, because both hierarchy modes are wrong for this
 design in opposite directions. Under \code{flatten}, Yosys honours the
-\code{keep\_hierarchy} attribute the triple-modular register bank
-carries as an anti-merge defence and \code{Checker.\allowbreak
-YosysUnmappedCells} stops the run; under \code{deferred\_flatten}, a
-constant driving the core's \code{cheriot\_enable\_i} never folds, and
-the same RTL comes out as 37,895 cells of
-\qty{523809.6444}{\micro\metre\squared} against 27,565 of
+\code{keep\_hierarchy} attribute the triple-modular register bank carries
+as an anti-merge defence~\cite{esa_ftmr} and
+\code{Checker.\allowbreak YosysUnmappedCells} stops the run; under
+\code{deferred\_flatten}, a constant driving the core's
+\code{cheriot\_enable\_i} never folds, and the same RTL comes out as
+37,895 cells of \qty{523809.6444}{\micro\metre\squared} against 27,565 of
 \qty{396177.6420}{\micro\metre\squared}, and its worst slow-corner path is
 \qty{13.8442}{\nano\second} worse, measured before any placement exists
 at all (\dcite{47}{sections 6.2 and 6.3}). The project's own script holds
@@ -296,11 +297,16 @@ Legalisation displacement, mean / max, \si{\micro\metre} & 0.075 / 20.04 \\
 
 \Cref{tab:phys-census} is the census. The macros are
 \qty{48.8}{\percent} of the die area, and the placeable area left inside
-the core --- the core less the macros --- is
+the core --- the core less the macros, which is the denominator the
+flow's own utilisation metric uses --- is
 \qty{2001390}{\micro\metre\squared}, of which the standard cells fill
-\qty{46.6}{\percent}. The first layout of this SoC put
-\qty{396177.6420}{\micro\metre\squared} of cells into
-\qty{2092010.95}{\micro\metre\squared}, \qty{18.9}{\percent}, and
+\qty{46.6}{\percent}. That denominator is generous: on the six-macro
+floorplan \dcite{59}{section 11} measured the union of the DEF's
+\code{ROW} statements at \qty{7.66}{\percent} less than it, the macro
+halos and the site grid taking the difference. The first layout of this
+SoC put \qty{396177.6420}{\micro\metre\squared} of cells into
+\qty{2092010.95}{\micro\metre\squared} (\dcite{48}{section 4.1}),
+\qty{18.9}{\percent}, and
 \dcite{47}{section 8.4} named that sparseness as the probable cause of
 what layout was costing in timing. It was not: what has since filled the
 die is the design.
@@ -312,9 +318,9 @@ die is the design.
   non-fill standard cells, macros in black, channel and pocket zones
   outlined. The channel is populated almost uniformly and the rest of
   the logic is in the pockets and the strip at the right. The ``lower
-  pocket'' rectangle comes from \code{clint\_region.py}'s constants,
-  which describe the six-macro floorplan in which the lower ROM sat at
-  $y=60.48$; here that band holds the check macro.}
+  pocket'' rectangle is drawn from the six-macro floorplan's constants,
+  in which the lower ROM sat at $y=60.48$; in this layout the check
+  macro stands there, so that outline no longer marks a pocket.}
   \label{fig:phys-density}
 \end{figure}
 
@@ -325,10 +331,10 @@ where all the logic is}. The zone census on the six-macro floorplan puts
 in the lower pocket, 441 in the strip and 436 elsewhere, against a
 baseline run of the same floorplan at 45,966 / 2,208 / 3,049 / 424 /
 173. Those runs differ by 466 cells of netlist, and the extra cells did
-not go into the channel --- it holds 347 \emph{fewer}, and the pockets
-and strip 813 more. A net with one pin in a pocket and the other in the
-channel crosses a ROM macro, and 140 nets did so in one run and 134 in
-the other (\dcite{72}{section 6.4}).
+not go into the channel --- it holds 347 \emph{fewer}, and the pockets,
+the strip and everything outside them 813 more. A net with one pin in
+the upper pocket and one in the channel crosses a ROM macro, and 140
+nets did so in one run and 134 in the other (\dcite{72}{section 6.4}).
 
 \section{Timing}
 \label{sec:phys-timing}
@@ -387,9 +393,9 @@ Two metrics the flow judges with nothing are reported here rather than
 left in a file. \code{Checker.\allowbreak WireLength} has no threshold
 in either PDK and so warns and skips, on a layout whose longest routed
 net is \qty{4292.89}{\micro\metre}. And the Classic flow has no
-max-fanout
-checker at all, on a layout carrying 589 such violations against a
-constraint of 10 and a library declaring \code{default\_max\_fanout : 8}.
+max-fanout checker at all, on a layout carrying 589 such violations
+against a constraint of 10 and a library declaring
+\code{default\_max\_fanout : 8}.
 
 \subsection{The worst path}
 
@@ -397,7 +403,8 @@ constraint of 10 and a library declaring \code{default\_max\_fanout : 8}.
 violating endpoints against the run's own netlist and finds six launch
 points behind them. One is the register file's read address bit
 \code{raddr\_b\_i[4]}, which launches 2,865 of them and carries
-\qty{-13195.08}{\nano\second} of total negative slack; the others are 360 endpoints from a RAM macro's \code{A\_DOUT[31]}, 154 from
+\qty{-13195.08}{\nano\second} of total negative slack. The others are
+360 endpoints from a RAM macro's \code{A\_DOUT[31]}, 154 from
 \code{raddr\_b\_i[2]}, 101 from the accelerator's axon register, 38 from
 a launch point the census cannot resolve to a public name, and 11 from
 the CLINT's \code{mtime} codeword register.
@@ -413,7 +420,8 @@ arriving at \qty{29.565346}{\nano\second} against a required
 \qty{21.989546}{\nano\second}, for \qty{-7.575801}{\nano\second} of
 slack (step-49 \code{max.rpt}, slow corner). Seventeen of the 77 stages
 are \code{sg13g2\_xnor2\_1}, which is the encoder; eighteen are buffers
-or inverters the repair steps inserted.
+or inverters, and fifteen of those carry the \code{rebuffer} or
+\code{fanout} names the repair steps give what they insert.
 
 \textbf{Two stages cost \qty{5.701}{\nano\second} between them, and why
 neither was repaired is a property of the library rather than of the
@@ -445,9 +453,9 @@ The second-largest violating launch group is the memory. The
 $2048\times64$ macro's \code{A\_CLK}$\rightarrow$\code{A\_DOUT} arc is
 \qty{9.2941}{\nano\second} at the slow corner, and it is a function of
 macro \emph{depth}: across the eighteen single-port parts it runs from
-\qty{5.2678}{\nano\second} at 256 and 512 words to
-\qty{9.6611}{\nano\second} at 8192 while density improves in the same
-direction, a \qty{4.3933}{\nano\second} trade end to end. The part
+\qty{5.2678}{\nano\second} at $512 \times 8$ to
+\qty{9.6611}{\nano\second} at $8192 \times 32$ while density improves in
+the same direction, a \qty{4.3933}{\nano\second} trade end to end. The part
 chosen is the smallest byte-writable 64\,KiB build available, the
 denser $8192\times32$ having no per-bit write mask
 (\dcite{47}{sections 4.1 and 4.2}).
@@ -471,20 +479,29 @@ of this SoC turning them on was worth \qty{4.30}{\nano\second}
 (\dcite{47}{section 8.5}). Both are set here.
 
 \textbf{What the setup resizer then does was instrumented rather than
-guessed at}: the step was re-executed on its own saved state with
-OpenROAD's \code{repair\_setup} trace on, reproducing the flow's step to
-the byte --- 53 metrics, zero differing --- and printing why the loop
-stopped. No configured limit bound; what ended it was OpenROAD's own
-rule abandoning \code{repair\_timing} when total negative slack has not
-moved by \qty{0.01}{\percent} for two hundred iterations. It chased its
-worst endpoint for 257 iterations and improved it, tried nineteen more
-for 51 passes each and reverted every change, and quit with
-\textbf{3,345 of 3,365 endpoints never visited}. The stage that defeated
-it drove \qty{180}{\femto\farad} from the channel at
+guessed at} --- on the six-macro boot-hardened layout that preceded this
+one, not on \code{s83romecc5}, so the figures below are that layout's.
+The step was re-executed on its own saved state with OpenROAD's
+\code{repair\_setup} trace on, reproducing the flow's step to the byte
+--- 53 metrics, zero differing --- and printing why the loop stopped. No
+configured limit bound; what ended it was OpenROAD's own rule abandoning
+\code{repair\_timing} when total negative slack fails to improve by the
+fix-rate threshold in two consecutive hundred-iteration windows ---
+\qty{0.02}{\percent} here, the source's \qty{0.01}{\percent} doubled
+once past iteration 1,000. It chased its worst endpoint for 257
+iterations, from \qty{-12.260}{\nano\second} to
+\qty{-7.990}{\nano\second}; took up nineteen more and reverted every
+change on seventeen of them after 51 non-improving passes each; and
+ended that phase having visited \textbf{20 of 3,365 endpoints}. A second
+phase with a reduced move set visited 156 more and found
+\qty{0.146}{\nano\second}. The stage that defeated the first drove
+\qty{180}{\femto\farad} from the channel at
 $(1911.84,\,1224.72)$ into the pocket at $(1973.76,\,1776.60)$ ---
-\qty{614}{\micro\metre} of wire over a \qty{336}{\micro\metre} macro at
-a \qty{4.69}{\nano\second} transition, \qty{3.73}{\nano\second} on one
-single-drive-strength gate (\dcite{72}{sections 4 to 7}).
+\qty{62}{\micro\metre} across and \qty{552}{\micro\metre} up, over a
+\qty{336}{\micro\metre} macro, at a \qty{4.69}{\nano\second} transition
+and \qty{3.73}{\nano\second} on one gate that the resizer did size up,
+from \code{nor4\_1} to \code{nor4\_2}, without recovering it
+(\dcite{72}{sections 3.2, 6.3 and 7}).
 
 \section{Hold, antennas, and \qty{29.6}{\pico\second}}
 
@@ -495,11 +512,14 @@ inverter and one \code{sg13g2\_a22oi\_1} and back to its own $D$ pin,
 arriving at \qty{1.353502}{\nano\second} against a required
 \qty{1.323898}{\nano\second} (step-49 \code{min.rpt}, fast corner). The
 flow inserted 11 hold buffers in the whole design.
+\dcite{50}{section 16} calls this the only layout in the project that
+meets hold; several earlier six-macro runs also report zero hold
+violations at all three corners in their own \code{final/metrics.json},
+so what is scarce here is the margin and not the fact.
 
 \textbf{That \qty{29.6}{\pico\second} is the scarcest quantity on this
 die, and two experiments have now been spent against it}
-(\cref{sec:phys-rdreg} is the second). The first is
-the antenna repair. \code{s83romecc5} leaves two antenna violations ---
+(\cref{sec:phys-rdreg} is the second). The first is the antenna repair. \code{s83romecc5} leaves two antenna violations ---
 one net into a RAM macro's \code{A\_ADDR[4]} on Metal3 at
 $2.26\times$ the ratio limit, one core net at $1.22\times$ --- out of
 538 net and 729 pin violations the default repair had already cleared.
@@ -534,7 +554,9 @@ CLINT's 32-bit response register across the upper ROM macro, with the
 binding stage a one-drive gate driving a macro-crossing net, and asked
 for one probe: put the CLINT's read multiplexer and its response
 register on one side of that macro, with \emph{the crossing count on the
-worst path} as the metric rather than the slack alone.
+worst path} as the metric rather than the slack alone. Both forms of the
+probe ran on the same six-macro boot-hardened layout as that section's
+resizer trace, not on \code{s83romecc5}.
 
 Deriving the cell set is most of the work, because the design is
 flattened before \code{abc} and only net names survive.
@@ -552,9 +574,9 @@ Two mechanisms were tried. A placement \emph{region} --- OpenROAD's
 \code{dbRegion} and \code{dbGroup}, which no LibreLane key reaches,
 written into the flow's own saved database between two steps --- fences
 the set into a box in the channel under the ROM and \textbf{does not
-route}: the channel has no \qty{38000}{\micro\metre\squared} to give,
-3,076 cells spread into the macro gaps, and the global router ends with
-420 units of overflow. The flow's own manual-placement key, which moves
+route}: the fence takes \qty{38102}{\micro\metre\squared} of placeable
+area out of a channel that has none to give, 3,076 cells spread into the
+macro gaps, and the global router ends with 420 units of overflow. The flow's own manual-placement key, which moves
 the same cells to the same coordinates and holds every other cell at the
 baseline's placement, routes and reaches sign-off --- and \textbf{the
 crossing count on the register-file read went from 2 to 4, not to 0}.
@@ -576,8 +598,9 @@ defect found only after both layouts had used the tool --- the
 expression reading macro definitions out of the LEF was unanchored, and
 the PDK's property-definitions block also contains the word
 \code{MACRO}, so a match starting there swallowed the file's first five
-macros. On the corrected tool the rule's answer is 999 cells, and the
-block's register-to-register closure is 1,830
+macros. On the corrected tool the rule's answer is 999 cells, and its
+union with the block's register-to-register closure --- the set that
+captures the whole co-placed cluster --- is 1,830
 (\dcite{73}{sections 1, 3, 5 and 7}).
 
 \subsection{The memory read register}
@@ -596,8 +619,9 @@ against \code{s83romecc5} as the other arm.
 group falls from 360 violating endpoints to 17, its worst slack from
 \qty{-4.1587}{\nano\second} to \qty{-2.4798}{\nano\second} and its total
 negative slack from \qty{-864.88}{\nano\second} to
-\qty{-28.87}{\nano\second}; sixteen of the seventeen survivors are not
-on the bus at all but capture into the scrub engine's counter. The
+\qty{-28.87}{\nano\second}; none of the seventeen survivors is on the
+bus at all, and sixteen of them capture into the scrub engine's
+counter. The
 design's total setup violation improves by \qty{21.9}{\percent}, from
 \qty{-14735.65}{\nano\second} to \qty{-11509.24}{\nano\second}, the
 largest single-change improvement any layout here has produced.
@@ -677,12 +701,14 @@ phrase is doing precise work.} It does not mean the die is
 manufacturable. It means that in every deck run, each marker has been
 attributed either to vendor geometry or to the interaction between that
 geometry's abstract and the design's routing beside it, and none to a
-shape this design's flow drew in open area. The total is not available,
-because no open deck can check these macros at the pinned PDK version.
+shape this design's flow drew in open area~\cite{companion_decks}. The
+total is not available, because no open deck can check these macros at
+the pinned PDK version.
 One check that did not run is recorded with the ones that did: the
-detailed router skips an enclosure rule on nine layers, identically in
-the hardened and baseline runs, so it is the PDK's and every layout has
-inherited it.
+detailed router skips a cut-enclosure rule the PDK states in a form this
+OpenROAD build does not implement --- ten warnings over seven layer
+names, identical layer for layer in the hardened and baseline runs --- so
+it is the PDK's and every layout has inherited it.
 
 \subsection{What the KLayout deck is objecting to}
 
@@ -697,7 +723,8 @@ symmetric difference 0. On the eight-macro layout the structure recurs
 at another scale, 4,464 and 4,464 with exact set equality, so the 11,048
 markers are 6,584 distinct shapes. \textbf{And the deep-mode count is a
 property of the deck rather than of the layout}: the same deck in flat
-mode on the same file returns 122,814, a factor of 53.0. Any figure
+mode on the single-macro file returns 122,814 against its 2,316, a
+factor of 53.0. Any figure
 quoted from it has to name the deck and the mode; normalised, the two
 decks are a factor of 4 to 9 apart rather than three orders of
 magnitude, and they \emph{corroborate} each other on the
@@ -707,8 +734,8 @@ contact-enclosure rule.
 rules could be a deck that looked at three; this one declared
 \textbf{173 rule categories in 47 groups} --- M1 to M5, V1 to V4, the
 top-metal and MIM rules, the well, active, gate, seal and fill families
---- and evaluated all of them over the whole 113\,MB layout. Three
-fired, all inside vendor geometry.
+--- and evaluated all of them over the whole 113\,MB
+layout~\cite{krinke2024}. Three fired, all inside vendor geometry.
 
 \textbf{And the count is a property of the macro's structure rather than
 of the memory the design asked for}, which a sweep of all twenty-seven
@@ -720,10 +747,11 @@ monotonically --- the row decoder --- and a second port roughly doubles
 it. A design that halves its word width buys no reduction whatever. The
 deck swap is therefore not the exit: the deck the flow runs is the PDK's
 main set, which its own documentation calls verified and intended for
-foundry precheck, and the deck that returns zero is the extra set, which
-the same documentation calls not verified or tested. DRC was never the
-binding constraint anyway --- a design that passes DRC and fails LVS is
-not signed off (\dcite{54}{sections 3 and 7}).
+foundry precheck, and the deck that returns zero~\cite{companion_tmr} is
+the extra set, which the same documentation calls not verified or
+tested~\cite{ihppdk}. DRC was never the binding constraint anyway --- a
+design that passes DRC and fails LVS is not signed off
+(\dcite{54}{sections 3 and 7}).
 
 \section{Power}
 
@@ -733,21 +761,26 @@ The sign-off run writes a \code{power.rpt} per corner, and
 rounded here to four significant figures, is \qty{32.78}{\milli\watt}
 internal, \qty{23.56}{\milli\watt} switching and
 \qty{0.06900}{\milli\watt} leakage. \textbf{That is a flow estimate at a
-default activity assumption and must be quoted as one}: reproducing it
-exactly requires asserting that every top-level input and every register
-output toggles 0.1 times per clock period and spends half its time at 1
-(\dcite{57}{section 2}).
+default activity assumption and must be quoted as one}: the default was
+pinned on an earlier layout by reproducing that layout's published
+figure to every digit with \code{set\_power\_activity -input -activity
+0.1 -duty 0.5}, so it is the power of a design in which every top-level
+input and every register output toggles 0.1 times per clock period and
+spends half its time at 1 (\dcite{57}{section 2}).
 
-Measured instead at the toggle rates of a real program --- on an earlier
-six-macro layout without the accelerator, so superseded for this design
---- the same recipe gives \qty{33.890}{\milli\watt} computing and
+Measured instead at the toggle rates of a real program --- on that
+earlier six-macro layout, which does not contain the accelerator at all
+(\dcite{57}{section 3.2}), so superseded for this design --- the same
+recipe gives \qty{33.890}{\milli\watt} computing and
 \qty{5.539}{\milli\watt} waiting at the typical corner, the waiting
-window being \qty{57.6}{\percent} of the run (\dcite{57}{section 5.2},
-measured 2026-09-06). \textbf{Idle is \qty{16.3}{\percent} of busy, and
+window being \qty{57.6}{\percent} of the run (\dcite{57}{section 5.2}).
+\dcite{67}{section 11} states plainly that no power number in the corpus
+has been re-measured on \code{s83romecc5}.
+\textbf{Idle is \qty{16.3}{\percent} of busy, and
 the reason is a clock gate that had been in the netlist since the core
 was brought up and that no document had ever mentioned.} It is the real
 PDK cell, bound deliberately because the core's upstream substitute is a
-modelling stand-in, and it covers \qty{79.9}{\percent} of the design's
+modelling stand-in, and it covers 2,464 of that design's 3,085
 flip-flops; on the measured workload it is open \qty{42.4}{\percent} of
 the time, with two clock transitions per cycle when open and 0.0004 when
 shut (\dcite{57}{section 4}). The sign-off layout carries three such
@@ -779,12 +812,13 @@ and the flow does not notice for thirty-five steps
 
 \textbf{Setup does not close} (\cref{sec:phys-timing}):
 \qty{-7.5758}{\nano\second} on 3,529
-endpoints at the slow corner, on the same register-file read into the
-fabric that every layout has found. Four leads were measured to sign-off
-and none recovers it --- the hierarchy mode and both post-global-route
+endpoints at the slow corner, on the register-file read into the fabric
+that \dcite{50}{section 16} finds unchanged in kind by the one change
+that most improves the total. Four leads have been worked through and
+none recovers it --- the hierarchy mode and both post-global-route
 stages were banked before the first number existed, two alternative
-floorplans are worse and one does not route, and the capacitance
-constraint costs more than it buys. The two unpriced mechanisms are a
+floorplans are worse and one does not route at all, and the capacitance
+constraint was measured to sign-off and costs more than it buys. The two unpriced mechanisms are a
 registered request phase in the bus fabric and a hold-repair pass aimed
 at the fast corner that would let the read register be turned on.
 
@@ -793,14 +827,18 @@ die.} Every macro area here is a LEF \code{SIZE} statement and every
 macro timing figure a Liberty arc, and both describe a part no open deck
 can check at the pinned PDK version.
 
-\textbf{The redundancy is in the netlist and not in the placement.}
-Nothing in this flow requests physical separation between
-triple-modular replicas and nothing supplies it by default: on the
-frozen pilot's sign-off layout the median centre-to-centre distance
+\textbf{The redundancy is in the netlist and not in the
+placement}~\cite{companion_tmr}. Nothing in this flow requests physical
+separation between triple-modular replicas and nothing supplies it by
+default: on the
+frozen pilot's sign-off layout --- the run \dcite{34}{} superseded on
+2026-08-31, whose DEF hash is identical to the current frozen one's ---
+the median centre-to-centre distance
 between corresponding bits of different replicas is
 \qty{27.52}{\micro\metre} against \qty{113.47}{\micro\metre} over all
-cross-replica pairs, a $4.12\times$ concentration with 49 pairs
-abutting, and the same picture appears on this SoC across three
+cross-replica pairs, a $4.12\times$ concentration, with 49 of the 9,075
+cross-replica pairs abutting, and the same picture appears on this SoC
+across three
 triplicated structures and two hardens
 (\dcite{79}{sections 1.2 to 1.6}). The likely mechanism is wirelength
 minimisation to a shared voter; no seed and no objective function was

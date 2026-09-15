@@ -68,8 +68,16 @@ signs off on IHP SG13G2 with Magic DRC, KLayout DRC, XOR, all four
 Netgen LVS unmatched counters, antenna, power grid and illegal overlap
 at zero,
 setup and hold clean on three corners with a real 5 percent derate, and
-the Tiny Tapeout precheck at 10 of 10. No silicon exists and the hosted
-GDS action has not run.
+the Tiny Tapeout precheck at 10 of 10. No silicon exists.
+
+*Corrected 2026-09-15.* This sentence used to end "and the hosted GDS
+action has not run". It has: `ROADMAP.md` records the push of
+2026-09-11 and run `34557306023`, in which `gds`, `precheck` and
+`gl_test` all succeeded and only `viewer` failed, on a repository where
+GitHub Pages had never been switched on, and then succeeded once it
+was. The hosted harden routed 675,878 um globally and 479,173 um in
+detail. What remains true is the first half: no silicon exists, and the
+shuttle slot is an owner action with a deadline.
 
 *Exists, and is unhardened.* A management subsystem, begun after the
 pilot froze and kept strictly separate from it. Ibex (`small-pmp`:
@@ -298,9 +306,13 @@ current RTL that also carries the ROM's two check macros: `Circuits
 match uniquely`; 11,048 KLayout markers -- **6,584 distinct shapes**,
 because `Sdiod.d` and `Sdiod.e` report the same set and `docs/54`
 section 3.1 says to count it that way -- of which 0 are outside the
-vendor macro hierarchy; and 182 Magic boxes of which 20 are inside a
-macro footprint and **all 162 others lie within 0.5 um of a macro
-edge**, none in open routing area; and the KLayout XOR deck reports
+vendor macro hierarchy; and, on `s83ant` (the same layout after
+antenna repair), 182 Magic boxes of which 20 are inside a macro
+footprint and **all 162 others lie within 0.5 um of a macro edge**,
+none in open routing area --- the sign-off run `s83romecc5` itself
+reports 170, 20 and 150, and the twelve-box difference is the 60
+inserted diodes moving routing inside the same halo, not design DRC
+(`docs/67` section 11 carries both runs); and the KLayout XOR deck reports
 **0 differences** (`docs/67` section 11). All four deck families have
 now run on a layout built from the current RTL.** What the original sentence got right is the reason,
 and the reason is a PDK property rather than a schedule: `docs/12`
@@ -471,3 +483,7 @@ but re-run a count before quoting it.
 - `sw/golden/` — bit-exact integer golden models (the abstract specification); `sw/tests/` — their pytest suite
 - `regmap/` — the register map single source and its generators
 - `hw/openlane/` — physical flow configurations for IHP SG13G2
+- `hw/soc/` — the system-on-chip: RTL, flows, place-and-route configurations and run trees, its own formal jobs under `hw/soc/formal/`
+- `docs/` — the numbered record; `docs/00-index.md` is the entry point and names every document
+- `thesis/` — a design description of the whole part, built from `thesis/chapters/*.tex` into `thesis/main.pdf`; `thesis/figures/make_layout_figures.py` regenerates its layout maps from a sign-off run's DEF and netlist
+- `paper/`, `paper-residual/`, `paper-design/` — preprints, each with its own `refs.bib` and `make`

@@ -8,13 +8,13 @@
 \label{sec:intro-part}
 
 This document describes a fault-tolerant system-on-chip for on-board AI
-inference in small-satellite missions, implemented on a 130\,nm
-technology with an open-source RTL-to-GDS flow
+inference in small-satellite missions~\cite{naoukin2023}, implemented on
+a 130\,nm technology with an open-source RTL-to-GDS flow
 (\code{README.md}; \dcite{00-index}{section 1}). Its architecture class
-follows the Frontgrade Gaisler GR801 as published in that device's April
-2026 product brief --- a RISC-V management processor, an event-driven
-neuromorphic inference engine, on-chip SRAM and a set of spacecraft
-interfaces --- retargeted from 28\,nm FDSOI to 130\,nm at a scale an open
+follows the Frontgrade Gaisler GR801~\cite{gr801} as published in that
+device's April 2026 product brief --- a RISC-V management processor, an
+event-driven neuromorphic inference engine, on-chip SRAM and a set of
+spacecraft interfaces --- retargeted from 28\,nm FDSOI to 130\,nm at a scale an open
 PDK and one person can carry
 (\code{docs/00-reference-brief.md}; \dcite{01}{section 2}).
 
@@ -299,13 +299,13 @@ claim sentence says only ``130\,nm family with published ESCC-track TID
 and SEL characterization'' plus this project's architectural hardening.
 Nothing in the repository measures the single-event latch-up behaviour
 of anything this project has built. The second reason is the European
-institutional ecosystem; the third is that the open PDK ships foundry
-compiled SRAM macros with a built-in BIST interface rather than
-compiler-generated cells (\code{docs/04} section 3); the fourth is the
-cost argument of the paragraph above; and the fifth is that the fallback
+institutional ecosystem; the third is that the open PDK~\cite{ihppdk}
+ships foundry compiled SRAM macros with a built-in BIST interface
+rather than compiler-generated cells (\code{docs/04} section 3); the
+fourth is the cost argument of the paragraph above; and the fifth is that the fallback
 is unusually strong, because the flow is already silicon-proven on the
-fallback node, so falling back costs a retarget rather than a flow
-rebuild (\textbf{[estimate]} at 3--6 weeks, \dcite{04}{section 2}).
+fallback node~\cite{openlane2020}, so falling back costs a retarget
+rather than a flow rebuild (\textbf{[estimate]} at 3--6 weeks, \dcite{04}{section 2}).
 
 \begin{figure}[tbp]
   \centering
@@ -409,8 +409,8 @@ by \code{README.md}).
 The point of \code{docs/34} is not the numbers but the pinning: it answers
 one question --- \emph{is what I am submitting the thing that was
 verified?} --- and answers it so the answer can be checked by running
-commands. Ten RTL blobs by git hash, the submission tree by a 31-file
-manifest whose own SHA-256 is recorded, six flow configurations pinned
+commands~\cite{lamb2022}. Ten RTL blobs by git hash, the submission tree
+by a 31-file manifest whose own SHA-256 is recorded, six flow configurations pinned
 by hash inside their own generator, and the built netlist, powered
 netlist and DEF bit-identical across four independently configured
 hardens of two configurations on two dates
@@ -633,9 +633,9 @@ exists in register-transfer and layout form. It is not a qualification
 report and nothing in it should be read as one.
 
 Concretely: there is no beam test, no lot, no screening and no
-qualification body; the fault-injection results are simulated single-bit
-upsets, not measured event rates; the timing, power and area figures are
-pre-silicon flow results on layouts that are explicitly named where they
+qualification body~\cite{ecss60_15c}; the fault-injection results are
+simulated single-bit upsets, not measured event rates~\cite{nijsink2026};
+the timing, power and area figures are pre-silicon flow results on layouts that are explicitly named where they
 fail; and the memory macros the design depends on cannot be signed off
 by the open decks at the pinned PDK version, so the die that carries
 them cannot be either (\dcite{67}{section 11}). The claims this work
