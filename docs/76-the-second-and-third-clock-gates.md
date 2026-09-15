@@ -1549,6 +1549,17 @@ three is optional and all three were run to completion **[fact]**.
    layouts this document builds, and the question is whether the
    detected-fault rate moves. It is the one item that could falsify
    section 3.2.
+   *Raised 2026-09-15, `docs/82`.* `s76gate` is one of that
+   document's three arms, under `docs/77`'s name `s77base`. The direct
+   test measures the wake latency as exactly 2 edges on all 75
+   injections of the registered-wake arm and 1 on both controls, with
+   the upset recorded every time. The campaign runs one plan of 32
+   sites on all three arms: nine hold an unknown value at their
+   injection cycle and are skipped identically, and of the 23 that run,
+   the classification differs between arms on exactly one --- a fabric
+   ownership bit that the two GATED arms mask and the UNGATED one hangs
+   on. The detected-fault rate did not move.*
+
 3. **`SCRUB_IVL_RST` against idle power.** Section 3.4 measures the RAM
    scrubber at **16.46 % of idle switching**, which nothing in the corpus
    knew. The interval is a register and a reset parameter, the trade is

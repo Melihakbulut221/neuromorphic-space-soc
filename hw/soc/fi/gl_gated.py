@@ -678,9 +678,20 @@ def cmd_campaign(args):
         "injection cycle and %d were unchanged by the force, both skipped "
         "and neither is a fault", len(rows), len(todo), len(unknown),
         len(unchanged))
+    # EVERYTHING THAT REPORTS GOES THROUGH say(), AND ALL OF IT BEFORE
+    # log.close(). The first version of this block wrote to `log`
+    # directly and the second put the unknown-field tally after the
+    # close; both died on the file handle rather than on the physics
+    # ("I/O operation on closed file", 2026-09-15), after the arm's
+    # simulations had already run. The records survived both because
+    # they are written incrementally, which is why that line exists.
     for tag, lst in (("unknown", unknown), ("unchanged", unchanged)):
         for idx, q, cyc in lst:
-            log("  %s: flop %d %s at cycle %d" % (tag, idx, q, cyc))
+            say("  %s: flop %d %s at cycle %d", tag, idx, q, cyc)
+    if II_UNKNOWN or HX_UNKNOWN:
+        say("unknown (x) record fields, counted not ignored: %s",
+            ", ".join("%s=%d" % kv for kv in
+                      sorted(list(II_UNKNOWN.items()) + list(HX_UNKNOWN.items()))))
     summarise_campaign(say, rows)
     say("wall: %.1f s for %d simulations at %d jobs (contended); per simulation "
         "min %.1f, median %.1f, max %.1f",
@@ -690,10 +701,6 @@ def cmd_campaign(args):
         max(float(r["wall"]) for r in rows))
     log.close()
 
-    if II_UNKNOWN or HX_UNKNOWN:
-        say("unknown (x) record fields, counted not ignored: %s",
-            ", ".join("%s=%d" % kv for kv in
-                      sorted(list(II_UNKNOWN.items()) + list(HX_UNKNOWN.items()))))
 
 def summarise_campaign(say, rows):
     say("")

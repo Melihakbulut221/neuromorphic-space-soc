@@ -1327,6 +1327,16 @@ for the figures; the wall times are costs and not benchmarks]**
    are this document's two layouts, and the question is whether the
    detected-fault rate moves. It is the one experiment that could
    falsify section 4.
+   *Raised 2026-09-15, `docs/82`.* The direct test finds the wake
+   latency is exactly 2 edges on all 75 injections of the gated arm
+   and 1 on both controls, with the upset recorded every time. The
+   campaign runs one plan of 32 sites on three arms: nine hold an
+   unknown value at their injection cycle and are skipped on every
+   arm, and of the 23 that run, the classification differs between
+   arms on exactly one --- a fabric ownership bit that the two GATED
+   arms mask and the UNGATED one hangs on. Stopping the clock cost
+   this campaign no detection.*
+
 3. **The `nand2_1` on the enable's wire.** Section 3.3 measures the last
    gate of `docs/76`'s enable driving 0.167540 pF with a 1.556 ns
    transition and costing 1.336 ns — a minimum-strength cell on a long

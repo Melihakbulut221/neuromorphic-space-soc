@@ -361,6 +361,91 @@ persistence is a property of the register, not of the gate.
 
 ---
 
+## 7. The campaign: does the gate change what a campaign sees?
+
+Section 6 measured the wake path on the cell that implements it. This
+section asks the question `docs/76` section 14 item 2 actually posed:
+**does stopping the clock change the rate at which upsets are
+detected?** One plan of 32 sites is drawn from the gated domains --- 20
+in the accelerator's, 12 in the fabric's --- each with the workload
+cycle at which it is injected, and the SAME plan is run on all three
+arms, matched by Q-net name so that no arm is injected anywhere the
+others are not.
+
+**Nine of the 32 sites hold an UNKNOWN value at their injection cycle
+and are skipped on every arm, identically** **[fact, each arm's
+`gl_campaign_gated.log`]**. They are registers with no reset ---
+`\u_npu.u_node0.u_lif.w_data_all` is the largest group --- inside a
+domain whose clock is stopped, in a workload that never writes them: a
+gate-level model leaves such a flip-flop at X until something clocks a
+value into it, and forcing an unknown bit to its complement produces
+another unknown. There is no state there to upset. The campaign counts
+them and moves on; the first three runs of this job aborted on the
+first one instead, which is why the tool now says how many rather than
+how few.
+
+That leaves **23 injections run on every arm**.
+
+### 7.1 The result
+
+| | | MASKED | HANG | released | never clocked |
+|---|---|---:|---:|---:|---:|
+| **accelerator domain**, 11 records | `s77gate` | 10 | 1 | 1 | **10** |
+| | `s77base` | 10 | 1 | 1 | **10** |
+| | `s76base` (ungated) | 10 | 1 | 11 | 0 |
+| **fabric domain**, 12 records | `s77gate` | 9 | 3 | 12 | 0 |
+| | `s77base` | 9 | 3 | 12 | 0 |
+| | `s76base` (ungated) | 8 | 4 | 12 | 0 |
+
+**[fact, `gl_gated.py report` over the three `records_gated.csv`.]** No
+injection in any arm was CORRECTED, none produced silent data
+corruption, and none was DETECTED --- these are ordinary data and
+control flip-flops, not the fault lines section 6 injected, and nothing
+in the design watches them.
+
+**The classification differs between arms on 0 of the 11 accelerator
+records and on 1 of the 12 fabric records.** The one difference is
+`\u_bus.q_owner[1] [0]` at cycle 3096: the two gated arms mask it, and
+the **ungated** arm hangs on it.
+
+### 7.2 What that answers
+
+**Stopping the clock did not cost this campaign a single detection.**
+In the accelerator's domain, 10 of the 11 upsets were never sampled at
+all on the gated arms --- the clock did not come back inside the window
+--- and all 11 were sampled on the ungated arm, and the outcome is the
+same on all three: ten masked, one hang. An upset that a stopped clock
+prevents from being sampled was, in every one of these ten cases, an
+upset that changed nothing when it was sampled.
+
+**And the one arm that behaves differently is the one without a gate.**
+`q_owner` is the fabric's ownership state; upset at cycle 3096 it
+wedges the ungated build and is harmless in both gated builds. One site
+out of twenty-three is not a claim that gating improves robustness, and
+this document does not make one. It is, precisely, the falsification
+that `docs/76` section 14 item 2 asked for and did not get: if the gate
+degraded detection, this campaign is where it would show, and what it
+shows instead is a single difference pointing the other way.
+
+**What the two gated arms say about each other is nothing, and that is
+also a result.** `s77gate` and `s77base` --- the registered wake and the
+combinational enable it replaced --- are identical in all 23 records but
+one latency value. The difference between those two designs lives
+entirely on the fault lines, where section 6 measured it as exactly one
+edge, and it does not reach the ordinary state of the blocks they gate.
+
+### 7.3 The size of the sample, stated as the sample it is
+
+Twenty-three injections per arm, at 23 sites, at one cycle each, on one
+workload. That is small, it is stated as small, and no rate is computed
+from it. What it can carry is the comparison, because the three arms
+run the same 23 sites at the same cycles and differ in one place; what
+it cannot carry is a cross-section, a per-bit probability, or any
+statement about sites the plan did not draw. `docs/74`'s campaign is the
+instrument for rates and this is not that instrument.
+
+---
+
 ## 8. What this does NOT cover
 
 Everything `docs/74` section 12 and `docs/75` section 10 list stands
