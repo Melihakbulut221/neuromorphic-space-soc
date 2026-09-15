@@ -249,6 +249,30 @@ def ii(rec, k):
         return -1
 
 
+def hx(rec, k):
+    """A hex record field, with X tolerated the way ii() tolerates it.
+
+    A gate-level model prints X into %h for any bit that is unknown at
+    the moment of the $display, and a word inside a domain whose clock
+    has not started is full of them.  The first two campaign runs died
+    here -- `invalid literal for int() with base 16:
+    '0000000000000000000000000000000X'`, 2026-09-15 -- with six minutes
+    of simulation behind each.  An unknown word is -1, which is not a
+    value the design can produce and is the same "no measurement" this
+    file already uses, and HX_UNKNOWN counts them so a run reports how
+    many rather than pretending there were none.
+    """
+    v = rec.get(k, "")
+    try:
+        return int(v, 16)
+    except ValueError:
+        HX_UNKNOWN[k] += 1
+        return -1
+
+
+HX_UNKNOWN = collections.Counter()
+
+
 # =====================================================================
 def cmd_golden(args):
     build = os.path.abspath(args.build)
@@ -441,7 +465,7 @@ def cmd_direct(args):
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
         for n, (item, r) in enumerate(ex.map(job, plan), 1):
             b, k, f, cyc = item
-            if ii(r, "hit") != 1 or ii(r, "during") == int(r["before"], 16):
+            if ii(r, "hit") != 1 or ii(r, "during") == hx(r, "before"):
                 sys.exit("a force did not land: flop %d" % f["idx"])
             rows.append(row_of(args.arm, "cause_%s" % b, k, f, cyc, r, g))
             if n % 25 == 0:
@@ -456,15 +480,15 @@ def cmd_direct(args):
 
 
 def row_of(arm, kind, pos, f, cyc, r, g, cls=None, df=None):
-    word_b = int(r.get("cg_npu_word_before", "0"), 16)
-    word_a = int(r.get("cg_npu_word", "0"), 16)
+    word_b = hx(r, "cg_npu_word_before")
+    word_a = hx(r, "cg_npu_word")
     sticky_b = (word_b >> NPU_P_STICKY) & ((1 << NPU_NSTICKY) - 1)
     sticky_a = (word_a >> NPU_P_STICKY) & ((1 << NPU_NSTICKY) - 1)
     own_first = ii(r, "own_first")
     npu_first = ii(r, "cg_npu_first")
     row = {"arm": arm, "kind": kind, "pos": pos, "gl_idx": f["idx"], "gl_net": f["q"],
-           "cycle": cyc, "hit": r["hit"], "before": int(r["before"], 16),
-           "during": r["during"], "after": int(r["after"], 16),
+           "cycle": cyc, "hit": r["hit"], "before": hx(r, "before"),
+           "during": r["during"], "after": hx(r, "after"),
            "persist": r["persist"], "released": r.get("released", ""),
            "own_first": own_first,
            "own_latency": (own_first - cyc) if own_first >= 0 else -1,
@@ -608,7 +632,7 @@ def cmd_campaign(args):
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
         for n, (item, r) in enumerate(ex.map(job, todo), 1):
             p, f = item
-            if ii(r, "hit") != 1 or ii(r, "during") == int(r["before"], 16):
+            if ii(r, "hit") != 1 or ii(r, "during") == hx(r, "before"):
                 sys.exit("a force did not land: flop %d" % f["idx"])
             cls, df = campaign.classify(r, golden)
             rows.append(row_of(args.arm, p["kind"], p.get("asleep", ""), f,
@@ -629,9 +653,10 @@ def cmd_campaign(args):
         max(float(r["wall"]) for r in rows))
     log.close()
 
-    if II_UNKNOWN:
+    if II_UNKNOWN or HX_UNKNOWN:
         say("unknown (x) record fields, counted not ignored: %s",
-            ", ".join("%s=%d" % kv for kv in sorted(II_UNKNOWN.items())))
+            ", ".join("%s=%d" % kv for kv in
+                      sorted(list(II_UNKNOWN.items()) + list(HX_UNKNOWN.items()))))
 
 def summarise_campaign(say, rows):
     say("")

@@ -1348,3 +1348,158 @@ for the figures; the wall times are costs and not benchmarks]**
    F10 could be added to.
 7. **`.A_REN(req_i && !do_write)`**, still. `docs/57` section 8.3's six
    AND gates and 0.147 mW, unbuilt in three documents now.
+
+---
+
+## 18. Item 1, built and measured (added 2026-09-15)
+
+Section 17 item 1 asked for the wakefulness-qualified grant to be built
+behind a parameter, laid out beside `s77gate`, and reported on. This
+section is that, minus the layout, and section 18.6 says what the
+missing layout costs the conclusion.
+
+### 18.1 What was built
+
+`hw/soc/rtl/soc_npu.v` gains `parameter integer WAKE_GNT = 0` beside
+`CLKGATE`. Inside `g_clkgate` the registered term that section 11 names
+is given a name of its own, `awake`, and a generate arm `g_wake_gnt`
+assigns two things from it when the parameter is non-zero: the clock
+enable `clk_en_o`, which therefore stops reading `req_i | psel_i`, and
+the acceptance term `may_accept`, which qualifies `gnt_o` and
+`pready_o`. `hw/soc/rtl/soc_top.v` forwards the parameter;
+`hw/soc/flow/syn_soc_top.sh` and `hw/soc/flow/sim_soc.sh` take it as
+`SOC_WAKE_GNT` and `hw/soc/tb/cocotb/Makefile.soc_npu` as `WAKE_GNT`,
+each defaulting to 0.
+
+**The design ships 0.** Section 18.5's numbers are the case for keeping
+it that way until there is a layout.
+
+### 18.2 The default is not bit-exact, and it is equivalent
+
+The honest statement first: **the netlist changes at `WAKE_GNT = 0`.**
+`soc_npu` synthesised standalone and flattened is 11,529 cells before
+the parameter and 11,739 after it, with the same flip-flop count
+**[fact, yosys `stat` on the two builds]**. Naming a term `awake` and
+putting the arm around it gives the synthesiser a different expression
+tree to fold, and it folds it differently.
+
+So the claim that matters was proved rather than inspected. A miter of
+the two modules --- the committed one as `gold`, the parameterised one
+at `WAKE_GNT = 0` as `gate`, both flattened, `async2sync` for the
+asynchronous resets --- closes under `equiv_induct`:
+
+```
+Found 251 unproven $equiv cells (38 groups) in equiv:
+Proved 251 previously unproven $equiv cells.
+  Of those cells 396 are proven and 0 are unproven.
+Equivalence successfully proven!
+```
+
+**[fact, 2026-09-15.]** `WAKE_GNT = 0` is the same sequential machine
+as the code before the parameter existed. Every number this document
+and `docs/76` published on the default therefore still measures the
+default, and the 2,249-signal walk of section 7.3 is unchanged.
+
+### 18.3 What the parameter proves when it is on
+
+`hw/soc/formal/clkgate_wake_gnt.sby` states the safety property of the
+qualified grant on the same abstraction `clkgate_wake.sby` uses, and
+all three tasks pass from a clean run directory: `bmc`, `prove` and
+`cover`, `DONE (PASS, rc=0)` **[fact, each job's `logfile.txt`]**.
+
+The cocotb suite runs at both settings. At the default, 35 of 35 pass.
+At `WAKE_GNT = 1`, 35 of 35 pass **[fact,
+`hw/soc/tb/cocotb/results_wg0.xml` and `results_wg1.xml`]** --- but not
+on the first attempt, and the first attempt is the more useful result.
+
+> **A1 FAILED AT `WAKE_GNT = 1`, AND IT WAS THE TEST'S SCOPE AND NOT
+> THE DESIGN.** A1 asserts that no state moves in a cycle the gate
+> would have removed. It already excused `wake_q`, which is clocked by
+> the free clock precisely so that the block can wake. It did not
+> excuse what `wake_q` reaches combinationally in that same cycle, and
+> the run named exactly five: `awake`, `clk_en_o`, `may_accept`,
+> `gnt_o` and `pready_o`. None is a flip-flop; none is state the gate
+> can lose. The allowance now covers the cone, and because an allowance
+> written as a list of names is the thing this project does not trust,
+> `sw/tests/test_soc_clkgate_guards.py` gained a guard that reads the
+> `g_wake_gnt` arm and fails if it ever assigns more than those
+> signals. A sixth signal joining the cone now breaks a guard instead
+> of quietly widening a simulation's excuse.
+
+### 18.4 What it costs the corpus
+
+Section 11 priced the qualified grant at **56 cycles of 415,324**, or
+0.013 per cent. Measured, on today's tree, by running the whole
+system-on-chip at both settings:
+
+| | `SOC_WAKE_GNT=0` | `SOC_WAKE_GNT=1` | delta |
+|---|---:|---:|---:|
+| run length | **416,673** cycles | **416,700** cycles | **+27** |
+| cycles in the image | 220,279 | 220,306 | +27 |
+| verdict | `[TB] PASS` | `[TB] PASS` | --- |
+
+**[fact, `hw/soc/out/sim-wg0/sim.log` and `sim-wg1/sim.log`.]**
+
+**The cost is 27 cycles, 0.0065 per cent --- about half what section 11
+predicted.** The prediction counted every cycle in which a request
+would find the block asleep; the measurement says that in half of them
+the block was already awake for another reason by the time the request
+arrived.
+
+> *The 415,324-cycle invariant is superseded as a figure for today's
+> tree, 2026-09-15: the same workload at the same default now runs
+> **416,673** cycles. The figure is not wrong where it appears --- it
+> measured the tree it was taken on --- and it is left standing, as
+> `docs/64` requires. The comparison in the table above is internal to
+> one tree and one pair of runs, which is why it is the comparison the
+> conclusion rests on.*
+
+### 18.5 What it costs the netlist
+
+Synthesis at 20 ns, both arms, same flow and same corner library:
+
+| | default | `WAKE_GNT = 1` | delta |
+|---|---:|---:|---:|
+| cells | 47,106 | 47,092 | **-14** |
+| flip-flops | 5,998 | 5,991 | **-7** |
+| chip area | 704,104.0020 um2 | **716,615.0838 um2** | **+12,511.0818, +1.78 %** |
+
+**[fact, `hw/soc/out/s85-wg0-syn` and `s85-wg1-syn`, each run's
+`area.rpt` and its own netlist.]**
+
+**Fewer cells and more area, and the histogram says why.** The arm
+takes `req_i | psel_i` off the enable and puts a wake bit in its place,
+and the mapper answers with **1,115 more `sg13g2_mux2_1`** against 310
+fewer inverters, 260 fewer `a221oi`, 257 fewer `nor2` and 251 fewer
+`nand2` **[fact, cell-type census of the two netlists]**. A multiplexer
+is a larger cell than the gates it replaces. Seven flip-flops go away
+with the fast-path term they served.
+
+### 18.6 What is NOT here, and what it costs the conclusion
+
+**The clock-gating check at the slow corner is not re-measured, because
+that needs a layout of this netlist and no layout of it has been run.**
+Section 9.5's two checks are OpenSTA's, derived from the gate cell's
+Liberty on a placed and routed database; a pre-place static analysis on
+a synthesis netlist is a different measurement and would not be
+comparable to the published pair. The claim of section 17 item 1 ---
+that the check would close *by construction*, because a block can only
+be addressed in a cycle it is clocked --- is therefore supported here
+structurally and not confirmed by the instrument that reported the
+miss:
+
+- structurally, the enable no longer reads any input port at
+  `WAKE_GNT = 1`, which is what put the CPU's critical path in the
+  check's launch cone (section 5), and the guard in
+  `sw/tests/test_soc_clkgate_guards.py` asserts exactly that;
+- functionally, the safety property is proved and the cocotb suite
+  passes at both settings;
+- and the cost of switching is now two measured numbers rather than an
+  estimate.
+
+**The recommendation is therefore to keep `WAKE_GNT = 0` and to run one
+layout.** The layout is the missing evidence, not the missing work:
+everything else section 17 item 1 asked for is above, and 1.78 per cent
+of area with a 29.6 ps hold margin (`docs/79`) is exactly the kind of
+change this project has learned to lay out before believing.
+

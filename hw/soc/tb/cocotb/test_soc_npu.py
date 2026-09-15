@@ -1760,7 +1760,25 @@ async def test_no_state_moves_in_a_cycle_the_gate_would_have_removed(dut):
         # moves in such a cycle (a fast term in the enable has the clock
         # running first), so the walk is left whole there and the
         # 2,249-signal figure docs/77 section 7.3 quotes is unchanged.
-        leaves = [h for h in leaves if not h._path.endswith("g_clkgate.wake_q")]
+        # AND ITS COMBINATIONAL CONE IS NOT STATE EITHER. `wake_q` moving
+        # in a stopped cycle changes, in that same cycle and through pure
+        # combinational logic, every signal the WAKE_GNT arm derives from
+        # it: `awake`, the enable `clk_en_o` it drives, the acceptance
+        # term `may_accept`, and the two outputs `may_accept` qualifies,
+        # `gnt_o` and `pready_o`. The first run of this test at
+        # WAKE_GNT = 1 failed naming exactly those five and nothing else
+        # [fact, 2026-09-15]. None of them is a flip-flop, so none of
+        # them is state the gate can lose, which is what A1 is about.
+        # The cone is pinned by
+        # sw/tests/test_soc_clkgate_guards.py::
+        # test_the_wake_cone_is_exactly_what_the_A1_allowance_lists, so
+        # that a sixth signal joining it fails a guard rather than
+        # quietly widening this allowance.
+        WAKE_CONE = ("g_clkgate.wake_q", "g_clkgate.awake", "clk_en_o",
+                     "may_accept", "gnt_o", "pready_o")
+        leaves = [h for h in leaves
+                  if not any(h._path.endswith("." + n) or h._path.endswith(n)
+                             for n in WAKE_CONE)]
     assert len(leaves) > 200, (
         f"only {len(leaves)} signals found under soc_npu; the hierarchy "
         "walk broke and this test would prove nothing")

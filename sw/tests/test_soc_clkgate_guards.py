@@ -601,3 +601,34 @@ def test_at_the_default_the_enable_reads_exactly_the_two_transient_inputs(
     assert reached == {"req_i", "psel_i"}, (
         "at WAKE_GNT = 0 soc_npu.v's clk_en_o reaches {}; docs/77 built "
         "it to reach exactly req_i and psel_i".format(sorted(reached)))
+
+
+def test_the_wake_cone_is_exactly_what_the_A1_allowance_lists():
+    """`wake_q`'s combinational cone under WAKE_GNT is six signals.
+
+    WHY THIS GUARD EXISTS. `hw/soc/tb/cocotb/test_soc_npu.py`'s A1 --
+    no state moves in a cycle the gate would have removed -- has to
+    excuse `wake_q`, which is clocked by the FREE clock so that the
+    block can wake at all, and everything `wake_q` reaches through pure
+    combinational logic in the same cycle. That excuse is a list of
+    names in a simulation, and a list of names in a simulation is
+    exactly the thing this project does not trust: if a seventh signal
+    joins the cone, A1 keeps passing and stops meaning what it says.
+
+    So the cone is pinned HERE, against the RTL, by the property that
+    defines it: inside `g_clkgate` at WAKE_GNT, `awake` is assigned from
+    `wake_q`, and the signals assigned from `awake` are the enable and
+    the acceptance term, which in turn qualifies the two outputs. If the
+    WAKE_GNT arm grows an assignment, this fails and whoever added it
+    has to decide whether A1's allowance should grow with it.
+    """
+    npu = (ROOT / "hw" / "soc" / "rtl" / "soc_npu.v").read_text()
+    m = re.search(r"if \(WAKE_GNT != 0\) begin : g_wake_gnt(.*?)\n    end",
+                  npu, re.S)
+    assert m, "soc_npu.v has no g_wake_gnt generate arm to pin"
+    arm = m.group(1)
+    assigned = set(re.findall(r"(?m)^\s*assign\s+(\w+)", arm))
+    assert assigned <= {"awake", "clk_en_o", "may_accept"}, (
+        "the WAKE_GNT arm assigns {}, which is more than the cone "
+        "test_soc_npu.py's A1 allowance excuses; widen the allowance "
+        "deliberately or narrow the arm".format(sorted(assigned)))
