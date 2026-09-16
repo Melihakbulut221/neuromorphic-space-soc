@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
 # SPDX-License-Identifier: Apache-2.0
 #
-#   make -C paper-design         build the PDF
-#   make -C paper-design arxiv   the .tex + .bbl tarball arXiv wants
-#   make -C paper-design clean
+#   make -C thesis         build the PDF
+#   make -C thesis arxiv   the .tex + .bbl tarball arXiv wants
+#   make -C thesis clean
 #
 # tectonic resolves its own packages and runs the passes itself, so it is
 # preferred when present; the pdflatex path is kept because arXiv and CI
@@ -34,6 +34,20 @@ endif
 	@grep -qE 'Citation .* undefined|Reference .* undefined' $(DOC).log \
 	  && { echo "undefined citations or references -- see $(DOC).log"; \
 	       exit 1; } || true
+# TWO GATES ON THE RENDERED PAGE. Neither of these can be seen by
+# reading the source, and both have shipped in this project: an
+# instruction line that leaked into a table body made a row 890 pt
+# wider than the page, and a figure printed every macro's name on top
+# of its own dimensions for two revisions. The log answers the first;
+# only the PDF answers the second.
+	@grep -q 'Overfull' $(DOC).log && { \
+	  echo "overfull box -- something is wider than the page:"; \
+	  grep -n 'Overfull' $(DOC).log; exit 1; } || true
+	@command -v pdftotext >/dev/null || { \
+	  echo "pdftotext (poppler-utils) is needed to check the page for"; \
+	  echo "text printed over other text; install it or build elsewhere."; \
+	  exit 1; }
+	@python3 ../scripts/pdf_overlap_check.py $(DOC).pdf --quiet
 
 # main.bbl IS NOT BUILD OUTPUT for this deliverable. arXiv compiles the
 # tarball it is given and does not run BibTeX, so the .bbl must travel

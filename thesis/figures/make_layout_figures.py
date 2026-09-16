@@ -505,17 +505,40 @@ def fig_regions(cells, macros, owner, out):
              "Memory scrub engine": "scrub",
              "Plug-and-play ROM": "PnP ROM",
              "Bus fabric and APB": "fabric"}
+    # WHERE EACH BOX GOES. Three regions have room for their own box in
+    # their own top corner. The ROM column does not, and putting one
+    # there anyway is what printed a region's statistics across the ROM
+    # macro labels in two published revisions: the column is 477 um
+    # wide, its two macros leave a 98 um band between them, and a
+    # five-line box at 5.6 pt needs about 260. Those two boxes sit
+    # instead in the empty right end of the central channel and point
+    # at the region they describe.
+    OUTSIDE = {
+        # region: (text corner), (arrow tip)
+        "ROM column, upper half": ((2238.0, 1362.0), (2216.0, 1520.0), "top"),
+        "ROM column, lower half": ((2238.0, 712.0), (2216.0, 520.0), "bottom"),
+    }
+    box = dict(boxstyle="round,pad=0.28", fc="white", ec="#4A4A4A",
+               alpha=0.94, linewidth=0.6)
     for name, (x0, y0, x1, y1), anchor in REGIONS:
         c = occ[name]
         total = sum(c.values())
         lines = ["%s" % name.upper(), "%s cells" % f"{total:,}"]
         lines += ["%s %s" % (f"{v:,}".rjust(6), SHORT.get(k, k))
                   for k, v in c.most_common(3)]
+        text = "\n".join(lines)
+        if name in OUTSIDE:
+            (tx, ty), tip, va = OUTSIDE[name]
+            ax.annotate(text, xy=tip, xytext=(tx, ty), fontsize=5.6,
+                        va=va, ha="right", zorder=8,
+                        family="DejaVu Sans Mono", bbox=box,
+                        arrowprops=dict(arrowstyle="-|>", color="#4A4A4A",
+                                        linewidth=0.7, shrinkA=1.5,
+                                        shrinkB=0.0))
+            continue
         tx, ha = ((x1 - 10, "right") if anchor == "r" else (x0 + 12, "left"))
-        ax.text(tx, y1 - 12, "\n".join(lines), fontsize=5.6, va="top",
-                ha=ha, zorder=8, family="DejaVu Sans Mono",
-                bbox=dict(boxstyle="round,pad=0.28", fc="white", ec="#4A4A4A",
-                          alpha=0.94, linewidth=0.6))
+        ax.text(tx, y1 - 12, text, fontsize=5.6, va="top",
+                ha=ha, zorder=8, family="DejaVu Sans Mono", bbox=box)
     save(fig, out, "layout_regions")
 
 
@@ -534,17 +557,49 @@ def fig_floorplan(macros, out):
         w, h = MACRO_SIZE[master]
         ax.add_patch(Rectangle((x, y), w, h, facecolor=fills[master],
                                edgecolor="#222222", linewidth=1.0, zorder=2))
-        ax.text(x + w / 2, y + h / 2 + (14 if h > 300 else 9),
-                MACRO_LABEL.get(name, name), ha="center", va="center",
-                fontsize=7.4, fontweight="bold", zorder=3)
-        ax.text(x + w / 2, y + h / 2 - (10 if h > 300 else 7),
-                "%.2f x %.2f um\n(%.0f, %.0f) %s" % (w, h, x, y, orient),
-                ha="center", va="center", fontsize=6.0, zorder=3)
-    ax.text(2306.4 / 2, 2075.22 - 18, "die 2306.40 x 2075.22 um",
-            ha="center", va="top", fontsize=7.5)
-    ax.text(CORE[0] + 6, CORE[1] + 8,
+        # OFFSETS IN POINTS, NOT MICROMETRES. The first version of this
+        # used data coordinates -- 14 um above the centre for the name
+        # and 10 below for the size -- on an axis 2,000 um tall in a
+        # five-inch figure, where 14 um is a quarter of a point. Every
+        # macro printed its name on top of its own dimensions, in the
+        # thesis and in the paper both, until 2026-09-16.
+        cx, cy = x + w / 2, y + h / 2
+        detail = "%.2f x %.2f um\n(%.0f, %.0f) %s" % (w, h, x, y, orient)
+        if w >= 400.0:
+            # The box can hold both lines: name above centre, size below.
+            ax.annotate(MACRO_LABEL.get(name, name), (cx, cy),
+                        textcoords="offset points", xytext=(0, 5),
+                        ha="center", va="bottom", fontsize=7.0,
+                        fontweight="bold", zorder=3)
+            ax.annotate(detail, (cx, cy), textcoords="offset points",
+                        xytext=(0, -4), ha="center", va="top",
+                        fontsize=5.6, zorder=3)
+        else:
+            # THE CHECK MACROS ARE 236.80 um WIDE AND THE SIZE LINE AT
+            # THE OTHER MACROS' SIZE IS WIDER THAN THAT. Printed inside
+            # at 5.6 pt it spilled over both edges of its own box; moved
+            # outside, it sat on the RAM bank next door. It fits inside
+            # at 4.8 pt with the numbers trimmed to one decimal, which
+            # is what the check macros' dimensions need -- they are
+            # 236.80 by 191.34 exactly, and the trailing zero and the
+            # hundredths carry nothing a reader of this figure wants.
+            ax.annotate(MACRO_LABEL.get(name, name), (cx, cy),
+                        textcoords="offset points", xytext=(0, 3),
+                        ha="center", va="bottom", fontsize=6.0,
+                        fontweight="bold", zorder=3)
+            ax.annotate("%.1f x %.1f um\n(%.0f, %.0f) %s"
+                        % (w, h, x, y, orient), (cx, cy),
+                        textcoords="offset points", xytext=(0, -3),
+                        ha="center", va="top", fontsize=4.8, zorder=3)
+    # BOTH CAPTIONS GO IN THE EMPTY CHANNEL. At the top of the die the
+    # first one crossed the outline it was naming, and at the bottom
+    # left the second one ran under RAM bank 0.
+    mid = (CORE[1] + RAM_H + UROM_Y0) / 2
+    ax.text(2306.4 / 2, mid + 30, "die 2306.40 x 2075.22 um",
+            ha="center", va="bottom", fontsize=7.5)
+    ax.text(2306.4 / 2, mid - 30,
             "core %.2f x %.2f um" % (CORE[2] - CORE[0], CORE[3] - CORE[1]),
-            ha="left", va="bottom", fontsize=7.0, color="#555555")
+            ha="center", va="top", fontsize=7.0, color="#555555")
     ax.set_xlim(-30, 2336)
     ax.set_ylim(-30, 2105)
     ax.set_aspect("equal")

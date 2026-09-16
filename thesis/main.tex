@@ -15,6 +15,7 @@
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{lmodern}
+\usepackage{upgreek}
 \usepackage{microtype}
 \usepackage[a4paper,margin=2.4cm,bottom=2.8cm]{geometry}
 
@@ -48,6 +49,14 @@
 \newcommand{\fact}{\textsuperscript{[fact]}}
 
 \sisetup{detect-all,group-separator={,},group-minimum-digits=4}
+% THE MICRO SIGN. Under T1 with lmodern, siunitx's own \micro prefix
+% prints a t-cedilla: two revisions of this document shipped a
+% "700.08 tm" standard-cell channel. siunitx's text-micro and
+% math-micro keys do not fix it -- they were tried, and the glyph does
+% not change -- so the unit is declared here instead, with upgreek's
+% upright mu, and every unit in the text uses \um rather than the
+% built-in prefix and metre.
+\DeclareSIUnit{\um}{\text{\ensuremath{\upmu}}m}
 
 \captionsetup{font=small,labelfont=bf,width=0.94\linewidth}
 \setlength{\parskip}{0.35em}

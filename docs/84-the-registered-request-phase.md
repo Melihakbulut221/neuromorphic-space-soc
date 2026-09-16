@@ -8,7 +8,7 @@ SPDX-License-Identifier: CC-BY-4.0
 every load and a `docs/50`-class change; it is named here as the thing
 the paths have in common, not priced."* `docs/83` then measured that
 nothing else is the thing the paths have in common — **wire is 1.9 % of
-a violating path at the median**, and the median violating path is **88
+a violating path at the median**, and the median violating path is **78
 gate stages deep**. A floorplan moves wire.
 
 This document builds the change behind `soc_bus.v`'s new `REQ_REG`,

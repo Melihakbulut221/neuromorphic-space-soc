@@ -32,11 +32,9 @@ layout in the project that meets hold at every corner.}
 \midrule
 \multicolumn{3}{@{}l}{\textit{Process and floorplan}}\\
 Technology & IHP SG13G2, 130\,nm, open PDK & \code{docs/12} \\
-Die & $2306.40 \times 2075.22$\,\si{\micro\metre} & final DEF \\
-Core area & $(60.00,\,45.36)$ to $(2246.40,\,2029.86)$\,\si{\micro\metre} & \code{clint\_region.py} \\
+Die & $2306.40 \times 2075.22$\,\si{\um} & final DEF \\
+Core area & $(60.00,\,45.36)$ to $(2246.40,\,2029.86)$\,\si{\um} & \code{clint\_region.py} \\
 Vendor macros & 8: four $2048\times64$ RAM, two $1024\times32$ ROM, two $512\times16$ ROM ECC & \code{docs/67} \\
-
-and at line 53: Antenna violating nets & 2, and clearing them breaks hold & \code{docs/67} \\
 Instances placed & 168{,}592 & \code{metrics.json} \\
 Instance utilisation & 0.7538 (standard cells 0.4662) & \code{metrics.json} \\
 Flip-flops & 5{,}998 & final netlist \\

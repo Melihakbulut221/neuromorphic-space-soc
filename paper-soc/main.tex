@@ -254,8 +254,13 @@ every read.
 \centering
 \scriptsize
 \setlength{\tabcolsep}{4pt}
-\renewcommand{\arraystretch}{1.05}
-\begin{tabular}{L{2.7cm}L{1.9cm}L{5.6cm}rL{2.4cm}}
+\renewcommand{\arraystretch}{1.0}
+% The "what it states" column was 5.6 cm on a 15.9 cm text block, which
+% left three centimetres unused and wrapped half the rows to three
+% lines. The table then overran its float page and dropped its caption
+% onto the folio. Widening it is the fix; the total is still inside the
+% text block.
+\begin{tabular}{L{2.7cm}L{1.7cm}L{7.0cm}rL{2.1cm}}
 \toprule
 property set & block & what it states & tasks & result \\
 \midrule
@@ -854,11 +859,10 @@ instead of at \texttt{data arrival time} and so counting the
 \emph{capture} clock's tree into the data path. It was corrected the
 same day, and the old figures are an instrument defect rather than a
 superseded measurement---nothing about the design changed between them.
-Three places in the corpus still carry a pre-correction figure: the
-summary section of the document that made the correction and the
-opening of the document that cites it carry the \num{88}, and the
-document index carries the \SI{3.6}{\percent} beside a corrected
-\SI{3.0}{\percent}. All three are named here.
+The first printing of this paper named three places in the corpus that
+still carried a pre-correction figure; those three were corrected on
+2026-09-16, and the pre-correction numbers now survive in exactly one
+place, the correction record of the document that made it.
 
 The register file's data bits hold \num{1007} of the \num{3529}
 violating endpoints, its SECDED check bits \num{217} and the rest of

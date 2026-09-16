@@ -47,8 +47,8 @@ unique Netgen LVS match, and all four geometric deck families run on it
   memory macros drawn and labelled, read out of run
   \code{s83romecc5}'s own DEF and netlist --- the eight-macro layout of
   \dcite{67}{section 11}. The die is
-  2306.40 by 2075.22\,\si{\micro\metre}, that is
-  \qty{4786287.408}{\micro\metre\squared} (\dcite{59}{section 3.1}). Apart
+  2306.40 by 2075.22\,\si{\um}, that is
+  \qty{4786287.408}{\um\squared} (\dcite{59}{section 3.1}). Apart
   from the eight macros, which are fixed, nothing here was told where to
   go: the clusters are the placer's, not the designer's. Only about
   7{,}700 of the die's instances still carry a hierarchical name after
@@ -362,9 +362,9 @@ set --- of which zero are outside the vendor macro hierarchy. The
 abstracted Magic run reports 170 error boxes on \code{s83romecc5},
 20 inside a macro
 footprint and 150 outside, and every one of the 150 lies within
-\qty{0.500}{\micro\metre} of a macro edge, none in open routing area,
+\qty{0.500}{\um} of a macro edge, none in open routing area,
 because a LEF obstruction blanket is one shape more than
-\qty{10}{\micro\metre} wide and ordinary routing beside it violates
+\qty{10}{\um} wide and ordinary routing beside it violates
 wide-metal spacing rules that the macro's real geometry would not
 (\dcite{67}{section 11}). \code{README.md} summarises the run with 182
 Magic boxes and 162 outside, which reads like a contradiction and is
@@ -388,7 +388,7 @@ run before committing a full SoC.
 
 \textbf{The pilot} is \code{tt\_um\_melihakbulut\_nssoc}, a
 $6\times2$ = 12-tile design on the TTIHP26b shuttle, die area
-\code{0 0 1289.28 313.74}\,\si{\micro\metre}, frozen at commit
+\code{0 0 1289.28 313.74}\,\si{\um}, frozen at commit
 \code{b6738e5} (\dcite{34}{section 1}). Its sign-off run closes setup at
 every corner --- the slow corner at \qty{+1.2262}{\nano\second}, quoted
 here to four decimals from a metric that carries more digits

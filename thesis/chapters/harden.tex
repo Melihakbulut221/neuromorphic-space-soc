@@ -203,8 +203,8 @@ corrects nothing}: the cost of any check over a 64-bit counter is the
 reduction tree that recomputes it, not the shadow register, so the
 flip-flop count, 2 against 8, is not where the money is. And
 \dcite{41}'s unsynthesised estimate for replicating \code{mtime} and
-\code{mtimecmp}, ``roughly 27{,}000\,$\mu$m$^2$ \dots\ 256
-more flip-flops'', measured at 25{,}792.0740\,$\mu$m$^2$
+\code{mtimecmp}, ``roughly 27{,}000\,$\upmu$m$^2$ \dots\ 256
+more flip-flops'', measured at 25{,}792.0740\,$\upmu$m$^2$
 and \emph{exactly} 256 flip-flops --- a good estimate, recorded as one,
 against a code that corrects the same 64 bits for
 \SI{50.224}{\percent} of the area.
@@ -212,7 +212,7 @@ against a code that corrects the same 64 bits for
 Two decisions follow the same criterion. That 11 of the 64 bits are
 architecturally dead over a five-year mission is an argument \emph{for}
 covering them, since deadness bounds the fault-free value and not the
-faulty one --- truncation saves 1{,}438.1766\,$\mu$m$^2$ and
+faulty one --- truncation saves 1{,}438.1766\,$\upmu$m$^2$ and
 is ``not a protection; a cheaper failure''
 (\dcite{58}{section 4.5}). And \code{mtimecmp} gets nothing: software
 rewrites it every deadline, and its worst direction is a missed
@@ -232,8 +232,8 @@ because the codec is $(72,64)$ and the RAM macro's row is 64 bits.
 bits \emph{wider} than the row, and a hard macro has no bit-widening.
 Six options were costed from the vendor LEF; keeping
 \SI{64}{\kibi\byte} needs a seventh macro at
-+491{,}633.62\,$\mu$m$^2$ or
-+257{,}608.51\,$\mu$m$^2$ \emph{and} a read-modify-write on
++491{,}633.62\,$\upmu$m$^2$ or
++257{,}608.51\,$\upmu$m$^2$ \emph{and} a read-modify-write on
 every sub-word store, which is a change to the bus protocol rather than
 a wrapper (\dcite{67}{section 3}).
 
@@ -397,7 +397,7 @@ logical rather than structural, so the mapper may factor it freely; that
 it survived mapping is proved by SAT on the mapped cells, with two
 mutations that make the proof fail, one of which keeps the flip-flop and
 the cell count and gets the logic wrong (\dcite{75}{section 7.4}). It
-cost \textbf{one flip-flop} and +643.0536\,$\mu$m$^2$ on
+cost \textbf{one flip-flop} and +643.0536\,$\upmu$m$^2$ on
 the whole SoC, with no die area, no hold margin at any corner and no
 DRC; a block-level area figure was published and then
 \textbf{withdrawn} on 2026-09-09 because it did not reproduce under any
@@ -460,12 +460,6 @@ exclusive-ored into a data or check word of one memory, 1{,}000 draws
 by region of the program's own link map (\dcite{67}{section 7.1}), and
 \dcite{60}{section 9.10} is explicit that a memory word is not a
 flip-flop of this netlist.}
-
-and at line 793: \textbf{Every campaign is single-bit}, and every
-campaign but the memories' is flip-flop only ---
-\dcite{67}{section 7.1}'s 1{,}000 draws land in a data or check word of
-one memory --- with no multi-bit strike and no transient in
-combinational
 \label{tab:campaigns}
 \begin{tabularx}{\linewidth}{@{}lr>{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -617,14 +611,14 @@ Makefile treats as an error (\dcite{79}{section 2}).
 The last rung is the die, and there the claim does not survive intact.
 On the frozen pilot's sign-off layout the banks are not
 placement-separated: minimum cross-replica separation is
-3.78\,$\mu$m centre-to-centre, the floor for two cells in
+3.78\,$\upmu$m centre-to-centre, the floor for two cells in
 adjacent rows, and 49 pairs abut. Against a null model shuffling only
 the replica labels over the same placed positions the banks are
 indistinguishable from an arbitrary labelling --- $110.73 \pm 8.26$
 expected, 103 observed --- so the finding is not that the placer drew
 them together but that \textbf{it did not keep them apart}. The mechanism shows as a
 \textbf{4.12-fold concentration on corresponding bits}, median
-27.52\,$\mu$m against 113.47\,$\mu$m over all
+27.52\,$\upmu$m against 113.47\,$\upmu$m over all
 cross-replica pairs, which is the shape a shared voter's wirelength
 would leave; and the same picture appears on \code{soc\_top} across all
 three of its TMR structures (\dcite{79}{sections 1.2--1.6}).
@@ -652,14 +646,14 @@ evidence.
 \caption{Measured area of each mechanism, against a baseline measured in
 the same session with only the thing being priced turned off. Gate
 equivalent is \code{sg13g2\_nand2\_1} $=$
-7.2576\,$\mu$m$^2$; the Ibex reference is
-275{,}682.6198\,$\mu$m$^2$. Deltas are arithmetic on two
+7.2576\,$\upmu$m$^2$; the Ibex reference is
+275{,}682.6198\,$\upmu$m$^2$. Deltas are arithmetic on two
 measurements [estimate]; every measured row is [fact]. Rows marked
 $\dagger$ are deltas on the whole SoC rather than on one block.}
 \label{tab:harden-area}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
-Mechanism & $\Delta$ flops & $\Delta$ area ($\mu$m$^2$) & of Ibex \\
+Mechanism & $\Delta$ flops & $\Delta$ area ($\upmu$m$^2$) & of Ibex \\
 \midrule
 Watchdog TMR, W6 (\dcite{41}{\,6.5}) & $+49$ & $+5{,}091.0552$ & $+1.85\,\%$ \\
 Windowed mode and kick budget (\dcite{43}{\,7.3}) & $+29$ & $+4{,}904.0964$ & $+1.78\,\%$ \\
@@ -683,18 +677,18 @@ Two habits sit behind \cref{tab:harden-area}, both learned by nearly
 getting a number wrong. \textbf{The baseline must be the same source
 measured now, with only the priced thing turned off}, never a figure a
 previous document published: three waves measured that gap at
-58.17\,$\mu$m$^2$, 25.4394\,$\mu$m$^2$
-and 10.9242\,$\mu$m$^2$, the last in the direction that
+58.17\,$\upmu$m$^2$, 25.4394\,$\upmu$m$^2$
+and 10.9242\,$\upmu$m$^2$, the last in the direction that
 would have \emph{over}stated the hardening (\dcite{41}{section 6.5};
 \dcite{58}{section 7}; \dcite{69}{section 7.1}). And \textbf{a module
 measured alone understates what it costs in place}: the register file's
-standalone delta is +31{,}709.55\,$\mu$m$^2$ against a
-whole-core +38{,}050.58\,$\mu$m$^2$, \SI{20}{\percent}
+standalone delta is +31{,}709.55\,$\upmu$m$^2$ against a
+whole-core +38{,}050.58\,$\upmu$m$^2$, \SI{20}{\percent}
 larger, because \code{abc} re-optimises across a boundary the flattened
 core does not have (\dcite{43}{section 7.2}). One row breaks the first
 habit: the memories' delta is against HEAD's \SI{64}{\kibi\byte} design,
 not against a control with only the code off, which
-\dcite{67}{section 5.1} puts at +26{,}932.9914\,$\mu$m$^2$ and $+211$
+\dcite{67}{section 5.1} puts at +26{,}932.9914\,$\upmu$m$^2$ and $+211$
 flip-flops.
 
 \textbf{The costs that are not area.} Every RTL hardening wave costs
@@ -715,7 +709,7 @@ and unbounded in the limit, one walk of \num{8192} rows per
 clock gate one cycle of wake latency on a fault. The codecs cost
 2.7928\,ns on the register file's read path, of which
 0.2593\,ns was recovered for
-+1{,}201.5486\,$\mu$m$^2$ (\dcite{44}{\,5.4}), and
++1{,}201.5486\,$\upmu$m$^2$ (\dcite{44}{\,5.4}), and
 +1.3442\,ns on the memory's routed read return.
 
 

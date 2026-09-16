@@ -79,7 +79,7 @@ flip-flops}, and a self-checking program executing in Icarus --- and
 PMP was not taken for free. \dcite{09}{part B track 3} had already chosen
 a software architecture whose isolation mechanism is PMP, so a core
 without it does not implement the design already decided. It costs
-\textbf{43{,}634\,$\mu$m$^2$, $+18.8$\,\%} and \textbf{1.21\,ns} of
+\textbf{43{,}634\,$\upmu$m$^2$, $+18.8$\,\%} and \textbf{1.21\,ns} of
 pre-layout closing period, because the address-match logic is replicated
 per region and sits in the load/store path
 (\dcite{38}{sections 8.4, 8.6}).
@@ -100,7 +100,7 @@ configuration synthesised at its own closing period
 \begin{center}\small
 \begin{tabular}{lrrrr}
 \toprule
-Configuration & Cells & Flip-flops & Area, $\mu$m$^2$ & kGE \\
+Configuration & Cells & Flip-flops & Area, $\upmu$m$^2$ & kGE \\
 \midrule
 \code{small}, no PMP        & 15{,}736 & 1{,}950 & 232{,}049 & 31.97 \\
 \code{small-pmp}, chosen    & 18{,}921 & 2{,}106 & 275{,}683 & 37.99 \\
@@ -109,7 +109,7 @@ Configuration & Cells & Flip-flops & Area, $\mu$m$^2$ & kGE \\
 \end{tabular}
 \end{center}
 
-Lockstep is \textbf{$+309{,}550\,\mu$m$^2$, $+112$\,\%} over the chosen
+Lockstep is \textbf{$+309{,}550\,\upmu$m$^2$, $+112$\,\%} over the chosen
 core and costs almost nothing in closing period, 0.27\,ns, because the
 shadow core is parallel rather than in series (\dcite{38}{sections 8.5,
 8.6}).
@@ -132,9 +132,9 @@ optional, and the decision is cheap to reverse only before floorplanning.
 \begin{sloppypar}
 What has happened since: the campaign was run, the register file gained a
 (39,32) SECDED codec with a background scrub at
-$+38{,}050.5762\,\mu$m$^2$ and $+222$ flip-flops (\dcite{43}{}), and the
+$+38{,}050.5762\,\upmu$m$^2$ and $+222$ flip-flops (\dcite{43}{}), and the
 watchdog is the recovery policy. The core as shipped is \textbf{22{,}338 cells, 2{,}328
-flip-flops, 316{,}051.6590\,$\mu$m$^2$} (\dcite{45}{section 6.2});
+flip-flops, 316{,}051.6590\,$\upmu$m$^2$} (\dcite{45}{section 6.2});
 everything in Ibex except the register file remains unprotected, by
 decision (\dcite{60}{section 9.8}).
 \end{sloppypar}
@@ -148,7 +148,7 @@ and puts \emph{real} AMBA 3 APB at the peripheral boundary.
 \textbf{There is no AHB in this SoC and none is claimed}
 (\dcite{39}{sections 3, 4, 7}).
 
-The obvious argument, area, is the one the record refuses. An honest AHB-Lite cost probe was built and synthesised at \textbf{17{,}154.32\,$\mu$m$^2$ against
+The obvious argument, area, is the one the record refuses. An honest AHB-Lite cost probe was built and synthesised at \textbf{17{,}154.32\,$\upmu$m$^2$ against
 14{,}807.32}, $+15.9$\,\% on the fabric and \textbf{$+0.85$\,\% of the
 CPU}. Nine tenths of one per cent is not a reason to reject a bus; what
 the measurement is good for is excluding the opposite mistake, that the
@@ -196,11 +196,11 @@ transfer ever completes (\dcite{39}{sections 5.3, 5.5}).
 
 On the one recipe every block here is measured with --- Yosys
 \code{stat -liberty} on \code{ihp-sg13g2} typical, \code{abc} at a 20\,ns
-target, one gate equivalent $=$ 7.2576\,$\mu$m$^2$ (\dcite{45}{section 6})
+target, one gate equivalent $=$ 7.2576\,$\upmu$m$^2$ (\dcite{45}{section 6})
 --- the fabric is 868
-cells, 55 flip-flops, \textbf{10{,}928.8872\,$\mu$m$^2$}, 3.96\,\% of the
+cells, 55 flip-flops, \textbf{10{,}928.8872\,$\upmu$m$^2$}, 3.96\,\% of the
 unprotected core, and the APB bridge 201 cells, 94 flip-flops,
-6{,}437.4912\,$\mu$m$^2$ (\dcite{60}{section 5.2}).
+6{,}437.4912\,$\upmu$m$^2$ (\dcite{60}{section 5.2}).
 
 \section{The memory map, and its single source}
 
@@ -278,11 +278,11 @@ byte-writable 64\,KiB build the PDK~\cite{ihppdk} admits (the denser \code{8192x
 \code{sb} and \code{sh}); two \code{RM\_IHPSG13\_1P\_1024x32\_c2\_bm\_bist} for the
 ROM, because there is no \code{2048x32} part; and two
 \code{RM\_IHPSG13\_1P\_512x16\_c2\_bm\_bist}, one per ROM bank, holding the (39,32) word code's seven check bits at
-$+90{,}618.62\,\mu$m$^2$. The check pair was designed unplaced and was \textbf{placed and routed on
+$+90{,}618.62\,\upmu$m$^2$. The check pair was designed unplaced and was \textbf{placed and routed on
 2026-09-13} in run \code{s83romecc5}, with zero detailed-routing DRC
-errors and a die that does not grow by one database unit. The estimate that the die would have to grow by about 200\,$\mu$m in
+errors and a die that does not grow by one database unit. The estimate that the die would have to grow by about 200\,$\upmu$m in
 $x$ --- made about the single \code{RM\_IHPSG13\_1P\_1024x16} that was
-the alternative, 236.80\,$\mu$m wide against the 60.48\,$\mu$m
+the alternative, 236.80\,$\upmu$m wide against the 60.48\,$\upmu$m
 \dcite{61}{}'s floorplan leaves beside each ROM macro --- was
 \textbf{superseded on 2026-09-13} and is kept rather than deleted: the
 space the check macros needed was vertical, in the pocket the shorter
@@ -300,11 +300,11 @@ bit-widening in a hard macro}, so the check field goes into another macro
 or into the space a narrower word leaves. \dcite{67}{section 3} costs six
 options from the vendor LEF, and the three that keep 64\,KiB all buy it
 with a read-modify-write: a seventh \code{2048x64} for the (39,32) word
-code at $+491{,}633.62\,\mu$m$^2$, $+21.88$\,\% of the six-macro area,
+code at $+491{,}633.62\,\upmu$m$^2$, $+21.88$\,\% of the six-macro area,
 with one on every \code{sb} and \code{sh}; one \code{4096x16} for a
-(72,64) code over the whole row at $+257{,}608.51\,\mu$m$^2$,
+(72,64) code over the whole row at $+257{,}608.51\,\upmu$m$^2$,
 $+11.46$\,\%, with one on \emph{every} store; and four more
-\code{2048x64} at $+1{,}966{,}534.46\,\mu$m$^2$ to avoid it. That is a design
+\code{2048x64} at $+1{,}966{,}534.46\,\upmu$m$^2$ to avoid it. That is a design
 change and not a wrapper: a second port cycle per store, a hazard against
 the pipelined request the fabric permits, and a grant the memory would
 have to withhold.
@@ -332,7 +332,7 @@ the lanes the decoder corrected. \textbf{The bus always wins}: if the bus
 asks in the examine cycle the scrub result is dropped, so a bus write
 between a scrub read and its write-back cannot be overwritten.
 
-The protection costs \textbf{$+31{,}391.3124\,\mu$m$^2$, $+4.783$\,\%}
+The protection costs \textbf{$+31{,}391.3124\,\upmu$m$^2$, $+4.783$\,\%}
 on the whole SoC at the SRAM boundary, taking it from 43{,}884 cells and
 5{,}599 flip-flops to 45{,}952 and 5{,}833 (\dcite{67}{section 5.1}).
 Routed, the read-return group's worst slack at
@@ -358,7 +358,7 @@ have independent time bases that nothing synchronises
 (\dcite{40}{section 4}).
 
 The CLINT sits on the system bus rather than behind the APB bridge, which
-costs $+1{,}421.92\,\mu$m$^2$, $+0.52$\,\% of the core --- the difference
+costs $+1{,}421.92\,\upmu$m$^2$, $+0.52$\,\% of the core --- the difference
 of two measurements, and tagged an estimate where it is published
 (\dcite{40}{section 9}) --- and buys a
 one-cycle \code{mtime} read instead of the bridge's three-cycle minimum
@@ -373,7 +373,7 @@ checking the safe sequence.
 \code{mtime} is the one block here whose hardening is a code rather than
 a copy. \dcite{58}{} makes its 64 stored bits the data field of a (72,64)
 SECDED codeword, decoded and corrected on every tick, at \textbf{eight
-added flip-flops} and $+7{,}026.8310\,\mu$m$^2$. It corrects: 144 of 144 single-bit injections into the 72 stored bits came
+added flip-flops} and $+7{,}026.8310\,\upmu$m$^2$. It corrects: 144 of 144 single-bit injections into the 72 stored bits came
 back corrected, against an unprotected design that
 displaced the clock in 95 of 128 draws and announced none. That
 document's own negative result sits beside it --- a residue-mod-3
@@ -382,7 +382,7 @@ corrects nothing --- and \code{mtimecmp} gets nothing, because 128
 injections into it displaced the clock zero times.
 
 The CLINT's area is published twice and both numbers are right:
-\dcite{40}{section 9} reports 1{,}038 cells and 16{,}683.48\,$\mu$m$^2$,
+\dcite{40}{section 9} reports 1{,}038 cells and 16{,}683.48\,$\upmu$m$^2$,
 \dcite{45}{section 6.2} reports 1{,}043 and 16{,}712.8164 for the same
 unchanged file, and the difference is the source list the script read on
 the day. The second is the one to quote for the SoC as it stands.
@@ -468,7 +468,7 @@ what makes a stale configuration survive} (\dcite{40}{section 7.2}). The
 redundancy itself was counted rather than assumed, after stripping every
 protective attribute~\cite{esa_ftmr} from the source text: \textbf{102 mapped
 flip-flops} on the build \dcite{41}{} measured, 36 unprotected plus three
-replicas of 22, at $+5{,}091.06\,\mu$m$^2$ and \textbf{1.6\,\% of what
+replicas of 22, at $+5{,}091.06\,\upmu$m$^2$ and \textbf{1.6\,\% of what
 lockstep would have cost}; \textbf{132} on the block as it stands,
 $44 + 1 + 3 \times 29$, the one being W9's registered request
 (\dcite{75}{section 3.5}).
@@ -493,14 +493,19 @@ the protected build, which is what the design instantiates --- from
 \dcite{69}{section 7}. A block re-measured in a different source list
 moves by of order one per cent (\dcite{45}{section 4.3}), and the BUSSTAT
 row is the file \dcite{44}{} measured: \dcite{55}{} later added the NPU
-fault lines at a further $+4{,}796.1396\,\mu$m$^2$, which
+fault lines at a further $+4{,}796.1396\,\upmu$m$^2$, which
 \dcite{60}{section 5.7} declines to fold in because no run has reported
-the sum.}
+the sum. The SCRUB row counts more registers than \dcite{60}{section
+5.7} does, and both are right on their own dates: that document's
+seven-register table is revision 0.1's, and \dcite{55}{} and
+\dcite{58}{} later added \code{CNT\_NPUCOR}, \code{CNT\_NPUDET},
+\code{CNT\_NPUTMR} and \code{CNT\_MTECC} above \code{CLR}, which keeps
+its offset of \code{0x018}.}
 \label{tab:arch-slots}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llp{2.5cm}p{4.3cm}rrr@{}}
 \toprule
-Slot & Address & Block & Registers & IRQ & Line & Area, $\mu$m$^2$ \\
+Slot & Address & Block & Registers & IRQ & Line & Area, $\upmu$m$^2$ \\
 \midrule
 \code{0x000} & \code{0xFF900000} & UART0, console & 4: data, status, ctrl, scaler & 2 & 0 & 4{,}359.78 \\
 \code{0x001} & \code{0xFF901000} & UART1 & \emph{reserved} & 3 & 1 & --- \\
@@ -513,12 +518,6 @@ Slot & Address & Block & Registers & IRQ & Line & Area, $\mu$m$^2$ \\
 \code{0x013} & \code{0xFF913000} & I2C & \emph{reserved} & 20 & 8 & --- \\
 \code{0x014} & \code{0xFF914000} & QSPI flash & 7, at \code{0x00}--\code{0x18} & 21 & 9 & 19{,}690.62 \\
 \code{0x015} & \code{0xFF915000} & BUSSTAT & 11, at \code{0x00}--\code{0x28} & 22 & 10 & 7{,}060.55 \\
-
-and append to the caption of \cref{tab:arch-slots}: \dcite{60}{section
-5.7}'s seven-register table is revision 0.1's; \dcite{55}{} and
-\dcite{58}{} added \code{CNT\_NPUCOR}, \code{CNT\_NPUDET},
-\code{CNT\_NPUTMR} and \code{CNT\_MTECC} above \code{CLR}, which keeps
-\code{0x018}.
 \code{0x016} & \code{0xFF916000} & SCRUB & 6 counters, 6 stickies, 2 addresses & 23 & 11 & 16{,}710.96 \\
 \code{0x017} & \code{0xFF917000} & BOOTREG & 4: straps, status, report, epoch & --- & --- & 12{,}495.89 \\
 \code{0x018} & \code{0xFF918000} & CLKGATE & \emph{reserved} & --- & --- & --- \\
@@ -563,7 +562,7 @@ rather than dismissed: it synthesises to
 its 5{,}404 flip-flops FIFO storage at depths fixed in a generated
 package --- the area a fact, the share an estimate
 (\dcite{65}{section 8.4}). What was written instead is
-19{,}690.6248\,$\mu$m$^2$, \textbf{4.2\,\% of the size} of the block it
+19{,}690.6248\,$\upmu$m$^2$, \textbf{4.2\,\% of the size} of the block it
 declined. Its data phase \textbf{pauses at every word}, so a transfer of any length
 needs one word of storage and no FIFO --- ``the storage is where software
 is, not where the block is'' (\dcite{66}{section 3.1}).
@@ -652,7 +651,7 @@ system-reset sample is rewritten every clock, which normally means a
 register sheds an upset on its own, and that is true of the register and
 false of the consequence --- an upset there manufactures a release edge
 and the saturating counter never takes it back. Protection costs
-$+5{,}255.9010\,\mu$m$^2$ and $+51$ flip-flops; placed and routed
+$+5{,}255.9010\,\upmu$m$^2$ and $+51$ flip-flops; placed and routed
 (\dcite{70}{}) it costs \textbf{no die area, no hold margin and no
 routing quality} --- and the layout it landed in reports
 \textbf{4.30\,ns less setup slack} at \code{nom\_slow\_1p08V\_125C} than
@@ -746,13 +745,13 @@ nowhere (\dcite{65}{sections 9.4, 9.5}).
 
 The whole design at the SRAM boundary, synthesised as one netlist at the
 20\,ns target with both memories protected, is \textbf{45{,}952 cells,
-5{,}833 flip-flops, 687{,}776.3676\,$\mu$m$^2$} of standard cells plus
+5{,}833 flip-flops, 687{,}776.3676\,$\upmu$m$^2$} of standard cells plus
 the eight vendor macros (\dcite{67}{section 5.1}). That row is from
 before the boot block existed --- \code{soc\_boot.v} does not appear
 anywhere in \dcite{67}{} --- and the netlist the placed design of record
 was built from is a different configuration, hardened boot block and
 \code{ROM\_HARDEN} = 0: \textbf{45{,}546 cells, 5{,}873 flip-flops,
-685{,}153.2744\,$\mu$m$^2$} (\dcite{69}{section 7.4},
+685{,}153.2744\,$\upmu$m$^2$} (\dcite{69}{section 7.4},
 \dcite{60}{section 9.10.1}). \textbf{No document measures both together},
 so no combined figure is given here.
 Neither number is a frequency, and none is claimed.

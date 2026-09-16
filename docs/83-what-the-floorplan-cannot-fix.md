@@ -178,7 +178,7 @@ not a floorplan artefact and no placement removes an XOR tree.
 
 ## 5. What binds this design, stated plainly
 
-Gate delay, spread over roughly 88 stages between two flip-flops, in a
+Gate delay, spread over roughly 78 stages between two flip-flops, in a
 130 nm standard-cell library, at a 20 ns constraint with a 5 % derate at
 the slow corner.
 

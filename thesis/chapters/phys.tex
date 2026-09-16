@@ -68,8 +68,8 @@ as an anti-merge defence~\cite{esa_ftmr} and
 \code{Checker.\allowbreak YosysUnmappedCells} stops the run; under
 \code{deferred\_flatten}, a constant driving the core's
 \code{cheriot\_enable\_i} never folds, and the same RTL comes out as
-37,895 cells of \qty{523809.6444}{\micro\metre\squared} against 27,565 of
-\qty{396177.6420}{\micro\metre\squared}, and its worst slow-corner path is
+37,895 cells of \qty{523809.6444}{\um\squared} against 27,565 of
+\qty{396177.6420}{\um\squared}, and its worst slow-corner path is
 \qty{13.8442}{\nano\second} worse, measured before any placement exists
 at all (\dcite{47}{sections 6.2 and 6.3}). The project's own script holds
 \code{keep\_hierarchy} through optimisation and \code{abc} and releases
@@ -93,23 +93,23 @@ layouts here is therefore a difference the netlists caused.}
   area and the eight vendor macros with their sizes, origins and
   orientations, drawn from the sign-off run's own DEF by
   \code{thesis/figures/\allowbreak make\_layout\_figures.py}. Two macro
-  rows face a \qty{700.08}{\micro\metre} standard-cell channel; the
+  rows face a \qty{700.08}{\um} standard-cell channel; the
   third column carries the boot ROM and, in the height the shorter ROM
   macro leaves over in each row, its two check macros. These eight are
   the only instances on the die whose position a person chose.}
   \label{fig:phys-floorplan}
 \end{figure}
 
-The die is $2306.40 \times 2075.22$\,\si{\micro\metre}, reported as
-\qty{4786290}{\micro\metre\squared} and exactly
-\qty{4786287.408}{\micro\metre\squared} as the product of the DEF's own
+The die is $2306.40 \times 2075.22$\,\si{\um}, reported as
+\qty{4786290}{\um\squared} and exactly
+\qty{4786287.408}{\um\squared} as the product of the DEF's own
 \code{DIEAREA} corners (\dcite{59}{section 4.1}). The core runs from
-$(60.00,\,45.36)$ to $(2246.40,\,2029.86)$\,\si{\micro\metre}:
-$2186.40 \times 1984.50$\,\si{\micro\metre} and
-\qty{4338910}{\micro\metre\squared}. Alignment is asserted rather than
+$(60.00,\,45.36)$ to $(2246.40,\,2029.86)$\,\si{\um}:
+$2186.40 \times 1984.50$\,\si{\um} and
+\qty{4338910}{\um\squared}. Alignment is asserted rather than
 arranged --- \num{2186.40} is exactly 4,555 sites of
-\qty{0.48}{\micro\metre} and \num{1984.50} exactly 525 rows of
-\qty{3.78}{\micro\metre}, and every macro origin is an integer number of
+\qty{0.48}{\um} and \num{1984.50} exactly 525 rows of
+\qty{3.78}{\um}, and every macro origin is an integer number of
 sites and rows from the core's lower left corner
 (\dcite{47}{section 6.1}) --- and \code{hw/soc/pnr/floorplan.py} refuses
 to emit a floorplan that has lost the property, reading macro
@@ -123,7 +123,7 @@ the vendor LEF \code{SIZE} statements. All eight are \code{FIXED}.}
 \small
 \begin{tabular}{@{}llrrl@{}}
 \toprule
-\textbf{Instance} & \textbf{Master} & \textbf{$W \times H$, \si{\micro\metre}} & \textbf{Origin, \si{\micro\metre}} & \textbf{Orient} \\
+\textbf{Instance} & \textbf{Master} & \textbf{$W \times H$, \si{\um}} & \textbf{Origin, \si{\um}} & \textbf{Orient} \\
 \midrule
 \code{u\_ram...u\_b0} & \code{2048x64} & $784.48 \times 626.70$ & (120.00,\,60.48) & FS \\
 \code{u\_ram...u\_b1} & \code{2048x64} & $784.48 \times 626.70$ & (944.64,\,60.48) & FS \\
@@ -146,24 +146,24 @@ its signal pins on one edge, at local $y=0$, on Metal2 and Metal3 ---
 macro is a macro the router reaches the long way round. The lower row is
 therefore \code{FS}, which mirrors about $X$ and lifts its pins to its
 \emph{top}; the upper row is \code{N}, which leaves its pins at its
-\emph{bottom}; and both face the \qty{700.08}{\micro\metre} channel
+\emph{bottom}; and both face the \qty{700.08}{\um} channel
 between them. Rotating a hard macro is not an option this project can
 check, for the reason \cref{sec:phys-decks} gives.
 
 \textbf{The two ROM check macros fit without growing the die, and why
 they sat unplaced for weeks is worth more than the placement.} The open
-item read that there was \qty{60.48}{\micro\metre} beside each ROM and
+item read that there was \qty{60.48}{\um} beside each ROM and
 the check part is \num{236.80} wide --- true, and a measurement of the
 wrong axis. A macro row is as tall as the RAM,
-\qty{626.70}{\micro\metre}; the ROM is \num{336.46}; the third column
-therefore carries \qty{290.24}{\micro\metre} of unused height per row
+\qty{626.70}{\um}; the ROM is \num{336.46}; the third column
+therefore carries \qty{290.24}{\um} of unused height per row
 and the check macro is \num{191.34} tall. The real obstacle was pins:
 the bottom row is \code{FS}, so its ROM's pins are at its top and a
 check macro in the pocket \emph{above} it would sit across every wire
 leaving them. The bottom ROM is raised to the top of its own band, to
 $y=347.76$, and the check macro takes the blind space beneath;
-clearances are \qty{95.94}{\micro\metre} and \qty{98.24}{\micro\metre}
-with a \qty{10}{\micro\metre} halo, computed from the LEF size and row
+clearances are \qty{95.94}{\um} and \qty{98.24}{\um}
+with a \qty{10}{\um} halo, computed from the LEF size and row
 pitch and asserted, never written down as a coordinate
 (\dcite{67}{section 11}). The die, the core and the four RAM origins do
 not move, which keeps measurements on the earlier six-macro floorplan
@@ -285,12 +285,12 @@ Integrated clock-gating cells & 3 \\
 Timing-repair buffers & 13{,}089 \\
 \quad inserted for setup / for hold & 369 / 11 \\
 Clock buffers / clock inverters & 815 / 309 \\
-Standard-cell area, \si{\micro\metre\squared} & 933{,}010 \\
-Macro area, \si{\micro\metre\squared} & 2{,}337{,}520 \\
+Standard-cell area, \si{\um\squared} & 933{,}010 \\
+Macro area, \si{\um\squared} & 2{,}337{,}520 \\
 Rows / sites & 1{,}517 / 1{,}003{,}595 \\
 Instance utilisation & 0.7538 \\
 Standard-cell utilisation & 0.4662 \\
-Legalisation displacement, mean / max, \si{\micro\metre} & 0.075 / 20.04 \\
+Legalisation displacement, mean / max, \si{\um} & 0.075 / 20.04 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -299,13 +299,13 @@ Legalisation displacement, mean / max, \si{\micro\metre} & 0.075 / 20.04 \\
 \qty{48.8}{\percent} of the die area, and the placeable area left inside
 the core --- the core less the macros, which is the denominator the
 flow's own utilisation metric uses --- is
-\qty{2001390}{\micro\metre\squared}, of which the standard cells fill
+\qty{2001390}{\um\squared}, of which the standard cells fill
 \qty{46.6}{\percent}. That denominator is generous: on the six-macro
 floorplan \dcite{59}{section 11} measured the union of the DEF's
 \code{ROW} statements at \qty{7.66}{\percent} less than it, the macro
 halos and the site grid taking the difference. The first layout of this
-SoC put \qty{396177.6420}{\micro\metre\squared} of cells into
-\qty{2092010.95}{\micro\metre\squared} (\dcite{48}{section 4.1}),
+SoC put \qty{396177.6420}{\um\squared} of cells into
+\qty{2092010.95}{\um\squared} (\dcite{48}{section 4.1}),
 \qty{18.9}{\percent}, and
 \dcite{47}{section 8.4} named that sparseness as the probable cause of
 what layout was costing in timing. It was not: what has since filled the
@@ -398,7 +398,7 @@ four places (\dcite{72}{section 7.1}).
 Two metrics the flow judges with nothing are reported here rather than
 left in a file. \code{Checker.\allowbreak WireLength} has no threshold
 in either PDK and so warns and skips, on a layout whose longest routed
-net is \qty{4292.89}{\micro\metre}. And the Classic flow has no
+net is \qty{4292.89}{\um}. And the Classic flow has no
 max-fanout checker at all, on a layout carrying 589 such violations
 against a constraint of 10 and a library declaring
 \code{default\_max\_fanout : 8}.
@@ -504,8 +504,8 @@ phase with a reduced move set visited 156 more and found
 \qty{0.146}{\nano\second}. The stage that defeated the first drove
 \qty{180}{\femto\farad} from the channel at
 $(1911.84,\,1224.72)$ into the pocket at $(1973.76,\,1776.60)$ ---
-\qty{62}{\micro\metre} across and \qty{552}{\micro\metre} up, over a
-\qty{336}{\micro\metre} macro, at a \qty{4.69}{\nano\second} transition
+\qty{62}{\um} across and \qty{552}{\um} up, over a
+\qty{336}{\um} macro, at a \qty{4.69}{\nano\second} transition
 and \qty{3.73}{\nano\second} on one gate that the resizer did size up,
 from \code{nor4\_1} to \code{nor4\_2}, without recovering it
 (\dcite{72}{sections 3.2, 6.3 and 7}).
@@ -581,7 +581,7 @@ Two mechanisms were tried. A placement \emph{region} --- OpenROAD's
 \code{dbRegion} and \code{dbGroup}, which no LibreLane key reaches,
 written into the flow's own saved database between two steps --- fences
 the set into a box in the channel under the ROM and \textbf{does not
-route}: the fence takes \qty{38102}{\micro\metre\squared} of placeable
+route}: the fence takes \qty{38102}{\um\squared} of placeable
 area out of a channel that has none to give, 3,076 cells spread into the
 macro gaps, and the global router ends with 420 units of overflow. The flow's own manual-placement key, which moves
 the same cells to the same coordinates and holds every other cell at the
@@ -676,7 +676,7 @@ eight-macro build (\dcite{67}{section 11}):
 \item \textbf{Detailed routing.} 0 DRC errors, 0 disconnected pins, 0
   power-grid violations on either net, 0 illegal overlaps; 62,767 signal
   nets and 2 special nets routed with 486,886 vias, all single-cut, over
-  \qty{5746921}{\micro\metre} of wire.
+  \qty{5746921}{\um} of wire.
 \item \textbf{Netgen LVS.} \emph{Circuits match uniquely}, 263
   symmetries, all seven counters zero --- with the vendor macro a black
   box on both sides, so this signs off the connectivity \emph{into} all
@@ -689,9 +689,9 @@ eight-macro build (\dcite{67}{section 11}):
   decoders and internal cells.
 \item \textbf{Magic DRC}, macros entering as LEF abstracts: 170 error
   boxes, 20 inside a macro footprint and 150 outside --- and
-  \emph{every one of the 150 lies within \qty{0.5}{\micro\metre} of a
+  \emph{every one of the 150 lies within \qty{0.5}{\um} of a
   macro edge}, none further and none in open routing area. A LEF
-  obstruction blanket is one shape more than \qty{10}{\micro\metre}
+  obstruction blanket is one shape more than \qty{10}{\um}
   wide, so ordinary routing beside it violates a wide-metal spacing rule
   it would not violate against the macro's real geometry; \code{M3.f}
   alone is 102 of the 150. Four of the twenty inside are the check
@@ -831,7 +831,7 @@ registered request phase in the bus fabric, was built and priced on
 2026-09-16: it takes the design's maximum combinational depth from 81
 levels to 69 and its median from 39 to 20, costs
 \qty{24.89}{\percent} of the workload's cycle count and
-\qty{7618.97}{\micro\metre\squared}, and does not route --- its layout
+\qty{7618.97}{\um\squared}, and does not route --- its layout
 \code{s89rr1} stops at global routing with 387 overflowing tiles, 353 of
 them on Metal5, against zero for this one (\dcite{84}{sections 1 and
 11}).
@@ -849,7 +849,7 @@ frozen pilot's sign-off layout --- the run \dcite{34}{} superseded on
 2026-08-31, whose DEF hash is identical to the current frozen one's ---
 the median centre-to-centre distance
 between corresponding bits of different replicas is
-\qty{27.52}{\micro\metre} against \qty{113.47}{\micro\metre} over all
+\qty{27.52}{\um} against \qty{113.47}{\um} over all
 cross-replica pairs, a $4.12\times$ concentration, with 49 of the 9,075
 cross-replica pairs abutting, and the same picture appears on this SoC
 across three
