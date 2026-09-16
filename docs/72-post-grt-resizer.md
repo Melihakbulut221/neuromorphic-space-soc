@@ -939,5 +939,11 @@ grep SIZE $PDK_ROOT/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x32_c2
    period. A registered request phase in the fabric is a latency cost
    on every load and a `docs/50`-class change; it is named here as the
    thing the paths have in common, not priced.
+   *Scope measured 2026-09-16, `docs/83` section 4:* on the eight-macro
+   sign-off layout the fabric captures **54** of 3,529 violating
+   endpoints and the CLINT **138**, against 1,224 in the register file
+   and 864 elsewhere in Ibex. This change is a correction to 5.4 % of
+   the violating endpoints, and it costs a cycle on every load. The
+   trade can now be stated as a trade.
 6. **The remaining items of `docs/68` section 16 and `docs/71` section
    15 are unchanged.**
