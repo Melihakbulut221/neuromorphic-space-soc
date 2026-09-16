@@ -376,9 +376,13 @@ workload.
 
 \dcite{77}{} then split the enable by \emph{arrival}: the two bus-side
 inputs stay combinational, being the only terms that can rise and fall
-while the clock is stopped, and the eight fault terms that are
-functions of the block's own registers move behind one flip-flop on the
-ungated clock. Such a term cannot pulse and vanish --- it rises when
+while the clock is stopped, and the nine fault terms that are functions
+of the block's own registers move behind one flip-flop on the ungated
+clock. Nine and not all ten, because \code{C\_INJ\_OVF} carries the
+peripheral select and is therefore already covered by the
+combinational half --- which is what \code{STICKY\_FROZEN} masks out.
+\dcite{77}{section 5.2} counted eight of nine; the tenth line,
+\code{C\_EVT\_TO}, was added on 2026-09-11. Such a term cannot pulse and vanish --- it rises when
 the upset lands and stays up until the block is clocked --- so a wake
 one cycle later loses nothing. Both halves are proved by $k$-induction
 in \code{hw/soc/formal/\allowbreak{}clkgate\_wake.sby}, and the side
@@ -567,9 +571,13 @@ identifiers, and each node's register block carries its own counters
 decoded indices are a bus error (\dcite{51}{section 14}). The shape
 costs four comparator bits that do nothing; it buys a second node that
 is a parameter and a wiring change rather than a redesign of the
-software interface. The per-node counters, the node identifier and the
-routing prefix are specification and reservation, and a reader should
-not count them as hardware.
+software interface. The routing prefix is specification and reservation, and a reader
+should not count it as hardware; the node identifier and the fault
+counters are implemented registers in the frozen die ---
+\code{NODE\_ID} at \code{0x9C}, \code{CNT\_SEC} at \code{0x70} and
+\code{CNT\_DED} at \code{0x74}, three of the 31 the pilot implements
+(\dcite{15}{section 3}) --- and what does not exist is the second node
+they would address.
 
 
 \section{One line, finally checkable over all reachable states}

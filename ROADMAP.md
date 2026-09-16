@@ -440,9 +440,8 @@ Ordered by what blocks what, not by size.
    nine days.** Nothing in this repository substitutes for it and
    nothing else on this list is waiting on anything else.
 2. **Close the `docs/13` open decisions that are not blocked on
-   `docs/14`** — the requested amount, the rate, the project name, the
-   generative-AI disclosure — against the 2026-10-29 internal
-   submission target. The public-URL field is no longer among them:
+   `docs/14`** — the requested amount, the rate and the project name —
+   against the 2026-10-29 internal submission target. The public-URL field is no longer among them:
    `docs/13` section 3.3 now carries both published repositories.
 3. Not before the above: `soc_npu.v`'s formal property set (`docs/56`),
    and `reg_ch0` by one of `docs/63`'s three ranked routes.

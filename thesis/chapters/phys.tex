@@ -324,9 +324,15 @@ die is the design.
   \label{fig:phys-density}
 \end{figure}
 
-\Cref{fig:phys-density} is the same placement as a density field, and it
-shows the property the timing story turns on: \emph{the channel is not
-where all the logic is}. The zone census on the six-macro floorplan puts
+\Cref{fig:phys-density} is the same placement as a density field, and
+what it shows is where the logic went: \emph{the channel is not where
+all of it is}. That is not what the timing turns on, and the difference
+was measured rather than assumed --- on this same run, wire is
+\qty{1.9}{\percent} of a violating path at the median and
+\qty{3.0}{\percent} at the most wire-bound of 1{,}000, over a median of
+78 gate stages, and the CLINT closure the pocket story was about sits
+1{,}802 cells of 1{,}802 in the channel with none in either pocket
+(\dcite{83}{sections 1, 2 and 3}). The zone census on the six-macro floorplan puts
 45,619 standard cells in the channel, 2,222 in the upper pocket, 3,568
 in the lower pocket, 441 in the strip and 436 elsewhere, against a
 baseline run of the same floorplan at 45,966 / 2,208 / 3,049 / 424 /
@@ -412,11 +418,12 @@ the CLINT's \code{mtime} codeword register.
 The worst is \emph{a register-file read address into the register file's
 own error-correcting encoder}, ending at the check bit
 \code{g\_rf\_flops[2].\allowbreak g\_chk.rf\_chk\_q[6]} of that file's
-single-error-correcting double-error-detecting code. It decomposes
-into \qty{2.492291}{\nano\second} of launch clock --- through the core's
-integrated clock gate, which is in the launch path --- and \textbf{77
-driver stages carrying \qty{26.290}{\nano\second} of cell delay},
-arriving at \qty{29.565346}{\nano\second} against a required
+single-error-correcting double-error-detecting code. It decomposes into \qty{2.492291}{\nano\second} of launch clock ---
+through the core's integrated clock gate, which is in the launch path
+--- and a data path of \qty{27.0731}{\nano\second} over \textbf{77
+driver stages, of which \qty{26.290}{\nano\second} is cell delay and
+\qty{0.7827}{\nano\second} is net delay}, arriving at
+\qty{29.565346}{\nano\second} against a required
 \qty{21.989546}{\nano\second}, for \qty{-7.575801}{\nano\second} of
 slack (step-49 \code{max.rpt}, slow corner). Seventeen of the 77 stages
 are \code{sg13g2\_xnor2\_1}, which is the encoder; eighteen are buffers
@@ -818,9 +825,16 @@ that most improves the total. Four leads have been worked through and
 none recovers it --- the hierarchy mode and both post-global-route
 stages were banked before the first number existed, two alternative
 floorplans are worse and one does not route at all, and the capacitance
-constraint was measured to sign-off and costs more than it buys. The two unpriced mechanisms are a
-registered request phase in the bus fabric and a hold-repair pass aimed
-at the fast corner that would let the read register be turned on.
+constraint was measured to sign-off and costs more than it buys. The one unpriced mechanism left is a hold-repair pass aimed at the fast
+corner that would let the read register be turned on. The other, a
+registered request phase in the bus fabric, was built and priced on
+2026-09-16: it takes the design's maximum combinational depth from 81
+levels to 69 and its median from 39 to 20, costs
+\qty{24.89}{\percent} of the workload's cycle count and
+\qty{7618.97}{\micro\metre\squared}, and does not route --- its layout
+\code{s89rr1} stops at global routing with 387 overflowing tiles, 353 of
+them on Metal5, against zero for this one (\dcite{84}{sections 1 and
+11}).
 
 \textbf{The macros cannot be signed off, and therefore neither can the
 die.} Every macro area here is a LEF \code{SIZE} statement and every

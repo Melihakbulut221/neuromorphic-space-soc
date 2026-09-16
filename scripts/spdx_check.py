@@ -102,7 +102,8 @@ SYNTAX = {
 # Its .tex and .bib are the sources of a DOCUMENT and carry CC-BY-4.0 by
 # docs/14 section 6.4, exactly as the three preprint directories do; the
 # extension map alone would call them Apache-2.0 and did.
-DIR_IS_DOCUMENT = ("paper/", "paper-residual/", "paper-design/", "thesis/")
+DIR_IS_DOCUMENT = ("paper/", "paper-residual/", "paper-design/", "thesis/",
+                   "paper-soc/")
 DOCUMENT_SUFFIXES = {".tex", ".bib", ".yaml", ".yml", ".csv", ".tsv"}
 
 # Hardware sources take CERN-OHL-W-2.0; everything else executable takes

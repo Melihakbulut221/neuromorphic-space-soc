@@ -280,11 +280,15 @@ ROM, because there is no \code{2048x32} part; and two
 \code{RM\_IHPSG13\_1P\_512x16\_c2\_bm\_bist}, one per ROM bank, holding the (39,32) word code's seven check bits at
 $+90{,}618.62\,\mu$m$^2$. The check pair was designed unplaced and was \textbf{placed and routed on
 2026-09-13} in run \code{s83romecc5}, with zero detailed-routing DRC
-errors and a die that does not grow by one database unit. The estimate
-that the die would have to grow by about 200\,$\mu$m in $x$ to take the
-pair was \textbf{superseded on 2026-09-13} and is kept rather than
-deleted: the space it needed was vertical, in the pocket the shorter ROM
-macro leaves in its own row, so the estimate had measured the wrong axis.
+errors and a die that does not grow by one database unit. The estimate that the die would have to grow by about 200\,$\mu$m in
+$x$ --- made about the single \code{RM\_IHPSG13\_1P\_1024x16} that was
+the alternative, 236.80\,$\mu$m wide against the 60.48\,$\mu$m
+\dcite{61}{}'s floorplan leaves beside each ROM macro --- was
+\textbf{superseded on 2026-09-13} and is kept rather than deleted: the
+space the check macros needed was vertical, in the pocket the shorter
+ROM macro leaves in its own row, so the estimate had measured the wrong
+axis. The pair was never its subject; \dcite{67}{section 8} costed the
+pair into that pocket from the start.
 \end{sloppypar}
 
 \subsection{Why the check bits cost half the RAM}
@@ -508,7 +512,13 @@ Slot & Address & Block & Registers & IRQ & Line & Area, $\mu$m$^2$ \\
 \code{0x012} & \code{0xFF912000} & SPI & \emph{reserved} & 19 & 7 & --- \\
 \code{0x013} & \code{0xFF913000} & I2C & \emph{reserved} & 20 & 8 & --- \\
 \code{0x014} & \code{0xFF914000} & QSPI flash & 7, at \code{0x00}--\code{0x18} & 21 & 9 & 19{,}690.62 \\
-\code{0x015} & \code{0xFF915000} & BUSSTAT & 7, at \code{0x00}--\code{0x18} & 22 & 10 & 7{,}060.55 \\
+\code{0x015} & \code{0xFF915000} & BUSSTAT & 11, at \code{0x00}--\code{0x28} & 22 & 10 & 7{,}060.55 \\
+
+and append to the caption of \cref{tab:arch-slots}: \dcite{60}{section
+5.7}'s seven-register table is revision 0.1's; \dcite{55}{} and
+\dcite{58}{} added \code{CNT\_NPUCOR}, \code{CNT\_NPUDET},
+\code{CNT\_NPUTMR} and \code{CNT\_MTECC} above \code{CLR}, which keeps
+\code{0x018}.
 \code{0x016} & \code{0xFF916000} & SCRUB & 6 counters, 6 stickies, 2 addresses & 23 & 11 & 16{,}710.96 \\
 \code{0x017} & \code{0xFF917000} & BOOTREG & 4: straps, status, report, epoch & --- & --- & 12{,}495.89 \\
 \code{0x018} & \code{0xFF918000} & CLKGATE & \emph{reserved} & --- & --- & --- \\

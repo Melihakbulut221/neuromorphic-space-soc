@@ -34,7 +34,9 @@ layout in the project that meets hold at every corner.}
 Technology & IHP SG13G2, 130\,nm, open PDK & \code{docs/12} \\
 Die & $2306.40 \times 2075.22$\,\si{\micro\metre} & final DEF \\
 Core area & $(60.00,\,45.36)$ to $(2246.40,\,2029.86)$\,\si{\micro\metre} & \code{clint\_region.py} \\
-Vendor macros & 8: four $2048\times64$ RAM, two $1024\times32$ ROM, two $512\times16$ ROM ECC & \code{docs/79} \\
+Vendor macros & 8: four $2048\times64$ RAM, two $1024\times32$ ROM, two $512\times16$ ROM ECC & \code{docs/67} \\
+
+and at line 53: Antenna violating nets & 2, and clearing them breaks hold & \code{docs/67} \\
 Instances placed & 168{,}592 & \code{metrics.json} \\
 Instance utilisation & 0.7538 (standard cells 0.4662) & \code{metrics.json} \\
 Flip-flops & 5{,}998 & final netlist \\
@@ -75,12 +77,13 @@ at that corner, and the honest statement of the result is the number
 and the corner together, never a megahertz figure derived from either.
 
 \textbf{The hold margin is 29.6\,ps and everything competes for it.}
-That single number is the reason three separate experiments in this
+That single number is the reason two separate experiments in this
 project ended the same way: a change with a clearly positive effect of
 its own spends more hold margin than the design has. The antenna
-repair does it (\dcite{79}{}), and so does the memory read register
-(\cref{sec:rdreg-result}). A design that meets hold by 29.6\,ps is a
-design in which the next improvement must be paid for out of hold.
+repair does it (\dcite{67}{section 11}), and so does the memory read
+register (\cref{sec:rdreg-result}). A design that meets hold by
+29.6\,ps is a design in which the next improvement must be paid for out
+of hold.
 
 \section{Four experiments, 14--15 September 2026}
 
@@ -107,9 +110,9 @@ signals are in scope natively; a hierarchical reference from an outside
 wrapper into a generate scope silently declares a fresh free wire
 instead, which is how an earlier attempt on a different block produced a
 counterexample that the register-transfer code cannot produce. And the
-six submodules in the instantiation closure are read \emph{without} the
-formal flag, so that their own property includes --- and the
-assumptions inside them --- stay out of this model.
+eight submodules in the instantiation closure are read \emph{without}
+the formal flag, so that the property includes three of them carry ---
+and the assumptions inside those --- stay out of this model.
 
 \subsection{The register file with its storage and its scrub}
 

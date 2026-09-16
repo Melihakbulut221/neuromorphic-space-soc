@@ -83,9 +83,11 @@ Guards exist because the cocotb suite and the formal job check \emph{behaviour},
 \code{scripts/spdx\_check.py} once reported itself as licence-tagged
 while carrying no header. It searched the first 4,000 characters for the identifier string in any context --- and its own docstring and regular expression both contain it, so \textbf{the checker read its own prose as its own licence}. A tag now counts only on a comment line in the first twelve.
 
-The second instance is a guard failing at guarding. The public-mirror
-generator had to rewrite one sentence in a CI workflow before publishing
-it, and refused to run if that sentence changed --- anchored on the \emph{filename}. When the file was deleted the guard did not fire: it was skipped, and the generator wrote 511 files as though nothing were owed. \dcite{78}{section 3.2}: \textbf{a check that cannot fail when the
+The third instance is a guard failing at guarding; the second, the
+verification recorder's glob, is below. The public-mirror generator had
+to rewrite one sentence in a CI workflow before publishing it, and
+refused to run if that sentence changed --- anchored on the
+\emph{filename}. When the file was deleted the guard did not fire: it was skipped, and the generator wrote 511 files as though nothing were owed. \dcite{78}{section 3.2}: \textbf{a check that cannot fail when the
 thing it checks is absent is not a check.} The same rule chose the
 anchor in \code{test\_soc\_shipped\_netlist\_guards.py}: a replica is
 identified by the fan-in cone of \emph{the voter's own input pin},

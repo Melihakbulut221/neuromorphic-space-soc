@@ -675,11 +675,12 @@ on the memories and the architectural register file, a scrub engine, and
 fault counters an operator can read. Its sources are \code{docs/43},
 \code{docs/44}, \code{docs/55}--\code{docs/58}, \code{docs/67} and \code{docs/69}.
 
-\textbf{The verification chapter} covers the four instruments and what
-each can and cannot see: the bit-exact golden models that are the
-specification, the cocotb regressions, the SymbiYosys property sets, the
+\textbf{The verification chapter} covers the five layers and what each
+can and cannot see: the cocotb regressions, the \emph{guards} that read
+the tree without simulating it, the SymbiYosys property sets, the
 riscv-formal bring-up against the ISA, and the seeded fault-injection
-campaigns at register-transfer and gate level
+campaigns at register-transfer and gate level --- every one of them
+judged against the bit-exact golden models that are the specification
 (\code{docs/09}, \code{docs/11}, \code{docs/16}, \code{docs/32}, \code{docs/42},
 \code{docs/52}, \code{docs/63}, \code{docs/74}, \code{docs/82}).
 

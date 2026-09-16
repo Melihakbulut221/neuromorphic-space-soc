@@ -232,3 +232,11 @@ thesis/main.blg
 thesis/main.synctex.gz
 thesis/*.fdb_latexmk
 thesis/*.fls
+
+# Editor and agent working directories. A 13 MB worktree was found
+# sitting in the tree on 2026-09-16: untracked, so it never reached a
+# commit or the mirror, and still the sort of thing that should not be
+# able to.
+.claude/
+.cursor/
+.aider*

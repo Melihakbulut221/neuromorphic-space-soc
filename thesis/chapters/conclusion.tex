@@ -82,8 +82,14 @@ cost, and what an injected-fault campaign observed in simulation.
       violating path in every layout this project has produced, and no
       placement experiment has moved it, because it is a structure and
       not a placement. It is the one change that would change the worst
-      number in \cref{tab:headline}, and it is unpriced.
-\item \textbf{Hold margin as a first-class budget.} Three separate
+      number in \cref{tab:headline}, and it is now priced: \dcite{84}{}
+      takes the design's median combinational depth from 39 levels to 20
+      and its maximum from 81 to 69, for \qty{24.89}{\percent} of the
+      workload's cycle count and \qty{1.08}{\percent} of its area, and
+      the layout of it stops at global routing with 387 overflowing
+      tiles, 353 of them on one metal layer. The default stays off for
+      that reason rather than for want of a price.
+\item \textbf{Hold margin as a first-class budget.} Two separate
       improvements have now been refused because they cost more hold
       than the design has. The next layout study worth running is not
       another improvement but a hold-repair pass aimed at the fast
@@ -95,9 +101,11 @@ cost, and what an injected-fault campaign observed in simulation.
       not a step this project can take alone.
 \item \textbf{The remaining peripherals.} A second serial port, the
       synchronous and two-wire interfaces, and the space-oriented link
-      and bus codecs are specified and unbuilt; one of them is now
-      unblocked by a bridge that exists and is proved, and none of them
-      is on the critical path of anything above.
+      and bus codecs are specified and unbuilt; two of them --- the
+      two-wire interface and the bus codec, both Wishbone-classic
+      cores with an 8-bit data path --- are now unblocked by the one
+      bridge that exists and is proved, and none of them is on the
+      critical path of anything above.
 \end{enumerate}
 
 \section{What this document is}

@@ -245,7 +245,7 @@ Re-fetched and re-read on 2026-08-29 and cross-checked by `docs/37` on
    2026-08-29, two with public source URLs. The correction of `docs/06`
    A.4's "no space precedent" stands (section 1.6).
 
-### 1.4 Two things that shape the plan, and one of them now bites harder
+### 1.4 One thing that shapes the plan
 
 **(a) NLnet cannot pay for work already done.** FAQ, verbatim: "A grant
 can only cover the period between the proposal being officially selected
@@ -275,34 +275,6 @@ A reviewer doing "independent verification of facts, methods and claims"
 would find the public repository and see all of this. Section 2.2
 rebuilds the scope around work that will still be ahead of the project
 when an MoU exists.
-
-**(b) The generative-AI policy has a second half that outlives the
-submission.** The policy
-(`https://nlnet.nl/foundation/policies/generativeAI/`, version 1.1,
-valid from 2026-01-26) governs **project development** for the life of
-the grant. **[fact]** Verbatim: "For any *substantive* use of GenAI that
-materially affects outputs, public disclosure is required"; a codebase
-"declares, typically in its 'readme', broadly how GenAI is used";
-"Generated content should be marked as such … Specify which model was
-used, (including version), and how it was used." Non-compliance "may
-result in rejection of the proposal or ultimately in the termination of
-the running grant."
-
-The FAQ is blunter: "**The short answer is: no.** … Please grant us the
-courtesy of writing the proposal yourself. If you do use generative AI
-to write (part of your) proposal, please put this in the text **and
-explain why this was necessary**. Failure to do so is likely to result
-in the proposal being rejected, and tarnishing your reputation."
-**[fact]** The required disclosure is a log *and a justification*.
-
-One clause reads in the project's favour: "NLnet is a strong proponent
-of automation and of deterministic and reproducible generation of source
-code, formal and symbolic proofs, etc. based on specifications and
-scientific and engineering rigour." **[fact]** The generated register and
-memory maps, the golden-model refinement and the SymbiYosys programme
-sit squarely inside what the policy says it wants.
-
-See [D-10] and [D-18].
 
 ### 1.5 Two more constraints
 
@@ -773,15 +745,6 @@ developer's to provide; this document records the requirement only, and
 the requirement is that the answer be accurate — non-compliance is
 grounds for rejection or for termination of a running grant.
 
-**[D-18]** — not a form field. The same policy governs project
-development for the life of the grant: substantive use that materially
-affects outputs requires public disclosure, a broad statement in the
-repository readme of how such tools are used, and per-contribution
-provenance for generated content **[fact]**. Settle the readme statement
-and the contribution convention before the MoU. It interacts with the
-licensing decision, since the policy requires that everything delivered
-"can be legally published under a FLOS licence".
-
 ### 3.13 Consent and PGP
 
 - Privacy consent checkbox: required, must be ticked. **[fact]**
@@ -930,7 +893,6 @@ row 11 and which was left open by the same signature.*
 | D-15 | Obtain a real Co-60 facility quote to replace the H5 estimate | developer | 2026-10-15 | open |
 | D-16 | Keep the shuttle generic in the milestone plan (recommendation: generic, and `docs/37`'s "no IHP run after 26b is announced" strengthens it) | developer | 2026-10-27 | open |
 | D-17 | Final positioning-language pass against `docs/05` section 4 **plus the two prohibitions** before submitting | developer | 2026-10-27 | open |
-| D-18 | Repository-level generative-AI disclosure convention for the life of the grant | developer | 2026-10-27 | open |
 | **D-19** | **Confirm the requested amount, now EUR 29,685** (was EUR 29,500, and EUR 27,500 before that), and that the rebuilt task set of section 4.1 is the scope the developer intends to be bound to. The change is one line: H1 gains the devkit and shipping every tile-only figure in this repository omitted, per `docs/37` | developer | 2026-09-30 | **changed** |
 | D-20 | Accept or reject the method-led framing of section 2.1. **Recommendation: accept, and note it is now the only framing section 1.4(a) leaves standing** | developer | 2026-09-30 | open |
 | **D-21** | **Confirm the verification counts immediately before pasting.** They were measured 2026-09-05 at HEAD `ed51de0` (section 9.2) and this project has changed them four times in ten days. Re-run `pytest sw/tests`, `scripts/run_cocotb.sh` and the two formal makefiles, and paste what they return | engineering | 2026-10-27 | **open** |
@@ -949,7 +911,7 @@ row 11 and which was left open by the same signature.*
 | 2026-09-30 | D-5, D-8, D-12, D-14, D-19, D-20 closed | developer |
 | 2026-10-15 | D-6, D-7, D-15 closed | developer |
 | 2026-10-20 | Attachments drafted (D-9) | engineering |
-| 2026-10-27 | Full package review: positioning pass **and the two prohibitions** (D-17), arithmetic re-check, character counts re-run, verification counts re-run (D-21), physical sentences re-checked (D-22), **scope re-tested against HEAD (D-23)**, D-1..D-4, D-16, D-18 closed | developer |
+| 2026-10-27 | Full package review: positioning pass **and the two prohibitions** (D-17), arithmetic re-check, character counts re-run, verification counts re-run (D-21), physical sentences re-checked (D-22), **scope re-tested against HEAD (D-23)**, D-1..D-4, D-16 closed | developer |
 | **2026-10-29** | **Submit.** Five days before the deadline, not on it | developer |
 | 2026-11-03 12:00 CEST | Hard deadline **[fact]** | — |
 | 2027-03 to 2027-06 | Expected decision window **[estimate, section 1.3 item 4]** | — |

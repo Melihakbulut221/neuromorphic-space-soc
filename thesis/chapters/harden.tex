@@ -70,9 +70,12 @@ section 8.2 proves it: over one bit there are exactly two storage
 functions, $x$ and $\lnot x$, so a third replica is bit-for-bit
 identical to one of the others and Yosys's \code{opt\_merge} hashes it
 away, and three bits is the first width at which a third replica has
-a function left to take (\dcite{30}{section 3.3}; \dcite{41}{section 4.1}). Six of the watchdog's eight protected fields
-are one bit wide, and replicating one naively yields a single flip-flop
-with a voter voting it against itself --- while \textbf{every functional
+a function left to take (\dcite{30}{section 3.3}; \dcite{41}{section 4.1}). Five of the watchdog's eight protected fields are one bit wide ---
+\code{hw/soc/rtl/soc\_wdog.v}'s field offsets and
+\dcite{41}{section 3.2}'s own table, whose widths sum to the 22 bits
+quoted below, while that document's section 4.2 says six --- and
+replicating one naively yields a single flip-flop with a voter voting
+it against itself --- while \textbf{every functional
 test and every proof here would still pass}. Polarity cannot rescue it either
 (\dcite{33}{section 5}).
 
@@ -322,9 +325,16 @@ of two flip-flops (\dcite{69}{section 8.4}).
 \label{sec:harden-clock}
 
 Power, and not frequency, is the requirement this design is written
-against: \dcite{57} measured \SI{33.890}{\milli\watt} computing against
-\SI{5.539}{\milli\watt} waiting at the typical corner. \dcite{76} then
-added two clock gates, and the interesting part is what gating a
+against. \dcite{57} measured \SI{33.890}{\milli\watt} computing against
+\SI{5.539}{\milli\watt} waiting at the typical corner, but on
+\code{full3}, a layout \dcite{57}{section 3.2} itself found does not
+contain the accelerator; \dcite{76}{section 2} could not reproduce that
+pair on the design that exists and replaced it with its own baseline,
+so the figures the gates were measured against are
+\SI{33.359}{\milli\watt} computing and \SI{18.745}{\milli\watt} waiting
+on the ungated control, becoming \SI{45.199}{\milli\watt} and
+\SI{8.287}{\milli\watt} with the gates in (\dcite{76}{section 8.3}).
+\dcite{76} added two clock gates, and the interesting part is what gating a
 fault-tolerant block gets wrong. \textbf{A
 clock-gated flip-flop still holds state and can still be upset; what it
 cannot do is report the upset}, because the voter's correction, the
@@ -443,8 +453,19 @@ without the codec seeing it. The criterion there is now that nothing is
 \begin{table}[tbp]
 \centering\footnotesize
 \caption{Fault-injection campaigns bearing on the hardening, with their
-paired counterfactuals. Every injection is one single-bit flip into one
-flip-flop at a seeded cycle inside a measured window.}
+paired counterfactuals. Every injection is one single-bit flip at a
+seeded cycle inside a measured window, into one flip-flop everywhere
+except the two memory rows: there the deposit is one bit
+exclusive-ored into a data or check word of one memory, 1{,}000 draws
+by region of the program's own link map (\dcite{67}{section 7.1}), and
+\dcite{60}{section 9.10} is explicit that a memory word is not a
+flip-flop of this netlist.}
+
+and at line 793: \textbf{Every campaign is single-bit}, and every
+campaign but the memories' is flip-flop only ---
+\dcite{67}{section 7.1}'s 1{,}000 draws land in a data or check word of
+one memory --- with no multi-bit strike and no transient in
+combinational
 \label{tab:campaigns}
 \begin{tabularx}{\linewidth}{@{}lr>{\raggedright\arraybackslash}X@{}}
 \toprule

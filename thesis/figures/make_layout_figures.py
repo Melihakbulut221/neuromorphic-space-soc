@@ -444,6 +444,81 @@ def fig_panels(cells, macros, owner, counts, out):
     save(fig, out, "layout_panels")
 
 
+
+# ---- the die by REGION, and what each region holds -------------------
+REGIONS = [
+    # name, (x0, y0, x1, y1), label anchor
+    ("central channel", (60.0, 687.18, 2246.4, 1387.26), "c"),
+    ("lower macro row", (60.0, 45.36, 1769.28, 687.18), "c"),
+    ("upper macro row", (60.0, 1387.26, 1769.28, 2029.86), "c"),
+    ("ROM column, lower half", (1769.28, 45.36, 2246.4, 687.18), "r"),
+    ("ROM column, upper half", (1769.28, 1387.26, 2246.4, 2029.86), "r"),
+]
+
+
+def fig_regions(cells, macros, owner, out):
+    """Which region of the die holds what.
+
+    The regions are the ones the floorplan creates: two macro rows, the
+    channel between them, and the column the ROMs stand in.  Each is
+    annotated with the blocks that actually landed in it, counted from
+    the placement rather than assigned by intent.
+    """
+    import collections
+    fig, ax = plt.subplots(figsize=(8.4, 6.8))
+    frame(ax)
+    occ = collections.defaultdict(collections.Counter)
+    for n, (m, x, y) in cells.items():
+        o = owner[n]
+        if o == FILLER:
+            continue
+        for name, (x0, y0, x1, y1), _ in REGIONS:
+            if x0 <= x < x1 and y0 <= y < y1:
+                occ[name][BLOCK_NAME.get(o, o.strip("_"))] += 1
+                break
+    tint = {"central channel": "#DCE9F5",
+            "lower macro row": "#EFE6DA", "upper macro row": "#EFE6DA",
+            "ROM column, lower half": "#E4F0E4",
+            "ROM column, upper half": "#E4F0E4"}
+    for name, (x0, y0, x1, y1), _ in REGIONS:
+        ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0,
+                               facecolor=tint[name], edgecolor="#4A4A4A",
+                               linewidth=1.0, linestyle=(0, (6, 3)), zorder=0.3))
+    for n, (m, x, y) in cells.items():
+        pass
+    xs, ys = [], []
+    for n, (m, x, y) in cells.items():
+        if owner[n] == FILLER:
+            continue
+        xs.append(x)
+        ys.append(y)
+    ax.scatter(xs, ys, s=0.22, c="#3C3C3C", marker=",", linewidths=0,
+               alpha=0.55, zorder=1, rasterized=True)
+    macro_patches(ax, macros, label=True, fontsize=6.0, facecolor="#FFFFFF")
+    SHORT = {"General-purpose timer": "GP timer",
+             "QSPI flash controller": "QSPI",
+             "Neuromorphic accelerator": "accelerator",
+             "Ibex RV32IMC core": "Ibex core",
+             "Bus fault counters": "bus counters",
+             "ROM control and ECC": "ROM control",
+             "RAM control and ECC": "RAM control",
+             "Memory scrub engine": "scrub",
+             "Plug-and-play ROM": "PnP ROM",
+             "Bus fabric and APB": "fabric"}
+    for name, (x0, y0, x1, y1), anchor in REGIONS:
+        c = occ[name]
+        total = sum(c.values())
+        lines = ["%s" % name.upper(), "%s cells" % f"{total:,}"]
+        lines += ["%s %s" % (f"{v:,}".rjust(6), SHORT.get(k, k))
+                  for k, v in c.most_common(3)]
+        tx, ha = ((x1 - 10, "right") if anchor == "r" else (x0 + 12, "left"))
+        ax.text(tx, y1 - 12, "\n".join(lines), fontsize=5.6, va="top",
+                ha=ha, zorder=8, family="DejaVu Sans Mono",
+                bbox=dict(boxstyle="round,pad=0.28", fc="white", ec="#4A4A4A",
+                          alpha=0.94, linewidth=0.6))
+    save(fig, out, "layout_regions")
+
+
 def fig_floorplan(macros, out):
     fig, ax = plt.subplots(figsize=(6.0, 5.6))
     ax.add_patch(Rectangle((0, 0), 2306.4, 2075.22, facecolor="#FAFAFA",
@@ -510,6 +585,7 @@ def main():
     fig_density(cells, macros, owner, out)
     fig_two_blocks(cells, macros, owner, out)
     fig_panels(cells, macros, owner, counts, out)
+    fig_regions(cells, macros, owner, out)
     return 0
 
 
