@@ -45,7 +45,7 @@ where it is named as such.
 | **What does it cost in cycles?** | **+103,725 cycles, +24.89 %**, 416,673 → 520,398, `[TB] PASS` at both **[fact]**. |
 | **What does it cost in area?** | **+7,618.97 um2, +1.08 %** against the same file at `REQ_REG = 0`. The register is **68 flip-flops** in the mapped netlist; the design-wide delta is **+67**, so one flip-flop elsewhere went with them **[fact]**. |
 | **Does it cost head-of-line blocking?** | **No, and the first version of this document said it did.** The blocking is the round-robin arbiter's and is there at both settings; the instruction port's grant count while the data port's slave refuses is the same at both, and its first grant comes one cycle *earlier* at `REQ_REG = 1` **[fact, section 2.4a]**. |
-| **Should the default change?** | **No, not on this evidence.** Section 9. A quarter of the cycle count is not bought back by a depth number alone: what closes the design is slack on a placed and routed layout, and no layout of this netlist has been run. |
+| **Should the default change?** | **No, and the reason is now stronger than section 9's.** The layout was run: `s89rr1` stops at global routing with 387 overflowing tiles, 353 of them on Metal5, against 0 for the sign-off layout. As built, the change does not have a layout, so it has no slack to compare. Section 11. |
 
 ---
 
@@ -719,6 +719,11 @@ result.**
 
 ## 9. Recommendation
 
+*Superseded 2026-09-16 by section 11, which ran the layout this section
+asks for. The recommendation below is left standing as it was written,
+`docs/64`'s rule; what it did not know is that the netlist does not
+route.*
+
 **Keep `REQ_REG = 0`, and run one layout before revisiting it.**
 
 The reason is the ratio, and it is not close on this evidence. The
@@ -772,3 +777,102 @@ Run trees: `hw/soc/out/s87-gold-syn`, `s87-rr0-syn`, `s87-rr1-syn`,
 `s88-rr0-syn` and `s88-rr1-syn` (the 2026-09-16 re-synthesis, byte-identical
 to the `s87` pair), `sim-rr0`, `sim-rr1`, and
 `hw/soc/formal/soc_bus_{bmc,prove,cover}` and their `_rr` counterparts.
+
+---
+
+## 11. The layout, run, and it does not route (added 2026-09-16)
+
+Section 9 recommended keeping the default off "until a layout says how
+much slack the shorter chain actually returns" and named the run to
+make. It was made. **It does not reach a slack number, because it does
+not route.**
+
+`s89rr1` is `hw/soc/out/s88-rr1-syn`'s netlist through the same flow,
+the same configuration (`config-ecc-rom.json`) and the same initial
+state as the sign-off layout. It stopped at step 31,
+`OpenROAD.GlobalRouting`, with `[GRT-0116] Global routing finished with
+congestion` **[fact, `/tmp` flow log and the step's own log]**.
+
+| at `31-openroad-globalrouting` | `s83romecc5`, the sign-off layout | `s89rr1`, `REQ_REG = 1` |
+|---|---:|---:|
+| **total overflow** | **0** | **387** (max 5 H, 4 V) |
+| of which on Metal5 | --- | **353** |
+| Metal5 usage | 18.68 % | 21.40 % |
+| total usage | 32.69 % | 35.60 % |
+| total wirelength | 7,182,252 um | **7,768,591 um** (+586,339, +8.2 %) |
+| nets routed | 61,620 | 61,779 (+159) |
+| vias | 477,852 | 495,052 (+17,200) |
+
+**[fact, each run's `openroad-globalrouting.log`.]**
+
+### 11.1 Why 124 more cells cost 586,339 um of wire
+
+The mechanism is in the third row and it is not a surprise once seen.
+Before the change, `s_addr_o`, `s_be_o` and `s_wdata_o` are
+combinational selections between two masters, and the drivers are
+wherever the placer put the masters' own logic --- near the register
+file and near the prefetch buffer, which is where those signals come
+from. After it, all three come out of ONE register in the fabric, and
+that register must reach **all seven slaves**, which the pad ring and
+the macro column spread across the die: the timer, QSPI, GPIO, boot and
+UART sit in the lower right at their pads (`docs/83` section 4's
+placement census), the RAM and ROM controls sit against their macros,
+and the CLINT sits mid-channel.
+
+A single point driving a 69-bit bus to seven destinations at opposite
+corners is a broadcast, and a broadcast goes on the long layer. **353 of
+the 387 overflowing tiles are on Metal5**, whose usage rises from
+18.68 % to 21.40 % while the design gains 159 nets. The registered
+request phase does not add wire because it adds cells; it adds wire
+because it moves the fan-out's origin from two well-placed sources to
+one, and no placement of one register is near seven slaves at once.
+
+### 11.2 What this does to the recommendation
+
+Section 9's recommendation was "keep the default off, and run one
+layout before revisiting it". The layout has been run and the
+recommendation is now stronger and differently grounded:
+
+**Keep `REQ_REG = 0`. As built, the change does not have a layout.**
+
+It is not enough to say the depth is better, because a netlist that
+does not route has no slack to compare. The trade section 9 described
+--- a quarter of the cycle count against an unmeasured slack --- is not
+the trade on offer; the trade on offer is a quarter of the cycle count
+against a design that stops at global routing.
+
+**And the finding is about this implementation, not about the idea.**
+The depth result stands: 81 levels to 69, median 39 to 20, the CLINT's
+response registers from 81 to 16, all measured on the netlist and all
+independent of placement. What section 11 adds is that the way this
+version delivers it --- one register at one point, broadcasting to
+seven slaves --- is what the router cannot take. A version that
+registered the request AT EACH SLAVE, or in two halves by die region,
+would buy the same depth without the broadcast, and is not built.
+
+That is the item section 12 names, and it is the first item in this
+document whose cost is now known before it is built: it must not
+concentrate the fan-out.
+
+---
+
+## 12. What the next block should be, after the layout
+
+1. **Register the request at the slaves, not at the fabric.** The depth
+   win is the same --- the slave's decode and read multiplexer start at
+   a flip-flop either way --- and the fan-out stays where the placer
+   already put it. Seven small registers instead of one large one, at
+   the same flip-flop cost to within a few bits. This is the version to
+   build, and section 11.1 is the reason.
+2. **Do not re-run `s89rr1` with a looser global route.** The overflow
+   is 387 tiles on one layer, not a router setting: `docs/79` records
+   what it costs to argue with this router and `docs/48` records two
+   floorplans that lost the argument.
+3. **The cycle cost is the same for any version** and it is measured:
+   +24.89 %. Whatever registers the request pays it, so the question
+   section 9 asked --- whether a quarter of the cycle count is worth
+   the depth --- is still open, and still needs a layout to answer.
+4. **`docs/83` section 5's other two structural items are untouched by
+   this.** The core's pipeline and the register file's write encoder
+   hold the worst endpoint, and no version of this change reaches them.
+
