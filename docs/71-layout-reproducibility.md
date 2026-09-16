@@ -804,6 +804,7 @@ steps-1–37 figures, single-threaded throughout, agree within 3 %.
    `docs/68` 9.2 quote the old name. None of their verdicts changes,
    and none of them needs a note beyond `docs/44`'s and `docs/70`'s,
    but the **v0.2 of `docs/60`** that five documents already owe
+   *Issued 2026-09-14: `docs/60` revision 0.2. THE HALF THIS ITEM ASKED FOR IS NOT IN IT: revision 0.2's row does not carry the noise-floor distinction this document is about, so the debt is paid in form and open in substance.*
    should carry the distinction so that a reader of the datasheet does
    not learn it from this document.
 3. **`docs/50`'s read register**, `docs/70` section 15 item 3, unchanged:

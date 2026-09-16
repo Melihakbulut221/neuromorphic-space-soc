@@ -5,8 +5,8 @@
 
     logic_depth.py <netlist.v> [--top N] [--hist]
 
-WHY NOT STA.  `docs/83` measured that wire is 3.6 % of a violating path
-and that the median path is 88 stages deep, which points at synthesis
+WHY NOT STA.  `docs/83` measured that wire is 1.9 % of a violating path
+and that the median path is 78 stages deep, which points at synthesis
 rather than at placement.  The obvious next question --- is that depth a
 synthesis CHOICE or a structure? --- cannot be asked of the flow's
 pre-place STA: with no placement there are no wire loads, OpenSTA uses

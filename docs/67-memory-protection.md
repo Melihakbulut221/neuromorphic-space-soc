@@ -1553,6 +1553,8 @@ sentences stand.
 - **`docs/60` sections 5.3, 9.8 and 11.1**: the RAM is 32 KiB; the
   memory contents are protected; the ROM's check macros exist and are
   unplaced. A v0.2 of the datasheet is now owed by two documents.
+
+*Issued 2026-09-14: `docs/60` revision 0.2. The debt this item records is paid; what it asked for that revision 0.2 does NOT carry is named where it is still owed.*
 - **`README.md`**: "no ECC on the 72 KiB of memory ... and nothing on
   the CLINT's `mtime`" — both done, `docs/58` and this.
 - **`docs/00-index.md` section 2.2**: "no SRAM macro in any hardened

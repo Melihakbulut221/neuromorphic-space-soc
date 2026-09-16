@@ -1171,6 +1171,8 @@ commit it describes should not be silently retargeted at another one:
 
 A v0.2 revision row is section 15 item 5.
 
+*Issued 2026-09-14: `docs/60` revision 0.2. The debt this item records is paid; what it asked for that revision 0.2 does NOT carry is named where it is still owed.*
+
 **Nothing in `docs/55` or `docs/56` moves.** The 215,428-cycle invariant
 is reproduced exactly and no NPU number is touched.
 

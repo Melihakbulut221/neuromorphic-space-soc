@@ -9,11 +9,11 @@ WHY THIS EXISTS.  `docs/73` section 16 concluded that a placement
 requirement it could not satisfy was therefore a FLOORPLAN requirement.
 Before building a floorplan to satisfy it, the obvious question is how
 much a floorplan could buy, and the report already on disk answers it:
-a floorplan moves wire, and on this design wire is **3.6 % of a
-violating path at the median** and 4.7 % at the most wire-bound path in
+a floorplan moves wire, and on this design wire is **1.9 % of a
+violating path at the median** and 3.0 % at the most wire-bound path in
 the whole report (`docs/83` section 3).  The same measurement on
-`s71boot`, a different macro set and a different pocket, gives 3.1 %
-and 3.9 %.  Three floorplans have been measured in this project and
+`s71boot`, a different macro set and a different pocket, gives 1.9 %
+and 2.8 %.  Three floorplans have been measured in this project and
 they differ in a quantity that is under five per cent of every path
 that violates.
 
@@ -23,9 +23,9 @@ CELL arc's delay; a line for any other pin carries the delay of the NET
 that reached it.  The data path is everything after the launch
 flip-flop's `Q`, so the split is:
 
-    stages = output-pin lines after the launch Q
+    stages = output-pin lines between the launch Q and "data arrival time"
     cell   = their delays summed
-    net    = every other line's delay after the launch Q
+    net    = every other line's delay in that same window
 
 This counts the clock network into neither, which is what makes the
 percentage comparable between layouts with different clock trees.
@@ -44,7 +44,7 @@ import sys
 # An OpenSTA path line: [fanout] [cap] slew delay time dir description
 ROW = re.compile(r"\s*(?:\d+\s+)?(?:[\d.]+)?\s*(?:[\d.]+)?\s+"
                  r"([\d.]+)\s+([\d.]+)\s+([v^])\s+(\S+)")
-OUTPIN = re.compile(r"/(X|Y|Q|ZN|GCLK)$")
+OUTPIN = re.compile(r"/(X|Y|Q|ZN)$")
 LAUNCH_Q = re.compile(r"/Q$")
 SLACK = re.compile(r"(-?\d+\.\d+)\s+slack")
 
@@ -54,8 +54,14 @@ def paths(report):
     with open(report, errors="ignore") as f:
         text = f.read()
     for block in text.split("Startpoint: ")[1:]:
+        # CUT AT "data arrival time". Everything after it in an OpenSTA
+        # block is the CAPTURE clock's path -- the clock edge at the
+        # period, then the clock tree again -- and counting it into the
+        # data path is how the first version of this tool inflated every
+        # number it produced (docs/83 section 3, corrected 2026-09-16).
+        head = block.split("data arrival time", 1)[0]
         rows = []
-        for line in block.splitlines():
+        for line in head.splitlines():
             m = ROW.match(line)
             if m:
                 rows.append((float(m.group(1)), m.group(4)))

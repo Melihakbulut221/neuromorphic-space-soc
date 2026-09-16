@@ -1308,8 +1308,8 @@ sit in the channel, 0 in the upper pocket, 0 in the lower pocket, 0 in
 the strip** [fact, `clint_region.py census` on `s83romecc5`'s final
 DEF]. The probe was aimed at a pocket the design had already left when
 the ROM check macros of `docs/67` took the blind space at each band
-edge. And no floorplan is the answer to the slack: wire is **3.6 % of
-a violating path at the median and 4.7 % at the most wire-bound path
+edge. And no floorplan is the answer to the slack: wire is **1.9 % of
+a violating path at the median and 3.0 % at the most wire-bound path
 in the report**, on this layout and on `s71boot` alike. What these two
 runs establish is what they establish --- that the cluster does not
 route as a forced group at either utilisation --- and nothing about

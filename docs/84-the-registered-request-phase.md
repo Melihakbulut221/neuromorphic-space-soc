@@ -7,7 +7,7 @@ SPDX-License-Identifier: CC-BY-4.0
 `docs/72` section 15 item 5 named this change and did not price it: *"A registered request phase in the fabric is a latency cost on
 every load and a `docs/50`-class change; it is named here as the thing
 the paths have in common, not priced."* `docs/83` then measured that
-nothing else is the thing the paths have in common — **wire is 3.6 % of
+nothing else is the thing the paths have in common — **wire is 1.9 % of
 a violating path at the median**, and the median violating path is **88
 gate stages deep**. A floorplan moves wire.
 
@@ -661,7 +661,7 @@ result.**
 * **No place and route, and therefore no slack.** Logic depth is a
   netlist property and is what this change was aimed at, but what closes
   a design is slack on a placed and routed database at the slow corner.
-  `docs/83` measured that wire is 3.6 % of a violating path, which is the
+  `docs/83` measured that wire is 1.9 % of a violating path, which is the
   reason to believe the depth is the binding term — it is not a
   substitute for measuring it. **This is the missing evidence, and it is
   one four-hour run.**

@@ -1488,7 +1488,11 @@ with the fast-path term they served.
 ### 18.6 What is NOT here, and what it costs the conclusion
 
 **The clock-gating check at the slow corner is not re-measured, because
-that needs a layout of this netlist and no layout of it has been run.**
+that needs a layout of this netlist and no layout of THIS netlist has
+been run.** *(Corrected 2026-09-16: a layout of a `ROM_HARDEN = 0`
+build with the grant qualified does exist, `s85wakegnt`, and section
+18.7 reports it. The sentence as first written said "no layout of it
+has been run", which was false.)*
 Section 9.5's two checks are OpenSTA's, derived from the gate cell's
 Liberty on a placed and routed database; a pre-place static analysis on
 a synthesis netlist is a different measurement and would not be
@@ -1508,8 +1512,60 @@ miss:
   estimate.
 
 **The recommendation is therefore to keep `WAKE_GNT = 0` and to run one
-layout.** The layout is the missing evidence, not the missing work:
+layout of the eight-macro netlist.** The layout is the missing evidence,
+not the missing work:
 everything else section 17 item 1 asked for is above, and 1.78 per cent
 of area with a 29.6 ps hold margin (`docs/79`) is exactly the kind of
 change this project has learned to lay out before believing.
+
+### 18.7 A layout of it DOES exist, on a different configuration (added 2026-09-16)
+
+Section 18.6 says "no layout of it has been run". **That is false as
+written, and the run it misses was finished nine hours before section
+18 was published.**
+
+`hw/soc/pnr/runs/s85wakegnt` is a complete sign-off run: 62 steps, a
+final netlist, an empty `error.log`, finished 2026-09-15 11:28:56. It
+places `hw/soc/out/s85-rom0-wakegnt/soc_top.netlist.v`.
+
+**And it is NOT the netlist section 18.6 is about**, which is why the
+sentence is corrected rather than deleted. Read the run tag: `rom0`.
+This is a `ROM_HARDEN = 0` build --- SIX macros, without the two ROM
+check macros of `docs/67` --- against the eight-macro design every
+number in sections 18.2 to 18.5 is measured on. It has 5,895 flip-flops
+where the sign-off layout has 5,998 **[fact, both final netlists]**.
+
+| | `s83romecc5`, eight macros, `WAKE_GNT = 0` | `s85wakegnt`, six macros, `WAKE_GNT = 1` |
+|---|---:|---:|
+| route DRC errors | 0 | **0** |
+| antenna violating nets | 2 | **1** |
+| worst setup slack, slow corner | −7.5758 | **−4.7014** |
+| setup TNS, slow corner | −14,735.65 | **−9,027.64** |
+| worst hold slack, fast corner | +0.0296 | **+0.0620** |
+| instances | 168,592 | 175,414 |
+| worst endpoint | a register-file SECDED check bit | **a RAM macro's data input** |
+
+**[fact, each run's `final/metrics.json` and `max.rpt`.]**
+
+**DO NOT READ THE SLACK COLUMN AS THE GRANT'S DOING.** Two things
+differ between these columns, not one: the parameter and the macro set.
+A six-macro build has two fewer hard blocks in the channel, a different
+floorplan around the ROM column and a different critical structure ---
+its worst endpoint is a RAM macro's data input, not the register file's
+check bits. Attributing 2.87 ns of that difference to `WAKE_GNT` would
+be exactly the error `docs/44` is about and `docs/64` collects, and
+this document does not make it.
+
+**What the run does settle** is the question section 18.6 could not
+answer at all: the qualified grant lays out, routes, meets hold and
+carries no design DRC. What it does not settle is the clock-gating
+check at the slow corner, because that is section 9.5's targeted
+`report_checks` query and it has not been run on this database --- and
+when it is, its number will belong to a six-macro build.
+
+*Section 18.6's sentence is corrected in place rather than marked,
+because it is a present-state claim and `docs/64` corrects those
+outright. The correct statement is: no layout of the EIGHT-MACRO
+`WAKE_GNT = 1` netlist has been run; a six-macro one exists and is
+named here.*
 

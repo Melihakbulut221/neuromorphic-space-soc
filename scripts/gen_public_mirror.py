@@ -190,12 +190,23 @@ def head_rev():
 
 
 def citation_count(stem):
-    """How many documents cite this one, for the stub to state."""
+    """How many documents cite this one, for the stub to state.
+
+    COUNT THE CITATION, NOT THE NUMERAL. This searched for the bare
+    number -- "06" -- anywhere in a document's text, so every date in
+    2026-09-06, every table row reading 06 and every hash containing it
+    counted as a citation. The two stubs went out saying 74 and 88
+    where the true figures are 19 and 14, four and eight times over
+    [fact, 2026-09-16]. A citation in this corpus is written "docs/NN",
+    which is what is matched now.
+    """
+    number = stem.split("-")[0]
+    needle = "docs/" + number
     n = 0
     for p in sorted((ROOT / "docs").glob("*.md")):
-        if p.name.startswith(stem.split("-")[0] + "-"):
+        if p.name.startswith(number + "-"):
             continue
-        if stem.split("-")[0] in p.read_text(encoding="utf-8"):
+        if needle in p.read_text(encoding="utf-8"):
             n += 1
     return n
 

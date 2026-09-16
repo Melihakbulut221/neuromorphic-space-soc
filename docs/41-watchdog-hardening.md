@@ -915,6 +915,11 @@ protection exists.
 
 1. **`mtime` and `mtimecmp` are unprotected.** Section 7.4. This is the
    top of the next hardening wave, not a closed question.
+   *Closed 2026-09-04 by `docs/58-clint-time-base-hardening.md`.* `mtime` is now the 64-bit data field of a (72,64) SECDED codeword,
+   decoded and corrected on every read; `soc_clint.v` carries the
+   `g_mtime_secded` block. This item is the oldest one the corpus
+   still ranked open, and it has been closed for twelve days.
+
 2. **`counter`, `reload` and `pre` are unprotected**, by decision, with
    the price measured. Section 7.
 3. **Nothing raises an alarm on `TMRERR`.** The mismatch is counted and

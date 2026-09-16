@@ -15,9 +15,9 @@ Two measurements settle it, and both are on layouts that already exist.
 The first locates the CLINT's closure in the sign-off layout: **1,802
 cells of 1,802 are in the channel, none in any pocket, and no macro
 stands between them and the fabric.** The second decomposes the delay of
-every violating path: **wire is 3.6 % of it, and the median path is 88
+every violating path: **wire is 1.9 % of it, and the median path is 78
 gate stages deep.** A floorplan moves wire. There is no version of this
-floorplan that moves 88 gate stages.
+floorplan that moves 78 gate stages.
 
 Convention, as elsewhere: **[fact]** = measured in this environment or
 read out of a file; **[estimate]** = derived or judged, with the
@@ -37,11 +37,11 @@ and it is section 3's arithmetic and nothing else.
 |---|---|
 | **Is the CLINT's closure split by a macro in the sign-off layout?** | **No. 1,802 of 1,802 in the channel, 0 in the upper pocket, 0 in the lower pocket, 0 in the strip** **[fact]**. The condition `docs/73` section 15 item 2 states is met by the placer, unconstrained, with no fence and no manual placement. |
 | **Then what were `s84clint5` and `s84clint6` doing?** | Forcing a cluster that is already together into a box, which is why both congested. `docs/73` section 16's negative result stands as measured and its conclusion is narrowed here. |
-| **How much of a violating path is wire?** | **3.6 % at the median, 4.7 % at the most wire-bound path in the report** **[fact, 1,000 violating paths]**. On `s71boot` it is 3.1 % and 3.9 %. |
-| **How deep are the violating paths?** | **88 gate stages at the median**, 66 at the shallowest and 107 at the deepest **[fact]**. |
+| **How much of a violating path is wire?** | **1.9 % at the median, 3.0 % at the most wire-bound path in the report** **[fact, 1,000 violating paths]**. On `s71boot` it is 1.9 % and 2.8 %. The figures first published here were 3.6 % and 4.7 %, from a tool that counted the capture clock tree into the data path; section 3 carries the correction. |
+| **How deep are the violating paths?** | **78 gate stages at the median**, 57 at the shallowest and 91 at the deepest **[fact]**. |
 | **What is the worst endpoint?** | A **register-file SECDED check bit**, at −7.5758 ns — the hardening's own write path, not the fabric's read path **[fact]**. |
 | **Where did the one-cycle bus read go?** | It is still there and it is a minority: `u_clint` captures **138** of 3,529 violating endpoints and `u_bus` **54**, against 1,224 in the register file and 864 elsewhere in Ibex **[fact]**. |
-| **Was the bus-read framing ever right?** | **On `s71boot`, yes, for the worst path**: `docs/73` section 7.3 measured it as `raddr_b_i[0]` → `s_rdata_clint[27]` at −8.1852. On the eight-macro layout that structure is no longer the worst and nobody re-asked. Wire was 3.1 % of `s71boot`'s paths as well. |
+| **Was the bus-read framing ever right?** | **On `s71boot`, yes, for the worst path**: `docs/73` section 7.3 measured it as `raddr_b_i[0]` → `s_rdata_clint[27]` at −8.1852. On the eight-macro layout that structure is no longer the worst and nobody re-asked. Wire was 1.9 % of `s71boot`'s paths as well. |
 | **So what binds this design at 20 ns?** | Gate delay, spread across the core's datapath and its hardening. Section 5. |
 
 ---
@@ -102,23 +102,38 @@ delay after it is attributed to a **cell arc** (an output pin) or to a
 
 | | `s83romecc5`, 1,000 violating | `s71boot`, 985 violating |
 |---|---|---|
-| gate stages, median | **88** (66 to 107) | **85** |
-| net delay, median | **0.971 ns** | 0.910 ns |
-| cell delay, median | **26.785 ns** | 28.274 ns |
-| **wire share, median** | **3.6 %** | **3.1 %** |
-| **wire share, maximum over all violating paths** | **4.7 %** | **3.9 %** |
+| gate stages, median | **78** (57 to 91) | **76** (66 to 79) |
+| net delay, median | **0.493 ns** | 0.526 ns |
+| cell delay, median | **24.976 ns** | 26.869 ns |
+| **wire share, median** | **1.9 %** | **1.9 %** |
+| **wire share, maximum over all violating paths** | **3.0 %** | **2.8 %** |
+
+> **THE FIRST VERSION OF THESE NUMBERS WAS WRONG, AND THE CORRECTION
+> MAKES THE ARGUMENT STRONGER.** As published on 2026-09-16 this section
+> read 3.6 % at the median and 4.7 % at the most wire-bound path, over a
+> median of 88 stages, with 0.971 ns of net delay and 26.785 ns of cell
+> delay. `hw/soc/pnr/path_composition.py` was cutting each path at the
+> END of the report block instead of at `data arrival time`, so the
+> CAPTURE clock's tree --- the clock edge at the period and a dozen
+> buffers after it --- was being counted into the data path. The tool
+> was corrected the same day and every figure in this document is the
+> corrected one. The old numbers are recorded here rather than in the
+> tables, because they are an instrument defect and not a superseded
+> measurement: nothing about the design changed between them.
+
+
 
 **[fact, arithmetic on each report's own incremental-delay column.]**
 
-The worst path alone, in full: 86 gate stages after the launch flop,
-**28.0309 ns of cell delay and 1.3414 ns of net delay**, 29.3723 ns of
+The worst path alone, in full: 77 gate stages after the launch flop,
+**26.2904 ns of cell delay and 0.7827 ns of net delay**, 27.0731 ns of
 data path, slack −7.5758 **[fact]**.
 
 **Read the third row again.** If every wire on the worst path were
 made ideal — zero resistance, zero capacitance, the cells placed on top
-of one another — the path would still take 28.03 ns against a 20 ns
+of one another — the path would still take 26.29 ns against a 20 ns
 constraint. Perfect placement does not close this design; it closes
-4.7 % of the gap at the most wire-bound path in the report and 3.6 % at
+3.0 % of the gap at the most wire-bound path in the report and 1.9 % at
 the median.
 
 That is the whole of the answer to "solve the floorplan problem", and
@@ -215,8 +230,8 @@ None of the three is a floorplan.
 - **It does not measure a floorplan that does not exist.** The claim is
   about the delay composition of the two layouts on disk, not a proof
   that no floorplan helps. What it establishes is the size of the prize:
-  at most the net delay, which is 0.971 ns at the median violating path
-  and 1.3414 ns on the worst, against deficits of 7.5758 ns.
+  at most the net delay, which is 0.493 ns at the median violating path
+  and 0.7827 ns on the worst, against deficits of 7.5758 ns.
 - **It does not price any of section 5's three structural changes.**
   Two of them are core changes and the third is `docs/72`'s, still
   unpriced there.
@@ -251,12 +266,12 @@ python3 hw/soc/pnr/clint_region.py census $P/final/def/soc_top.def \
 # the percentage comparable between layouts with different clock trees.
 python3 hw/soc/pnr/path_composition.py \
   $P/49-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt --top 100
-#   1,000 violating: stages med 88 (66..107), net med 0.971,
-#   cell med 26.785, WIRE SHARE med 3.6 % max 4.7 %
-#   worst path: slack -7.5758, 86 stages, net 1.3414, cell 28.0309
+#   1,000 violating: stages med 78 (57..91), net med 0.493,
+#   cell med 24.976, WIRE SHARE med 1.9 % max 3.0 %
+#   worst path: slack -7.5758, 77 stages, net 0.7827, cell 26.2904
 python3 hw/soc/pnr/path_composition.py \
   hw/soc/pnr/runs/s71boot/49-openroad-stapostpnr/nom_slow_1p08V_125C/max.rpt
-#   985 violating: stages med 85 (73..92), WIRE SHARE med 3.1 % max 3.9 %
+#   985 violating: stages med 76 (66..79), WIRE SHARE med 1.9 % max 2.8 %
 
 # section 4: where the endpoints are
 python3 hw/soc/pnr/violator_census.py $P --corner nom_slow_1p08V_125C

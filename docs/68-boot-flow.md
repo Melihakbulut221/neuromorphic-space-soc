@@ -1397,6 +1397,8 @@ sentences stand.
   never caught anything is a liability" — the rule stands, and section
   4.5 records the cost it has on a memory nothing has initialised yet.
 - **`docs/60`**: a v0.2 of the datasheet is now owed by three documents.
+
+*Issued 2026-09-14: `docs/60` revision 0.2. The debt this item records is paid; what it asked for that revision 0.2 does NOT carry is named where it is still owed.*
 - **`README.md`** and **`docs/00-index.md`**: the boot flow.
 
 ---

@@ -52,7 +52,19 @@ RTL they were mapped from is commit `5384ee5`'s.
 
 ---
 
-%%VERDICT%%
+## 1. Verdict first
+
+| Question | Answer |
+|---|---|
+| **Does stopping a block's clock cost a detection?** | **No, and the one arm that behaves differently is the one without a gate.** Of the 23 injections that run on all three arms, the classification differs on exactly one: a fabric ownership bit that the two GATED arms mask and the UNGATED one hangs on. Section 7. |
+| **Does T2 hold on a placed netlist?** | **Yes, exactly, with no variance.** A fault line forced true while the block is asleep has its own clock back after **2 edges on all 75 injections** of the registered-wake arm, and 1 on both controls. Section 6. |
+| **Is the upset recorded?** | **Every time.** All 75 injections changed the sticky word, and all 25 of each control. A stopped clock delays the recording by one edge; it does not lose it. |
+| **What is the 2 made of?** | The price of taking the fault line OUT of the gate's enable and putting it behind a flip-flop --- exactly the trade `docs/77` made and priced, now measured on a placed netlist rather than argued from an abstraction. The combinational arm's 1 is the other side of the same trade. |
+| **What do the two gated arms say about each other?** | **Nothing, and that is a result.** They are identical in all 23 campaign records but one latency value. The difference between the registered wake and the combinational enable lives entirely on the fault lines and does not reach the ordinary state of the blocks they gate. |
+| **How big is the sample?** | **Small, and stated as small**: 23 injections per arm at 23 sites and one cycle each, on one workload, plus 75 direct-test injections on the gated arm. No rate is computed from it. Section 7.3. |
+| **What did nine of the 32 planned sites do?** | **Held an unknown value at their injection cycle, on every arm identically, and were skipped.** They are reset-less registers in a domain whose clock is stopped, in a workload that never writes them: there is no state there to upset. Counting them is the measurement. |
+
+---
 
 ---
 
@@ -208,7 +220,19 @@ clock gate (`provenance.txt` in each).
 `docs/42` section 5.1's discipline, `docs/74` section 7's list, run
 by `gl_gated.py golden` on every arm before anything was injected:
 
-%%CONTROLS%%
+| control | `s77gate` | `s77base` | `s76base` (ungated) |
+|---|---|---|---|
+| **1.** the bench elaborated as many flip-flops as the netlist parse lists | 5,872 = 5,872 | 5,871 = 5,871 | 5,874 = 5,874 |
+| **2.** the clean run's length, against the RTL bench's | 18,681 (RTL 18,682) | 18,681 (RTL 18,682) | 18,682 (RTL 18,682) |
+| **2.** its signature, console characters and hash | `9c07ef12`, 19, `6d6942c8` | the same three | the same three |
+| **2.** the idle window it opens and closes on | 206..16,910 | 206..16,910 | 208..16,910 |
+| **3.** the clean run reproduces, and is identical with the watchdog held off | yes, 18,681 | yes, 18,681 | yes, 18,682 |
+
+**[fact, `gl_gated_controls.log` in each build directory.]** The three
+arms agree on the workload to the character. Where they differ is the
+gate and only the gate: the ungated arm's window opens two cycles later
+and its clean run is one cycle longer, and its `npu_first_low` is -1
+because a clock that never stops has no first low edge to report.
 
 ---
 
@@ -289,13 +313,6 @@ not modified. The three arms' clean runs publish the RTL clean run's
 answer (section 4.2), which is the same check `docs/74` section 5.1
 made.
 
----
-
-%%DIRECT%%
-
----
-
-%%CAMPAIGN%%
 
 ---
 
@@ -567,7 +584,14 @@ read and not written; the run directories that appeared there during
 this work (`s84rdreg`, `s84clint4`) are the owner's and were not
 touched.
 
-%%SUITES%%
+**The execution suites were not run for this document and did not need
+to be.** Nothing under `hw/soc/rtl/` changed, so `scripts/run_cocotb.sh`
+and `pytest sw/tests` would be measuring the same tree they measured for
+`docs/77`; the artefacts this document produces are campaign records
+under `hw/soc/out/gl77*`, which are gitignored build products by
+`docs/38` section 11's rule. What was run, and is reported in sections 6
+and 7, is the bench itself: three elaborations, nine control runs and
+144 injections.
 
 ---
 

@@ -45,7 +45,8 @@ Worst hold slack, \code{nom\_typ\_1p20V\_25C} & $+0.1769$\,ns & \code{metrics.js
 Worst hold slack, \code{nom\_slow\_1p08V\_125C} & $+0.4261$\,ns & \code{metrics.json} \\
 Worst setup slack, slow corner & $-7.5758$\,ns & \code{metrics.json} \\
 Setup TNS, slow corner & $-14{,}735.65$\,ns over 3{,}529 endpoints & \code{violator\_census.py} \\
-Dominant violating launch group & the register-file read into the fabric & \code{docs/72}, \code{docs/73} \\
+Dominant violating launch point & the register file's read address & \code{docs/83} \\
+Dominant violating capture class & the register file and the rest of Ibex, 2{,}088 of 3{,}529 endpoints & \code{docs/83} \\
 \midrule
 \multicolumn{3}{@{}l}{\textit{Geometric sign-off}}\\
 Route DRC errors & 0 & \code{metrics.json} \\
@@ -195,8 +196,10 @@ sixteen of them end in the scrub engine's counter.
 
 And it does not make the part. The worst path is unchanged in kind and
 0.16\,ns worse in value, because it was never behind a macro: it is the
-register-file read into the fabric, whose structural answer --- a
-registered request phase --- remains unpriced. Worse, the 61 new
+register file's read address into the register file's own error-correcting
+encoder, whose structural answer is not the fabric's at all. The fabric
+captures 54 of the 3{,}529 violating endpoints and the time base 138,
+against 1{,}224 in the register file (\code{docs/83} section 4). Worse, the 61 new
 flip-flops and 683 new instances cost 325.7\,ps of hold margin at the
 fast corner, and the design has 29.6\,ps. The register therefore stays
 at its default of disabled, and what the experiment establishes is its

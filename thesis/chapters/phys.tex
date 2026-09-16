@@ -628,7 +628,7 @@ largest single-change improvement any layout here has produced.
 
 \textbf{And it does not make the part.} The worst path is unchanged in
 kind and \qty{0.1636}{\nano\second} worse in value --- still the
-register-file read into the fabric, which the read register was never
+register file's read address into its own encoder, which the read register was never
 going to touch, lying between the register file and the peripherals
 rather than behind a macro. And \emph{hold at the fast corner goes
 negative}: \qty{+0.0296}{\nano\second} becomes
@@ -812,7 +812,7 @@ and the flow does not notice for thirty-five steps
 
 \textbf{Setup does not close} (\cref{sec:phys-timing}):
 \qty{-7.5758}{\nano\second} on 3,529
-endpoints at the slow corner, on the register-file read into the fabric
+endpoints at the slow corner, launched by the register file's read address
 that \dcite{50}{section 16} finds unchanged in kind by the one change
 that most improves the total. Four leads have been worked through and
 none recovers it --- the hierarchy mode and both post-global-route
