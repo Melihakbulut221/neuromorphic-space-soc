@@ -54,9 +54,9 @@ REPO := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))../../..)
 # tools.mk carries its own first target: a bare `make` here would
 # otherwise run the repository tool check and report success without
 # having run a single proof.
-.PHONY: all bus apb apbwb clint wdog wdogtmr wdog_tmr_params regfile regfilescrub busstat npuser npu gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
+.PHONY: all bus apb apbwb clint clkwakegnt wdog wdogtmr wdog_tmr_params regfile regfilescrub busstat npuser npu gpio qspi scrub boot boot_tmr_params bytesecded memecc clkwake clean
 .DEFAULT_GOAL := all
-all: bus apb apbwb clint wdog wdogtmr regfile regfilescrub busstat npuser npu gpio qspi scrub boot bytesecded memecc clkwake
+all: bus apb apbwb clint wdog wdogtmr regfile regfilescrub busstat npuser npu gpio qspi scrub boot bytesecded memecc clkwake clkwakegnt
 
 include $(REPO)/tools.mk
 
@@ -295,6 +295,16 @@ clkwake:
 	@for t in $(CLKWAKE_TASKS); do \
 	  echo "== clkgate_wake $$t"; \
 	  $(SBY) -f clkgate_wake.sby $$t || exit 1; \
+	done
+
+# docs/77 section 18's wakefulness-qualified grant, added 2026-09-16.
+# Its own job rather than a task of clkgate_wake.sby, because it binds a
+# different top: clkgate_wake_gnt.v is the abstraction WITH the grant
+# qualified, and the two must be able to fail independently.
+clkwakegnt:
+	@for t in $(TASKS); do \
+	  echo "== clkgate_wake_gnt $$t"; \
+	  $(SBY) -f clkgate_wake_gnt.sby $$t || exit 1; \
 	done
 
 clean:

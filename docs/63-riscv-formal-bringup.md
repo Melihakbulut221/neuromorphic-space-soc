@@ -1939,7 +1939,17 @@ correction. Under it, `abc pdr` proves R1–R4 for every reachable state
 in 44 s **[fact, `regfile_scrub_abs_prove_pdr/logfile.txt`]**, and
 cover reaches all 31 visits in 88 s; the k-induction and bmc tasks
 at depth 40 were still crawling (step 18 after ten hours) when this
-was written and are not needed for the result. The composition is the
+was written and are not needed for the result.
+
+*Closed 2026-09-16.* Those two were left running and reached **step 23
+after 43 hours 30 minutes**, then were **stopped by hand** [fact, the
+`Checking assertions in step 23` line of each job's log and the process
+elapsed time at the moment of the signal]. KILLED, in this document's
+vocabulary, and recorded as such: they are not a TIMEOUT, because no
+bound was set on them, and they are not a result. The unbounded proof
+above is the result, and it closed in 44 seconds; what these two
+measure is the cost of asking the same question the bounded way, which
+is 43 hours of two cores for an answer that was already in hand. The composition is the
 usual one: a property of the wrapper that holds for every codec
 satisfying `dec(enc(x)) == x` holds for the real one, whose
 `dec(enc(x)) == x` is `regfile_secded.sby`'s separate theorem. What the
