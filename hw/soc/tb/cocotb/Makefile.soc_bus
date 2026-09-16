@@ -48,12 +48,22 @@ MODULE = test_soc_bus
 
 # Per-block build and results paths so this suite can run alongside the
 # others without clobbering their artifacts.
+# docs/84's registered request phase, the way Makefile.soc_npu takes
+# WAKE_GNT. 0 is the design and is what this suite's expectations are
+# written for; REQ_REG=1 builds the fabric that captures the
+# arbitration result into a register, and test_soc_bus.py reads the
+# value back out of the environment because the parameter moves the
+# CYCLE in which a slave sees the payload.
+REQ_REG ?= 0
+export SOC_BUS_REQ_REG = $(REQ_REG)
+
 SIM_BUILD ?= sim_build_soc_bus
 COCOTB_RESULTS_FILE ?= results_soc_bus.xml
 export COCOTB_RESULTS_FILE
 
 # soc_bus.v includes soc_memmap.vh, which is generated next to it.
 COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += -Psoc_bus.REQ_REG=$(REQ_REG)
 COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
 
 include $(shell cocotb-config --makefiles)/Makefile.sim

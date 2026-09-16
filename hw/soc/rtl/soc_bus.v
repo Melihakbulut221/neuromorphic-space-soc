@@ -107,14 +107,22 @@
 //   G1. `issue_en` moves only while it is 0.
 //   G2. `last_was_d` moves only on `accepted`, and `accepted` implies
 //       `any_win`, which implies one of the two masters is requesting.
-//   G3. `err_rvalid` is set only by `accepted` and is cleared only when
-//       it is already 1.
+//   G3. `err_rvalid` is set only by `xfer` and is cleared only when it
+//       is already 1.
 //   G4. `q_owner` and `q_fill` move only on a push or a pop. A push
-//       implies `accepted`; a pop is `slv_rvalid`, which is
+//       implies `xfer`; a pop is `slv_rvalid`, which is
 //       `{err_rvalid, s_rvalid_i}`.
 //   G5. `cnt_i`, `cnt_d`, `lock_i` and `lock_d` move only on a grant or
 //       an rvalid. A grant implies a request; an rvalid to a master
 //       implies a `slv_rvalid`.
+//   G6. AT REQ_REG = 1 ONLY: the request register moves only on
+//       `accepted`, which implies a request, or on its own drain, which
+//       implies `req_busy`. At REQ_REG = 0 there is no such register and
+//       `req_busy` is the constant 0.
+//
+// G3 and G4 read `xfer` rather than `accepted`, which are the same
+// signal at REQ_REG = 0 and one cycle apart at REQ_REG = 1. `xfer`
+// implies `req_busy` there, so it is covered by G6 and not by G2.
 //
 // THE GATE ITSELF IS IN soc_top.v, not here, and that placement is the
 // whole reason the fabric's proofs did not have to be re-argued. Every
@@ -134,7 +142,9 @@
 // AND NOTHING ABOUT THIS ENABLE IS VISIBLE TO A SLAVE. `s_req_o`,
 // `s_addr_o` and the grant outputs are combinational, so the fabric
 // answers a master in the cycle it asks whether or not the previous
-// cycle was clocked.
+// cycle was clocked. (At `REQ_REG = 1` the first two are registered and
+// the grant outputs are still combinational; the section below says
+// what that changes and what it does not.)
 //
 // THE ONE OBLIGATION THIS CREATES IS A STATIC-TIMING ONE, AND IT IS A
 // FULL CYCLE AND NOT A HALF ONE. `sg13g2_lgcp_1` is
@@ -149,10 +159,163 @@
 // the slow corner before detailed routing and misses by -0.7495 ns
 // after it, on a design that fails setup at that corner on 3,055
 // endpoints without it.
+//
+// =====================================================================
+// REQ_REG -- THE REGISTERED REQUEST PHASE, AND WHAT IT MOVES
+// =====================================================================
+//
+// THE MEASUREMENT THIS PARAMETER EXISTS FOR. docs/83 decomposed every
+// violating path in the sign-off report and found that wire is 3.6 per
+// cent of one at the median, and that the median violating path is 88
+// gate stages deep. hw/soc/pnr/logic_depth.py then asked whether that
+// depth is a synthesis choice by remapping the whole design with abc's
+// delay target expressed in picoseconds rather than nanoseconds -- a
+// thousandfold tightening -- and got an IDENTICAL depth profile back.
+// The depth is neither placement nor synthesis effort. It is this
+// file's own sentence, four paragraphs up: `s_req_o`, `s_addr_o` and
+// the grant outputs are combinational. One clock period therefore
+// carries the register-file read, the SECDED correction, the ALU, this
+// fabric's decode and arbitration, the slave's own address decode and
+// read multiplexer, and the slave's response register. The deepest
+// endpoints in the whole netlist are the CLINT's `s_rdata_clint[*]`,
+// and every block's endpoints cluster behind them because they are all
+// at the end of the same chain.
+//
+// docs/72 section 15 item 5 names the answer and did not price it.
+// REQ_REG is that answer built behind a parameter, and docs/84 is the
+// price. THE DESIGN SHIPS REQ_REG = 0 and at 0 this module is the
+// module it was before the parameter existed -- proved, not inspected,
+// by the miter in docs/84 section 3.
+//
+// WHAT THE MASTER SEES AT REQ_REG = 1.
+//
+// One more cycle of latency, and NOT one less request per cycle. The
+// arbitration is unchanged and still combinational from the two
+// masters' `req` and address; what changes is that its result is
+// CAPTURED into a register instead of being driven straight at the
+// slaves, and the grant is given in the cycle of the capture. So a
+// master can still be granted in the cycle it asks and can still be
+// granted on every consecutive cycle: the register is a one-deep skid
+// buffer, not a pipeline stall. The request reaches the slave one cycle
+// after the grant, so every response arrives one cycle later than it
+// would have. That is the cost docs/72 section 15 item 5 named -- a
+// cycle on every load -- and hw/soc/flow/sim_soc.sh's SOC_REQ_REG is
+// what measures it.
+//
+// The grant stops depending on the slave's `gnt`, which is the point:
+// `mi_gnt_o` and `md_gnt_o` at REQ_REG = 1 are functions of the two
+// masters' requests, the outstanding counters and ONE register bit, and
+// of nothing downstream of the decode.
+//
+// WHERE OWNERSHIP IS PUSHED, WHICH IS THE ONE WAY TO GET THIS WRONG.
+//
+// `q_owner` exists to match a response to the master that asked for it,
+// and a slave's response is matched to the head of THAT SLAVE'S queue.
+// If the request reaches the slave a cycle later than the grant and the
+// push does not move with it, a response that arrives in the gap pops an
+// entry that belongs to a different request and every later response at
+// that slave is attributed to the wrong master. So the push is tied to
+// the TRANSFER and not to the grant: `xfer`, `xfer_tgt` and `xfer_own`
+// below name the cycle in which a request is handed to its target, and
+// the queue, the error slave's response strobe and nothing else are
+// driven from them. At REQ_REG = 0 the transfer IS the grant and the
+// three are the arbitration's own signals, which is why the parameter
+// costs the default nothing.
+//
+// The per-master outstanding counters `cnt_i`, `cnt_d` and the locks
+// `lock_i`, `lock_d` stay on the GRANT, deliberately and not by
+// oversight. They exist to enforce MAX_OUT and the same-slave
+// restriction on the master, and a master owns a request from the
+// moment it is granted one. Counting them at the transfer instead would
+// let a master be granted a third request while its second was still in
+// the register. The consequence is that a slave's queue occupancy lags
+// its masters' counts by at most one entry, which is where it belongs:
+// the queue is sized QD = 2 * MAX_OUT and the register holds one of the
+// at most four granted requests, so the queue still cannot overflow.
+// hw/soc/formal/soc_bus_props.v F6 and F8 are what say so rather than
+// this paragraph.
+//
+// THE ERROR SLAVE AND A REQUEST THAT IS NOT GRANTED.
+//
+// The error slave moves behind the register with everything else. It is
+// always ready, so a captured request addressed to it transfers on the
+// cycle after the capture and `err_rvalid` follows one cycle after that
+// -- the same one-cycle error-slave latency the header describes,
+// displaced by the register like every other response. An unmapped
+// access still reaches the core as `data_err_i` and still costs exactly
+// one `rvalid`.
+//
+// A request that is not granted is not captured, and a captured request
+// that the slave does not grant is HELD: `s_req_o`, `s_addr_o`,
+// `s_we_o`, `s_be_o` and `s_wdata_o` do not change until the slave
+// answers with `gnt`. That is Ibex protocol rule 1 obeyed by this
+// fabric toward its slaves, which the combinational form does NOT obey
+// -- at REQ_REG = 0 the arbitration winner can change while a slave is
+// still refusing, because `can_issue_i` and `can_issue_d` turn on as
+// responses return, and the refused slave then sees its request vanish.
+// soc_bus_props.v F3e asserts it at REQ_REG = 1; F3e with its
+// `REQ_REG != 0` guard removed is falsified at REQ_REG = 0 in four
+// steps of bmc, which is what says the combinational form does not
+// obey it rather than this sentence. docs/84 section 2.4.
+//
+// AND IT DOES NOT COST HEAD OF LINE BLOCKING. An earlier draft of this
+// paragraph said it did. The measurement says otherwise, and the reason
+// is that the combinational fabric blocks too: `target_ready` is
+// computed from the WINNER's target, `i_wins` is `can_issue_i &&
+// !d_wins`, and `last_was_d` advances only on `accepted`, so when the
+// winner's slave refuses, the loser is refused with it and the
+// round-robin bit does not move, so it goes on being refused. Both
+// masters requesting continuously for 201 cycles -- the instruction
+// port at the always-ready RAM, the data port at a slave that refuses
+// for N cycles -- the instruction port's grant count is the SAME at
+// both settings: 100/100 with a ready slave, 50/50 at N = 3, 19/19 at
+// N = 10, 4/4 at N = 50, 0/0 at a slave that never grants. Its FIRST
+// grant comes one cycle EARLIER at REQ_REG = 1, because the grant no
+// longer waits for the other master's slave. docs/84 section 2.4a has
+// the table and hw/soc/tb/tb_soc_bus_hol.v is the bench it came from.
+// The one case in which this register holds longer than the
+// combinational fabric would is a master that withdraws a request it
+// was never granted, which protocol rule 1 above forbids.
+//
+// TWO SLAVES HERE DO WITHHOLD `gnt`, so that case is reachable on this
+// tree and is not hypothetical: soc_apb_bridge.v's
+// `gnt_o = req_i && (state == ST_IDLE)` and soc_npu.v's
+// `gnt_o = req_i && may_accept && (win_state == W_IDLE) && ...`. Every
+// console character in hw/soc/flow/sim_soc.sh's run passes through the
+// first and the NPU self-test through the second.
+//
+// ACROSS RESET AND WHEN A SLAVE IS LOCKED.
+//
+// The register is cleared asynchronously by `rst_ni` exactly as every
+// other register in this file is, so the fabric presents no request to
+// any slave while reset is asserted and `issue_en` keeps it shut for
+// one further cycle after release. Nothing is in flight across a reset
+// and nothing has to be flushed.
+//
+// The same-slave lock is untouched. It is enforced on the grant, from
+// `lock_i` and `lock_d`, which the register does not sit in front of;
+// the register carries the one request the lock has already approved.
+// A master switching target still waits for its outstanding count to
+// reach zero, and that count now includes a request sitting in the
+// register, so the dead cycle the header prices at "one" becomes two.
+//
+// AND THE CLOCK-GATE ENABLE GAINS ONE TERM, `req_busy`, which is the
+// register's own valid bit. G1 to G5 above enumerate the reasons this
+// module can have work to do at the end of a cycle, and at REQ_REG = 1
+// there is a sixth: a captured request can be handed to its slave in a
+// cycle when neither master is asking for anything and no response is
+// coming back. F10 is what would have caught its omission, and it is
+// the reason the term is there rather than an argument that it is.
 
 `timescale 1ns / 1ps
 
-module soc_bus (
+module soc_bus #(
+    // docs/72 section 15 item 5, built and priced by docs/84. 0 is the
+    // design: the request phase is combinational and this module is
+    // bit-for-bit the module that was here before the parameter. 1
+    // registers the request phase. See the header section above.
+    parameter integer REQ_REG = 0
+) (
     input  wire        clk_i,
     input  wire        rst_ni,
 
@@ -312,26 +475,141 @@ module soc_bus (
   wire [2:0]  tgt      = d_wins ? tgt_d : tgt_i;
   wire        any_win  = d_wins || i_wins;
 
-  // The error slave is inside this module and is always ready. A real
-  // slave port answers with its own gnt.
-  wire target_ready = (tgt == ERRSLV[2:0]) ? 1'b1 : s_gnt_i[tgt];
-  wire accepted     = any_win && target_ready;
+  // The winning master's request payload (S2). Named rather than
+  // written into the four broadcast assignments, because at REQ_REG = 1
+  // it is what the request register captures and at REQ_REG = 0 it is
+  // what the broadcast is.
+  wire [31:0] win_addr  = d_wins ? md_addr_i  : mi_addr_i;
+  wire        win_we    = d_wins ? md_we_i    : 1'b0;
+  wire [3:0]  win_be    = d_wins ? md_be_i    : 4'hF;
+  wire [31:0] win_wdata = d_wins ? md_wdata_i : 32'h0;
 
-  assign mi_gnt_o = i_wins && target_ready;
-  assign md_gnt_o = d_wins && target_ready;
+  // -------------------------------------------------------------------
+  // The request phase, in one of two shapes. See the header's REQ_REG
+  // section for what each one means to a master and to a slave.
+  //
+  // FIVE NAMES CROSS THE BOUNDARY, and everything downstream reads them
+  // rather than reading the arbitration:
+  //
+  //   accepted   a master is granted this cycle. The round-robin flop
+  //              and the outstanding counters turn on it, at both
+  //              settings, because it is the master's event.
+  //   xfer       a request is handed to its target this cycle, with
+  //   xfer_tgt   the target it goes to and the master it belongs to.
+  //   xfer_own   The ownership queue and the error slave's response
+  //              strobe turn on these, at both settings, because they
+  //              are the SLAVE's event. At REQ_REG = 0 the two events
+  //              are the same cycle and these three are the
+  //              arbitration's own signals.
+  //   req_busy   the request register is holding something. Constant 0
+  //              at REQ_REG = 0, and a term of clk_en_o at 1.
+  // -------------------------------------------------------------------
+  wire accepted;
+  wire xfer;
+  wire [2:0] xfer_tgt;
+  wire xfer_own;
+  wire req_busy;
 
-  // Broadcast request payload (S2).
-  assign s_addr_o  = d_wins ? md_addr_i  : mi_addr_i;
-  assign s_we_o    = d_wins ? md_we_i    : 1'b0;
-  assign s_be_o    = d_wins ? md_be_i    : 4'hF;
-  assign s_wdata_o = d_wins ? md_wdata_i : 32'h0;
+  generate
+  if (REQ_REG == 0) begin : g_req_comb
+    // THE DESIGN. The error slave is inside this module and is always
+    // ready. A real slave port answers with its own gnt.
+    wire target_ready = (tgt == ERRSLV[2:0]) ? 1'b1 : s_gnt_i[tgt];
+    assign accepted   = any_win && target_ready;
 
-  assign s_req_o[0] = any_win && (tgt == 3'd0);
-  assign s_req_o[1] = any_win && (tgt == 3'd1);
-  assign s_req_o[2] = any_win && (tgt == 3'd2);
-  assign s_req_o[3] = any_win && (tgt == 3'd3);
-  assign s_req_o[4] = any_win && (tgt == 3'd4);
-  assign s_req_o[5] = any_win && (tgt == 3'd5);
+    assign mi_gnt_o = i_wins && target_ready;
+    assign md_gnt_o = d_wins && target_ready;
+
+    // Broadcast request payload (S2).
+    assign s_addr_o  = win_addr;
+    assign s_we_o    = win_we;
+    assign s_be_o    = win_be;
+    assign s_wdata_o = win_wdata;
+
+    assign s_req_o[0] = any_win && (tgt == 3'd0);
+    assign s_req_o[1] = any_win && (tgt == 3'd1);
+    assign s_req_o[2] = any_win && (tgt == 3'd2);
+    assign s_req_o[3] = any_win && (tgt == 3'd3);
+    assign s_req_o[4] = any_win && (tgt == 3'd4);
+    assign s_req_o[5] = any_win && (tgt == 3'd5);
+
+    // The grant IS the transfer here, and nothing is ever held.
+    assign xfer     = accepted;
+    assign xfer_tgt = tgt;
+    assign xfer_own = d_wins;
+    assign req_busy = 1'b0;
+  end else begin : g_req_reg
+    // docs/72 section 15 item 5. One request, held until its slave
+    // takes it.
+    reg        r_val;
+    reg  [2:0] r_tgt;
+    reg        r_own;
+    reg [31:0] r_addr;
+    reg        r_we;
+    reg  [3:0] r_be;
+    reg [31:0] r_wdata;
+
+    // The slave handshake, entirely behind the register. The error
+    // slave is still always ready, so a request addressed to it is
+    // held for exactly one cycle.
+    wire r_ready = (r_tgt == ERRSLV[2:0]) ? 1'b1 : s_gnt_i[r_tgt];
+    wire r_xfer  = r_val && r_ready;
+
+    // THE THROUGHPUT STATEMENT, and it is one line. The register can
+    // take a request whenever it is empty OR is being emptied in this
+    // same cycle, so a request is accepted every cycle in the case
+    // that matters and the grant does not wait for the slave.
+    wire cap_ok = !r_val || r_xfer;
+
+    assign accepted = any_win && cap_ok;
+    assign mi_gnt_o = i_wins && cap_ok;
+    assign md_gnt_o = d_wins && cap_ok;
+
+    // Capture beats clear: a grant in the cycle the register drains
+    // leaves it full, which is what makes back-to-back grants work.
+    always @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        r_val   <= 1'b0;
+        r_tgt   <= 3'd0;
+        r_own   <= 1'b0;
+        r_addr  <= 32'h0;
+        r_we    <= 1'b0;
+        r_be    <= 4'h0;
+        r_wdata <= 32'h0;
+      end else if (accepted) begin
+        r_val   <= 1'b1;
+        r_tgt   <= tgt;
+        r_own   <= d_wins;
+        r_addr  <= win_addr;
+        r_we    <= win_we;
+        r_be    <= win_be;
+        r_wdata <= win_wdata;
+      end else if (r_xfer) begin
+        r_val   <= 1'b0;
+      end
+    end
+
+    // Broadcast request payload (S2), from the register. S2 says a
+    // slave may only believe these in the cycle its own req and gnt are
+    // both high, which is exactly the cycle r_val names it.
+    assign s_addr_o  = r_addr;
+    assign s_we_o    = r_we;
+    assign s_be_o    = r_be;
+    assign s_wdata_o = r_wdata;
+
+    assign s_req_o[0] = r_val && (r_tgt == 3'd0);
+    assign s_req_o[1] = r_val && (r_tgt == 3'd1);
+    assign s_req_o[2] = r_val && (r_tgt == 3'd2);
+    assign s_req_o[3] = r_val && (r_tgt == 3'd3);
+    assign s_req_o[4] = r_val && (r_tgt == 3'd4);
+    assign s_req_o[5] = r_val && (r_tgt == 3'd5);
+
+    assign xfer     = r_xfer;
+    assign xfer_tgt = r_tgt;
+    assign xfer_own = r_own;
+    assign req_busy = r_val;
+  end
+  endgenerate
 
   always @(posedge clk_i or negedge rst_ni)
     if (!rst_ni)      last_was_d <= 1'b0;
@@ -345,10 +623,14 @@ module soc_bus (
   // therefore reaches the core as data_err_i, which Ibex turns into a
   // load or store access fault rather than a silent read of zero.
   // -------------------------------------------------------------------
+  // It answers the TRANSFER and not the grant, so that at REQ_REG = 1
+  // it is displaced by the register exactly as a real slave's response
+  // is, and its entry in the ownership queue is pushed in the same
+  // cycle as every other slave's.
   reg err_rvalid;
   always @(posedge clk_i or negedge rst_ni)
     if (!rst_ni) err_rvalid <= 1'b0;
-    else         err_rvalid <= accepted && (tgt == ERRSLV[2:0]);
+    else         err_rvalid <= xfer && (xfer_tgt == ERRSLV[2:0]);
 
   wire [NS-1:0] slv_rvalid = {err_rvalid, s_rvalid_i};
   wire [NS-1:0] slv_err    = {1'b1,       s_err_i};
@@ -388,14 +670,19 @@ module soc_bus (
   reg  [QD-1:0] q_owner [0:NS-1];   // 1 = data port, 0 = instruction port
   reg  [1:0]    q_fill  [0:NS-1];   // write index, modulo QD
 
+  // THE PUSH IS ON THE TRANSFER AND NOT ON THE GRANT. The header's
+  // REQ_REG section says why in full: the queue matches a response to
+  // the request that produced it, the response comes from the slave,
+  // and at REQ_REG = 1 the slave sees the request a cycle after the
+  // master is told it may send one.
   wire [NS-1:0] push;
-  assign push[0] = accepted && (tgt == 3'd0);
-  assign push[1] = accepted && (tgt == 3'd1);
-  assign push[2] = accepted && (tgt == 3'd2);
-  assign push[3] = accepted && (tgt == 3'd3);
-  assign push[4] = accepted && (tgt == 3'd4);
-  assign push[5] = accepted && (tgt == 3'd5);
-  assign push[6] = accepted && (tgt == ERRSLV[2:0]);
+  assign push[0] = xfer && (xfer_tgt == 3'd0);
+  assign push[1] = xfer && (xfer_tgt == 3'd1);
+  assign push[2] = xfer && (xfer_tgt == 3'd2);
+  assign push[3] = xfer && (xfer_tgt == 3'd3);
+  assign push[4] = xfer && (xfer_tgt == 3'd4);
+  assign push[5] = xfer && (xfer_tgt == 3'd5);
+  assign push[6] = xfer && (xfer_tgt == ERRSLV[2:0]);
 
   integer s;
   always @(posedge clk_i or negedge rst_ni) begin
@@ -408,7 +695,7 @@ module soc_bus (
       for (s = 0; s < NS; s = s + 1) begin
         case ({push[s], slv_rvalid[s]})
           2'b10: begin   // push only
-            q_owner[s][q_fill[s]] <= d_wins;
+            q_owner[s][q_fill[s]] <= xfer_own;
             q_fill[s] <= q_fill[s] + 2'd1;
           end
           2'b01: begin   // pop only
@@ -421,7 +708,7 @@ module soc_bus (
             // it covers, so the queue shifts and the new entry lands at
             // the index the shift vacated, in one statement pair.
             q_owner[s] <= {1'b0, q_owner[s][QD-1:1]};
-            q_owner[s][q_fill[s] - 2'd1] <= d_wins;
+            q_owner[s][q_fill[s] - 2'd1] <= xfer_own;
           end
           default: ;
         endcase
@@ -512,9 +799,18 @@ module soc_bus (
   //   !issue_en          G1: the boot cycle, once, ever.
   //   mi_req_i           G2, and the grant half of G5: a request is the
   //   md_req_i           precondition of every grant, and a grant is the
-  //                      precondition of `accepted` and of every push.
+  //                      precondition of `accepted` and of every
+  //                      capture.
   //   |s_rvalid_i        G4 and the response half of G5: a pop.
   //   err_rvalid         G3, and the error slave's own pop.
+  //   req_busy           G6, and at REQ_REG = 1 the precondition of
+  //                      every push: a captured request can reach its
+  //                      slave in a cycle in which no master is asking
+  //                      for anything and no response is arriving, and
+  //                      that is a cycle this module needs a clock in.
+  //                      THE CONSTANT 0 AT REQ_REG = 0, where the term
+  //                      folds away and the enable is the enable docs/76
+  //                      measured.
   //
   // `err_rvalid` is this module's own register and `issue_en` is too, so
   // the enable is a function of the ports plus two bits of state that
@@ -529,7 +825,7 @@ module soc_bus (
   // NPU register access and buy nothing -- F10 is what says so, because
   // the enable it proves complete does not contain one.
   assign clk_en_o = !issue_en || mi_req_i || md_req_i
-                 || (|s_rvalid_i) || err_rvalid;
+                 || (|s_rvalid_i) || err_rvalid || req_busy;
 
 `ifdef FORMAL
 `include "soc_bus_props.v"

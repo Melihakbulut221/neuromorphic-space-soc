@@ -945,5 +945,17 @@ grep SIZE $PDK_ROOT/ihp-sg13g2/libs.ref/sg13g2_sram/lef/RM_IHPSG13_1P_1024x32_c2
    and 864 elsewhere in Ibex. This change is a correction to 5.4 % of
    the violating endpoints, and it costs a cycle on every load. The
    trade can now be stated as a trade.
+   *Built and priced 2026-09-16,
+   `docs/84-the-registered-request-phase.md`.* It is
+   `soc_bus.v`'s `REQ_REG`, defaulted off, with the default proved
+   unchanged by a yosys miter and all six SymbiYosys tasks passing at
+   both settings. **The CLINT's response registers go from 81
+   combinational levels to 16**, the design's maximum from 81 to 69 and
+   its median from 39 to 20; the same workload goes from **416,673
+   cycles to 520,398, 24.89 % more**, `[TB] PASS` at both. The cost is
+   not "a cycle on every load" but a cycle on every bus transaction,
+   which is why it is a quarter and not a few per cent. The
+   recommendation there is to keep the default and run one layout, and
+   the layout is the evidence this item still owes.
 6. **The remaining items of `docs/68` section 16 and `docs/71` section
    15 are unchanged.**

@@ -216,6 +216,17 @@ if [ "$SOC_WAKE_GNT" != 0 ]; then
   DEFPARAMS="$DEFPARAMS
   defparam tb_soc.dut.WAKE_GNT = $SOC_WAKE_GNT;"
 fi
+# SOC_REQ_REG, docs/84: soc_top.v's REQ_REG, the fabric's registered
+# request phase. 1 is the build docs/84 section 6 measures the cycle
+# cost on; the design ships 0 and sw/tests enforces it, for the reason
+# it enforces WAKE_GNT's default and more strongly -- this one costs a
+# cycle on EVERY load rather than one per sleep interval, and the
+# whole-SoC cycle count is a corpus invariant.
+SOC_REQ_REG=${SOC_REQ_REG:-0}
+if [ "$SOC_REQ_REG" != 0 ]; then
+  DEFPARAMS="$DEFPARAMS
+  defparam tb_soc.dut.REQ_REG = $SOC_REQ_REG;"
+fi
 if [ -n "$DEFPARAMS" ]; then
   RF_ROOT=(-s soc_param_override)
   RF_SRC=("$OUT/soc_param_override.v")

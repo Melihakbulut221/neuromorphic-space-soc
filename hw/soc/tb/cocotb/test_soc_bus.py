@@ -74,6 +74,7 @@ WHAT THIS SUITE DOES NOT COVER
     that one of them can be run against a mutant in a minute.
 """
 
+import os
 import random
 import re
 import sys
@@ -141,6 +142,14 @@ ADDR_MAX = (1 << ADDR_BITS) - 1
 CLK_NS = 10
 T_DRIVE = 1   # every driver applies this cycle's stimulus here
 T_SAMPLE = 8  # every monitor samples the settled cycle here
+
+# docs/84's registered request phase, read out of the environment the way
+# test_soc_npu.py reads WAKE_GNT, and set by
+# `make -f Makefile.soc_bus REQ_REG=1`. The DESIGN IS 0 and this file's
+# expectations are written for 0; what the parameter moves is WHEN a
+# slave sees the payload, which is one statement in one monitor, and
+# BusMonitor below is where it is transported rather than relaxed.
+REQ_REG = int(os.environ.get("SOC_BUS_REQ_REG", "0"))
 T_CHECK = 9   # test-level polling, after all monitors have run
 
 # ---------------------------------------------------------------------------
@@ -490,12 +499,26 @@ class BusMonitor:
       payload, and the instruction port is read-only so its we must be 0.
     * allowed_req is an optional set of legal s_req_o values, used by the
       decode tests to demand one specific target and nothing else.
+
+    AT REQ_REG = 1 THE SECOND OF THOSE IS A CYCLE EARLY AND NOTHING ELSE
+    IS. The fabric captures the arbitration result and hands it to the
+    slave in a later cycle, so the payload a slave must believe is the
+    payload captured at the grant, presented in the cycles where that
+    slave's own req is high. That is the same S2 statement carried
+    across the register -- it is soc_bus_props.v F3d at that setting --
+    and it is checked here by remembering the granted master's payload
+    rather than by dropping the check. NOTHING IS WEAKENED: the
+    broadcast is checked in more cycles at REQ_REG = 1 than at 0,
+    because a held request is checked in every cycle it is held.
     """
 
     def __init__(self, dut):
         self.dut = dut
         self.allowed_req = None
         self.cycle = 0
+        # The payload captured at the last grant, for REQ_REG = 1:
+        # (owner, addr, we, be, wdata). None until the first grant.
+        self.captured = None
 
     async def run(self):
         dut = self.dut
@@ -522,34 +545,73 @@ class BusMonitor:
                 "both masters granted in cycle {}: the payload bus can only "
                 "carry one request (S2)".format(self.cycle)
             )
-            if mi:
-                assert val(dut.s_addr_o) == val(dut.mi_addr_i), (
-                    "cycle {}: s_addr_o 0x{:08x} != mi_addr_i 0x{:08x} in the "
-                    "instruction grant cycle (S2)".format(
-                        self.cycle, val(dut.s_addr_o), val(dut.mi_addr_i))
-                )
-                assert val(dut.s_we_o) == 0, (
-                    "cycle {}: s_we_o high for an instruction-port grant; "
-                    "that port is read-only".format(self.cycle)
-                )
-            if md:
-                assert val(dut.s_addr_o) == val(dut.md_addr_i), (
-                    "cycle {}: s_addr_o 0x{:08x} != md_addr_i 0x{:08x} in the "
-                    "data grant cycle (S2)".format(
-                        self.cycle, val(dut.s_addr_o), val(dut.md_addr_i))
-                )
-                assert val(dut.s_we_o) == val(dut.md_we_i), (
-                    "cycle {}: s_we_o != md_we_i in the data grant cycle (S2)"
-                    .format(self.cycle)
-                )
-                assert val(dut.s_be_o) == val(dut.md_be_i), (
-                    "cycle {}: s_be_o != md_be_i in the data grant cycle (S2)"
-                    .format(self.cycle)
-                )
-                assert val(dut.s_wdata_o) == val(dut.md_wdata_i), (
-                    "cycle {}: s_wdata_o != md_wdata_i in the data grant "
-                    "cycle (S2)".format(self.cycle)
-                )
+            if REQ_REG:
+                # The request phase is registered, so the payload a
+                # slave is being shown in THIS cycle is the one captured
+                # at an EARLIER grant. The check therefore comes before
+                # the capture: a grant in this cycle loads the register
+                # for the next one, and reading it here would be reading
+                # the request the slave has not been given yet.
+                if req and self.captured is not None:
+                    who, addr, we, be, wdata = self.captured
+                    assert val(dut.s_addr_o) == addr, (
+                        "cycle {}: s_addr_o 0x{:08x} != the 0x{:08x} granted "
+                        "to the {} port (S2 across the request register)"
+                        .format(self.cycle, val(dut.s_addr_o), addr, who)
+                    )
+                    assert val(dut.s_we_o) == we, (
+                        "cycle {}: s_we_o != the we granted to the {} port"
+                        .format(self.cycle, who)
+                    )
+                    assert val(dut.s_be_o) == be, (
+                        "cycle {}: s_be_o != the be granted to the {} port"
+                        .format(self.cycle, who)
+                    )
+                    assert val(dut.s_wdata_o) == wdata, (
+                        "cycle {}: s_wdata_o != the wdata granted to the {} "
+                        "port".format(self.cycle, who)
+                    )
+                    if who == "mi":
+                        assert val(dut.s_we_o) == 0, (
+                            "cycle {}: s_we_o high for an instruction-port "
+                            "request; that port is read-only"
+                            .format(self.cycle)
+                        )
+                if mi:
+                    self.captured = ("mi", val(dut.mi_addr_i), 0, 0xF, 0)
+                elif md:
+                    self.captured = ("md", val(dut.md_addr_i),
+                                     val(dut.md_we_i), val(dut.md_be_i),
+                                     val(dut.md_wdata_i))
+            else:
+                if mi:
+                    assert val(dut.s_addr_o) == val(dut.mi_addr_i), (
+                        "cycle {}: s_addr_o 0x{:08x} != mi_addr_i 0x{:08x} in the "
+                        "instruction grant cycle (S2)".format(
+                            self.cycle, val(dut.s_addr_o), val(dut.mi_addr_i))
+                    )
+                    assert val(dut.s_we_o) == 0, (
+                        "cycle {}: s_we_o high for an instruction-port grant; "
+                        "that port is read-only".format(self.cycle)
+                    )
+                if md:
+                    assert val(dut.s_addr_o) == val(dut.md_addr_i), (
+                        "cycle {}: s_addr_o 0x{:08x} != md_addr_i 0x{:08x} in the "
+                        "data grant cycle (S2)".format(
+                            self.cycle, val(dut.s_addr_o), val(dut.md_addr_i))
+                    )
+                    assert val(dut.s_we_o) == val(dut.md_we_i), (
+                        "cycle {}: s_we_o != md_we_i in the data grant cycle (S2)"
+                        .format(self.cycle)
+                    )
+                    assert val(dut.s_be_o) == val(dut.md_be_i), (
+                        "cycle {}: s_be_o != md_be_i in the data grant cycle (S2)"
+                        .format(self.cycle)
+                    )
+                    assert val(dut.s_wdata_o) == val(dut.md_wdata_i), (
+                        "cycle {}: s_wdata_o != md_wdata_i in the data grant "
+                        "cycle (S2)".format(self.cycle)
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -929,6 +991,17 @@ async def test_gnt_follows_the_slave(dut):
     both high. A fabric that granted a master while the target slave was
     withholding gnt would let the master move on (rule 2) before the slave
     had captured anything.
+
+    AT REQ_REG = 1 THE SECOND HALF OF THE TITLE IS DELIBERATELY NOT TRUE
+    and what replaces it is stronger. docs/84's register decouples the
+    grant from the slave's gnt on purpose -- taking the slave off the
+    master's critical path is the whole change -- so the fabric accepts
+    ONE request, into the register, and refuses every further one until
+    the slave takes it. What it offers the slave in exchange is Ibex
+    rule 1 in the direction the combinational fabric never offered it:
+    the captured request is presented, unchanged, for as long as the
+    slave withholds gnt. hw/soc/formal/soc_bus_props.v F3e is that
+    statement proved; this is it executed.
     """
     env = await setup(dut)
     ram = SLAVE_INDEX["RAM"]
@@ -942,18 +1015,34 @@ async def test_gnt_follows_the_slave(dut):
         addr = base + 0x40
         master.push(Xact(addr, exp_rdata=tag_of(ram, addr)))
         stalled = 0
-        for _ in range(12):
+        for i in range(12):
             await RisingEdge(dut.clk_i)
             await Timer(T_CHECK, unit="ns")
-            assert val(getattr(dut, master.name + "_gnt_o")) == 0, (
-                "{} granted while the target slave withheld gnt".format(
-                    master.name)
-            )
-            assert val(dut.s_req_o) == 1 << ram, (
-                "the stalled request stopped being presented to its slave"
-            )
+            if REQ_REG:
+                assert master.grants <= 1, (
+                    "{} was granted a second request while the target "
+                    "slave withheld gnt; the request register is one deep"
+                    .format(master.name)
+                )
+                # One cycle later than the combinational fabric: the
+                # register is loaded at the end of the grant cycle, so
+                # the slave sees the request from the next one on.
+                if i >= 1:
+                    assert val(dut.s_req_o) == 1 << ram, (
+                        "the stalled request stopped being presented to "
+                        "its slave"
+                    )
+            else:
+                assert val(getattr(dut, master.name + "_gnt_o")) == 0, (
+                    "{} granted while the target slave withheld gnt".format(
+                        master.name)
+                )
+                assert val(dut.s_req_o) == 1 << ram, (
+                    "the stalled request stopped being presented to its slave"
+                )
             stalled += 1
-        assert master.grants == 0 and master.rvalids == 0
+        assert master.grants == (1 if REQ_REG else 0)
+        assert master.rvalids == 0
         assert stalled == 12
         # The request must survive the stall unchanged and complete.
         env.slaves[ram].ready = True
@@ -1300,3 +1389,67 @@ async def test_the_clock_enable_closes_while_a_slow_slave_is_working(dut):
             shut, slow))
     dut._log.info("one %d-cycle access: the enable was low on %d of its "
                   "cycles", slow, shut)
+
+
+@cocotb.test()
+async def test_a_refused_slave_blocks_the_other_master_at_both_settings(dut):
+    """Head-of-line blocking belongs to the arbiter, not to REQ_REG.
+
+    docs/84 first claimed the registered request phase costs head-of-line
+    blocking -- that while the register holds a request for a slave
+    withholding gnt, neither master is granted, "where the combinational
+    fabric would have let the other master go elsewhere". It would not.
+    `target_ready` is computed from the arbitration WINNER's target,
+    `i_wins` is `can_issue_i && !d_wins`, and `last_was_d` advances only
+    on `accepted`, so when the winner's slave refuses, the loser is
+    refused with it and the round-robin bit does not move.
+
+    THIS TEST IS THE TWO-MASTER CASE, which test_gnt_follows_the_slave
+    cannot be: that one drives one master at a time and pins the one-deep
+    register's own contract. Here the data port sits at a slave that
+    refuses and the instruction port at the always-ready RAM, and the
+    instruction port gets nothing AT EITHER SETTING. docs/84 section 2.4a
+    has the grant counts over 201 cycles from hw/soc/tb/tb_soc_bus_hol.v;
+    this is the statement they support, asserted where the suite runs it.
+    """
+    env = await setup(dut)
+    ram = SLAVE_INDEX["RAM"]
+    apb = SLAVE_INDEX["APB"]
+    ram_base = port_regions()["RAM"][0]
+    apb_base = port_regions()["APB"][0]
+
+    # The data port's slave refuses from the first cycle. Both masters
+    # hold req and payload until granted, which is rule 1, so neither
+    # withdraws and the only thing that can move is the fabric.
+    env.slaves[apb].ready = False
+    env.md.push(Xact(apb_base, exp_rdata=tag_of(apb, apb_base)))
+    env.mi.push(Xact(ram_base + 0x20,
+                     exp_rdata=tag_of(ram, ram_base + 0x20)))
+
+    for _ in range(20):
+        await RisingEdge(dut.clk_i)
+        await Timer(T_CHECK, unit="ns")
+        assert env.mi.grants == 0, (
+            "the instruction port was granted at the always-ready RAM "
+            "while the data port's slave refused; the round-robin "
+            "arbiter blocks it at both settings and this test is what "
+            "says which setting changed that"
+        )
+
+    # The data port's own grant is the one thing the parameter moves: at
+    # REQ_REG = 1 the request is accepted into the register immediately
+    # and waits there; at 0 the grant waits for the slave.
+    assert env.md.grants == (1 if REQ_REG else 0), (
+        "data port grants {} while its slave refused, expected {}".format(
+            env.md.grants, 1 if REQ_REG else 0)
+    )
+    assert env.md.rvalids == 0
+
+    # And both complete once the slave opens, in the order they were
+    # asked for, with nothing lost in the register.
+    env.slaves[apb].ready = True
+    await env.drain(limit=200)
+    assert env.mi.grants == 1 and env.mi.rvalids == 1
+    assert env.md.grants == 1 and env.md.rvalids == 1
+    assert env.slaves[apb].captured[-1][0] == apb_base
+    assert env.slaves[ram].captured[-1][0] == ram_base + 0x20

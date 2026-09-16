@@ -207,7 +207,24 @@ module soc_top #(
     // pins CLKGATE, with one more: what this changes is the cycle count
     // of every program that touches the accelerator after an idle gap,
     // and the corpus quotes that count as an invariant.
-    parameter integer WAKE_GNT = 0
+    parameter integer WAKE_GNT = 0,
+
+    // ---- the registered request phase, docs/84 ----
+    //
+    // docs/72 section 15 item 5, forwarded to soc_bus and read by
+    // nothing else. 1 captures the fabric's arbitration result into a
+    // register, so that the slave decode and the slave's own read
+    // multiplexer no longer share a clock period with the core's
+    // register-file read and its ALU. docs/83 measured that this shared
+    // period, and not the floorplan and not abc's effort, is what makes
+    // the median violating path 88 gate stages deep.
+    //
+    // IT DEFAULTS TO 0, and the default is the same sequential machine
+    // as the fabric before the parameter existed -- proved, docs/84
+    // section 3. At 1 every load costs one more cycle, which is a
+    // number the corpus quotes, so sw/tests pins the default for the
+    // reason it pins WAKE_GNT.
+    parameter integer REQ_REG = 0
 ) (
     input  wire        clk_i,
     // POWER-ON reset. Asynchronously asserted, and the only reset the
@@ -661,7 +678,9 @@ module soc_top #(
   end
   endgenerate
 
-  soc_bus u_bus (
+  soc_bus #(
+      .REQ_REG (REQ_REG)
+  ) u_bus (
       .clk_i  (clk_bus),
       .rst_ni (rst_sys_n),
       .clk_en_o (bus_clk_en),

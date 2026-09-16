@@ -7,6 +7,15 @@
 #   sby -f soc_bus.sby bmc      bounded check, depth 24
 #   sby -f soc_bus.sby cover    reachability of every proven behaviour
 #
+# AND THE SAME THREE AT REQ_REG = 1, the registered request phase of
+# docs/84: prove_rr, bmc_rr, cover_rr. They are TASKS and not an edit to
+# the default, the way regfile_scrub.sby sets SCRUB, so that the three
+# jobs above stay the three jobs this project has been publishing --
+# same script, same engine, same depths -- and the parameter is
+# something the harness passes rather than something the design carries.
+# Every task that passed before the parameter existed must pass at both
+# settings; docs/84 section 4 is the record of what they printed.
+#
 # Properties live in soc_bus_props.v, textually included at the end of
 # the soc_bus module body under `ifdef FORMAL (read_verilog -formal
 # defines FORMAL). soc_memmap.vh is listed in [files] as well, because
@@ -21,9 +30,12 @@
 # too-strong environment assumption would quietly make unreachable.
 
 [tasks]
-bmc
-prove
-cover
+bmc      base bmc
+prove    base prove
+cover    base cover
+bmc_rr   rr   bmc
+prove_rr rr   prove
+cover_rr rr   cover
 
 [options]
 bmc: mode bmc
@@ -38,6 +50,11 @@ smtbmc yices
 
 [script]
 read_verilog -I. -formal soc_bus.v
+# The chparam needs a derived hierarchy to bind to, and `prep` would
+# derive it too late. Both lines are task-prefixed so that the default
+# tasks run the script they have always run.
+rr: hierarchy -check -top soc_bus
+rr: chparam -set REQ_REG 1 soc_bus
 prep -top soc_bus
 
 [files]

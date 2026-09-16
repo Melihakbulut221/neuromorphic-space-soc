@@ -2053,6 +2053,77 @@ def test_the_fabric_does_not_gate_its_request_path_with_the_reset_net():
         "this guard needs updating rather than deleting")
 
 
+def test_the_registered_request_phase_ships_off_and_is_forwarded():
+    """docs/84's REQ_REG, guarded the way docs/77's WAKE_GNT is.
+
+    The parameter registers the fabric's request phase, which takes the
+    slave decode and the slave's read multiplexer out of the period the
+    core's register-file read and its ALU are already in. docs/84
+    measures both sides of that: the deepest endpoint class goes from
+    81 levels to 16, and the whole-SoC workload goes from 416,673
+    cycles to 520,398.
+
+    The second number is why this is guarded and not merely defaulted.
+    The cycle count is a figure this corpus quotes as an invariant, and
+    a knob that moves it by a quarter must not be selected by anything
+    in the design."""
+    assert re.search(r"parameter\s+integer\s+REQ_REG\s*=\s*0\b",
+                     (SOC_RTL / "soc_bus.v").read_text()), (
+        "hw/soc/rtl/soc_bus.v's REQ_REG no longer defaults to 0")
+    top = (SOC_RTL / "soc_top.v").read_text()
+    assert re.search(r"parameter\s+integer\s+REQ_REG\s*=\s*0\b", top), (
+        "hw/soc/rtl/soc_top.v's REQ_REG no longer defaults to 0: the "
+        "whole-SoC cycle count moves by about a quarter with it, and "
+        "docs/84 says what the default should be and why")
+    assert re.search(r"\.REQ_REG\s*\(\s*REQ_REG\s*\)", top), (
+        "hw/soc/rtl/soc_top.v no longer forwards its own REQ_REG to "
+        "soc_bus")
+
+    offenders = []
+    for f in sorted(SOC_RTL.glob("*.v")) + sorted(SOC_RTL.glob("*.vh")):
+        text = f.read_text()
+        for m in re.finditer(r"\.REQ_REG\s*\(\s*(\d+)\s*\)", text):
+            if m.group(1) != "0":
+                offenders.append((f.name, m.group(0)))
+        if re.search(r"defparam[^;]*REQ_REG\s*=\s*[1-9]", text):
+            offenders.append((f.name, "defparam REQ_REG != 0"))
+    assert not offenders, (
+        "the RTL selects the registered request phase somewhere: "
+        "{}".format(offenders))
+
+    allowed = {"syn_soc_top.sh", "sim_soc.sh"}
+    setters = {f.name for f in sorted(SOC_FLOW.glob("*.sh"))
+               if re.search(r"SOC_REQ_REG", f.read_text())}
+    assert setters <= allowed, (
+        "a flow script this test does not know about carries the knob: "
+        "{}. Add it here with the reason, or remove it.".format(
+            sorted(setters - allowed)))
+
+    # AND THE SCRIPTS THAT MAY CARRY IT MUST STILL DEFAULT IT OFF, which
+    # is the half of this guard that was missing until 2026-09-16. The
+    # two assertions above pin the RTL default and the set of scripts
+    # allowed to select the knob; neither of them looks at what those
+    # scripts do when SOC_REQ_REG is unset, so `SOC_REQ_REG=${SOC_REQ_REG:-1}`
+    # would have moved the shipped synthesis and the shipped simulation
+    # -- and with them the 416,673-cycle figure this corpus quotes as an
+    # invariant -- with nothing turning red. A default belongs to the
+    # stage that can satisfy it: soc_top.v cannot default a shell
+    # variable, so the shell script is where this is checked.
+    for name in sorted(allowed):
+        text = (SOC_FLOW / name).read_text()
+        assert re.search(r"SOC_REQ_REG=\$\{SOC_REQ_REG:-0\}", text), (
+            "hw/soc/flow/{} no longer defaults SOC_REQ_REG to 0; the "
+            "design ships the combinational request phase and docs/84 "
+            "section 9 says why".format(name))
+
+    mk = (ROOT / "hw" / "soc" / "tb" / "cocotb" /
+          "Makefile.soc_bus").read_text()
+    assert re.search(r"(?m)^REQ_REG\s*\?=\s*0\s*$", mk), (
+        "hw/soc/tb/cocotb/Makefile.soc_bus no longer defaults REQ_REG "
+        "to 0, so the block-level suite would stop being run against "
+        "the design by default")
+
+
 def _pnr_config():
     return json.loads((SOC_PNR / "config.json").read_text())
 

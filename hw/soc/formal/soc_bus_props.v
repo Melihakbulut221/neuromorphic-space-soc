@@ -35,6 +35,33 @@
 // statement, and there is no other way to observe a slave that has no
 // pins.
 //
+// AND FOUR MORE AT REQ_REG = 1, WHICH ARE ASSERTED ON AND NOT READ:
+// `xfer`, `xfer_tgt`, `xfer_own` and `req_busy`, the design's own
+// request-phase boundary. I6 states that the ghost request phase
+// reconstructed from the ports below is exactly them. That is the
+// opposite of deriving a property from the design: it makes the ghost
+// an OBSERVATION of the design rather than a definition, so that F3c,
+// F4b, F8 and the covers -- all of which turn on the ghost -- are not
+// circular. A fabric that transferred a request the slave had not
+// granted, or that pushed the wrong master's ownership, fails I6 and
+// not only the properties downstream of it.
+//
+// WHAT REQ_REG CHANGES IN THIS FILE, in one paragraph. At REQ_REG = 1
+// soc_bus.v captures the arbitration's result into a register and hands
+// it to the slave a cycle later, so the GRANT and the TRANSFER are no
+// longer the same event. Every clause below that was a statement about
+// one of them and silently about the other has been split: the
+// per-master outstanding counts stay on the grant, the per-slave queues
+// move to the transfer, and the difference between the two -- at most
+// one request, sitting in the fabric's register -- is carried by the
+// ghost `f_fly` and named `f_out_i_slv` / `f_out_d_slv` where an
+// invariant needs it. NOTHING IS WEAKENED: at REQ_REG = 0 every line
+// below elaborates to the line that was here before the parameter
+// existed, `f_fly` folds to a constant zero, and two properties are
+// ADDED at REQ_REG = 1 -- I6 above and F3e, which is Ibex protocol rule
+// 1 obeyed by this fabric toward its slaves and which the
+// combinational request phase does not obey.
+//
 // WHAT IS NOT PROVEN HERE:
 //
 //   * Liveness of any kind. Nothing says a request is ever granted or a
@@ -53,6 +80,9 @@
 //     against the fabric's ports, because it can enumerate the generated
 //     map and this file cannot.
 //   * Reset behaviour beyond the initial state.
+//   * That REQ_REG = 1 costs exactly one cycle of latency and no
+//     throughput. That is a performance claim, it is not a safety
+//     property, and docs/84 measures it on the whole SoC instead.
 
 localparam integer F_ERRSLV = 6;
 localparam integer F_NS     = 7;   // six ports plus the error slave
@@ -74,13 +104,64 @@ wire [2:0]  f_tgt_idx = s_req_o[0] ? 3'd0 :
                         s_req_o[4] ? 3'd4 :
                         s_req_o[5] ? 3'd5 : F_ERRSLV[2:0];
 
-wire [6:0] f_push = {f_gnt && (s_req_o == 6'b000000),
-                     f_gnt && s_req_o[5],
-                     f_gnt && s_req_o[4],
-                     f_gnt && s_req_o[3],
-                     f_gnt && s_req_o[2],
-                     f_gnt && s_req_o[1],
-                     f_gnt && s_req_o[0]};
+// ---------------------------------------------------------------------
+// The request phase, at both settings
+// ---------------------------------------------------------------------
+//
+// AT REQ_REG = 1 THE GRANT AND THE TRANSFER ARE NOT THE SAME CYCLE, and
+// every ghost below has to be told which of the two it counts. The rule
+// is the design's own, stated in soc_bus.v's REQ_REG section: a
+// master's outstanding count turns on the GRANT, because that is when
+// the master owns the request, and a slave's queue turns on the
+// TRANSFER, because that is when the slave has it.
+//
+// The transfer is reconstructed FROM THE PORTS. A grant loads the ghost
+// register; it unloads when the slave being presented with the request
+// answers gnt, or immediately when the target is the error slave --
+// which is the one target with no pins, and which f_tgt_idx already
+// reports as F_ERRSLV when no slave port is selected. I6 below asserts
+// that this reconstruction is the design's own register.
+//
+// AT REQ_REG = 0 the ghost register is held at zero, `f_take` is
+// `f_gnt`, `f_take_i` is `mi_gnt_o`, and every line in this file is the
+// line that was here before the parameter existed.
+reg f_fly, f_fly_own;
+
+wire f_fly_xfer = f_fly && ((s_req_o == 6'b000000) || |(s_req_o & s_gnt_i));
+
+always @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+        f_fly     <= 1'b0;
+        f_fly_own <= 1'b0;
+    end else if (REQ_REG == 0) begin
+        f_fly     <= 1'b0;
+        f_fly_own <= 1'b0;
+    end else if (f_gnt) begin
+        f_fly     <= 1'b1;
+        f_fly_own <= md_gnt_o;
+    end else if (f_fly_xfer) begin
+        f_fly     <= 1'b0;
+    end
+end
+
+wire f_take     = (REQ_REG == 0) ? f_gnt    : f_fly_xfer;
+wire f_take_own = (REQ_REG == 0) ? md_gnt_o : f_fly_own;
+wire f_take_i   = (REQ_REG == 0) ? mi_gnt_o : (f_fly_xfer && !f_fly_own);
+wire f_take_d   = (REQ_REG == 0) ? md_gnt_o : (f_fly_xfer &&  f_fly_own);
+
+// Whether a request is being PRESENTED to a target this cycle, which is
+// the only cycle in which s_addr_o means anything. At REQ_REG = 1 the
+// register keeps driving the last address after it has been taken, and
+// a property that read it then would be reading a stale bus.
+wire f_present  = (REQ_REG == 0) ? f_gnt : f_fly;
+
+wire [6:0] f_push = {f_take && (s_req_o == 6'b000000),
+                     f_take && s_req_o[5],
+                     f_take && s_req_o[4],
+                     f_take && s_req_o[3],
+                     f_take && s_req_o[2],
+                     f_take && s_req_o[1],
+                     f_take && s_req_o[0]};
 wire [6:0] f_pop  = {err_rvalid, s_rvalid_i};
 
 // ---------------------------------------------------------------------
@@ -124,8 +205,11 @@ always @(posedge clk_i or negedge rst_ni) begin
         if (!mi_gnt_o && mi_rvalid_o) f_out_i <= f_out_i - 3'd1;
         if (md_gnt_o && !md_rvalid_o) f_out_d <= f_out_d + 3'd1;
         if (!md_gnt_o && md_rvalid_o) f_out_d <= f_out_d - 3'd1;
-        if (mi_gnt_o) f_lock_i <= f_tgt_idx;
-        if (md_gnt_o) f_lock_d <= f_tgt_idx;
+        // The LOCK moves with the request, not with the grant: it
+        // names the slave an entry is queued at, and at REQ_REG = 1 a
+        // granted request has not reached a slave yet.
+        if (f_take_i) f_lock_i <= f_tgt_idx;
+        if (f_take_d) f_lock_d <= f_tgt_idx;
         for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
             if (f_push[f_s] && !f_pop[f_s]) f_occ[f_s] <= f_occ[f_s] + 4'd1;
             if (!f_push[f_s] && f_pop[f_s]) f_occ[f_s] <= f_occ[f_s] - 4'd1;
@@ -149,13 +233,13 @@ always @(posedge clk_i or negedge rst_ni) begin
         end
     end else begin
         for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
-            case ({mi_gnt_o && (f_tgt_idx == f_s[2:0]),
+            case ({f_take_i && (f_tgt_idx == f_s[2:0]),
                    mi_rvalid_o && (f_lock_i == f_s[2:0])})
                 2'b10:   f_occ_i[f_s] <= f_occ_i[f_s] + 3'd1;
                 2'b01:   f_occ_i[f_s] <= f_occ_i[f_s] - 3'd1;
                 default: ;
             endcase
-            case ({md_gnt_o && (f_tgt_idx == f_s[2:0]),
+            case ({f_take_d && (f_tgt_idx == f_s[2:0]),
                    md_rvalid_o && (f_lock_d == f_s[2:0])})
                 2'b10:   f_occ_d[f_s] <= f_occ_d[f_s] + 3'd1;
                 2'b01:   f_occ_d[f_s] <= f_occ_d[f_s] - 3'd1;
@@ -164,6 +248,19 @@ always @(posedge clk_i or negedge rst_ni) begin
         end
     end
 end
+
+// THE PART OF A MASTER'S OUTSTANDING COUNT THAT HAS REACHED A SLAVE.
+// At REQ_REG = 0 it is all of it, and every clause using it below is
+// the clause that read f_out_i directly. At REQ_REG = 1 one granted
+// request may still be in the fabric's register: it is counted against
+// the master, because the master owns it and MAX_OUT is about the
+// master, and it is NOT yet in any slave's queue. Every invariant that
+// ties the two sides together needs the second number, and using the
+// first is the single most likely way to get this file wrong.
+wire [2:0] f_out_i_slv = (REQ_REG == 0) ? f_out_i
+                       : (f_out_i - {2'd0, (f_fly && !f_fly_own)});
+wire [2:0] f_out_d_slv = (REQ_REG == 0) ? f_out_d
+                       : (f_out_d - {2'd0, (f_fly &&  f_fly_own)});
 
 // Slave contract S1/S3, as an assumption on the four external ports: a
 // slave does not answer a request it was never given. The error slave is
@@ -203,8 +300,20 @@ always @(posedge clk_i) if (rst_ni) begin
     //     also the statement that the address broadcast to the slaves
     //     decodes to the same slave the granting master's own address
     //     decoded to.
-    if (f_out_i != 3'd0) assert (f_lock_i == lock_i);
-    if (f_out_d != 3'd0) assert (f_lock_d == lock_d);
+    if (f_out_i_slv != 3'd0) assert (f_lock_i == lock_i);
+    if (f_out_d_slv != 3'd0) assert (f_lock_d == lock_d);
+
+    // I2b. AT REQ_REG = 1 ONLY, and it is the other half of I2 rather
+    //      than a weakening of it. The ghost lock is set when a request
+    //      REACHES a slave and the design's when it is GRANTED, so in
+    //      the cycles a request spends in the fabric's register the two
+    //      are about different requests and I2 above excuses them. What
+    //      must still hold there is the same statement one step
+    //      earlier: the slave the fabric is presenting this request to
+    //      is the slave the granting master's own address decoded to.
+    //      Without this the excusing antecedent in I2 would be a hole.
+    if (REQ_REG != 0 && f_fly && !f_fly_own) assert (f_tgt_idx == lock_i);
+    if (REQ_REG != 0 && f_fly &&  f_fly_own) assert (f_tgt_idx == lock_d);
 
     for (f_s = 0; f_s < F_NS; f_s = f_s + 1) begin
         // I3. Total occupancy is the sum of the two masters' shares.
@@ -217,9 +326,9 @@ always @(posedge clk_i) if (rst_ni) begin
         //     true: two slaves cannot both be holding a response for the
         //     same master, so two responses in one cycle cannot collide
         //     on one master's rvalid.
-        if (f_s[2:0] == f_lock_i) assert (f_occ_i[f_s] == f_out_i);
+        if (f_s[2:0] == f_lock_i) assert (f_occ_i[f_s] == f_out_i_slv);
         else                      assert (f_occ_i[f_s] == 3'd0);
-        if (f_s[2:0] == f_lock_d) assert (f_occ_d[f_s] == f_out_d);
+        if (f_s[2:0] == f_lock_d) assert (f_occ_d[f_s] == f_out_d_slv);
         else                      assert (f_occ_d[f_s] == 3'd0);
 
         // I5. The design's ownership queue holds exactly the entries the
@@ -234,6 +343,46 @@ always @(posedge clk_i) if (rst_ni) begin
             if (({1'b0, f_z[2:0]} < f_occ[f_s]) && !q_owner[f_s][f_z])
                 f_zeros = f_zeros + 3'd1;
         assert (f_occ_i[f_s] == f_zeros);
+    end
+
+    // I6. THE GHOST REQUEST PHASE IS THE DESIGN'S REQUEST PHASE. The
+    //     four signals named here are soc_bus.v's own boundary between
+    //     the arbitration and the slaves, and everything above that
+    //     turns on `f_take` turns on a reconstruction of them made from
+    //     the ports. This is what stops that reconstruction being a
+    //     definition: a fabric that handed a request to a slave which
+    //     had not granted it, that pushed the wrong master into the
+    //     ownership queue, or that held a request the ports say is gone
+    //     fails HERE, one step before the properties that would
+    //     otherwise have been satisfied by agreeing with it.
+    //
+    //     At REQ_REG = 0 it is a real check too and a cheap one: the
+    //     transfer is `accepted`, and the statement is that `accepted`
+    //     is exactly the disjunction of the two grant outputs.
+    //     THE ANTECEDENT IS `req_busy || xfer` AND NOT `xfer`, and the
+    //     first version of this property was the second. It failed
+    //     induction at REQ_REG = 1 and the counterexample is worth
+    //     writing down, because it is the shape docs/09 section B.3
+    //     warns about rather than a defect: k-induction started in a
+    //     state with the fabric's register FULL, the ghost owning it
+    //     for the data port and the design owning it for the
+    //     instruction port -- a state no reachable trace can produce,
+    //     because both are loaded from the same grant, and one no
+    //     assertion excluded, because the old antecedent only looked at
+    //     the register in the cycle it DRAINS. A hundred idle cycles
+    //     later the register drained and the two disagreed.
+    //
+    //     THE REPAIR IS TO ASSERT IT IN MORE CYCLES AND NOT IN FEWER.
+    //     The register's ownership bit is now checked in every cycle
+    //     the register is full, which is strictly stronger than the
+    //     version that failed and is what makes it inductive: loaded
+    //     together, held together, so equal in every cycle it exists.
+    //     The RTL was not touched.
+    assert (xfer == f_take);
+    assert (req_busy == ((REQ_REG != 0) && f_fly));
+    if (req_busy || xfer) begin
+        assert (xfer_tgt == f_tgt_idx);
+        assert (xfer_own == f_take_own);
     end
 end
 
@@ -273,12 +422,17 @@ always @(posedge clk_i) if (rst_ni) begin
     //      never sent to the error slave, and never dropped. Without
     //      this half, a fabric that answered every access with a bus
     //      error would satisfy F2a.
-    if (f_gnt && (s_addr_o & SOC_MASK_RAM) == SOC_BASE_RAM) assert (s_req_o[0]);
-    if (f_gnt && (s_addr_o & SOC_MASK_ROM) == SOC_BASE_ROM) assert (s_req_o[1]);
-    if (f_gnt && (s_addr_o & SOC_MASK_APB) == SOC_BASE_APB) assert (s_req_o[2]);
-    if (f_gnt && (s_addr_o & SOC_MASK_PNP) == SOC_BASE_PNP) assert (s_req_o[3]);
-    if (f_gnt && (s_addr_o & SOC_MASK_CLINT) == SOC_BASE_CLINT) assert (s_req_o[4]);
-    if (f_gnt && (s_addr_o & SOC_MASK_NPU) == SOC_BASE_NPU) assert (s_req_o[5]);
+    //
+    //      The antecedent is `f_present` and not `f_gnt` because at
+    //      REQ_REG = 1 the broadcast bus keeps driving the last request
+    //      after that request has been taken, and a stale address is
+    //      not an address this fabric is failing to route.
+    if (f_present && (s_addr_o & SOC_MASK_RAM) == SOC_BASE_RAM) assert (s_req_o[0]);
+    if (f_present && (s_addr_o & SOC_MASK_ROM) == SOC_BASE_ROM) assert (s_req_o[1]);
+    if (f_present && (s_addr_o & SOC_MASK_APB) == SOC_BASE_APB) assert (s_req_o[2]);
+    if (f_present && (s_addr_o & SOC_MASK_PNP) == SOC_BASE_PNP) assert (s_req_o[3]);
+    if (f_present && (s_addr_o & SOC_MASK_CLINT) == SOC_BASE_CLINT) assert (s_req_o[4]);
+    if (f_present && (s_addr_o & SOC_MASK_NPU) == SOC_BASE_NPU) assert (s_req_o[5]);
 end
 
 // ---------------------------------------------------------------------
@@ -293,28 +447,107 @@ always @(posedge clk_i) if (rst_ni) begin
     //      addresses on one broadcast bus.
     assert (!(mi_gnt_o && md_gnt_o));
 
-    // F3c. A grant to a real slave requires that slave to have accepted.
-    //      The error slave is internal and always ready, so it is
-    //      excluded, which is exactly why F2b matters.
-    if (f_gnt && s_req_o[0]) assert (s_gnt_i[0]);
-    if (f_gnt && s_req_o[1]) assert (s_gnt_i[1]);
-    if (f_gnt && s_req_o[2]) assert (s_gnt_i[2]);
-    if (f_gnt && s_req_o[3]) assert (s_gnt_i[3]);
-    if (f_gnt && s_req_o[4]) assert (s_gnt_i[4]);
-    if (f_gnt && s_req_o[5]) assert (s_gnt_i[5]);
+    // F3c. A transfer to a real slave requires that slave to have
+    //      accepted. The error slave is internal and always ready, so
+    //      it is excluded, which is exactly why F2b matters.
+    //
+    //      `f_take` and not `f_gnt`: at REQ_REG = 0 they are the same
+    //      signal, and at REQ_REG = 1 the grant is deliberately NOT
+    //      qualified by the slave -- that decoupling is the whole point
+    //      of the parameter -- while the transfer still is. What keeps
+    //      this from being a tautology there is I6, which asserts that
+    //      the design's transfer is this ghost's.
+    if (f_take && s_req_o[0]) assert (s_gnt_i[0]);
+    if (f_take && s_req_o[1]) assert (s_gnt_i[1]);
+    if (f_take && s_req_o[2]) assert (s_gnt_i[2]);
+    if (f_take && s_req_o[3]) assert (s_gnt_i[3]);
+    if (f_take && s_req_o[4]) assert (s_gnt_i[4]);
+    if (f_take && s_req_o[5]) assert (s_gnt_i[5]);
 
     // F3d. The broadcast payload is the granted master's, and the
     //      instruction port -- which has no write signals at all -- must
     //      never cause a write.
-    if (mi_gnt_o) begin
-        assert (s_addr_o == mi_addr_i);
-        assert (s_we_o == 1'b0);
+    //
+    //      AT REQ_REG = 1 THE GRANTED MASTER'S PINS ARE GONE by the
+    //      time a slave sees the payload: protocol rule 2 lets a master
+    //      change them in the cycle after its grant, and the fabric's
+    //      register is what carries them across. So the comparison is
+    //      against `f_cap_*`, a ghost copy taken from the MASTER PORTS
+    //      at the grant. It is not a reading of the design's register
+    //      -- soc_bus.v's own r_addr, r_we, r_be and r_wdata are named
+    //      nowhere in this file -- so a fabric that captured the wrong
+    //      master's payload, or the right master's a cycle late, fails
+    //      here.
+    if (REQ_REG != 0) begin
+        if (f_fly) begin
+            assert (s_addr_o  == f_cap_addr);
+            assert (s_we_o    == f_cap_we);
+            assert (s_be_o    == f_cap_be);
+            assert (s_wdata_o == f_cap_wdata);
+            if (!f_fly_own) assert (s_we_o == 1'b0);
+        end
+    end else begin
+        if (mi_gnt_o) begin
+            assert (s_addr_o == mi_addr_i);
+            assert (s_we_o == 1'b0);
+        end
+        if (md_gnt_o) begin
+            assert (s_addr_o  == md_addr_i);
+            assert (s_we_o    == md_we_i);
+            assert (s_be_o    == md_be_i);
+            assert (s_wdata_o == md_wdata_i);
+        end
     end
-    if (md_gnt_o) begin
-        assert (s_addr_o  == md_addr_i);
-        assert (s_we_o    == md_we_i);
-        assert (s_be_o    == md_be_i);
-        assert (s_wdata_o == md_wdata_i);
+end
+
+// The ghost copy F3d compares against at REQ_REG = 1, loaded from the
+// master ports in the cycle of the grant. Held and not reset: it is
+// read only while f_fly is high, and f_fly is high only after a grant
+// has loaded it.
+reg [31:0] f_cap_addr, f_cap_wdata;
+reg        f_cap_we;
+reg  [3:0] f_cap_be;
+always @(posedge clk_i) if ((REQ_REG != 0) && f_gnt) begin
+    f_cap_addr  <= md_gnt_o ? md_addr_i  : mi_addr_i;
+    f_cap_we    <= md_gnt_o ? md_we_i    : 1'b0;
+    f_cap_be    <= md_gnt_o ? md_be_i    : 4'hF;
+    f_cap_wdata <= md_gnt_o ? md_wdata_i : 32'h0;
+end
+
+// ---------------------------------------------------------------------
+// F3e: rule 1 toward the SLAVE, at REQ_REG = 1
+// ---------------------------------------------------------------------
+//
+// THIS PROPERTY IS ADDED AND NOT TRANSPORTED, and the combinational
+// fabric does not satisfy it. Ibex protocol rule 1 says a request is
+// held, unchanged, until it is granted. This fabric requires that of
+// its masters and at REQ_REG = 0 does not offer it to its slaves: the
+// arbitration winner can change while a slave is still refusing --
+// `can_issue_i` and `can_issue_d` turn on as responses return -- so a
+// slave sees a request appear and vanish. That is not an argument: this
+// same property with the `REQ_REG != 0` guard below removed is
+// falsified at REQ_REG = 0 in four steps of bmc, and docs/84 section
+// 2.4 records the run.
+//
+// TWO SLAVES IN THIS SoC WITHHOLD `gnt` -- soc_apb_bridge.v's
+// `gnt_o = req_i && (state == ST_IDLE)` and soc_npu.v's
+// `gnt_o = req_i && may_accept && (win_state == W_IDLE) && ...` -- so
+// a slave that could see it is not hypothetical here. Nothing has
+// depended on it because both of those slaves latch nothing until they
+// grant; a slave that did would be written against REQ_REG = 1.
+//
+// At REQ_REG = 1 the request register makes it true, and a slave may
+// therefore be written against it. That is a strictly stronger contract
+// on this fabric's own outputs, and it is the one structural thing the
+// parameter buys besides the depth.
+always @(posedge clk_i) if (f_past_valid && $past(rst_ni) && rst_ni
+                            && (REQ_REG != 0)) begin
+    if ($past(|s_req_o) && !(|($past(s_req_o) & $past(s_gnt_i)))) begin
+        assert (s_req_o   == $past(s_req_o));
+        assert (s_addr_o  == $past(s_addr_o));
+        assert (s_we_o    == $past(s_we_o));
+        assert (s_be_o    == $past(s_be_o));
+        assert (s_wdata_o == $past(s_wdata_o));
     end
 end
 
@@ -332,8 +565,8 @@ always @(posedge clk_i) if (rst_ni) begin
     //      is the restriction the fabric imposes in exchange for not
     //      carrying a reorder buffer, and everything about the response
     //      steering rests on it.
-    if (mi_gnt_o && f_out_i != 3'd0) assert (f_tgt_idx == f_lock_i);
-    if (md_gnt_o && f_out_d != 3'd0) assert (f_tgt_idx == f_lock_d);
+    if (f_take_i && f_out_i_slv != 3'd0) assert (f_tgt_idx == f_lock_i);
+    if (f_take_d && f_out_d_slv != 3'd0) assert (f_tgt_idx == f_lock_d);
 end
 
 // ---------------------------------------------------------------------
@@ -395,11 +628,11 @@ wire [3:0] f_occ_total = f_occ[0] + f_occ[1] + f_occ[2] + f_occ[3] + f_occ[4]
                        + f_occ[5] + f_occ[6];
 
 always @(posedge clk_i) if (rst_ni) begin
-    assert (f_occ_total == ({1'b0, f_out_i} + {1'b0, f_out_d}));
-    if (f_out_i != 3'd0)
-        assert (f_occ[f_lock_i] >= {1'b0, f_out_i});
-    if (f_out_d != 3'd0)
-        assert (f_occ[f_lock_d] >= {1'b0, f_out_d});
+    assert (f_occ_total == ({1'b0, f_out_i_slv} + {1'b0, f_out_d_slv}));
+    if (f_out_i_slv != 3'd0)
+        assert (f_occ[f_lock_i] >= {1'b0, f_out_i_slv});
+    if (f_out_d_slv != 3'd0)
+        assert (f_occ[f_lock_d] >= {1'b0, f_out_d_slv});
 end
 
 // ---------------------------------------------------------------------
@@ -505,6 +738,33 @@ end
 // The registers are enumerated rather than sampled in bulk, because
 // there is no bulk to sample: `q_owner` and `q_fill` are arrays and
 // `$past` of an array element is what has to be written.
+//
+// AND THE REQUEST REGISTER AT REQ_REG = 1 IS ENUMERATED THROUGH WHAT IT
+// DRIVES, which needs saying rather than assuming, because the theorem
+// is only about the registers it names. soc_bus.v's `g_req_reg` arm
+// declares seven of them and each one is covered by exactly one signal
+// in the block below:
+//
+//   r_val    by `req_busy`, which is it.
+//   r_tgt    by `xfer_tgt`, which is it.
+//   r_own    by `xfer_own`, which is it.
+//   r_addr   by `s_addr_o`   |  the four broadcast outputs, which at
+//   r_we     by `s_we_o`     |  REQ_REG = 1 are the register's own
+//   r_be     by `s_be_o`     |  output pins and nothing else.
+//   r_wdata  by `s_wdata_o`  |
+//
+// `s_req_o` is asserted as well, and it is not a seventh register: it
+// is `r_val` decoded by `r_tgt`, so it adds no coverage and is there
+// because a slave that saw a request appear in an unclocked cycle is
+// the failure this property exists to exclude.
+//
+// THEY ARE OBSERVED AND NOT NAMED, and the reason is the parameter. The
+// seven live inside a generate arm that does not elaborate at all at
+// REQ_REG = 0, so a reference to `g_req_reg.r_val` would not compile in
+// the configuration the design ships. The mapping above is total --
+// every bit of the register reaches exactly one line below -- which is
+// what the theorem needs, and it is what
+// sw/tests/test_soc_clkgate_guards.py checks is still written down.
 integer f_g;
 always @(posedge clk_i) if (f_past_valid && $past(rst_ni) && rst_ni
                             && !$past(clk_en_o)) begin
@@ -518,6 +778,24 @@ always @(posedge clk_i) if (f_past_valid && $past(rst_ni) && rst_ni
     for (f_g = 0; f_g < F_NS; f_g = f_g + 1) begin
         assert (q_owner[f_g] == $past(q_owner[f_g]));
         assert (q_fill[f_g]  == $past(q_fill[f_g]));
+    end
+    // AND THE REQUEST REGISTER AT REQ_REG = 1, which is the whole of G6
+    // and the reason `req_busy` is a term of the enable. The register's
+    // seven fields are enumerated through the module's own outputs and
+    // through the three transfer signals, which between them carry
+    // every bit of it: `req_busy` is its valid bit, `xfer_tgt` and
+    // `xfer_own` are its target and its owner, and the five broadcast
+    // outputs are the payload. An enable that forgot the drain would
+    // clear the valid bit in an unclocked cycle and fail here.
+    if (REQ_REG != 0) begin
+        assert (req_busy  == $past(req_busy));
+        assert (xfer_tgt  == $past(xfer_tgt));
+        assert (xfer_own  == $past(xfer_own));
+        assert (s_req_o   == $past(s_req_o));
+        assert (s_addr_o  == $past(s_addr_o));
+        assert (s_we_o    == $past(s_we_o));
+        assert (s_be_o    == $past(s_be_o));
+        assert (s_wdata_o == $past(s_wdata_o));
     end
 end
 
@@ -561,16 +839,19 @@ end
 // Cover: docs/09 B.1 vacuity rule -- every proven behaviour reachable
 // ---------------------------------------------------------------------
 always @(posedge clk_i) if (f_past_valid && rst_ni) begin
-    cover (f_gnt && s_req_o[0]);            // a grant to each slave port
-    cover (f_gnt && s_req_o[1]);
-    cover (f_gnt && s_req_o[2]);
-    cover (f_gnt && s_req_o[3]);
-    cover (f_gnt && s_req_o[4]);
+    // A request REACHING each slave port. `f_push` and not
+    // `f_gnt && s_req_o[k]`, which are the same thing at REQ_REG = 0
+    // and are the grant of an unrelated, earlier request at 1.
+    cover (f_push[0]);
+    cover (f_push[1]);
+    cover (f_push[2]);
+    cover (f_push[3]);
+    cover (f_push[4]);
     // docs/51's port. Without this the sixth slave would be covered by
     // every ASSERTION above and witnessed by none of them, which is the
     // vacuity docs/09 section B.1 makes a red result.
-    cover (f_gnt && s_req_o[5]);
-    cover (f_gnt && s_req_o == 6'b000000);  // and to the error slave
+    cover (f_push[5]);
+    cover (f_push[6]);                      // and to the error slave
     cover (mi_rvalid_o && mi_err_o);        // a bus error reaching a master
     cover (f_out_i == 3'd2);                // both masters at the limit
     cover (f_out_d == 3'd2);
@@ -597,7 +878,7 @@ always @(posedge clk_i) if (f_past_valid && rst_ni) begin
     //     with a request still outstanding -- the push-and-pop case of
     //     the ownership queue, at a latency where it is not the same
     //     request being pushed and popped.
-    cover (f_gnt && s_req_o[0] && f_pop[0] && f_occ[0] >= 4'd2);
+    cover (f_push[0] && f_pop[0] && f_occ[0] >= 4'd2);
 
     // G1. THE GATE CLOSES. Without this F10 is satisfied by an enable
     //     that is the constant 1, which is a proof that a clock gate
@@ -614,3 +895,43 @@ always @(posedge clk_i) if (f_past_valid && rst_ni) begin
     cover (!clk_en_o && f_out_i != 3'd0);
     cover (!clk_en_o && f_out_d != 3'd0);
 end
+
+// ---------------------------------------------------------------------
+// R1-R4: the request register's own witnesses, REQ_REG = 1 only
+// ---------------------------------------------------------------------
+//
+// IN A GENERATE AND NOT UNDER AN `if`, deliberately. An assert whose
+// antecedent is constant-false is vacuously true and costs nothing; a
+// COVER whose condition is constant-false is UNREACHABLE, and docs/09
+// section B.1 makes an unreachable cover a red result. So these four
+// are elaborated only at the setting where they are reachable, and
+// REQ_REG = 0's cover task is the task it was before the parameter.
+generate
+if (REQ_REG != 0) begin : g_f_req_reg
+    always @(posedge clk_i) if (f_past_valid && rst_ni) begin
+        // R1. THE THROUGHPUT CLAIM, WITNESSED. A request is captured in
+        //     the very cycle the register hands the previous one to its
+        //     slave. Without this, every property here would be
+        //     satisfied by a fabric that accepted one request every two
+        //     cycles, which is the failure mode the one-deep skid
+        //     buffer exists to avoid and which no assertion can see.
+        cover (f_gnt && f_fly && f_fly_xfer);
+
+        // R2. AND THE OTHER HALF: the register holding a request a
+        //     slave has not taken. This is the state F3e is about.
+        //     TWO SLAVES HERE PRODUCE IT -- soc_apb_bridge.v grants
+        //     only in ST_IDLE and soc_npu.v only in W_IDLE -- so this
+        //     cover is not a hypothetical, and docs/84 section 2.4a
+        //     measures what the state costs, which is nothing the
+        //     round-robin arbiter was not already costing.
+        cover (f_fly && !f_fly_xfer);
+
+        // R3. A master at the outstanding limit with one of the two
+        //     still in the register -- the case where a master's count
+        //     and its slave's queue disagree, which is what f_out_i_slv
+        //     exists for and what I4 and F8 are checked on.
+        cover (f_fly && !f_fly_own && f_out_i == 3'd2);
+        cover (f_fly &&  f_fly_own && f_out_d == 3'd2);
+    end
+end
+endgenerate

@@ -220,6 +220,18 @@ if [ "$SOC_WAKE_GNT" != 0 ]; then
   TOP_CHPARAM="$TOP_CHPARAM
 chparam -set WAKE_GNT $SOC_WAKE_GNT soc_top"
 fi
+# docs/84's knob, on soc_top's own parameter, which forwards it to
+# soc_bus. 1 captures the fabric's arbitration result into a register,
+# so the slave decode and the slave's read multiplexer stop sharing a
+# clock period with the core's register-file read and its ALU. This is
+# the netlist docs/84 section 5 runs hw/soc/pnr/logic_depth.py on, and
+# it is the only knob in this script whose purpose is the DEPTH of the
+# netlist rather than its area or its power. Defaults to the design, 0.
+SOC_REQ_REG=${SOC_REQ_REG:-0}
+if [ "$SOC_REQ_REG" != 0 ]; then
+  TOP_CHPARAM="$TOP_CHPARAM
+chparam -set REQ_REG $SOC_REQ_REG soc_top"
+fi
 # shellcheck source=hw/soc/flow/ibex_sources.sh
 . "$SOC_DIR/flow/ibex_sources.sh"
 
@@ -529,6 +541,21 @@ fi
 # the only way to run SOC_MEM=array to a conclusion in a sensible time,
 # because what follows would then be a synthesis of 589,824 registers of
 # behavioural memory model.
+# YOSYS'S abc TAKES -D IN PICOSECONDS, AND THIS FLOW HAS ALWAYS PASSED
+# IT NANOSECONDS. `-D $PERIOD_NS` with PERIOD_NS=20 asks abc for a 20 ps
+# critical path, not a 20 ns one: a target three orders of magnitude
+# tighter than the constraint, which abc cannot meet and therefore
+# optimises against with no area ceiling. Every netlist this project has
+# published was mapped that way, so the default is LEFT AS IT WAS --
+# changing it silently would invalidate the comparison every timing
+# document in this corpus rests on. SOC_ABC_D_PS=1 expresses the same
+# period in the unit the flag reads, and docs/84 is the measurement of
+# what that changes.
+ABC_D=$PERIOD_NS
+if [ "${SOC_ABC_D_PS:-0}" != 0 ]; then
+  ABC_D=$(python3 -c "print(int(float('$PERIOD_NS')*1000))")
+fi
+
 cat > "$OUT/abc.constr" <<EOF
 set_driving_cell sg13g2_buf_4
 set_load 0.005
@@ -569,7 +596,7 @@ write_verilog $OUT/soc_top.pre_map.v
 
 dfflibmap -liberty $SG13G2_TYP
 opt
-abc -liberty $SG13G2_TYP -constr $OUT/abc.constr -D $PERIOD_NS
+abc -liberty $SG13G2_TYP -constr $OUT/abc.constr -D $ABC_D
 
 # Per-module area BEFORE the deferred flatten, so the memory stand-in's
 # contribution is separable in the same run that produced the netlist.
@@ -625,6 +652,6 @@ awk -v top=soc_top -v ge=7.2576 '
 ' "$OUT/$AREA_SUMMARY"
 
 echo "  mem=$SOC_MEM  regfile=$IBEX_REGFILE  fault_port=$IBEX_FAULT_PORT  synpre=$IBEX_RF_SYNPRE"
-echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  clkgate=$SOC_CLKGATE  wake_gnt=$SOC_WAKE_GNT  abc -D $PERIOD_NS"
+echo "  mem_rdreg=$SOC_MEM_RDREG  mem_harden=$SOC_MEM_HARDEN  rom_harden=$SOC_ROM_HARDEN  boot_harden=$SOC_BOOT_HARDEN  clkgate=$SOC_CLKGATE  wake_gnt=$SOC_WAKE_GNT  req_reg=$SOC_REQ_REG  abc -D $ABC_D"
 echo "  report: $OUT/$AREA_SUMMARY  per-module: $OUT/area_hier.rpt"
 echo "  netlist: $OUT/soc_top.netlist.v  sta: $OUT/soc_top.sta.v  log: $OUT/syn.log"
