@@ -13,8 +13,10 @@ revisions of the document.
 This records what the one report turned out to be the visible end of.
 Chasing it properly meant building the check the owner had just
 performed by eye, running it over both documents, and then reading what
-it could not see. **Four separate defects came out, of four different
-kinds, and only the first was the one reported.**
+it could not see. **Five separate defects came out, of five different
+kinds, and only the first was the one reported.** The last of them was
+not found by any tool; it was found by reading a rendered table, and it
+is the one that had corrupted the document's most-quoted numbers.
 
 Convention, as elsewhere: **[fact]** = measured in this environment or
 read out of a file in this repository on the stated date.
@@ -28,10 +30,11 @@ read out of a file in this repository on the stated date.
 | **What was reported** | one figure, one page, names over dimensions |
 | **What it was** | offsets given in data coordinates where points were meant: 14 um above centre on an axis 2,000 um tall |
 | **What a systematic scan then found** | a micro sign printing as a t-cedilla in 46 places; three fragments of editing instructions typeset as body text; a table overrunning its float page onto the folio |
+| **What reading the rendered page then found** | a thousands separator inside the decimal part of 44 numbers, the worst setup slack among them |
 | **What the scan could not find, and a human could** | all four, which is the point of section 7 |
-| **Gates added** | two, in both document Makefiles: no overfull box, and no text over other text |
+| **Gates added** | three, in both document Makefiles: no overfull box, no text over other text, no separator inside a decimal |
 | **Gate proved to fire** | yes, on a page built to collide (section 6) |
-| **State of both documents** | 0 overfull boxes, 0 colliding word pairs, 0 t-cedillas, 533 tests, SPDX clean |
+| **State of both documents** | 0 overfull boxes, 0 colliding word pairs, 0 t-cedillas, 0 misgrouped decimals, 534 tests, SPDX clean |
 
 **The reason all four survived to publication is the same reason.**
 Every one of them is invisible in the source and invisible in the
@@ -184,6 +187,35 @@ page. Nothing about the content changed.
 
 ---
 
+## 6a. The worst setup slack was printed as 7.575,8 ns
+
+The scan cannot see this one, and no LaTeX warning names it. It was
+found by reading a rendered table on page 70 and noticing that a
+standard-cell area read **396,177.642,0 um2**.
+
+siunitx's `group-separator` applies to the **decimal** side as well as
+the integer side unless `group-digits=integer` says otherwise. The
+thesis set `group-minimum-digits=4` and not that, so every number in
+it with four or more decimal places was cut with a comma:
+
+| source | printed | should read |
+|---|---|---|
+| `\qty{-7.5758}{\nano\second}` | -7.575,8 ns | -7.5758 ns |
+| `\qty{+0.0296}{\nano\second}` | 0.029,6 ns | 0.0296 ns |
+| `\qty{396177.6420}{\um\squared}` | 396,177.642,0 um2 | 396,177.6420 um2 |
+
+**44 numbers in the document, and the two at the top of that table are
+the design's headline timing figures** — the worst setup slack at the
+slow corner and the hold margin that two experiments in this project
+were refused for spending. Both had been printed with a comma inside
+them in every revision of the thesis so far. **[fact, 2026-09-16]**
+
+The SoC paper had `group-digits=integer` from its first line and was
+never affected, which is the only reason the defect is a thesis defect
+rather than a corpus one.
+
+---
+
 ## 7. Where the gates go, and why not in the test suite
 
 Both properties are properties **of the rendered page**, so they are
@@ -194,7 +226,21 @@ it, in `thesis/Makefile` and `paper-soc/Makefile`, beside the undefined
 ```make
 	@grep -q 'Overfull' $(DOC).log && { ... exit 1; } || true
 	@python3 ../scripts/pdf_overlap_check.py $(DOC).pdf --quiet
+	@sh -c 'if sed "s/%.*//" $(DOC).tex | grep -q "group-separator" && ...
 ```
+
+**The third gate reads the source, not the page, and that is deliberate.**
+In rendered text a grouped decimal is a comma between digits, which is
+exactly what a prose list of three decimals looks like: the first
+version of this gate flagged *"27.774, 34.835 and 46.095 mW"*, a
+correct sentence. The source form is exact, because siunitx's decimal
+grouping is controlled by that one key and nothing else.
+
+**And it strips comments before looking.** The first version did not,
+so it was satisfied by the preamble's own note *explaining* the key --
+it passed a file with the setting deleted. That is `docs/78`'s rule
+exactly: a guard must check the property, not the name. It was caught
+by deleting the setting and watching the build succeed.
 
 They are not in `sw/tests` because the suite does not build LaTeX and
 should not start; a test that skipped when no PDF was present would be
@@ -203,8 +249,8 @@ a guard that never fires, which this project has been bitten by before
 the guard sits at the build.
 
 **The gates are satisfiable today.** Both documents build with zero
-overfull boxes and zero colliding pairs, so neither gate is a standing
-red light that the next person learns to ignore.
+overfull boxes, zero colliding pairs and zero misgrouped decimals, so
+no gate is a standing red light that the next person learns to ignore.
 
 ---
 
@@ -243,6 +289,11 @@ die maps comes from the sign-off DEF and the netlist, and nothing here
 checks that the DEF is the one the document claims. `docs/50` section 16
 is the project's record of what that failure looks like.
 
+**A number that is printed wrong but plausibly.** Section 6a's gate
+catches the one shape that was found; it does not check that any number
+in the document is the number in the file it cites. That is read by
+hand, and section 6a was found by hand.
+
 **Prose that says the wrong thing clearly.** Section 8 exists because a
 human read three documents against each other. No gate in this
 repository would have found those, and the seventeen errors corrected
@@ -251,5 +302,5 @@ in the thesis the day before were found the same way.
 ---
 
 *2026-09-16. Nothing was built for this document; it is a record of a
-typographic pass over two already-published deliverables and the two
+typographic pass over two already-published deliverables and the three
 gates that came out of it.*

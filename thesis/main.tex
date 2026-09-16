@@ -48,7 +48,13 @@
 \newcommand{\dcite}[2]{\mbox{\code{docs/#1}\,#2}}
 \newcommand{\fact}{\textsuperscript{[fact]}}
 
-\sisetup{detect-all,group-separator={,},group-minimum-digits=4}
+% group-digits=integer IS NOT OPTIONAL HERE. Without it siunitx
+% groups the DECIMAL part too, and this document's most-quoted
+% numbers have four decimal places: the worst setup slack printed
+% as 7.575,8 ns and the hold margin as 0.029,6 ns in two published
+% revisions, 44 numbers in all.
+\sisetup{detect-all,group-separator={,},group-minimum-digits=4,
+         group-digits=integer}
 % THE MICRO SIGN. Under T1 with lmodern, siunitx's own \micro prefix
 % prints a t-cedilla: two revisions of this document shipped a
 % "700.08 tm" standard-cell channel. siunitx's text-micro and

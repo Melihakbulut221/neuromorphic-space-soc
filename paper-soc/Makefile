@@ -50,6 +50,22 @@ endif
 	  echo "text printed over other text; install it or build elsewhere."; \
 	  exit 1; }
 	@python3 ../scripts/pdf_overlap_check.py $(DOC).pdf --quiet
+# A GROUP SEPARATOR INSIDE A DECIMAL PART. siunitx applies
+# group-separator to the DECIMAL side as well as the integer side
+# unless group-digits=integer says otherwise, so a number with four
+# decimal places prints as 7.575,8. Two published revisions of the
+# thesis printed the design's worst setup slack and its hold margin
+# that way, 44 numbers in all. This is checked in the source rather
+# than in the rendered text because the rendered form -- a comma
+# between digits -- is indistinguishable from a prose list of three
+# decimals, and the source form is exact. Comments are stripped
+# first, or a preamble note naming the key would satisfy it.
+	@sh -c 'if sed "s/%.*//" $(DOC).tex | grep -q "group-separator" && \
+	          ! sed "s/%.*//" $(DOC).tex | grep -q "group-digits=integer"; \
+	        then \
+	          echo "siunitx will group the DECIMAL part of every number"; \
+	          echo "with four or more places: set group-digits=integer"; \
+	          echo "in $(DOC).tex, beside group-separator."; exit 1; fi'
 
 # main.bbl IS NOT BUILD OUTPUT for this deliverable. arXiv compiles the
 # tarball it is given and does not run BibTeX, so the .bbl must travel
