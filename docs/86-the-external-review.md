@@ -335,6 +335,39 @@ corpus did not contain — `regfile_scrub_abs` proves a property of the
 BLOCK, `reg_ch0` a property of the CORE, and only the first is what a
 file swap needs.
 
+**The review's preferred route, attempted and reported.** It ranked
+equivalence third and strongest: prove `ibex_regfile_secded` equivalent
+to upstream's `ibex_register_file_ff` on the fault-free input space,
+using the `eqy` machinery `formal/eqy/` already has. That was tried.
+
+Two obstacles the review does not mention, and both are results. The
+gold side lives in `hw/soc/gen/`, which is gitignored vendored Ibex and
+is therefore absent from the mirror and from a fresh clone — so this
+job cannot run where most of the suite runs. And the two modules are
+**not interface-identical**: the substituted file adds `rf_ecc_err_o`,
+so `eqy` refuses to combine them outright. `formal/eqy/regfile_shim.v`
+restricts the question to the sixteen ports upstream has, which is
+written out rather than hidden in a tool flag.
+
+With that, at `SCRUB = 0` and depth 16 **[fact, 2026-09-18]**:
+
+| | |
+|---|---|
+| partitions proved equivalent | **12 of 13** |
+| unresolved | `rdata_a_o` |
+| its verdict | `UNKNOWN` — *reached maximum number of time steps* |
+
+**The one that did not close was not refuted.** It reached the bound
+and stopped, at depth 5 and again at depth 16, and an unbounded engine
+did not finish either. So the honest statement is that twelve of the
+thirteen output partitions of the substituted register file are proved
+equivalent to upstream's on the fault-free input space, and the
+thirteenth — one of the two read ports, and only one, which is itself
+worth a look — is bounded-unresolved. That is more than the corpus had
+and less than the review hoped for, and `formal/eqy/regfile_secded.eqy.in`
+is committed so the next person starts where this stopped rather than
+where it began.
+
 ### F7 and section 5 — documentation
 
 `ROADMAP.md` gains the macro-edge keep-out experiment as a named,

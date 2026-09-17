@@ -1,0 +1,39 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: CERN-OHL-W-2.0
+#
+# Is the substituted register file the same register file?
+#
+# docs/43 swapped hw/soc/rtl/ibex_regfile_secded.v in for the vendored
+# ibex_register_file_ff by FILE SWAP. The claim that swap rests on is
+# that the new file still behaves as a register file at its ports --
+# and riscv-formal's reg_ch0, the check that would settle it through
+# the core, has no verdict on either core after seven engines and four
+# hours each (docs/63 section 17.2).
+#
+# This asks the smaller question the swap actually needs, by
+# equivalence rather than by property. @ROOT@ is substituted by the
+# Makefile; formal/eqy/regfile_shim.v explains why a shim is needed at
+# all (the substituted file adds one output, so the two are not
+# interface-identical and eqy refuses to combine them).
+#
+# SCRUB = 0, because the walker is extra state the gold side does not
+# have and this question is about the encode/decode round trip.
+# hw/soc/formal/regfile_scrub_abs.sby is the scrub's proof.
+
+[gold]
+read_verilog @ROOT@/hw/soc/gen/ibex_register_file_ff.v @ROOT@/formal/eqy/regfile_shim.v
+hierarchy -top regfile_shim
+prep -top regfile_shim -flatten
+
+[gate]
+read_verilog @ROOT@/hw/rtl/secded_enc.v @ROOT@/hw/rtl/secded_dec.v @ROOT@/hw/soc/rtl/ibex_regfile_secded.v @ROOT@/formal/eqy/regfile_shim.v
+chparam -set SCRUB 0 ibex_register_file_ff
+hierarchy -top regfile_shim
+prep -top regfile_shim -flatten
+
+[collect *]
+bind *
+
+[strategy sat]
+use sat
+depth 16
