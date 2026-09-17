@@ -953,6 +953,83 @@ async def test_flush_empties_the_queues_and_keeps_the_record(dut):
         "FLUSH erased the record of the overflow that preceded it"
 
 
+
+@cocotb.test()
+async def test_flush_asserts_at_once_and_releases_two_cycles_later(dut):
+    """The reset synchroniser added for the SYNCASYNCNET finding, measured.
+
+    `blk_rst_n` used to be the bare combinational term
+    `rst_ni && !flush_pulse`, driving aer_fifo's ASYNCHRONOUS reset and
+    read synchronously by the one-hold register at the same time. Two
+    things followed: the deassertion edge had no recovery/removal
+    constraint in static timing, and the queues left flush one edge
+    before the register that feeds them did.
+
+    It is now asynchronous assert with a two-stage synchronous deassert,
+    the discipline soc_top.v:352-359 gives every other reset in this
+    design, and the synchronous consumers read `blk_flush` so that no
+    net here is both an asynchronous reset and a synchronously sampled
+    signal.
+
+    This measures both halves, because the existing flush test waits
+    eight cycles and would not notice either changing:
+
+      * assert is immediate -- blk_rst_n is low in the same cycle the
+        flush pulse is high, with no edge in between;
+      * release takes exactly two more edges after the pulse clears,
+        which is the price of the synchroniser and the reason it is
+        written down here rather than remembered;
+      * blk_flush is the exact complement of blk_rst_n at every edge,
+        which is the queues and the one-hold register agreeing.
+    """
+    env = Env(dut)
+    await env.reset()
+    await env.cwr(C_CTRL, 0)
+
+    # Watch the pulse and the reset together, edge by edge.
+    last_pulse, released_at = None, None
+    complement_held = True
+    await env.cwr(C_CTRL, CTRL_FLUSH)
+    for edge in range(12):
+        await RisingEdge(dut.clk_i)
+        pulse = int(dut.flush_pulse.value)
+        rst_n = int(dut.blk_rst_n.value)
+        flush = int(dut.blk_flush.value)
+        if flush != (1 - rst_n):
+            complement_held = False
+        if pulse:
+            last_pulse = edge
+            assert rst_n == 0, (
+                "the flush pulse is high at edge %d and blk_rst_n is not "
+                "low: the assert is meant to be asynchronous and immediate"
+                % edge)
+        elif last_pulse is not None and rst_n == 1 and released_at is None:
+            released_at = edge
+
+    assert last_pulse is not None, "CTRL.FLUSH produced no flush_pulse"
+    assert complement_held, (
+        "blk_flush is not the complement of blk_rst_n at every edge, so "
+        "the queues and the one-hold register can disagree about whether "
+        "a flush is in progress -- which is the defect the synchroniser "
+        "was added to remove")
+    assert released_at is not None, (
+        "blk_rst_n never returned high within twelve edges of the flush")
+
+    # THE NUMBER, pinned. Without the synchroniser this is 1: blk_rst_n
+    # is combinational in flush_pulse and returns the moment the pulse
+    # clears. With it, two flops shift a 1 in, so release lands two
+    # edges later. A test that only asserted "it releases eventually"
+    # would stay green if the synchroniser were deleted, which is the
+    # failure shape this repository keeps correcting.
+    delay = released_at - last_pulse
+    dut._log.info("blk_rst_n released %d edges after the pulse cleared", delay)
+    assert delay == 3, (
+        "blk_rst_n released %d edges after the flush pulse cleared, not "
+        "3. One means the two-stage deassert synchroniser is gone and "
+        "the reset is combinational again; more means a stage was added "
+        "without this measurement being updated." % delay)
+
+
 # ---------------------------------------------------------------------------
 # 5. The interrupt
 # ---------------------------------------------------------------------------

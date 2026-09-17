@@ -1224,7 +1224,58 @@ module soc_npu #(
   // what it recovered from is the defect docs/16 section 5.1 named and
   // pilot_top.v section 5 corrects.
   // -------------------------------------------------------------------
-  wire blk_rst_n = rst_ni && !flush_pulse;
+  // 2026-09-17, and the shape of this changed rather than the meaning.
+  //
+  // It used to be one net, `rst_ni && !flush_pulse`, driving both
+  // aer_fifo's ASYNCHRONOUS rst_n and the synchronous tests at the
+  // one-hold register and the decode guard. Verilator says that plainly
+  // -- SYNCASYNCNET, "flopped as both synchronous and async" -- and it
+  // was the only place in this SoC where a reset reached flip-flops
+  // without the two-stage deassert soc_top.v:352-359 builds for every
+  // other reset. Three things followed, and none of them was a bug
+  // today: the deassert edge had no recovery/removal constraint in STA
+  // and was safe only because flush_pulse happens to be a clk_i flop;
+  // the queues cleared asynchronously while the one-hold register
+  // cleared on the next edge, so an upset in flush_pulse's own flop
+  // could leave them disagreeing about whether a flush happened; and
+  // the AND gate was a single point whose upset wipes both queues with
+  // nothing counting it.
+  //
+  // aer_fifo.v is frozen pilot RTL (docs/34 pins it by hash, and it is
+  // byte-identical to tt/src/aer_fifo.v), so the port cannot gain a
+  // synchronous flush. The fix lives here instead, and it is two parts:
+  //
+  //   blk_rst_n   asynchronous assert, SYNCHRONOUS DEASSERT, and it now
+  //               drives nothing but the two queues' rst_n.
+  //   blk_flush   what the synchronous consumers read, so that no net
+  //               in this block is both an asynchronous reset and a
+  //               synchronously sampled signal.
+  //
+  // Cost: the queues come out of flush two cycles later than they did.
+  // Benefit: the queues and the one-hold register now leave flush on
+  // the same edge, which is the disagreement above, removed.
+  wire blk_rst_raw_n = rst_ni && !flush_pulse;
+
+  // The pragma is on the SYNCHRONISER and on nothing else, and it is
+  // four lines wide on purpose. A reset synchroniser is a register that
+  // is asynchronously reset and synchronously shifted, and its output
+  // then resets something else asynchronously; Verilator's
+  // SYNCASYNCNET sees that shape and cannot tell it from the defect the
+  // shape exists to remove. The defect -- one net serving as both an
+  // asynchronous reset and a synchronously sampled signal -- is gone:
+  // blk_rst_n now drives the two queues' rst_n and nothing else, and
+  // the synchronous consumers read blk_flush. What remains is the
+  // idiom. Silencing it here rather than at the file level is the whole
+  // point: a SYNCASYNCNET anywhere else in this block still fails.
+  /* verilator lint_off SYNCASYNCNET */
+  reg [1:0] blk_rst_sync;
+  always @(posedge clk_i or negedge blk_rst_raw_n)
+    if (!blk_rst_raw_n) blk_rst_sync <= 2'b00;
+    else                blk_rst_sync <= {blk_rst_sync[0], 1'b1};
+  /* verilator lint_on SYNCASYNCNET */
+
+  wire blk_rst_n = blk_rst_sync[1];
+  wire blk_flush = !blk_rst_sync[1];
 
   wire        inj_full, inj_empty, inj_rd_valid;
   wire [15:0] inj_rd_data;
@@ -1382,7 +1433,7 @@ module soc_npu #(
       oh_req    <= 1'b0;
       cap_rd_en <= 1'b0;
       oh_guard  <= {OH_GUARD_W{1'b0}};
-    end else if (!blk_rst_n) begin
+    end else if (blk_flush) begin
       oh_valid  <= 1'b0;
       oh_req    <= 1'b0;
       cap_rd_en <= 1'b0;
@@ -1622,7 +1673,7 @@ module soc_npu #(
       inj_rd_en <= 1'b0;
       cap_wr_en <= 1'b0;
 
-      if (!blk_rst_n) begin
+      if (blk_flush) begin
         ev_state   <= E_IDLE;
         aer_in_stb <= 1'b0;
         // CTRL.FLUSH empties the queues and the engine, and a detour
@@ -1924,7 +1975,7 @@ module soc_npu #(
   // discard what is in flight, so a discard IT caused is not a fault of
   // the part, and H3's whole subject is false fault reports. One cycle
   // wide: dec_hold goes low on the same edge, because the state leaves.
-  wire dec_expire = dec_hold && blk_rst_n && (dec_guard >= DECMAX_W);
+  wire dec_expire = dec_hold && !blk_flush && (dec_guard >= DECMAX_W);
 
   // ---- the seven sticky events, in cause-bit order -------------------
   //
