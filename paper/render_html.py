@@ -79,6 +79,12 @@ def braces(s, i):
 SIMPLE = {
     "textbf": "strong", "emph": "em", "texttt": "code", "file": "code",
     "textsc": "span class='sc'", "textit": "em", "mathbf": "strong",
+    # \mbox means "do not break this across lines", and white-space:nowrap
+    # is its HTML equivalent, so this is a translation rather than a
+    # swallow. It reached the renderer through paper/main.tex's
+    # "\textbf{Corrected \mbox{2026-09-13}:}" and through the thesis's
+    # own \dcite, which wraps every docs/NN citation in one.
+    "mbox": "span class='nobr'",
 }
 
 
@@ -465,6 +471,7 @@ PAGE = """<!doctype html>
  .abstract h2{{border:0;font-size:1rem;margin:.4rem 0}}
  .sc{{font-variant:small-caps}}
  .note{{color:#666;font-size:.85em}}
+ .nobr{{white-space:nowrap}}
  .unknown{{background:#ffe8e8;color:#900;padding:0 .2em}}
  .banner{{background:#fff8e1;border:1px solid #e8d9a0;padding:.7rem 1.1rem;
    font-size:.88rem;margin-bottom:1.6rem;font-family:system-ui,sans-serif}}

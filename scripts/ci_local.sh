@@ -53,6 +53,23 @@ for a in "$@"; do [ "$a" = "--record" ] && RECORD=1; done
 
 PY=.venv/bin/python
 [ -x "$PY" ] || PY=python3
+# EXPORTED, because several gates below run their python inside
+# `bash -c '...'`. Single quotes stop $PY expanding when this file
+# is read, and the inner shell expands it from the environment
+# instead -- which only works if it is exported. Fourteen call
+# sites used a bare `python3` until 2026-09-17, so on a machine
+# whose system python lacks pyyaml or pytest the licence, docs and
+# suite gates failed for the interpreter and not for the thing
+# they check. A gate that fails for the wrong reason is worse than
+# no gate: it trains the reader to ignore it.
+export PY
+
+# Resolved once, here, because two places need it: the paper gate
+# and the log line's notes field. A row reading "tex=no" beside a
+# passing "build the paper" is a log that contradicts itself.
+TECTONIC="${TECTONIC:-$(command -v tectonic 2>/dev/null || \
+          ls "$HOME/.local/opt/tectonic-env/bin/tectonic" 2>/dev/null)}"
+export TECTONIC
 
 pass=0; fail=0; skip=0
 failed_names=""
@@ -76,7 +93,7 @@ skipped() {  # skipped <name> <reason>
 job_licence() {
     echo "== licence"
     run "every source file carries the right SPDX tag" \
-        python3 scripts/spdx_check.py
+        "$PY" scripts/spdx_check.py
     run "the four licence texts are present and canonical" bash -c '
         set -eu
         for f in CERN-OHL-W-2.0 Apache-2.0 CC-BY-4.0 ISC; do
@@ -113,10 +130,10 @@ job_licence() {
             exit 1
         fi
         rc=0
-        python3 regmap/generate.py >/dev/null
-        python3 regmap/generate_memmap.py >/dev/null
-        python3 scripts/gen_tt_submission.py >/dev/null
-        python3 scripts/spdx_check.py >/dev/null
+        "$PY" regmap/generate.py >/dev/null
+        "$PY" regmap/generate_memmap.py >/dev/null
+        "$PY" scripts/gen_tt_submission.py >/dev/null
+        "$PY" scripts/spdx_check.py >/dev/null
         git diff --exit-code -- $paths || rc=1
         git checkout -- $paths
         exit $rc'
@@ -140,15 +157,15 @@ job_docs() {
     if command -v pandoc >/dev/null 2>&1; then
         run "build the site (pandoc) and gate on the manifest" bash -c '
             set -eu
-            python3 scripts/build_docs.py --out _site --renderer pandoc >/dev/null
-            python3 scripts/ci_gate_docs.py _site pandoc'
+            "$PY" scripts/build_docs.py --out _site --renderer pandoc >/dev/null
+            "$PY" scripts/ci_gate_docs.py _site pandoc'
     else
         skipped "build the site (pandoc)" "no pandoc on this machine"
     fi
     run "build the site (builtin) and gate on the manifest" bash -c '
         set -eu
-        python3 scripts/build_docs.py --out _site_builtin --renderer builtin >/dev/null
-        python3 scripts/ci_gate_docs.py _site_builtin builtin
+        "$PY" scripts/build_docs.py --out _site_builtin --renderer builtin >/dev/null
+        "$PY" scripts/ci_gate_docs.py _site_builtin builtin
         test -s _site_builtin/index.html'
     # --strict, which nothing passed until 2026-09-11. The builder has
     # carried the flag since it was written and every invocation in this
@@ -161,7 +178,7 @@ job_docs() {
         set -eu
         out=$(mktemp -d)
         trap "rm -rf $out" EXIT
-        python3 scripts/build_docs.py --out "$out" --renderer builtin \
+        "$PY" scripts/build_docs.py --out "$out" --renderer builtin \
             --strict --quiet' 
 }
 
@@ -169,8 +186,8 @@ job_docs() {
 job_paper() {
     echo "== paper"
     run "re-derive the numbers the paper registers" \
-        python3 paper/check_claims.py
-    run "no claim may be unattributed" python3 - <<'PY'
+        "$PY" paper/check_claims.py
+    run "no claim may be unattributed" "$PY" - <<'PY'
 import sys, pathlib
 sys.path.insert(0, "paper")
 from check_claims import load
@@ -187,20 +204,28 @@ if bad:
 print("every claim names a command or an artefact")
 PY
     run "the paper source is structurally sound" \
-        python3 scripts/tex_lint.py paper/main.tex
+        "$PY" scripts/tex_lint.py paper/main.tex
     # The renderer exits non-zero on a macro it does not know, so this
     # is a real gate and not a convenience: a new command in the source
     # fails here rather than appearing as raw LaTeX in the reading copy.
     run "the reading copy renders with no unknown macro" \
-        python3 paper/render_html.py paper/main.tex paper/main.html
-    if command -v pdflatex >/dev/null 2>&1; then
-        run "build the paper" make -C paper
+        "$PY" paper/render_html.py paper/main.tex paper/main.html
+    # PROBE FOR WHAT THE MAKEFILE ACTUALLY USES. paper/Makefile resolves
+    # tectonic first and keeps pdflatex only for arXiv and for hosted
+    # runners (paper/Makefile:39-45), so a gate that probes pdflatex
+    # alone skips on every machine that has tectonic and not TeX Live --
+    # which is this one. The skip was honest and its reason was printed;
+    # it was also avoidable, and an avoidable skip is a gate that does
+    # not run. The resolution below is the Makefile's own, copied so the
+    # two cannot disagree.
+    if command -v pdflatex >/dev/null 2>&1 || [ -x "$TECTONIC" ]; then
+        run "build the paper" env TECTONIC="$TECTONIC" make -C paper
         run "the bibliography is not empty" bash -c '
             set -eu
             test -s paper/main.bbl
             ! grep -qE "Citation .* undefined" paper/main.log'
     else
-        skipped "build the paper" "no TeX on this machine; tex_lint above is not a compile"
+        skipped "build the paper" "no TeX and no tectonic on this machine; tex_lint above is not a compile"
         skipped "the bibliography is not empty" "needs the build"
     fi
 }
@@ -347,8 +372,8 @@ job_mirror() {
         set -eu
         out=$(mktemp -d)
         trap "rm -rf $out" EXIT
-        python3 scripts/gen_public_mirror.py --out "$out" | tail -2
-        python3 scripts/gen_public_mirror.py --out "$out" --check'
+        "$PY" scripts/gen_public_mirror.py --out "$out" | tail -2
+        "$PY" scripts/gen_public_mirror.py --out "$out" --check'
 }
 
 case "$JOB" in
@@ -376,7 +401,7 @@ if [ "$RECORD" = "1" ]; then
     [ -f "$REC" ] || printf 'utc\thead\tjob\tpassed\tfailed\tskipped\tnotes\n' > "$REC"
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "$(date -u +%Y-%m-%dT%H:%MZ)" "$head" "$JOB" "$pass" "$fail" "$skip" \
-        "tree-dirty=$dirty,pandoc=$(command -v pandoc >/dev/null && echo yes || echo no),tex=$(command -v pdflatex >/dev/null && echo yes || echo no)" \
+        "tree-dirty=$dirty,pandoc=$(command -v pandoc >/dev/null && echo yes || echo no),tex=$(command -v pdflatex >/dev/null && echo pdflatex || { [ -x "$TECTONIC" ] && echo tectonic || echo no; })" \
         >> "$REC"
     echo "recorded in $REC"
 fi

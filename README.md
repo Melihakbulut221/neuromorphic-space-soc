@@ -1,6 +1,6 @@
-# Neuromorphic Space SoC
+# Neuromorphic Fault Tolerant SoC
 
-A fault-tolerant system-on-chip for on-board AI inference in small-satellite
+A fault-tolerant system-on-chip for on-board AI inference in critical
 missions, implemented on a 130 nm technology with an open-source RTL-to-GDS
 flow. The architecture class follows the Frontgrade Gaisler GR801 (public
 product brief, April 2026): a RISC-V management processor, an event-driven
