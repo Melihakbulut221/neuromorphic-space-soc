@@ -223,6 +223,52 @@ the model checks it against the part's 133 MHz for every command and
 50 MHz for Read Data (03h). A sampling-delay adjustment for a faster SCK
 is not here and section 12 says so.
 
+**The minimum divider, added 2026-09-18.** The paragraph above states a
+CEILING and an external review found that the BUDGET under it was
+stated nowhere: no `set_input_delay` existed on `qspi_io_i` anywhere in
+the flow, so LibreLane's blanket `IO_PCT` synthetic delay -- a fraction
+of the clock period, not a model of a flash -- was what the timing tool
+used. The arithmetic is now written down in three places that must
+agree: `hw/soc/rtl/soc_qspi.v`'s header, `hw/soc/sta/soc_top_qspi_io.sdc`
+and here.
+
+One SCK half period is the whole external budget, because `io_i` goes
+into `cur` with no intermediate flop on the same `clk_i` edge that
+raises `sck_q`. It must cover clk-to-pad, board out, the part's tCLQV,
+board back, pad-to-core and setup:
+
+> half period = (DIV + 1) x CLOCK_PERIOD
+> DIV >= ceil((tCLQV + 2 x board) / CLOCK_PERIOD) - 1
+
+with tCLQV = 6.0 ns **[fact, `hw/soc/tb/flash_w25q128jv.v:113`]** and a
+board allowance of 2.0 ns each way **[ASSUMED]** -- assumed because
+there is no board, no pad ring and no pad model in this repository, and
+the SDC carries it as a variable so that a measurement can replace it.
+
+At the 20 ns period every layout here was built at, that is
+`ceil(10/20) - 1 = 0`: **DIV = 0 is legal**, with 10 ns of the 20
+remaining for setup and for whatever the assumption is wrong about. At
+10 ns it becomes DIV >= 0 with nothing spare, and at 5 ns DIV >= 1.
+
+**Measured, 2026-09-18.** With `hw/soc/sta/soc_top_qspi_io.sdc`
+sourced over the sign-off netlist
+`hw/soc/pnr/runs/s83romecc5/final/nl/soc_top.nl.v` at the typical
+corner, OpenSTA 3.1.0 and a 20 ns period, the input path closes with
+**+9.4682 ns** of slack and the SCK output path with **+16.7764 ns**
+**[fact, OpenSTA `report_checks`]**. The path closes with 9.47 ns of
+margin under the assumptions above -- which is the answer a ceiling
+cannot give. This was a standalone STA run on a netlist a completed
+run left behind; the constraints are not yet folded into the LibreLane
+configuration, and doing that is a separate change with its own
+measurement because a constraint the router sees can move the router.
+
+**And no synchroniser belongs on this path**, which is the obvious
+thing to reach for and would be wrong. `io_i` is source-synchronous:
+the flash launches it off the SCK this block generates from `clk_i`, so
+it is phase-related to `clk_i` rather than asynchronous to it. Two
+flops of synchroniser on a read-data lane would delay the data two
+clocks relative to the shift sequencer and corrupt every word read.
+
 ---
 
 ## 4. The commands the driver uses

@@ -204,6 +204,48 @@
 //     edge the block itself generates, so the SCK period must exceed
 //     twice the part's clock-low-to-output-valid time (6 ns): docs/66
 //     section 3.3.
+//
+// THE MINIMUM LEGAL DIVIDER, with the arithmetic rather than the
+// conclusion (added 2026-09-18 for the external review's F4, which
+// found that the ceiling above was stated and the budget under it was
+// not).
+//
+//   SCK          = clk_i / (2 * (DIV + 1))                 line 73
+//   half period  = (DIV + 1) * CLOCK_PERIOD                lines 130-131
+//
+// One half period is the whole external budget, because `io_i` goes
+// straight into `cur` at line 472 with no intermediate flop, on the
+// same clk_i edge that raises sck_q. It must cover, in order:
+//
+//   clk_i -> pad, board flight out, the part's tCLQV, board flight
+//   back, pad -> core, and setup at `cur`.
+//
+//   tCLQV        6.0 ns    hw/soc/tb/flash_w25q128jv.v:113 (W25Q128JV)
+//   board        2.0 ns    ASSUMED each way. There is no board, no pad
+//                          ring (see line 186) and no pad model in this
+//                          repository, so this is an assumption and is
+//                          named as one; hw/soc/sta/soc_top_qspi_io.sdc
+//                          carries it as a variable to be replaced by a
+//                          measurement.
+//
+//   DIV >= ceil((tCLQV + 2 * board) / CLOCK_PERIOD) - 1
+//
+// At CLOCK_PERIOD = 20 ns, the value every layout in this repository
+// was built at: ceil(10 / 20) - 1 = 0. DIV = 0 is legal, with 10 ns of
+// the 20 left for setup and for whatever the assumption is wrong
+// about. At 10 ns it is DIV >= 0 with nothing left over; at 5 ns,
+// DIV >= 1. The arithmetic is here so that a reader who changes
+// CLOCK_PERIOD recomputes it rather than inheriting a conclusion taken
+// at 20 ns.
+//
+// NO SYNCHRONISER BELONGS ON THIS PATH, and that is worth saying
+// because it is the obvious thing to reach for. `io_i` is
+// source-synchronous: the flash launches it off the SCK this very
+// block generates from clk_i, so it is phase-related to clk_i and not
+// asynchronous to it. A two-flop synchroniser on a read-data lane
+// would delay the data two clocks relative to the shift sequencer and
+// corrupt every word read. The constraint is on the SCK period, which
+// is what the arithmetic above bounds.
 
 `timescale 1ns / 1ps
 `default_nettype none
