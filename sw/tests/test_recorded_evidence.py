@@ -65,21 +65,39 @@ def test_every_cited_run_has_its_evidence_committed(tag, name):
 
 
 @pytest.mark.skipif(not RUNS, reason="scripts/collect_evidence.py is not in this tree")
-@pytest.mark.parametrize("tag,name", CASES, ids=lambda v: v)
-def test_the_record_matches_the_run_tree_where_both_exist(tag, name):
-    """A record that has drifted from its run is a record of nothing."""
-    base = ROOT / RUNS[tag] / tag
-    live = base / ("final/metrics.json" if name == "metrics.json"
-                   else "resolved.json")
-    if not live.is_file():
+def test_the_record_matches_the_run_tree_where_both_exist():
+    """A record that has drifted from its run is a record of nothing.
+
+    ONE test and not thirty. The first version parametrised over every
+    run and file, which reads well on a machine holding the run trees
+    and turns into thirty identical skips on every machine that does
+    not -- a clone, the mirror, CI. Thirty skips saying the same thing
+    is not thirty facts, and this repository's own rule is that a skip
+    must carry a reason worth reading. Where the trees ARE present this
+    still names every file it compared.
+    """
+    checked, absent = [], []
+    for tag in sorted(RUNS):
+        base = ROOT / RUNS[tag] / tag
+        for name in NAMES:
+            live = base / ("final/metrics.json" if name == "metrics.json"
+                           else "resolved.json")
+            if not live.is_file():
+                absent.append("%s/%s" % (tag, name))
+                continue
+            # evidence.load raises on a mismatch, naming both paths.
+            got = ev.load(tag, name, live)
+            assert got is not None and got.is_live
+            checked.append("%s/%s" % (tag, name))
+    if not checked:
         pytest.skip(
-            "no run tree for %r on this machine, so there is nothing to "
-            "compare the record against. runs/ is gitignored build output; "
-            "the record is what makes the claims checkable here, and the "
-            "comparison is what a machine holding the run does." % tag)
-    # evidence.load raises on a mismatch, with the two paths named.
-    got = ev.load(tag, name, live)
-    assert got is not None and got.is_live
+            "no run tree for any of the %d cited runs is on this machine, "
+            "so there is nothing to compare the records against. runs/ is "
+            "gitignored build output; the records are what make the claims "
+            "checkable here, and this comparison is what a machine holding "
+            "the runs does. %d files were looked for."
+            % (len(RUNS), len(absent)))
+    assert checked, "nothing compared"
 
 
 @pytest.mark.skipif(not RUNS, reason="scripts/collect_evidence.py is not in this tree")
