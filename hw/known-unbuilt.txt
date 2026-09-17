@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+#
+# Modules under hw/rtl/ that are deliberately reachable from no design
+# this repository builds. One per line: MODULE<tab>REASON.
+#
+# It lives HERE and not in hw/rtl/ because that tree is frozen:
+# docs/34 pins it by hash and tt/MANIFEST.sha256 verifies it.
+#
+# WHY THE FILE EXISTS. An external review found that 1,268 of the 6,883
+# lines README.md calls "exists, and is verified" are built into
+# nothing, and that fourteen of the fifty-four proof tasks prove them.
+# Nothing was wrong with the modules or the proofs; what was missing was
+# anyone saying so. This file is that statement, and
+# sw/tests/test_no_orphan_modules.py turns it into a gate, so the NEXT
+# orphan fails a test instead of accumulating quietly.
+#
+# A LINE HERE IS NOT A PARDON. It records a decision with a reason, the
+# way formal-dispositions.tsv does for a non-PASS verdict. Adding a
+# module here to make the test green, without the reason being true, is
+# the failure the test exists to prevent.
+
+npu_regbank	Written for the multi-node accelerator's shared register bank and orphaned when the pilot was scaled to one tile. pilot_top.v carries its own inline pilot_cfg_bank and pilot_chk_bank instead, and the SoC's peripheral registers are generated per block. Proved by formal/npu_regbank.sby, 5 tasks; docs/09 row 6 records that the proof's subject is in no netlist.
+scrub	The multi-node scrub controller, orphaned for the same reason. pilot_top.v walks its own scrub loop and the SoC instantiates hw/soc/rtl/soc_scrub.v, a different module in a different file. Proved by formal/scrub.sby, 9 tasks.

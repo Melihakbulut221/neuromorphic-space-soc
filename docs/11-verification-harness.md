@@ -60,14 +60,25 @@ the harness moved.
 
 ## 1. What is verified today
 
-| Block | RTL | Golden model | cocotb suite | Formal job |
-|---|---|---|---|---|
-| AER event FIFO | `hw/rtl/aer_fifo.v` | in-test scoreboard | `hw/tb/test_aer_fifo.py` | `formal/aer_fifo.sby` (4 tasks) |
-| NPU register bank | `hw/rtl/npu_regbank.v` | `sw/golden/regmap_gen.py` (generated) | `hw/tb/test_npu_regbank.py` | `formal/npu_regbank.sby` (5 tasks) |
-| LIF datapath | `hw/rtl/lif_core.v` | `sw/golden/lif_core.py` | `hw/tb/test_lif_core_rtl.py` | `formal/lif_ctrl.sby` (8 tasks) — the control path |
-| SECDED (72, 64) codec | `hw/rtl/secded_enc.v`, `hw/rtl/secded_dec.v` | `sw/golden/secded.py` | `hw/tb/test_secded.py` | `formal/secded.sby` (3 tasks) |
-| TMR voter | `hw/rtl/tmr_voter.v` | in-test majority model | `hw/tb/test_tmr_voter.py` | `formal/tmr_voter.sby` (8 tasks) |
-| Pilot integration + TT wrapper | `hw/rtl/pilot_top.v` and its Tiny Tapeout wrapper | `lif_core.py` + `regmap_gen.py`, driven through the TT pins | `hw/tb/test_pilot_top.py` | none — an integration of blocks that are each proven above; see the note in section 6.2 |
+| Block | RTL | Golden model | cocotb suite | Formal job | Built into |
+|---|---|---|---|---|---|
+| AER event FIFO | `hw/rtl/aer_fifo.v` | in-test scoreboard | `hw/tb/test_aer_fifo.py` | `formal/aer_fifo.sby` (4 tasks) | frozen submission, `soc_npu` |
+| NPU register bank | `hw/rtl/npu_regbank.v` | `sw/golden/regmap_gen.py` (generated) | `hw/tb/test_npu_regbank.py` | `formal/npu_regbank.sby` (5 tasks) | **neither** |
+| LIF datapath | `hw/rtl/lif_core.v` | `sw/golden/lif_core.py` | `hw/tb/test_lif_core_rtl.py` | `formal/lif_ctrl.sby` (8 tasks) — the control path | frozen submission |
+| SECDED (72, 64) codec | `hw/rtl/secded_enc.v`, `hw/rtl/secded_dec.v` | `sw/golden/secded.py` | `hw/tb/test_secded.py` | `formal/secded.sby` (3 tasks) | frozen submission, `soc_top` |
+| TMR voter | `hw/rtl/tmr_voter.v` | in-test majority model | `hw/tb/test_tmr_voter.py` | `formal/tmr_voter.sby` (8 tasks) | frozen submission, `soc_top` |
+| Pilot integration + TT wrapper | `hw/rtl/pilot_top.v` and its Tiny Tapeout wrapper | `lif_core.py` + `regmap_gen.py`, driven through the TT pins | `hw/tb/test_pilot_top.py` | none — an integration of blocks that are each proven above; see the note in section 6.2 | frozen submission |
+
+**The `Built into` column was added 2026-09-17**, because this table
+listed the register bank beside blocks that are in the submission and
+drew no distinction. `hw/rtl/npu_regbank.v` is instantiated in no
+design this repository builds -- `tt/info.yaml`'s `source_files` omits
+it and `hw/rtl/pilot_top.v` carries its own inline `pilot_cfg_bank` and
+`pilot_chk_bank` -- and neither does `hw/rtl/scrub.v`, whose row is
+absent here because the SoC's scrub engine is the separate
+`hw/soc/rtl/soc_scrub.v`. Both are proved, and the proofs are sound;
+what the proofs are about is a module in no netlist. See `README.md`'s
+inventory paragraph for the two shares that follow from it.
 
 Three independent kinds of evidence are kept for the fault-tolerance
 primitives (SECDED, TMR) and for the register bank: a Python model that

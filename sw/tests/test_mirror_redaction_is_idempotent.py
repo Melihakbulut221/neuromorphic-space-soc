@@ -2,6 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 """The mirror generator is idempotent, and still fails on a reworded hold.
 
+READ THE TREE BEFORE READING THE ASSERTIONS. This file ships to the
+public mirror, where every fact it states about a held fragment is
+inverted: upstream the fragment is present and the redaction is not,
+and in the mirror it is the other way round. The first version of this
+file did not account for that, shipped, and turned the mirror's own CI
+red on its first push -- a guard that fails where it is published is
+worse than the defect it was written for. `IN_MIRROR` decides which
+half applies, and each half is a real assertion rather than a skip.
+
 WHY THIS GUARD EXISTS. `scripts/gen_public_mirror.py` asserted that
 every held fragment matched its pattern exactly once. Run against the
 tree it had itself produced, the fragment was already redacted, the
@@ -64,8 +73,28 @@ def _fragments():
 
 FRAGMENTS = _fragments()
 
+# IS THIS TREE THE UPSTREAM OR THE MIRROR? The two have opposite truths
+# about every fragment, so a test that assumed one of them failed in the
+# other -- which is what happened: the first version of this file was
+# written upstream, shipped to the mirror by the generator, and turned
+# the mirror's own CI red on its first push. The generator appends a
+# section to README.md naming itself, and that is the signal.
+MIRROR_NOTE = "This repository is a published subset of a private development"
+
+
+def _is_generated_mirror():
+    readme = ROOT / "README.md"
+    return readme.is_file() and MIRROR_NOTE in readme.read_text(
+        encoding="utf-8", errors="ignore")
+
+
+IN_MIRROR = _is_generated_mirror()
+
 
 @pytest.mark.skipif(not FRAGMENTS, reason="scripts/gen_public_mirror.py is not in this tree")
+@pytest.mark.skipif(IN_MIRROR, reason="this tree IS the generated mirror, where "
+                                      "the fragment is redacted by construction; "
+                                      "the mirror's own claim is the next test")
 @pytest.mark.parametrize("entry", FRAGMENTS, ids=lambda e: e[0])
 def test_the_source_still_carries_the_fragment_and_not_the_marker(entry):
     """Upstream: the pattern matches once and the redaction is absent."""
@@ -87,6 +116,23 @@ def test_the_source_still_carries_the_fragment_and_not_the_marker(entry):
 
 
 @pytest.mark.skipif(not FRAGMENTS, reason="scripts/gen_public_mirror.py is not in this tree")
+@pytest.mark.parametrize("entry", FRAGMENTS, ids=lambda e: e[0])
+def test_this_mirror_is_redacted(entry):
+    """In the mirror the redaction is already present. That IS the claim."""
+    if not IN_MIRROR:
+        pytest.skip("this tree is the upstream repository, not the mirror")
+    rel, _pattern, _replacement, marker, _why = entry
+    src = ROOT / rel
+    if not src.exists():
+        pytest.skip("%s is not in this tree" % rel)
+    assert marker in src.read_text(encoding="utf-8"), (
+        "%s is in a generated mirror and does not carry the redaction "
+        "marker: the held fragment may have travelled." % rel)
+
+
+@pytest.mark.skipif(not FRAGMENTS, reason="scripts/gen_public_mirror.py is not in this tree")
+@pytest.mark.skipif(IN_MIRROR, reason="generating a mirror needs the upstream "
+                                      "tree's git history and its held files")
 def test_the_generated_tree_is_redacted_and_regenerates_unchanged(tmp_path):
     """The mirror case: pattern gone, marker present, and running again is a no-op."""
     first = tmp_path / "m1"
@@ -132,6 +178,8 @@ def test_the_generated_tree_is_redacted_and_regenerates_unchanged(tmp_path):
 
 
 @pytest.mark.skipif(not FRAGMENTS, reason="scripts/gen_public_mirror.py is not in this tree")
+@pytest.mark.skipif(IN_MIRROR, reason="the fragment is already redacted here, so "
+                                      "there is nothing left to reword")
 @pytest.mark.parametrize("entry", FRAGMENTS, ids=lambda e: e[0])
 def test_a_reworded_fragment_is_not_mistaken_for_a_redacted_one(entry):
     """The guarantee: reworded upstream is NOT the same as already redacted.

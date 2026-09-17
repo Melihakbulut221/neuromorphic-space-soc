@@ -50,18 +50,52 @@ commit `b6738e5`), and a gate-level run in which **370 of 370**
 comparable injections classify identically to RTL (`docs/32` section
 5.1). `docs/34-pilot-freeze.md` pins the whole artifact set by hash.
 
+*Scope stated 2026-09-17, because "exists, and is verified" was being
+read wider than the commands behind it.* Two of those nine files are
+built into nothing. `hw/rtl/npu_regbank.v` (936 lines) and
+`hw/rtl/scrub.v` (332) are complete, tested and proved, and are
+instantiated in no design this repository builds: not in
+`hw/rtl/pilot_top.v`, which carries its own inline `pilot_cfg_bank`,
+`pilot_chk_bank` and scrub loop; not in the TTIHP26b submission, whose
+`source_files` in `tt/info.yaml` names neither; and not in
+`hw/soc/rtl/soc_top.v`, which instantiates `soc_scrub`, a different
+module in a different file. They were written for the multi-node
+accelerator and were orphaned when the pilot was scaled to one tile.
+That is a legitimate history, and it is 1,268 of the 6,883 lines
+(**18.4 %**) and 14 of the 54 proof tasks (**25.9 %**: `npu_regbank` 5,
+`scrub` 9). Both numerals above are true of their commands; this
+sentence is the scope those commands do not carry. Verify it with
+`grep -rn npu_regbank --include=*.v .` and
+`grep -A8 source_files tt/info.yaml`.
+
 *Re-counted 2026-09-10, and one of those numerals was carrying a claim
 it cannot support.* This paragraph said **234 Python tests**, and no
 document in the corpus says 234 — the freeze measured 231 and the suite
 has grown with every SoC block and every document since, because
 `sw/tests/test_doc_links.py` parametrises one case per document.
-`.venv/bin/python -m pytest --collect-only -q` collects **503** at the
-repository root today. That is a count of the *whole* tree and not of
-the pilot, so the pilot figure is dropped rather than refreshed: there
-is no command that returns a pilot-only Python count, and a number with
-no command behind it is what this paragraph had. The line count moved
-too, 6,856 to 6,883, and 6,856 appears nowhere else either. The other
-four reproduce, to the digit, from the commands printed beside them.
+`.venv/bin/python -m pytest --collect-only -q` collects ~~**503**~~ at
+the repository root today. That is a count of the *whole* tree and not
+of the pilot, so the pilot figure is dropped rather than refreshed:
+there is no command that returns a pilot-only Python count, and a
+number with no command behind it is what this paragraph had. The line
+count moved too, 6,856 to 6,883, and 6,856 appears nowhere else either.
+The other four reproduce, to the digit, from the commands printed
+beside them.
+
+*Corrected 2026-09-17, and the correction is to stop printing the
+number.* An external review re-ran the five and found four exact and
+this one drifted: 503 had become **532** on a fresh clone. It has since
+moved again, and it will keep moving, because the figure is not a
+property of the repository. `sw/tests/test_soc_clkgate_guards.py`
+parametrises one case per gate-level netlist found under `hw/soc/out/`,
+which is gitignored build output, so running synthesis changes the
+count without changing one tracked file: this machine collects **543**
+where a clone of the same commit collects fewer. The other four
+numerals name a command *and* a value because both are stable. This one
+names the command only — `.venv/bin/python -m pytest --collect-only -q`
+— and that is the whole claim. A literal here would be a number that
+disagrees with its own command on most machines, which is the defect
+this paragraph was written to correct in the first place.
 
 *Manufacturable, on every check an open flow can run.* The 6x2 pilot
 signs off on IHP SG13G2 with Magic DRC, KLayout DRC, XOR, all four
