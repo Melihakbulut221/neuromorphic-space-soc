@@ -69,6 +69,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs" / "12-sg13g2-flow-bringup.md"
 DESIGN_DIR = ROOT / "hw" / "openlane" / "aer_fifo"
 RUNS_DIR = DESIGN_DIR / "runs"
+
+import evidence as _evidence   # noqa: E402  (same directory)
 CONFIG = DESIGN_DIR / "config.json"
 
 # Sign-off check -> the metric keys that carry it, keyed by the step
@@ -289,11 +291,30 @@ def run_dir():
 
 
 @pytest.fixture(scope="module")
-def metrics(run_dir):
-    path = run_dir / "final" / "metrics.json"
-    if not path.is_file():
-        _skip_no_run(path, _run_tag())
-    return json.loads(path.read_text(encoding="utf-8"))
+def metrics():
+    """The run's metrics, from the tree if it is here and the record if not.
+
+    This fixture used to depend on `run_dir`, so every metric assertion
+    skipped on a clone -- eleven of them, and with them every claim
+    docs/12 section 4 makes about the sign-off. `docs/evidence/` now
+    carries the 10 kB `metrics.json` itself, which is enough to check
+    all of them. A test that needs the RUN and not the numbers still
+    takes `run_dir` and still skips; that split is the point.
+    """
+    tag = _run_tag()
+    ev = _evidence.metrics(tag, RUNS_DIR / tag)
+    if ev is None:
+        _skip_no_run(RUNS_DIR / tag / "final" / "metrics.json", tag)
+    return ev
+
+
+@pytest.fixture(scope="module")
+def resolved_config():
+    tag = _run_tag()
+    ev = _evidence.resolved(tag, RUNS_DIR / tag)
+    if ev is None:
+        _skip_no_run(RUNS_DIR / tag / "resolved.json", tag)
+    return ev
 
 
 def _metric(metrics, key):
@@ -425,7 +446,7 @@ def test_signoff_step_directories_exist(run_dir):
             f"run did not produce")
 
 
-def test_signoff_metrics_match_the_document(run_dir, metrics):
+def test_signoff_metrics_match_the_document(metrics):
     """The zeros claimed in 4.1 are the zeros in final/metrics.json."""
     corners = [row["corner"] for row in _corner_rows()]
     for label, step, result in _signoff_rows():
@@ -531,7 +552,7 @@ def test_flow_ran_to_completion_without_errors(run_dir, metrics):
     assert _metric(metrics, "design__violations") == 0
 
 
-def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
+def test_committed_config_is_the_config_that_produced_the_evidence(resolved_config):
     """Section 4 says its numbers come from hw/openlane/aer_fifo/config.json
     "exactly as committed". Every key of the committed config must appear
     in the run's resolved.json with the same value.
@@ -544,10 +565,8 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
     a different file still does.
     """
     assert CONFIG.is_file(), f"missing {CONFIG}"
-    resolved_path = run_dir / "resolved.json"
-    assert resolved_path.is_file(), f"missing {resolved_path}"
     committed = json.loads(CONFIG.read_text(encoding="utf-8"))
-    resolved = json.loads(resolved_path.read_text(encoding="utf-8"))
+    resolved = resolved_config.data
 
     def _gates_nothing(value):
         """Is this the value of a checker bound to no corner at all?
@@ -613,7 +632,8 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
         if key in POSTDATE_EVIDENCE and _gates_nothing(resolved.get(key)):
             continue
         assert key in resolved, (
-            f"committed config key {key} is absent from {run_dir.name}/"
+            f"committed config key {key} is absent from "
+            f"{resolved_config.path.name} of {_run_tag()}: "
             f"resolved.json: this run did not execute the committed config")
         assert same(value, resolved[key]), (
             f"{key}: committed config has {value!r}, run resolved to "
@@ -624,7 +644,7 @@ def test_committed_config_is_the_config_that_produced_the_evidence(run_dir):
     stale = {k for k in POSTDATE_EVIDENCE
              if not _gates_nothing(resolved.get(k))}
     assert not stale, (
-        f"these keys are declared as postdating {run_dir.name}'s evidence "
+        f"these keys are declared as postdating {_run_tag()}'s evidence "
         f"and the run resolved them: {sorted(stale)}. The run has been "
         "redone; delete them from POSTDATE_EVIDENCE so the guard checks "
         "them again")
