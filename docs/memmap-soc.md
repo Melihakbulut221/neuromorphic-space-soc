@@ -82,7 +82,7 @@ interrupt controller and the drivers cannot disagree
 | `0xFF914000` | `0x014` | QSPICTL | 21 | 9 | implemented | QSPI flash controller, register mode, two chip selects; docs/66 |
 | `0xFF915000` | `0x015` | BUSSTAT | 22 | 10 | implemented | Fault counters and sticky status for the register file codec and the watchdog voter; AHBSTAT in spirit, not in name |
 | `0xFF916000` | `0x016` | SCRUB | 23 | 11 | implemented | Memory codec counters, scrubber control and the last uncorrectable address, MEMSCRUB-like; docs/67 |
-| `0xFF917000` | `0x017` | BOOTREG | - | - | implemented | Bootstrap pin readback, the hardware boot counter and the boot report and epoch words that survive a reset, GRGPREG-like; docs/68 |
+| `0xFF917000` | `0x017` | BOOTREG | - | - | implemented | Bootstrap pin readback, the hardware boot counter, the boot report and epoch words that survive a reset, and CRASH at 0x010 -- the faulting PC of the first double fault since power-on, kept in the same power-on domain so it is readable after the watchdog reset the fault causes; GRGPREG-like; docs/68 |
 | `0xFF918000` | `0x018` | CLKGATE | - | - | reserved | Clock gate enable and status for NPU nodes and heavy peripherals |
 | `0xFF919000` | `0x019` | NPUCFG | 24 | 12 | implemented | NPU fabric-level global configuration and status, and the AER event port; docs/51 |
 | `0xFF9FF000` | `0x0FF` | APBPNP | - | - | implemented | Peripheral bus device table, two words per slot |

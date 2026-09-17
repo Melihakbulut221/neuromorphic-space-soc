@@ -57,6 +57,9 @@ BSTAT = 0x004
 BRPT = 0x008
 EPOCH = 0x00C
 
+CRASH = 0x010
+# BSTAT bit 10: cnt_w is [7:0], last_attempt 8, over_limit 9.
+CRASHV_BIT = 10
 STRAP_VALID = 1 << 31
 STRAP_WDOGDIS = 1 << 16
 STAT_LAST = 1 << 8
@@ -523,3 +526,106 @@ async def test_the_mismatch_counter_saturates(dut):
         "TMRCNT did not saturate after twenty mismatches: "
         "0x{:08x}".format(v))
     assert v & STAT_TMRERR
+
+
+# ---------------------------------------------------------------------------
+# CRASH: the faulting PC of the first double fault since power-on (F2).
+#
+# The whole-SoC version of this -- make Ibex actually take a double
+# fault and read the word back after the watchdog's stage-3 reset --
+# is NOT what these are. There is no whole-SoC cocotb testbench in this
+# repository; every suite is per block. What the block CAN be shown is
+# the property the register exists for, and the watchdog reset is
+# exactly `rst_ni` low while `rst_por_ni` stays high, which is what
+# system_reset() drives. Ibex taking the fault is Ibex's behaviour and
+# is not what this register is.
+# ---------------------------------------------------------------------------
+
+
+@cocotb.test()
+async def test_the_faulting_pc_is_captured_and_flagged(dut):
+    """CRASH reads the PC back and BSTAT's CRASHV bit says it means something."""
+    await power_on(dut)
+    assert await apb_read(dut, CRASH) == 0, "CRASH is not zero after power-on"
+    assert (await apb_read(dut, BSTAT) >> CRASHV_BIT) & 1 == 0, (
+        "BSTAT says a crash is recorded on a part that has just booted")
+
+    dut.crash_pc_i.value = 0x8000_1234
+    dut.crash_seen_i.value = 1
+    await RisingEdge(dut.clk_i)
+    await RisingEdge(dut.clk_i)
+    dut.crash_seen_i.value = 0
+
+    assert await apb_read(dut, CRASH) == 0x8000_1234, (
+        "the faulting PC was not captured")
+    assert (await apb_read(dut, BSTAT) >> CRASHV_BIT) & 1 == 1, (
+        "CRASH holds a PC and BSTAT does not say so, so a loader cannot "
+        "tell a real zero PC from nothing having faulted")
+
+
+@cocotb.test()
+async def test_the_faulting_pc_survives_the_reset_the_fault_causes(dut):
+    """The point of the register.
+
+    A double fault is fatal and the watchdog resets the system because
+    of it. A record in the system reset domain would be erased by the
+    very event it records -- which is docs/16 section 5.1's defect, and
+    the reason this word lives in the power-on domain beside BRPT.
+    """
+    await power_on(dut)
+    dut.crash_pc_i.value = 0x0000_ABCD
+    dut.crash_seen_i.value = 1
+    await RisingEdge(dut.clk_i)
+    await RisingEdge(dut.clk_i)
+    dut.crash_seen_i.value = 0
+
+    for boot in range(3):
+        await system_reset(dut)
+        assert await apb_read(dut, CRASH) == 0x0000_ABCD, (
+            "the faulting PC did not survive system reset %d" % boot)
+        assert (await apb_read(dut, BSTAT) >> CRASHV_BIT) & 1 == 1
+
+
+@cocotb.test()
+async def test_the_first_fault_is_kept_and_a_power_cycle_clears_it(dut):
+    """FIRST, not last, and not across a power cycle.
+
+    A double fault the watchdog resets is likely to recur on the next
+    boot for the same reason, so a register keeping the LATEST one
+    reports the newest symptom of an old cause. And a record that
+    survived a power cycle would report a crash on a part that has just
+    been powered up, which is the one reading an operator must trust.
+    """
+    await power_on(dut)
+    dut.crash_pc_i.value = 0x1111_1111
+    dut.crash_seen_i.value = 1
+    await RisingEdge(dut.clk_i)
+    await RisingEdge(dut.clk_i)
+    dut.crash_pc_i.value = 0x2222_2222
+    await RisingEdge(dut.clk_i)
+    await RisingEdge(dut.clk_i)
+    dut.crash_seen_i.value = 0
+    assert await apb_read(dut, CRASH) == 0x1111_1111, (
+        "the second fault overwrote the first")
+
+    await power_on(dut)
+    assert await apb_read(dut, CRASH) == 0, "a power cycle left a crash record"
+    assert (await apb_read(dut, BSTAT) >> CRASHV_BIT) & 1 == 0
+
+
+@cocotb.test()
+async def test_no_write_can_forge_or_clear_the_record(dut):
+    """BSTAT's rule, applied to the same kind of record: not clearable."""
+    await power_on(dut)
+    await apb_write(dut, CRASH, 0xDEAD_BEEF)
+    assert await apb_read(dut, CRASH) == 0, (
+        "a write forged a crash record on a part that has not crashed")
+
+    dut.crash_pc_i.value = 0x4000_0000
+    dut.crash_seen_i.value = 1
+    await RisingEdge(dut.clk_i)
+    await RisingEdge(dut.clk_i)
+    dut.crash_seen_i.value = 0
+    await apb_write(dut, CRASH, 0)
+    assert await apb_read(dut, CRASH) == 0x4000_0000, (
+        "a write cleared the crash record")

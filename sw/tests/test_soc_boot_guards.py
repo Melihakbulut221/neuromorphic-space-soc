@@ -462,6 +462,16 @@ BOOT_UNPROTECTED_FLOPS = {
     "sync0", "sync1",      # the strap synchronisers
     "wsync0", "wsync1",    # the watchdog pin's
     "brpt_q", "epoch_q",   # evidence, not authority
+    # 2026-09-17. The same argument, and it is the argument and not a
+    # convenience: CRASH is the faulting PC of the first double fault
+    # since power-on, and like the report and the epoch it is evidence
+    # rather than authority. Nothing in this block reads it back to
+    # decide anything, and a corrupted crash record misleads a person
+    # reading a post-mortem where a corrupted boot counter would boot
+    # the wrong image. It is in the power-on domain for the same
+    # reason those two are -- the watchdog reset a double fault causes
+    # would otherwise erase it.
+    "crash_q", "crash_valid_q",
     "plain",               # the HARDEN = 0 bank, measurement only
 }
 

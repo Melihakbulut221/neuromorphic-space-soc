@@ -2952,7 +2952,20 @@ def _boot_geometry():
     report = 1 + tmc_w
 
     # Deliberately unprotected, B1's second list.
-    unprot = 2 * nstrap + 2 + 32 + 32   # sync0/1, wsync0/1, brpt, epoch
+    # 2026-09-17: CRASH and its validity flag join the second list.
+    # They are in the power-on domain beside BRPT and EPOCH, for the
+    # same reason -- a crash record that did not survive the watchdog
+    # reset the crash causes would record nothing -- and they are
+    # unprotected by the same argument those two are: written once by
+    # hardware and then read, with nothing rewriting them, so a vote
+    # would protect a word that is already only written once. The cost
+    # is 33 flip-flops and 2,490.87 um2, measured against the
+    # unmodified block at yosys 0.33 with sg13g2_stdcell_typ_1p20V_25C:
+    # 143 -> 176 flip-flops, 12,316.2984 -> 14,807.1672 um2, +20.22 %
+    # of soc_boot and +0.267 % of the SoC's 933,010 um2 of standard
+    # cells. docs/41 section 6.5's rule.
+    unprot = (2 * nstrap + 2 + 32 + 32 + 32 + 1)
+    # sync0/1, wsync0/1, brpt, epoch, crash_q, crash_valid_q
 
     return decision, report, unprot
 
@@ -3068,11 +3081,20 @@ def test_boot_harden_zero_is_exactly_the_block_docs_68_shipped(workdir):
         "HARDEN = 0 should leave one plain bank of the decision bits "
         "only: {} unprotected + {} decision = {} flip-flops, found "
         "{}".format(BOOT_UNPROT_FF, BOOT_DEC_W, expected, census.total))
-    assert expected == 92, (
-        "the HARDEN = 0 configuration is {} flip-flops and docs/68 "
-        "section 9.1 measured the unprotected block at 92. The baseline "
-        "the area delta is quoted against has stopped being the block "
-        "that document shipped.".format(expected))
+    # docs/68 section 9.1 measured 92, and 92 is what it measured: that
+    # number is right on its date and is not edited here. What has
+    # changed since is named rather than folded in -- the crash record
+    # added 2026-09-17 is 33 flip-flops, and this assertion carries it
+    # as a term so that the NEXT thing to move the baseline has to
+    # appear here too instead of quietly shifting a literal.
+    BOOT_CRASH_FF = 32 + 1        # crash_q, crash_valid_q
+    assert expected == 92 + BOOT_CRASH_FF, (
+        "the HARDEN = 0 configuration is {} flip-flops. docs/68 section "
+        "9.1 measured the unprotected block at 92, and the only addition "
+        "accounted for since is the {}-flip-flop crash record. The "
+        "baseline the area delta is quoted against has stopped being "
+        "the block that document shipped plus what is named here."
+        .format(expected, BOOT_CRASH_FF))
     for r in BOOT_REPLICAS:
         assert census.in_instance(r) == 0
 

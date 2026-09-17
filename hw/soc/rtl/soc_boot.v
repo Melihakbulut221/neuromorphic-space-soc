@@ -389,6 +389,23 @@ module soc_boot #(
     // Power-on reset. The only reset this block has.
     input  wire        rst_por_ni,
 
+    // ---- crash capture (2026-09-17, F2) ----
+    // The core exports the FACT of a double fault to a pin and dropped
+    // the EVIDENCE: crash_dump_o was left unconnected. docs/44 built
+    // BUSSTAT on the argument that in silicon a corrected upset is
+    // indistinguishable from no upset at all, and that argument is
+    // stronger here, because a double fault is not corrected and after
+    // the watchdog's reset there is nothing left to read.
+    //
+    // ONLY THE FAULTING PC IS KEPT. Ibex's crash_dump_o is 160 bits --
+    // pc_id, pc_if, lsu_addr_last and two more -- and this takes
+    // crash_dump_o[159:128], the instruction address in ID at the
+    // moment of the fault. The other four words are DROPPED, and that
+    // is a choice: five words is five registers and this block's slot
+    // has room for one at 0x010 without widening the memory map.
+    input  wire        crash_seen_i,   // the core's double_fault_seen
+    input  wire [31:0] crash_pc_i,     // crash_dump_o[159:128], pc_id
+
     // ---- APB slave ----
     input  wire        psel_i,
     input  wire        penable_i,
@@ -408,6 +425,11 @@ module soc_boot #(
   localparam [11:0] REG_BSTAT  = 12'h004;
   localparam [11:0] REG_BRPT   = 12'h008;
   localparam [11:0] REG_EPOCH  = 12'h00C;
+  // 0x010, the next free offset in this slot's own space. The
+  // memory map names slots, not registers, so nothing outside
+  // this file had to change for it; docs/memmap-soc.md carries the
+  // register table and is updated with it.
+  localparam [11:0] REG_CRASH  = 12'h010;
 
   localparam [CNT_W-1:0] CNT_MAX = {CNT_W{1'b1}};
 
@@ -688,6 +710,32 @@ module soc_boot #(
   end
 
   // -------------------------------------------------------------------
+  // CRASH: the faulting PC of the FIRST double fault since power-on.
+  //
+  // In the POR domain, which is what makes it readable after the
+  // watchdog's stage-3 reset -- the same reason BRPT and EPOCH are
+  // here, and the mechanism this block already proved survives the
+  // reset it causes.
+  //
+  // FIRST and not last. A double fault that the watchdog resets is
+  // likely to recur on the next boot for the same reason, and a
+  // register that kept the latest one would report the newest symptom
+  // of an old cause. crash_valid_q is the flag a loader reads to know
+  // the word means anything; neither is clearable, which is BSTAT's
+  // rule applied to the same kind of record.
+  reg [31:0] crash_q;
+  reg        crash_valid_q;
+  always @(posedge clk_i or negedge rst_por_ni) begin
+    if (!rst_por_ni) begin
+      crash_q       <= 32'h0;
+      crash_valid_q <= 1'b0;
+    end else if (crash_seen_i && !crash_valid_q) begin
+      crash_q       <= crash_pc_i;
+      crash_valid_q <= 1'b1;
+    end
+  end
+
+  // -------------------------------------------------------------------
   // Reads
   // -------------------------------------------------------------------
   // The limit as a vector of each width it is compared or reported at,
@@ -722,6 +770,11 @@ module soc_boot #(
     case (paddr_i)
       // BSTRAP: the pins in the low half, the width and the two
       // one-shot flags in the high half.
+      // CRASH: the faulting PC, or zero when nothing has faulted. The
+      // validity flag is NOT folded into a spare bit of the address --
+      // a PC is 32 bits and all of them are the PC. It is read from
+      // BSTAT instead; see that register's comment.
+      REG_CRASH:  prdata_o = crash_q;
       REG_BSTRAP: prdata_o = {valid_q, 3'h0, NSTRAP_B,
                               7'h0, wdis_q, strap_w};
       // BSTAT: the counter, the two derived flags a loader would
@@ -735,8 +788,13 @@ module soc_boot #(
       // protection corrected; on this part that is the only channel the
       // report has, because the block has no interrupt line and the map
       // gives it none.
+      // CRASHV takes the lowest of the six spare bits above OVERLIMIT,
+      // which is BIT 10: cnt_w is [7:0], last_attempt is 8 and
+      // over_limit is 9. A loader reads it before CRASH, because a zero
+      // PC and "nothing has faulted" are otherwise the same word.
       REG_BSTAT:  prdata_o = {tmr_err, tmr_count, 3'h0, LIMIT_B,
-                              6'h0, over_limit, last_attempt, cnt_w};
+                              5'h0, crash_valid_q,
+                              over_limit, last_attempt, cnt_w};
       REG_BRPT:   prdata_o = brpt_q;
       REG_EPOCH:  prdata_o = epoch_q;
       default:    prdata_o = 32'h0;

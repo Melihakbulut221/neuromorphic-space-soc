@@ -349,6 +349,7 @@ module soc_top #(
   // count either way, but it is a change and a reader should see it
   // here rather than infer it.
   wire wdog_rst_req;
+  wire [159:0] crash_dump;
   wire rst_raw_n = rst_ni && !wdog_rst_req;
 
   reg [1:0] rst_sync;
@@ -565,7 +566,14 @@ module soc_top #(
       .scramble_req_o       (),
 
       .debug_req_i         (1'b0),
-      .crash_dump_o        (),
+      // F2, 2026-09-17: this was `()`, so the SoC exported the FACT of
+      // a double fault to a pin and dropped the EVIDENCE. Only the
+      // faulting PC is kept -- crash_dump_o[159:128] is pc_id, the
+      // instruction address in the ID stage at the moment of the fault
+      // (hw/soc/gen/ibex_core.v:1103). The other four words, pc_if,
+      // lsu_addr_last and two more, are dropped; five words would be
+      // five registers and BOOTREG's slot has room for one.
+      .crash_dump_o        (crash_dump),
       .double_fault_seen_o (double_fault_seen_o),
 
       // ibex_pkg::IbexMuBiOn = 4'b0101
@@ -938,6 +946,13 @@ module soc_top #(
   // watchdog, the memories or the fabric.
   soc_boot #(.NSTRAP(BOOT_NSTRAP), .LIMIT(BOOT_LIMIT)) u_boot (
       .clk_i (clk_i), .rst_ni (rst_sys_n), .rst_por_ni (rst_por_sync_n),
+      // The capture lives in soc_boot because soc_boot is already in
+      // the power-on domain: it is the one block here whose registers
+      // survive the watchdog reset that a double fault causes, and a
+      // crash record that did not survive the reset would record
+      // nothing.
+      .crash_seen_i (double_fault_seen_o),
+      .crash_pc_i   (crash_dump[159:128]),
       .psel_i (sel_bootreg), .penable_i (penable), .paddr_i (paddr[11:0]),
       .pwrite_i (pwrite), .pwdata_i (pwdata),
       .prdata_o (prdata_bootreg), .pready_o (pready_bootreg),
