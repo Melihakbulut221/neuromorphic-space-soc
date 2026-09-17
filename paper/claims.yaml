@@ -149,7 +149,9 @@ claims:
     value: "commit"
     text: "the last verification-log row names a commit that exists in this repository, which is what makes the row a record rather than an assertion -- it is NOT necessarily HEAD, and the paper does not say it is"
     check: run
-    cmd: "git cat-file -t $(tail -1 verification-log.tsv | cut -f2)"
+    cmd: "h=$(tail -1 verification-log.tsv | cut -f2); case $h in upstream:*) echo upstream ;; *) git cat-file -t $h ;; esac"
+    unchecked_when: "upstream"
+    unchecked_why: "the generated mirror shares no history with the repository the measurement was taken in, so its head column carries the upstream hash prefixed; the row is traceable by hand and not by git"
 
   - id: suite.superseded_rows_stand
     value: 1

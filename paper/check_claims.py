@@ -234,6 +234,13 @@ def check(c):
         out = run(c["cmd"])
         if out.returncode != 0:
             return "FAIL", (out.stderr or out.stdout).strip()[:200]
+        # A claim may name one output that means "this tree cannot
+        # re-derive it, and here is why". That is UNCHECKED -- read by
+        # hand -- and not a wrong number. It is deliberately a value the
+        # command PRINTS rather than a property of the environment, so
+        # that a tree which can re-derive the claim still must.
+        if "unchecked_when" in c and out.stdout.strip() == str(c["unchecked_when"]):
+            return "UNCHECKED", c.get("unchecked_why", "named as not re-derivable here")
         if "json_path" in c:
             try:
                 got = dig(json.loads(out.stdout), c["json_path"])

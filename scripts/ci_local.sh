@@ -51,7 +51,11 @@ JOB="${1:-all}"
 RECORD=0
 for a in "$@"; do [ "$a" = "--record" ] && RECORD=1; done
 
-PY=.venv/bin/python
+# Overridable, because a clone of the public mirror has no .venv and
+# the fallback then lands on whatever python3 the PATH happens to
+# offer. `PY=... bash scripts/ci_local.sh all` is how a reader
+# points it at an interpreter that has pytest and pyyaml.
+PY="${PY:-.venv/bin/python}"
 [ -x "$PY" ] || PY=python3
 # EXPORTED, because several gates below run their python inside
 # `bash -c '...'`. Single quotes stop $PY expanding when this file

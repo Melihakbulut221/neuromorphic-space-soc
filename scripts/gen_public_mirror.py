@@ -114,6 +114,16 @@ what else is held are in `docs/14-licensing-decision.md` section 11 and
 #
 # Found by the pre-publication audit of 2026-09-14, after two prior
 # publications had carried both.
+# Each entry is (file, pattern, replacement, MARKER, why).
+#
+# THE MARKER IS WHAT MAKES THIS TOOL IDEMPOTENT, and it is a literal
+# rather than something derived from `replacement`, because two of the
+# three replacements carry a backreference and a derived marker would
+# be a second implementation of the substitution. It is the text the
+# redacted output is known to contain, and it is the ONLY thing that
+# licenses a zero-match: the generator run against an already-redacted
+# tree must not fail, and the generator run against a tree where the
+# fragment was silently reworded still must.
 HELD_FRAGMENTS = [
     (
         "ROADMAP.md",
@@ -121,18 +131,21 @@ HELD_FRAGMENTS = [
         r"\1*(the exact wording is the owner's account status and is not "
         r"published: it names a billing condition on the account, not a "
         r"fault in this repository)*",
+        "it names a billing condition on the account",
         "personal financial status of a named individual",
     ),
     (
         "scripts/ci_local.sh",
         r"(was refused before starting -- )'[^']*'",
         r"\1'(account status, not published)'",
+        "'(account status, not published)'",
         "the same wording, quoted a second time",
     ),
     (
         "docs/07-design-review.md",
         r"EUR \d+(?:\.\d+)?k NLnet ask",
         "NLnet ask *(figure held; `docs/06` carries it)*",
+        "NLnet ask *(figure held;",
         "the headline grant figure, which is the class docs/06 is held for",
     ),
 ]
@@ -252,13 +265,21 @@ def build():
         files[rel] = (text[:a] + SECTION_STUB.format(start=start, what=what)
                       + text[b:]).encode()
 
-    for rel, pattern, replacement, why in HELD_FRAGMENTS:
+    for rel, pattern, replacement, marker, why in HELD_FRAGMENTS:
         text = files[rel].decode("utf-8")
         redacted, n = re.subn(pattern, replacement, text, flags=re.S)
+        if n == 0 and marker in text:
+            # Already redacted: this is the generator being run against
+            # a tree it produced. Idempotent, and the guarantee below is
+            # untouched, because the marker is only there if a previous
+            # run put it there.
+            files[rel] = text.encode()
+            continue
         assert n == 1, (
-            "held fragment in {} matched {} times, expected 1 ({}). A "
-            "fragment that has been reworded upstream must fail the "
-            "build, because the alternative is that it travels."
+            "held fragment in {} matched {} times and the redaction "
+            "marker is not present either ({}). A fragment that has "
+            "been reworded upstream must fail the build, because the "
+            "alternative is that it travels."
             .format(rel, n, why))
         files[rel] = redacted.encode()
 
@@ -312,7 +333,17 @@ def build():
     # contains the wording -- because this file is published too, and a
     # redaction table that quotes what it redacts publishes it twice.
     billing_re = r'(are non-starts, on\n#\n)#   "[^"]*"'
-    if not re.search(billing_re, text, re.S):
+    # THE SAME IDEMPOTENCE THE FRAGMENT TABLE NOW HAS, for the same
+    # reason: run against a tree this generator produced, the paragraph
+    # is already rewritten, the pattern matches nothing, and a guard
+    # against silent no-ops fires on a no-op that is correct. The marker
+    # is a line only this rewrite writes, so it cannot be reached by a
+    # workflow that was reworded instead.
+    billing_done = ("IN THIS MIRROR that history is the DEVELOPMENT "
+                    "repository's and")
+    if billing_done in text:
+        pass
+    elif not re.search(billing_re, text, re.S):
         raise SystemExit(
             "gen_public_mirror.py: the checks workflow no longer carries the "
             "billing paragraph this script rewrites. That paragraph explains "
@@ -331,13 +362,57 @@ def build():
         "# The paragraph is kept rather than deleted because it is why the\n"
         "# checks live in a script instead of in this file, and that reason\n"
         "# holds wherever the file is.", text)
-    if text == before:
+    if text == before and billing_done not in text:
         raise SystemExit(
             "gen_public_mirror.py: the mirror rewrite of the billing "
             "paragraph in " + wf + " changed nothing. The generator must "
             "not emit an unrewritten copy; re-read the workflow and fix the "
             "replacement.")
     files[wf] = text.encode()
+
+    # THE LOGS NAME COMMITS THIS REPOSITORY DOES NOT HAVE, and until
+    # 2026-09-17 they named them as bare hashes. The mirror is generated
+    # with its own root commit and shares no history with the
+    # development repository, so `git cat-file -t` on the head column
+    # resolved nothing and paper/check_claims.py reported the last row
+    # as WRONG -- in a file whose entire purpose is that a measurement
+    # names the commit it was taken at. An external reviewer found it
+    # that way.
+    #
+    # Deleting the row or substituting a mirror commit would have been
+    # fabricating provenance, which is the failure `docs/64` exists to
+    # correct. The hash is kept and PREFIXED instead: `upstream:abc1234`
+    # says, in the file itself, that the commit is real and is not here.
+    # check_claims.py reads the prefix and reports the claim as read by
+    # hand rather than as re-derived, which is what it honestly is in
+    # this tree.
+    for log, note in (
+        ("verification-log.tsv",
+         "# In this generated mirror the head column reads upstream:<hash>.\n"
+         "# The hash is the development repository's commit, which is where\n"
+         "# the measurement was taken; this tree shares no history with it,\n"
+         "# so the hash is traceable by hand and not by `git cat-file`.\n"),
+        ("ci-local-log.tsv",
+         "# In this generated mirror the head column reads upstream:<hash>,\n"
+         "# for the reason verification-log.tsv's header gives.\n"),
+    ):
+        if log not in files:
+            continue
+        lines = files[log].decode("utf-8").split("\n")
+        out, seen_header = [], False
+        for line in lines:
+            if not line or line.startswith("#"):
+                out.append(line)
+                continue
+            if not seen_header:
+                seen_header = True          # the column-name row
+                out.append(line)
+                continue
+            col = line.split("\t")
+            if len(col) > 1 and col[1] and not col[1].startswith("upstream:"):
+                col[1] = "upstream:" + col[1]
+            out.append("\t".join(col))
+        files[log] = (note + "\n".join(out)).encode()
 
     readme = files["README.md"].decode()
     files["README.md"] = (readme.rstrip() + "\n"
