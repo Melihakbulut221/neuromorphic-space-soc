@@ -515,6 +515,70 @@ of it, one screen away, for two days.*
 - seL4-on-CVA6 product tier (docs/09 S3) — interface discipline only.
 - CPI front end — optional line item pending docs/08 CPI decision.
 
+## 5a. The macro-edge keep-out experiment (added 2026-09-18)
+
+An external review read `docs/67` section 11 and named the one thing
+that would turn its argument into a measurement. The argument is
+convincing and it is still an argument: Magic's abstracted deck reports
+**170** error boxes on the eight-macro layout, 20 inside a macro
+footprint and 150 outside, and on `s83ant` **182** of which all 162
+outside are within **0.500 um** of a macro edge and none in open
+routing area. The mechanism the document gives for the 150 is that a
+LEF `OBS` blanket is one shape wider than 10 um, so ordinary routing
+beside it trips a wide-metal spacing rule it would not trip against
+the macro's real geometry.
+
+**What cannot close it from inside this repository.** The argument
+depends on `MAGIC_DRC_USE_GDS = 0`. Running the same deck with the
+real macro GDS does not resolve it -- it produces the 1.1 M in-macro
+errors `docs/12` recorded as a NO-GO -- so there is no experiment
+available here that turns the argument into a measurement. Closure
+needs something external: a vendor-supplied DRC-clean abstract, or the
+experiment below.
+
+**The experiment, named and costed.** Increase the routing blockage
+around each macro by the wide-metal spacing rule that `M3.f` enforces
+-- a halo that forbids ROUTING and not only placement, which is not
+what `FP_MACRO_HORIZONTAL_HALO` does -- and re-run the Magic deck on
+the result.
+
+| | |
+|---|---|
+| **If the 150 go to 0** | the argument becomes a measurement and the cost is quantified area |
+| **If they do not** | the mechanism in `docs/67` section 11 is wrong and the document needs re-reading, which is worth knowing on its own |
+| **Cost** | one place-and-route run, about four hours, plus the area the blockage takes. Neither number exists yet: the area cost is the experiment's output, not its input |
+| **Blocked on** | nothing. It needs the PDK and the flow, both of which are already here |
+| **Not blocked on** | the shuttle, silicon, or a vendor |
+
+**And nothing is to be narrowed to make the count smaller.** The count
+is 170 and 182 and 11,048 because those decks were run as they are.
+
+---
+
+## 5b. What a foundry and a test house will ask for that this repository does not have (added 2026-09-18)
+
+Every row below is acknowledged somewhere already -- `docs/60` section
+on DFT lists scan, ATPG, BIST usage and test coverage as absent, and
+`docs/60:428` states there is no debug module and no JTAG. They are
+collected here because they were scattered and a reader could not see
+the SHAPE of the gap. **This is not a plan to build any of it.** The
+discussions are not duplicated; each row points at the document that
+already has it.
+
+| Missing | What the tree shows |
+|---|---|
+| Pad ring, I/O cells, ESD, bond pads | `grep -rli "sg13g2_io\|iopad\|bondpad\|padframe\|pad_ring"` matches one file, `hw/soc/flow/power_report.tcl`, and not as an instantiation. `soc_top` is a core-only block with `DIE_AREA = [0,0,2306.4,2075.22]` and no pad frame. **It is not a chip.** |
+| DFT: scan chains, ATPG, compression | `soc_top` has no test ports at all. `soc_top.v:507` `.test_en_i(1'b0)`, `:587` `.scan_rst_ni(1'b1)`, both clock gates `.test_en_i (1'b0)`. `prim_clock_gating.v:22` notes `test_en_i` exists for scan; nothing drives it |
+| Memory BIST | Correctly parked at `soc_mem_sram.v:378-380` and peers. Test coverage of the SRAM arrays is therefore **zero** |
+| RISC-V debug module, JTAG TAP | `soc_top.v:567` `.debug_req_i (1'b0)`. No way to halt or inspect the core on a board |
+| External interrupt input | `soc_top.v:558` `.irq_external_i (1'b0)` and no top-level pin. All fifteen fast lines are internal peripherals |
+| PLL, on-chip clock source, POR circuit, brownout detect | `clk_i` and `rst_ni` are top-level inputs |
+| Lockstep, bus integrity | Ibex's shadow outputs are unconnected. Documented as `small-pmp`, no lockstep |
+| Spacecraft interfaces: SpaceWire, CAN, SPI, I2C, event-camera | Surveyed and priced in `docs/65`; not built. Only GPIO (16 pins) and QSPI exist |
+| Radiation test data | No part exists (`docs/05` section 4 rules 1-2 on how this device is described) |
+
+---
+
 ## 6. Binding rules inherited by all phases
 
 - Positioning: docs/05 section 4 (LEO 10-30 krad class, fault-tolerant

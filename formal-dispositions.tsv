@@ -39,6 +39,40 @@
 # this file names a directory under formal/ or hw/soc/formal/, something
 # has gone wrong with what this project itself proves.
 #
+#
+# reg_ch0 AND ITS REPLACEMENT (added 2026-09-18).
+#
+# Thirteen rows below dispose of riscv-formal's reg_ch0 as ERROR or
+# STOPPED across seven engines on both cores, all recorded 2026-09-11.
+# Those rows are right on their date and are not edited: the sweep
+# happened, it produced no verdict, and docs/63 section 17.2 reads that
+# correctly as the timeout being the solver's rather than one engine's.
+#
+# What has changed since is that the property they could not close is
+# now closed at a smaller scope, and the rows do not say so. They are
+# left standing and this is the pointer:
+#
+#   hw/soc/formal/regfile_scrub_abs.sby, task prove_pdr, proves R1-R4
+#   for EVERY reachable state of hw/soc/rtl/ibex_regfile_secded.v in
+#   44 seconds under abc pdr, with the codec replaced by a stand-in of
+#   the same interface. Its companion regfile_scrub.sby binds the REAL
+#   codec and does not close, and docs/63 section 23 locates why: the
+#   solver is asked to relate eight parity trees at the write encoder
+#   to eight at the read decoder through thirty-two more in the scrub
+#   path, which is the case CDCL SAT cannot do in polynomial
+#   resolution.
+#
+# IT IS NOT reg_ch0, AND THE DIFFERENCE MATTERS. reg_ch0 is a property
+# of the CORE: every architectural read returns what the last write to
+# that address put there, as the pipeline actually issues them, with
+# forwarding, stalls and flushes in scope. regfile_scrub_abs is a
+# property of the BLOCK: a word written is read back unchanged at every
+# later cycle while the scrub walks, with the core replaced by free
+# inputs. The block property is what the SUBSTITUTION needs -- it is
+# the file docs/43 swapped in -- and the core property is what
+# transparency of that substitution to software would need. The second
+# is still open and no row below should be read as closing it.
+#
 # path	verdict	why	recorded
 hw/soc/out/rvformal-secded/cores/ibex/checks/insn_div_ch0	FAIL	riscv-formal's OWN model computes an unsigned division; Ibex is right and the specification is wrong. Two counterexamples, the arithmetic, the LRM citation and an independent tool's confirmation: docs/63 section 7.5. docs/63 section 8.5 is the same check with the model corrected.	2026-09-11
 hw/soc/out/rvformal-secded/cores/ibex/checks/insn_rem_ch0	FAIL	as insn_div_ch0: riscv-formal's model computes an unsigned remainder. docs/63 sections 7.5 and 8.5.	2026-09-11

@@ -1974,3 +1974,54 @@ unbounded answer at the register file, and the reason it had no answer
 at cycle 25 through the core is now located in one arithmetic block
 rather than in the core's size.
 
+---
+
+## 24. What section 23's proof is not: `reg_ch0`, and the difference (added 2026-09-18)
+
+An external review read sections 17.2 and 23 together and asked for the
+one sentence they do not contain: that the proof which closed is **not**
+the proof that did not, and what separates them. It is a fair ask --
+`formal-dispositions.tsv` carries thirteen `reg_ch0` rows and none of
+them pointed anywhere, which is now fixed in that file's own header --
+and the difference is worth more than the sentence.
+
+**`reg_ch0` is a property of the CORE.** riscv-formal's register-file
+consistency check says: for every architectural register, every read the
+core issues returns what the last write to that address put there, with
+the pipeline as it actually runs -- forwarding paths, stalls, flushes,
+the write-enable decode, and the instruction stream that drives all of
+them in scope. It is a statement about `ibex_core` with
+`ibex_regfile_secded.v` inside it.
+
+**`regfile_scrub_abs.sby` is a property of the BLOCK.** R1 says: a word
+written to a register and not written again is read back unchanged at
+every later cycle while the scrub engine walks the file. The core is
+gone; its ports are free inputs constrained only by the wrapper's own
+assumptions. R2, R3 and R4 add the scrub's coverage, its arbitration
+against the core's write port, and its silence when no fault is
+present.
+
+**What that buys, exactly.** The substitution `docs/43` performed is a
+FILE swap: `ibex_register_file_ff` replaced by
+`hw/soc/rtl/ibex_regfile_secded.v`, same module name, same port list.
+The claim that swap needs is that the new file still behaves as a
+register file -- writes are readable back, and the machinery added
+around them does not disturb that. That claim is now proved for every
+reachable state, in 44 seconds.
+
+**What it does not buy.** That the substitution is transparent to
+SOFTWARE. A register file can satisfy R1 at its own ports and still
+break a core that reads it through forwarding logic timed against the
+old file's latency, and nothing here rules that out. `reg_ch0` is the
+property that would, and `reg_ch0` still has no verdict on either core:
+section 17.2's seven-engine sweep stands as measured, and repeating it
+costs 28 hours for the same absence.
+
+**And two smaller exclusions, restated so the section is self-contained.**
+The abstraction replaces the codec, so nothing depending on the code's
+distance is covered -- R4 under an injected upset is not claimed, as
+section 23 says. And `regfile_scrub.sby`, the same wrapper with the
+REAL codec, does not close: section 23 locates the reason in the parity
+trees rather than in the property, which is why the abstracted job is
+the result and not a convenience.
+
