@@ -542,6 +542,14 @@ to read 86 and is restored here, because editing a dated measurement is
 the one thing `docs/64` forbids and the guard that asked for the change
 reads only the LAST figure in the file, not its date.
 
+**Re-measured again 2026-09-18 [fact].** `hw/soc/formal` carries
+**88 tasks across 20 jobs**. The two tasks added since the 2026-09-16
+count are `soc_apb_bridge.sby`'s `prove_to` and `cover_to`, which carry
+`APB_TIMEOUT = 8` for the external review's F3: the bridge's ACCESS
+timeout is a different machine from the default and proving only the
+default would be proving the parameter is unused. Every figure above is
+left standing.
+
 The formal figure is the one worth a sentence, because it had been
 corrected once already and the correction was wrong too: this file said
 52 across fourteen, `ROADMAP.md` amended that to 56 across 14, and both

@@ -44,7 +44,33 @@
 
 `timescale 1ns / 1ps
 
-module soc_apb_bridge (
+module soc_apb_bridge #(
+    // F3, 2026-09-18. ST_ACCESS had exactly one exit, `pready_i`, so a
+    // slave that never asserts PREADY holds the fabric's ownership
+    // queue and stalls the core until the watchdog's stage-3 reset.
+    //
+    // NOT A LIVE BUG TODAY, for a reason that is about the
+    // instantiation set and not about this module: eight of the nine
+    // mapped APB slaves drive PREADY as the literal 1'b1, the ninth
+    // (soc_npu) does so at its shipping WAKE_GNT = 0, and an address
+    // inside the window that names no slot is completed by soc_top's
+    // pready mux. `soc_apb_wb.v` has a genuinely non-constant PREADY
+    // and is written and proved but instantiated nowhere. The first
+    // time a real wait-state slave is wired in, this becomes live.
+    //
+    // DEFAULT 0, WHICH IS OFF, and the module is then bit-identical to
+    // what it was: every existing measurement, netlist and proof
+    // remains reproducible. At a non-zero value the counter runs in
+    // ST_ACCESS and on expiry the FABRIC side is released with an
+    // error while PSEL and PENABLE STAY ASSERTED. That asymmetry is
+    // the whole design: APB has no master-side abort, so dropping them
+    // would violate the protocol clause A4 proves. The bridge stays
+    // parked on the APB side until reset, which is acceptable because
+    // the slave that got it there is already broken; what it buys is
+    // that the core sees a bus error it can report instead of a hang
+    // only the watchdog ends.
+    parameter integer APB_TIMEOUT = 0
+) (
     input  wire        clk_i,
     input  wire        rst_ni,
 
@@ -58,6 +84,10 @@ module soc_apb_bridge (
     output reg         rvalid_o,
     output reg  [31:0] rdata_o,
     output reg         err_o,
+    // Sticky, cleared only by reset: one or more transactions were
+    // abandoned on expiry. BUSSTAT already has a counter shape for a
+    // bus event and this is the line it would count.
+    output reg         timeout_o,
 
     // ---- APB master port ----
     // paddr_o is 20 bits: the offset inside the 1 MiB bridge window.
@@ -82,6 +112,17 @@ module soc_apb_bridge (
   // different transactions, and the fabric's per-slave ownership queue
   // handles a simultaneous push and pop.
   assign gnt_o    = req_i && (state == ST_IDLE);
+  // Width from the parameter, so a bigger bound costs bits rather than
+  // silently wrapping. At APB_TIMEOUT = 0 the counter is one bit wide
+  // and the optimiser deletes it with the rest of the arm.
+  localparam integer TO_W = (APB_TIMEOUT <= 1) ? 1 : $clog2(APB_TIMEOUT);
+  localparam [TO_W-1:0] TO_LIMIT =
+      (APB_TIMEOUT <= 1) ? {TO_W{1'b0}}
+                         : (APB_TIMEOUT[TO_W-1:0] - {{(TO_W-1){1'b0}}, 1'b1});
+
+  reg [TO_W-1:0] to_cnt;
+  reg            to_fired;
+
   assign psel_o   = (state == ST_SETUP) || (state == ST_ACCESS);
   assign penable_o = (state == ST_ACCESS);
 
@@ -92,9 +133,12 @@ module soc_apb_bridge (
       pwrite_o <= 1'b0;
       pwdata_o <= 32'h0;
       pstrb_o  <= 4'h0;
-      rvalid_o <= 1'b0;
-      rdata_o  <= 32'h0;
-      err_o    <= 1'b0;
+      rvalid_o  <= 1'b0;
+      rdata_o   <= 32'h0;
+      err_o     <= 1'b0;
+      timeout_o <= 1'b0;
+      to_cnt    <= {TO_W{1'b0}};
+      to_fired  <= 1'b0;
     end else begin
       rvalid_o <= 1'b0;
       case (state)
@@ -115,11 +159,35 @@ module soc_apb_bridge (
           state <= ST_ACCESS;
         end
         ST_ACCESS: begin
-          if (pready_i) begin
+          // `&& !to_fired` found by the proof and not by reading.
+          // Without it a slave that asserts PREADY LATE, after the
+          // timeout already answered the fabric, sends the machine
+          // back to idle and delivers a SECOND response for one
+          // request -- which A6 and A9 both forbid and which the
+          // ownership queue would mis-pop. Once the timeout has fired
+          // the transfer is over as far as the fabric is concerned and
+          // the APB side stays parked until reset, which is what the
+          // parameter's comment says it does.
+          if (pready_i && !to_fired) begin
             rdata_o  <= prdata_i;
             err_o    <= pslverr_i;
             rvalid_o <= 1'b1;
             state    <= ST_IDLE;
+            to_cnt   <= {TO_W{1'b0}};
+          end else if (APB_TIMEOUT != 0) begin
+            if (!to_fired && (to_cnt == TO_LIMIT)) begin
+              // Release the FABRIC and hold the APB side. state stays
+              // ST_ACCESS, so psel_o and penable_o stay high and A4 is
+              // untouched; rvalid_o and err_o go to the core so it
+              // gets an error rather than a stall.
+              rdata_o   <= 32'h0;
+              err_o     <= 1'b1;
+              rvalid_o  <= 1'b1;
+              to_fired  <= 1'b1;
+              timeout_o <= 1'b1;
+            end else if (!to_fired) begin
+              to_cnt <= to_cnt + {{(TO_W-1){1'b0}}, 1'b1};
+            end
           end
         end
         default: state <= ST_IDLE;

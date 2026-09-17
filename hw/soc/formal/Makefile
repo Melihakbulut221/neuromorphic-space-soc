@@ -5,7 +5,8 @@
 #
 #   cd hw/soc/formal && make            every task of every job
 #   cd hw/soc/formal && make bus        soc_bus: bmc, prove, cover
-#   cd hw/soc/formal && make apb        soc_apb_bridge: bmc, prove, cover
+#   cd hw/soc/formal && make apb        soc_apb_bridge: bmc, prove, cover,
+#                                       prove_to, cover_to (APB_TIMEOUT=8)
 #   cd hw/soc/formal && make clint      soc_clint: bmc, prove, cover
 #   cd hw/soc/formal && make busstat    soc_busstat: bmc, prove,
 #                                       prove_w16, cover
@@ -90,8 +91,14 @@ npu:
 	  $(SBY) -f soc_npu.sby $$t || exit 1; \
 	done
 
+# prove_to and cover_to are the SAME properties at APB_TIMEOUT = 8, and
+# they are listed rather than folded into TASKS because they are a
+# second parameter point and not a second task: at the default the
+# timeout arm does not exist, so proving only TASKS would prove the
+# parameter is unused. soc_apb_bridge_props.v's header enumerates the
+# three AMBA clauses the non-zero point deviates from.
 apb:
-	@for t in $(TASKS); do \
+	@for t in $(TASKS) prove_to cover_to; do \
 	  echo "== soc_apb_bridge $$t"; \
 	  $(SBY) -f soc_apb_bridge.sby $$t || exit 1; \
 	done

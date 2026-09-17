@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Hasan Melih Akbulut
+# SPDX-License-Identifier: Apache-2.0
+#
+# The APB bridge at APB_TIMEOUT = 8, which is a DIFFERENT MACHINE from
+# the one Makefile.soc_apb_bridge elaborates and needs its own
+# elaboration to be simulated at all: the parameter defaults to 0 and
+# the shipping netlist is the default.
+#
+# It is a separate makefile rather than a MODULE= override because
+# scripts/run_cocotb.sh discovers suites by walking Makefile.*, and a
+# test file alone would be run against the default elaboration -- where
+# the timeout arm does not exist and the test would pass by proving
+# nothing. That is the failure shape this repository keeps correcting,
+# so the parameter travels with the makefile that sets it.
+SIM ?= icarus
+TOPLEVEL_LANG ?= verilog
+THIS_MK := $(lastword $(MAKEFILE_LIST))
+VENV_BIN := $(abspath $(dir $(THIS_MK))/../../../.venv/bin)
+ifeq ($(shell command -v cocotb-config 2>/dev/null),)
+GOALS := $(if $(MAKECMDGOALS),$(MAKECMDGOALS),sim)
+.PHONY: $(GOALS)
+$(GOALS):
+	@PATH="$(VENV_BIN):$$PATH" $(MAKE) -f $(THIS_MK) --no-print-directory $@
+else
+RTL = $(PWD)/../../rtl
+VERILOG_SOURCES = $(RTL)/soc_apb_bridge.v
+TOPLEVEL = soc_apb_bridge
+MODULE = test_soc_apb_bridge_to
+SIM_BUILD ?= sim_build_soc_apb_bridge_to
+COCOTB_RESULTS_FILE ?= results_soc_apb_bridge_to.xml
+export COCOTB_RESULTS_FILE
+COMPILE_ARGS += -I$(RTL)
+COMPILE_ARGS += -Psoc_apb_bridge.APB_TIMEOUT=8
+COMPILE_ARGS += $(EXTRA_COMPILE_ARGS)
+include $(shell cocotb-config --makefiles)/Makefile.sim
+endif

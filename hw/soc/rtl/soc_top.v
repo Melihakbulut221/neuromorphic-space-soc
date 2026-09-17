@@ -775,6 +775,17 @@ module soc_top #(
       .be_i (s_be), .wdata_i (s_wdata),
       .gnt_o (s_gnt[2]), .rvalid_o (s_rvalid[2]),
       .rdata_o (s_rdata_apb), .err_o (s_err[2]),
+      // PARKED, and the parking is the measurement. soc_apb_bridge's
+      // APB_TIMEOUT defaults to 0, so this line cannot assert in the
+      // shipping configuration: every mapped slave drives PREADY
+      // constant 1 at today's parameters. Widening BUSSTAT from eight
+      // sources to nine for an event that cannot fire would add a
+      // counter of dead flip-flops to the netlist and move every
+      // BUSSTAT measurement docs/44 records, which is the opposite of
+      // what docs/41 section 6.5 asks. Turning APB_TIMEOUT on is what
+      // makes the ninth source worth its area, and that is the same
+      // commit's work, not this one's.
+      .timeout_o (),
       .psel_o (psel), .penable_o (penable), .paddr_o (paddr),
       .pwrite_o (pwrite), .pwdata_o (pwdata), .pstrb_o (pstrb),
       .prdata_i (prdata), .pready_i (pready), .pslverr_i (pslverr)
